@@ -22,6 +22,7 @@ import {
 import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
+import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 
 
 // ---------------------------------------------------------------------------
@@ -139,5 +140,32 @@ export class RestTaxAdapter implements ITaxRepository {
 
   async validateTransaction(payload: Partial<TaxTransactionEntity>): Promise<void> {
     await this.http.post('/api/tax/transactions/validate', payload)
+  }
+
+  /**
+   * Upload a fiscal file as multipart to /api/tax/upload.
+   * @throws {TaxOperationError} with code 'UPLOAD_FAILED' on any error
+   * TODO: Backend endpoint /api/tax/upload not yet implemented
+   */
+  async uploadTaxFile(file: File): Promise<void> {
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      await this.http.postForm('/api/tax/upload', fd)
+    } catch (err) {
+      throw new TaxOperationError('UPLOAD_FAILED', `File upload failed: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Delete all transactions via DELETE /api/tax/transactions.
+   * @throws {TaxOperationError} with code 'DELETE_FAILED' on any error
+   */
+  async deleteAllTransactions(): Promise<void> {
+    try {
+      await this.http.delete('/api/tax/transactions')
+    } catch (err) {
+      throw new TaxOperationError('DELETE_FAILED', `Bulk delete failed: ${(err as Error).message}`)
+    }
   }
 }

@@ -22,8 +22,14 @@ type ValidationErrorPayload = {
   details?: unknown
 }
 
+type OperationErrorPayload = {
+  code: string
+  message: string
+}
+
 type ErrorBusEvents = {
   'validation-error': ValidationErrorPayload
+  'operation-error': OperationErrorPayload
 }
 
 type EventListener<T> = (payload: T) => void

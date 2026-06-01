@@ -35,4 +35,12 @@ export interface IHttpClient {
    * @param url - The endpoint path
    */
   delete<T>(url: string): Promise<{ data: T }>
+
+  /**
+   * Perform a multipart/form-data POST request.
+   * Used for file uploads (e.g., CSV ingestion).
+   * @param url - The endpoint path
+   * @param formData - A FormData object containing the file
+   */
+  postForm<T>(url: string, formData: FormData): Promise<{ data: T }>
 }

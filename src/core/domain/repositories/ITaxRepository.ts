@@ -46,4 +46,20 @@ export interface ITaxRepository {
    * @param payload - The corrected transaction data
    */
   validateTransaction(payload: Partial<TaxTransactionEntity>): Promise<void>
+
+  /**
+   * Upload a fiscal CSV/XLSX file for ingestion.
+   * In MockTaxAdapter: parsed locally via papaparse/SheetJS (no network).
+   * In RestTaxAdapter: multipart POST to /api/tax/upload.
+   * @param file - The File object from an <input type="file"> element
+   */
+  uploadTaxFile(file: File): Promise<void>
+
+  /**
+   * Delete all transactions — bulk state reset.
+   * In MockTaxAdapter: clears the mutable in-memory _transactions array.
+   * In RestTaxAdapter: DELETE /api/tax/transactions.
+   * @throws {TaxOperationError} with code 'DELETE_FAILED' on failure
+   */
+  deleteAllTransactions(): Promise<void>
 }

@@ -29,6 +29,7 @@
     "clsx": "^2.1.1",
     "lightweight-charts": "^5.2.0",
     "lucide-vue-next": "0.574.0",
+    "papaparse": "5.4.1",
     "pinia": "^3.0.4",
     "radix-vue": "1.9.17",
     "reka-ui": "^2.9.8",
@@ -38,6 +39,7 @@
     "vue-chartjs": "5.3.3",
     "vue-router": "4.5.1",
     "vue-sonner": "^2.0.9",
+    "xlsx": "0.18.5",
     "zod": "3.22.4"
   },
   "devDependencies": {
@@ -49,6 +51,7 @@
     "@semantic-release/github": "^12.0.8",
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/node": "^24.12.3",
+    "@types/papaparse": "5.3.14",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/test-utils": "^2.4.10",
     "@vue/tsconfig": "^0.9.1",
