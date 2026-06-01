@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.7.0](https://github.com/nelomr/kryptofolio/compare/v1.6.0...v1.7.0) (2026-06-01)
+
+### ✨ Features
+
+* **tax-adapters:** implement CSV parsers and MockTaxAdapter with robust validation ([31b053a](https://github.com/nelomr/kryptofolio/commit/31b053a28a14d114895a8240dcacc8e20b536ee4))
+
 ## [1.6.0](https://github.com/nelomr/kryptofolio/compare/v1.5.0...v1.6.0) (2026-05-28)
 
 ### ✨ Features
