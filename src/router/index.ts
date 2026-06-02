@@ -8,6 +8,11 @@ const router = createRouter({
       name: 'portfolio',
       component: () => import('@/views/Portfolio/PortfolioView.vue'),
     },
+    {
+      path: '/tax',
+      name: 'taxReport',
+      component: () => import('@/views/TaxReport/TaxReportView.vue'),
+    },
   ],
 })
 

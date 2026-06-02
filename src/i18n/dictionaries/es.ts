@@ -141,4 +141,25 @@ export const es: I18nDictionary = {
   'tax.delete.btn': 'Borrar Todo',
   'tax.delete.confirm': '¿Estás seguro? Esto eliminará permanentemente todas las transacciones fiscales.',
   'tax.entries': 'ENTRADAS',
+
+  // Tax Report New Components
+  'tax.header.badge': 'Motor de Cumplimiento',
+  'tax.header.sync': 'Sync Web3',
+  'tax.header.upload': 'Subir CSV',
+  'tax.header.pending': 'Funcionalidad pendiente de integración con backend',
+  'tax.header.delete_title': 'Eliminar datos',
+  
+  'tax.summary.capital_gains': 'Ganancias Patrimoniales',
+  'tax.summary.yields': 'Rendimientos (Yields)',
+  'tax.summary.total_losses': 'Pérdidas Compensables',
+  'tax.summary.estimated_irpf': 'IRPF Estimado (Base Ahorro)',
+  
+  'tax.integrity.title': 'Hospital Fiscal',
+  'tax.integrity.analyzing': 'Analizando integridad de datos...',
+  'tax.integrity.healthy': 'Los datos fiscales son consistentes. No se detectaron anomalías.',
+  
+  'tax.tabs.ledgers': 'Libros de Operaciones',
+  'tax.tabs.report': 'Auditoría e Informes',
+  'tax.tabs.chat': 'Asistente IA',
+  'tax.tabs.in_development': '(En desarrollo)',
 };

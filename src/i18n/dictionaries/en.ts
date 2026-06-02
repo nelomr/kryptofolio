@@ -141,4 +141,25 @@ export const en: I18nDictionary = {
   'tax.delete.btn': 'Delete All',
   'tax.delete.confirm': 'Are you sure? This will permanently delete all tax transactions.',
   'tax.entries': 'ENTRIES',
+
+  // Tax Report New Components
+  'tax.header.badge': 'Compliance Engine',
+  'tax.header.sync': 'Sync Web3',
+  'tax.header.upload': 'Upload CSV',
+  'tax.header.pending': 'Backend integration pending',
+  'tax.header.delete_title': 'Delete data',
+  
+  'tax.summary.capital_gains': 'Capital Gains',
+  'tax.summary.yields': 'Yields',
+  'tax.summary.total_losses': 'Compensable Losses',
+  'tax.summary.estimated_irpf': 'Estimated IRPF (Savings Base)',
+  
+  'tax.integrity.title': 'Fiscal Hospital',
+  'tax.integrity.analyzing': 'Analyzing data integrity...',
+  'tax.integrity.healthy': 'Fiscal data is consistent. No anomalies detected.',
+  
+  'tax.tabs.ledgers': 'Ledgers',
+  'tax.tabs.report': 'Audit & Reports',
+  'tax.tabs.chat': 'AI Assistant',
+  'tax.tabs.in_development': '(In development)',
 };

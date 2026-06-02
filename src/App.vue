@@ -38,8 +38,12 @@ onUnmounted(() => {
     <AppHeader />
 
     <!-- Main Content -->
-    <main class="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full">
-      <RouterView />
+    <main class="flex-1 mx-auto max-w-[1600px] px-4 md:px-6 py-8 w-full">
+      <RouterView v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </RouterView>
     </main>
 
     <!-- Global Toast Notifications (shadcn-vue Sonner) -->
@@ -47,3 +51,29 @@ onUnmounted(() => {
     <Toaster rich-colors position="top-right" />
   </div>
 </template>
+
+<style>
+/* 
+  Ultra-fluid page transitions mimicking native app navigation.
+  Fast ease-in for leaving, and a luxurious spring-like bezier for entering.
+*/
+.page-enter-active {
+  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease-out;
+}
+
+.page-leave-active {
+  transition: opacity 0.15s ease-in, transform 0.15s ease-in, filter 0.15s ease-in;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
+  filter: blur(2px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.99);
+  filter: blur(2px);
+}
+</style>

@@ -13,6 +13,7 @@
 ## ✨ Key Features
 
 - **📊 FIFO-Based Data Presentation:** Accurate and reliable transaction and balance reporting using a First-In-First-Out (FIFO) methodology to structure the display logic.
+- **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to audit operations, detect integrity issues (e.g., missing cost bases or negative balances), and provide structured data for AEAT-compliant reporting.
 - **🤖 AI Agent Ready:** The frontend data models are decoupled and specifically designed to be queried by a future AI Agent integration (using Vercel AI SDK and Mastra). You will be able to ask natural language questions about your portfolio in real-time.
 - **🛡️ Privacy First:** Fully self-hosted. The backend utilizes a local SQLite database (`fiscal.db`), ensuring your keys and transaction history never leave your machine.
 - **🏗️ Hexagonal Architecture:** Strict separation of concerns (Ports & Adapters). The UI layer is completely decoupled from data fetching, enabling high testability and robust runtime validation via Zod.
@@ -83,7 +84,7 @@ This project strictly adheres to **Clean Architecture** to ensure the UI is comp
 
 1. **Domain Layer (`src/core/domain/`)**: Framework agnostic. Defines Entities & Value Objects using TypeScript and `zod` for strict runtime validation. Contains Ports (repository interfaces).
 2. **Infrastructure Layer (`src/core/infrastructure/`)**: Concrete Implementations (Adapters) of the Domain Ports. Handles real `fetch` calls and dependency injection depending on environment variables.
-3. **Application & UI Layer (`src/composables/` & `src/views/`)**: Asynchronous data is managed declaratively via `@pinia/colada` (`useQuery`/`useMutation`). Views act purely as orchestrators.
+3. **Application & UI Layer (`src/composables/` & `src/views/`)**: Asynchronous data is managed declaratively via `@pinia/colada` (`useQuery`/`useMutation`). The primary views (`PortfolioView` and `TaxReportView`) act purely as orchestrators for presentation components.
 
 ## 🔖 Versioning
 

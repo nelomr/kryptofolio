@@ -13,6 +13,7 @@
 ## ✨ Características Principales
 
 - **📊 Presentación de Datos basada en FIFO:** Informes de saldos y transacciones precisos y fiables utilizando una metodología First-In-First-Out (FIFO) para estructurar la lógica de visualización.
+- **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para auditar operaciones, detectar anomalías de integridad (ej. bases de coste faltantes o saldos negativos), y proporcionar datos estructurados listos para informes AEAT.
 - **🤖 Preparado para Agentes de IA:** Los modelos de datos del frontend están desacoplados y diseñados específicamente para ser consultados por una futura integración de Agentes de IA (usando Vercel AI SDK y Mastra). Podrás hacer preguntas en lenguaje natural sobre tu portafolio en tiempo real.
 - **🛡️ Privacidad Primero:** Totalmente self-hosted. El backend utiliza una base de datos SQLite local (`fiscal.db`), asegurando que tus claves y tu historial de transacciones nunca salgan de tu máquina.
 - **🏗️ Arquitectura Hexagonal:** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI está completamente desacoplada de la obtención de datos, permitiendo una alta testabilidad y validación robusta en tiempo de ejecución mediante Zod.
@@ -101,7 +102,7 @@ Este proyecto se adhiere estrictamente a la **Arquitectura Limpia** (Clean Archi
 ```mermaid
 graph TD
     subgraph UI ["Capa de UI y Aplicación (Vue / Pinia Colada)"]
-        V[PortfolioView.vue] --> |Consume| PD[usePortfolioData.ts]
+        V[PortfolioView / TaxReportView] --> |Consume| PD[usePortfolioData / useTaxReport]
         PD --> |Invoca| PQ[usePortfolioQueries.ts]
         PQ --> |Inyecta el Puerto| PORT
     end
@@ -138,7 +139,7 @@ graph TD
    - **Inyección de Dependencias (`di/`)**: El "Composition Root". Evalúa las variables de entorno e instancia el adaptador correcto.
 
 3. **Capa de Aplicación y Presentación (`src/composables/queries/` & `src/views/`)**
-   - Utilizamos `@pinia/colada` para gestionar de forma declarativa la obtención asíncrona de datos. Las vistas actúan puramente como orquestadores.
+   - Utilizamos `@pinia/colada` para gestionar de forma declarativa la obtención asíncrona de datos. Las vistas principales (`PortfolioView` y `TaxReportView`) actúan puramente como orquestadores.
 
 ### 🛡️ Consumo de API y Validación Zod
 
