@@ -1,3 +1,19 @@
+<script setup lang="ts">
+/**
+ * AssetCell — Component description.
+ */
+
+import { CryptoIcon } from '@/components/common/CryptoIcon'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
+
+defineProps<{
+  symbol: string
+  onExpand: (symbol: string) => void
+}>()
+</script>
+
 <template>
   <div 
     class="flex items-center gap-3 py-2 cursor-pointer group/asset"
@@ -20,14 +36,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { CryptoIcon } from '@/components/common/CryptoIcon'
-import { useI18n } from '@/composables/useI18n'
-
-const { t } = useI18n()
-
-defineProps<{
-  symbol: string
-  onExpand: (symbol: string) => void
-}>()
-</script>

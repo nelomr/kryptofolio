@@ -7,7 +7,7 @@
  * responsible for reading the file (papaparse for CSV, SheetJS for XLSX)
  * before passing rows to `parse()`.
  *
- * @see openspec/changes/tax-domain-ports-services/design.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { TaxTransactionEntity } from '@/core/domain/models/FiscalEntities'

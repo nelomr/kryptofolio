@@ -2,7 +2,7 @@
  * RestTaxAdapter — Vitest unit tests for new operational methods (TDD red phase)
  * Tests uploadTaxFile and deleteAllTransactions via mocked IHttpClient.
  *
- * @see openspec/changes/tax-domain-ports-services/specs/tax-csv-ingestion/spec.md
+ * @see openspec/specs/tax-csv-ingestion/spec.md
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'

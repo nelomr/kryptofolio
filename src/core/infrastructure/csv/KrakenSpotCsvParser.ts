@@ -8,7 +8,7 @@
  *               asset, wallet, amount, fee, balance
  *
  * @implements ICsvIngestionPort
- * @see openspec/changes/tax-domain-ports-services/design.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { ICsvIngestionPort } from '@/core/domain/ports/ICsvIngestionPort'

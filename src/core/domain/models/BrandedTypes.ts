@@ -5,7 +5,7 @@
  * ID swapping at compile time. An `AssetId` cannot be passed where a
  * `TransactionId` is expected, even though both are strings at runtime.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/zod-validation/spec.md
+ * @see openspec/specs/zod-validation/spec.md
  */
 
 import { z } from 'zod'

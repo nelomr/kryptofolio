@@ -1,3 +1,37 @@
+<script setup lang="ts">
+/**
+ * LotEventHistory — Component description.
+ */
+
+import { ShieldCheck } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table'
+import { cn } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/composables/useFormatters'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
+
+defineProps({
+  events: { type: Array as () => any[], required: true }
+})
+
+const getEventBadge = (event: any) => {
+  if (event.flag === 'WALLET_ACTIVATION') return { variant: 'secondary', label: t('lot_events.badge_activation') };
+  if (!event.is_taxable) return { variant: 'secondary', label: t('lot_events.badge_exempt') };
+  return event.gain_loss_eur >= 0
+    ? { variant: 'profit', label: t('lot_events.badge_gain') }
+    : { variant: 'loss', label: t('lot_events.badge_loss') };
+};
+</script>
+
 <template>
   <div class="border-l-2 border-primary/40 ml-12 bg-background/20">
     <Table>
@@ -47,32 +81,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ShieldCheck } from 'lucide-vue-next'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table'
-import { cn } from '@/lib/utils'
-import { formatCurrency, formatDate } from '@/composables/useFormatters'
-import { useI18n } from '@/composables/useI18n'
-
-const { t } = useI18n()
-
-defineProps({
-  events: { type: Array as () => any[], required: true }
-})
-
-const getEventBadge = (event: any) => {
-  if (event.flag === 'WALLET_ACTIVATION') return { variant: 'secondary', label: t('lot_events.badge_activation') };
-  if (!event.is_taxable) return { variant: 'secondary', label: t('lot_events.badge_exempt') };
-  return event.gain_loss_eur >= 0
-    ? { variant: 'profit', label: t('lot_events.badge_gain') }
-    : { variant: 'loss', label: t('lot_events.badge_loss') };
-};
-</script>

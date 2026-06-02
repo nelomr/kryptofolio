@@ -13,7 +13,7 @@
  * Usage in App.vue:
  *   errorBus.on('validation-error', (err) => toast.error(err.message))
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/global-error-handling/spec.md
+ * @see openspec/specs/global-error-handling/spec.md
  */
 
 type ValidationErrorPayload = {

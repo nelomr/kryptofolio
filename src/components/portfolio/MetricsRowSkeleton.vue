@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * MetricsRowSkeleton — Component description.
+ */
+
 import { Skeleton } from '@/components/ui/skeleton'
 import MetricCard from '@/components/portfolio/MetricCard.vue'
 import { useI18n } from '@/composables/useI18n'

@@ -3,7 +3,7 @@
  * Tests that unknown formats throw TaxOperationError and
  * that detect() is correctly called across all registered parsers.
  *
- * @see openspec/changes/tax-domain-ports-services/specs/tax-operational-methods/spec.md
+ * @see openspec/specs/tax-operational-methods/spec.md
  */
 
 import { describe, it, expect } from 'vitest'

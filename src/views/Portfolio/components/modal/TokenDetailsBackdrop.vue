@@ -1,3 +1,11 @@
+<script setup lang="ts">
+/**
+ * TokenDetailsBackdrop — Component description.
+ */
+
+defineEmits(['close'])
+</script>
+
 <template>
   <div
     class="fixed inset-0 transition-opacity"
@@ -8,6 +16,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-defineEmits(['close'])
-</script>

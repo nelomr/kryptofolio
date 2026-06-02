@@ -1,3 +1,18 @@
+<script setup lang="ts">
+/**
+ * ExpandedLotsSkeleton — Component description.
+ */
+
+import { TableRow, TableCell } from '@/components/ui/table'
+import { Skeleton } from '@/components/ui/skeleton'
+
+withDefaults(defineProps<{
+  count?: number
+}>(), {
+  count: 3
+})
+</script>
+
 <template>
   <TableRow v-for="i in count" :key="`skeleton-${i}`" class="hover:bg-transparent border-b border-border/5">
     <TableCell class="py-3 w-10 pl-3">
@@ -33,13 +48,3 @@
   </TableRow>
 </template>
 
-<script setup lang="ts">
-import { TableRow, TableCell } from '@/components/ui/table'
-import { Skeleton } from '@/components/ui/skeleton'
-
-withDefaults(defineProps<{
-  count?: number
-}>(), {
-  count: 3
-})
-</script>

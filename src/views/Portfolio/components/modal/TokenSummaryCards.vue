@@ -1,3 +1,20 @@
+<script setup lang="ts">
+/**
+ * TokenSummaryCards — Component description.
+ */
+
+import { Wallet, Coins, TrendingDown, TrendingUp } from "lucide-vue-next";
+import { formatCurrency, formatNumber } from "@/composables/useFormatters";
+import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
+import { useI18n } from "@/composables/useI18n";
+
+const { t } = useI18n();
+
+defineProps<{
+  holding: CryptoAssetEntity;
+}>();
+</script>
+
 <template>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <!-- Balance -->
@@ -51,15 +68,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { Wallet, Coins, TrendingDown, TrendingUp } from "lucide-vue-next";
-import { formatCurrency, formatNumber } from "@/composables/useFormatters";
-import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
-import { useI18n } from "@/composables/useI18n";
-
-const { t } = useI18n();
-
-defineProps<{
-  holding: CryptoAssetEntity;
-}>();
-</script>

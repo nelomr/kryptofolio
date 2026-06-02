@@ -2,7 +2,7 @@
  * Portfolio Domain Types — Single source of truth for all portfolio data shapes.
  * Used by Pinia stores, Vue components, and mock fixtures.
  *
- * @see openspec/changes/data-contracts-agnostic-mocks/specs/portfolio-types/spec.md
+ * @see openspec/specs/portfolio-types/spec.md
  */
 
 // ---------------------------------------------------------------------------

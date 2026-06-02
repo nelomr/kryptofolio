@@ -2,7 +2,7 @@
  * BitvavoCsvParser — Vitest unit tests (TDD red phase)
  * Real sample rows derived from bitvavo_spot.csv
  *
- * @see openspec/changes/tax-domain-ports-services/specs/tax-operational-methods/spec.md
+ * @see openspec/specs/tax-operational-methods/spec.md
  */
 
 import { describe, it, expect } from 'vitest'

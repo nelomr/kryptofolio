@@ -10,7 +10,7 @@
  *
  * This schema eliminates ALL conditional logic from Pinia stores and Vue components.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import { z } from 'zod'

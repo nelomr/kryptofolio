@@ -1,3 +1,7 @@
+/**
+ * useFormatters — Composable description.
+ */
+
 export function formatCurrency(value: number | string | undefined | null): string {
   if (value === undefined || value === null) return '€0.00'
   const numValue = typeof value === 'string' ? parseFloat(value) : value

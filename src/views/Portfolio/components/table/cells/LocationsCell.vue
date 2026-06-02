@@ -1,3 +1,17 @@
+<script setup lang="ts">
+/**
+ * LocationsCell — Component description.
+ */
+
+import { computed } from 'vue'
+import { Badge } from '@/components/ui/badge'
+import { CryptoIcon } from '@/components/common/CryptoIcon'
+import { getDeterministicHue } from '@/lib/utils'
+
+const props = defineProps<{ row: any; isLoading: boolean }>()
+const locs = computed(() => props.row.portfolioLocations || [])
+</script>
+
 <template>
   <div v-if="locs.length" class="text-right flex justify-end gap-1.5 items-center">
     <Badge
@@ -16,12 +30,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { computed } from 'vue'
-import { Badge } from '@/components/ui/badge'
-import { CryptoIcon } from '@/components/common/CryptoIcon'
-import { getDeterministicHue } from '@/lib/utils'
-
-const props = defineProps<{ row: any; isLoading: boolean }>()
-const locs = computed(() => props.row.portfolioLocations || [])
-</script>

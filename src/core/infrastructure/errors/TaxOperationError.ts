@@ -8,12 +8,12 @@
  * Emits to errorBus 'operation-error' before the throw so the UI can
  * react (toast, banner) without coupling adapters to Vue components.
  *
- * @see openspec/changes/tax-domain-ports-services/specs/tax-operational-methods/spec.md
+ * @see openspec/specs/tax-operational-methods/spec.md
  */
 
 import { errorBus } from './errorBus'
 
-export type TaxOperationErrorCode = 'UPLOAD_FAILED' | 'DELETE_FAILED'
+export type TaxOperationErrorCode = 'UPLOAD_FAILED' | 'DELETE_FAILED' | 'IMPORT_FAILED' | 'SYNC_FAILED'
 
 export class TaxOperationError extends Error {
   readonly code: TaxOperationErrorCode

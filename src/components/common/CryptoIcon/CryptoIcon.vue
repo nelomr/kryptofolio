@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * CryptoIcon — Component description.
+ */
+
 import { computed } from 'vue'
 import { cn } from '@/lib/utils'
 import { CryptoIcons } from '@/assets/crypto'

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * PerformanceLineChart — Component description.
+ */
+
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { createChart, ColorType, AreaSeries, type ISeriesApi } from 'lightweight-charts'
 

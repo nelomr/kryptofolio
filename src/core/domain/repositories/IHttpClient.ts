@@ -5,7 +5,7 @@
  * Adapters (Axios, Fetch, Mock) will implement this interface, ensuring
  * Pinia stores and domain services never depend on a specific HTTP library.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/hexagonal-architecture/spec.md
  */
 
 export interface IHttpClient {

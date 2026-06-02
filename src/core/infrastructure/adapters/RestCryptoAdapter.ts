@@ -6,8 +6,8 @@
  * the domain. If safeParse fails, the error is emitted to the global errorBus
  * and a DomainValidationError is thrown (caught by the Pinia store).
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/hexagonal-architecture/spec.md
- * @see openspec/changes/hex-arch-zod-refactor/specs/global-error-handling/spec.md
+ * @see openspec/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/global-error-handling/spec.md
  */
 
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'

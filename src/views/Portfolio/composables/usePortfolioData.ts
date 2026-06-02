@@ -1,3 +1,7 @@
+/**
+ * usePortfolioData — Composable description.
+ */
+
 import { computed, ref } from 'vue'
 import { usePortfolioSummaryQuery, useRebuildMutation, useTokenHistoryQuery, usePortfolioRepo } from '@/composables/queries/usePortfolioQueries'
 

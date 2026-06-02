@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * ChartsRow — Component description.
+ */
+
 import PerformanceLineChart from '@/components/charts/PerformanceLineChart.vue'
 import AssetAllocationChart from '@/components/charts/AssetAllocationChart.vue'
 

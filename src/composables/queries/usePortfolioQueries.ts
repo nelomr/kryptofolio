@@ -1,3 +1,7 @@
+/**
+ * usePortfolioQueries — Composable description.
+ */
+
 import { inject } from 'vue'
 import { useQuery, useMutation, useQueryCache } from '@pinia/colada'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'

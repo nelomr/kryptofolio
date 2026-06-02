@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Card — Component description.
+ */
+
 import type { HTMLAttributes } from "vue"
 import { cn } from "@/lib/utils"
 

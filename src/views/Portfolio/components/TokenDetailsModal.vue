@@ -1,3 +1,26 @@
+<script setup lang="ts">
+/**
+ * TokenDetailsModal — Component description.
+ */
+
+import TokenDetailsBackdrop from "./modal/TokenDetailsBackdrop.vue";
+import TokenDetailsHeader from "./modal/TokenDetailsHeader.vue";
+import TokenDetailsContent from "./modal/TokenDetailsContent.vue";
+import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
+import type { TaxLot, LotRecord } from "@/types/portfolio";
+
+const props = defineProps<{
+  symbol: string;
+  holding?: CryptoAssetEntity | null;
+  lots?: TaxLot[];
+  history?: Record<string, LotRecord>;
+  loading?: boolean;
+  isOpen?: boolean;
+}>();
+
+defineEmits(["close"]);
+</script>
+
 <template>
   <Teleport to="body">
     <Transition name="modal">
@@ -33,24 +56,6 @@
   </Teleport>
 </template>
 
-<script setup lang="ts">
-import TokenDetailsBackdrop from "./modal/TokenDetailsBackdrop.vue";
-import TokenDetailsHeader from "./modal/TokenDetailsHeader.vue";
-import TokenDetailsContent from "./modal/TokenDetailsContent.vue";
-import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
-import type { TaxLot, LotRecord } from "@/types/portfolio";
-
-const props = defineProps<{
-  symbol: string;
-  holding?: CryptoAssetEntity | null;
-  lots?: TaxLot[];
-  history?: Record<string, LotRecord>;
-  loading?: boolean;
-  isOpen?: boolean;
-}>();
-
-defineEmits(["close"]);
-</script>
 
 <style scoped>
 /* Modern CSS way to lock scroll globally while modal is mounted */

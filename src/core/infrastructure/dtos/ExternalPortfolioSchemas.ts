@@ -9,7 +9,7 @@
  *
  * Always use `.safeParse()` — never `.parse()` — in adapters to prevent crashes.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/zod-validation/spec.md
+ * @see openspec/specs/zod-validation/spec.md
  */
 
 import { z } from 'zod'

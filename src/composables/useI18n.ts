@@ -1,3 +1,7 @@
+/**
+ * useI18n — Composable description.
+ */
+
 import { inject } from 'vue';
 import { I18N_PORT_KEY } from '@/core/injectionKeys';
 

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * TableEmpty — Component description.
+ */
+
 import type { HTMLAttributes } from "vue"
 import { reactiveOmit } from "@vueuse/core"
 import { cn } from "@/lib/utils"

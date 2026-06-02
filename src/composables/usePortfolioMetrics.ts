@@ -1,3 +1,7 @@
+/**
+ * usePortfolioMetrics — Composable description.
+ */
+
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 import type { PortfolioMetricsEntity } from '@/core/domain/models/PortfolioEntities'

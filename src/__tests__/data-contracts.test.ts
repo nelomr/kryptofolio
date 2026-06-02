@@ -5,7 +5,7 @@
  *   - portfolio-types: structural type assertions
  *   - portfolio-mock-data: shape, depth, edge cases, store injection
  *
- * @see openspec/changes/data-contracts-agnostic-mocks/specs/
+ * @see openspec/specs/
  */
 
 import { describe, it, expect } from 'vitest'

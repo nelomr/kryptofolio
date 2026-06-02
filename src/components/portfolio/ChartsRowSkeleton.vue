@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * ChartsRowSkeleton — Component description.
+ */
+
 import { Skeleton } from '@/components/ui/skeleton'
 </script>
 

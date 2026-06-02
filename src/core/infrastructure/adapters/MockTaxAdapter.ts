@@ -10,7 +10,7 @@
  * imported so they don't inflate the initial bundle). Format auto-detection
  * is done via REGISTERED_PARSERS.detect().
  *
- * @see openspec/changes/tax-domain-ports-services/specs/mock-adapters/spec.md
+ * @see openspec/specs/mock-adapters/spec.md
  */
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
@@ -344,6 +344,23 @@ export class MockTaxAdapter implements ITaxRepository {
   async deleteAllTransactions(): Promise<void> {
     await delay(100)
     this._transactions = []
+  }
+
+  /**
+   * Mock wallet import — simulates a small batch of on-chain transactions.
+   * No network request is made.
+   */
+  async importWallet(chain: string, address: string): Promise<void> {
+    await delay(800)
+    // In a real scenario, this would fetch from the chain's API.
+    // In mock mode, we just log and do nothing to keep the dataset clean.
+    console.info(`[MockTaxAdapter] importWallet called for ${chain}:${address} — no-op in mock mode`)
+  }
+
+  /** Mock Web3 sync — no-op in dev mode. */
+  async syncWeb3(): Promise<void> {
+    await delay(1200)
+    console.info('[MockTaxAdapter] syncWeb3 called — no-op in mock mode')
   }
 
   // ---------------------------------------------------------------------------

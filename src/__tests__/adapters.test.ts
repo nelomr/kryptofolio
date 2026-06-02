@@ -7,7 +7,7 @@
  *   - global-error-handling: safeParse failure → error bus notification
  *   - fiscal-domain: RestTaxAdapter maps legacy data through Zod schemas
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/
+ * @see openspec/specs/
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'

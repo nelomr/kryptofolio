@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * MetricsRow — Component description.
+ */
+
 import MetricCard from '@/components/portfolio/MetricCard.vue'
 import { useI18n } from '@/composables/useI18n'
 

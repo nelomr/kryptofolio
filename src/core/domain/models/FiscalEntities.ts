@@ -7,7 +7,7 @@
  *
  * AEAT Compliance: field names map directly to IRPF reporting concepts.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { TransactionId, LotId } from './BrandedTypes'

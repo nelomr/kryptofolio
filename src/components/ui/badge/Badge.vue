@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Badge — Component description.
+ */
+
 import type { HTMLAttributes } from "vue"
 import type { BadgeVariants } from "."
 import { cn } from "@/lib/utils"

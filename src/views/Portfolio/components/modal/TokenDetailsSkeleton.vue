@@ -1,3 +1,11 @@
+<script setup lang="ts">
+/**
+ * TokenDetailsSkeleton — Component description.
+ */
+
+import { Skeleton } from '@/components/ui/skeleton'
+</script>
+
 <template>
   <div class="px-6 py-6 max-h-[70vh] overflow-y-auto custom-scrollbar space-y-8">
     <!-- Mocking TokenSummaryCards -->
@@ -63,6 +71,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { Skeleton } from '@/components/ui/skeleton'
-</script>

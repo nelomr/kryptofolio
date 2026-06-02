@@ -5,7 +5,7 @@
  * implementing this interface will handle mapping the complex legacy API
  * shapes (asset_in/asset_out, tx_type, etc.) to clean domain entities.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
@@ -62,4 +62,18 @@ export interface ITaxRepository {
    * @throws {TaxOperationError} with code 'DELETE_FAILED' on failure
    */
   deleteAllTransactions(): Promise<void>
+
+  /**
+   * Import transactions from a blockchain wallet address.
+   * In RestTaxAdapter: POST /api/tax/import-wallet.
+   * @param chain - The blockchain network (e.g. 'solana', 'hedera', 'ethereum')
+   * @param address - The wallet or account address
+   */
+  importWallet(chain: string, address: string): Promise<void>
+
+  /**
+   * Trigger a full on-chain sync for all configured wallets.
+   * In RestTaxAdapter: POST /api/tax/sync-web3.
+   */
+  syncWeb3(): Promise<void>
 }

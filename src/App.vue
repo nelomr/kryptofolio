@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * App — Component description.
+ */
+
 import { onMounted, onUnmounted } from "vue";
 import { toast } from "vue-sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -8,7 +12,7 @@ import AppHeader from "@/components/layout/AppHeader.vue";
 // ---------------------------------------------------------------------------
 // Global error handling — listens to the errorBus and shows Sonner toasts
 // when Zod safeParse fails in any adapter.
-// @see openspec/changes/hex-arch-zod-refactor/specs/global-error-handling/spec.md
+// @see openspec/specs/global-error-handling/spec.md
 // ---------------------------------------------------------------------------
 
 function handleValidationError(payload: ValidationErrorPayload) {

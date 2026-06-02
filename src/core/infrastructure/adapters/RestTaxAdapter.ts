@@ -9,7 +9,7 @@
  * The complex BUY/SELL/SWAP symbol resolution logic lives exclusively in
  * ExternalTaxTransactionSchema — this adapter simply delegates to it.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
@@ -166,6 +166,30 @@ export class RestTaxAdapter implements ITaxRepository {
       await this.http.delete('/api/tax/transactions')
     } catch (err) {
       throw new TaxOperationError('DELETE_FAILED', `Bulk delete failed: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Import transactions from a blockchain wallet via the REST API.
+   * POST /api/tax/import-wallet
+   */
+  async importWallet(chain: string, address: string): Promise<void> {
+    try {
+      await this.http.post('/api/tax/import-wallet', { chain, address })
+    } catch (err) {
+      throw new TaxOperationError('IMPORT_FAILED', `Wallet import failed: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Trigger a full on-chain sync for all configured wallets.
+   * POST /api/tax/sync-web3
+   */
+  async syncWeb3(): Promise<void> {
+    try {
+      await this.http.post('/api/tax/sync-web3', {})
+    } catch (err) {
+      throw new TaxOperationError('SYNC_FAILED', `Web3 sync failed: ${(err as Error).message}`)
     }
   }
 }

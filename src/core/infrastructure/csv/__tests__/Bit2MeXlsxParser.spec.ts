@@ -7,7 +7,7 @@
  *   Cantidad de origen | Moneda de origen | Comisión de la operación |
  *   Moneda de la comisión | Exchange | Grupo | Descripción | Fecha
  *
- * @see openspec/changes/tax-domain-ports-services/specs/tax-operational-methods/spec.md
+ * @see openspec/specs/tax-operational-methods/spec.md
  */
 
 import { describe, it, expect } from 'vitest'

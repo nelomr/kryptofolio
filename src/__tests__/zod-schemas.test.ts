@@ -6,8 +6,8 @@
  *   - fiscal-domain: ExternalTaxTransactionSchema BUY/SELL/etc mapping
  *   - global-error-handling: safeParse failure paths
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/zod-validation/spec.md
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/zod-validation/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import { describe, it, expect } from 'vitest'

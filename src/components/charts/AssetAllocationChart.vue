@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * AssetAllocationChart — Component description.
+ */
+
 import { computed } from 'vue'
 import { Doughnut } from 'vue-chartjs'
 import {

@@ -1,3 +1,7 @@
+/**
+ * useChartData — Composable description.
+ */
+
 import { computed, type Ref } from 'vue'
 import { stringToColor } from '@/lib/utils'
 import type { PortfolioMetricsEntity, CryptoAssetEntity } from '@/core/domain/models/PortfolioEntities'

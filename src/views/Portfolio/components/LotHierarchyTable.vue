@@ -1,3 +1,91 @@
+<script setup lang="ts">
+/**
+ * LotHierarchyTable — Component description.
+ */
+
+import { ref, computed } from "vue";
+import {
+  useVueTable,
+  getCoreRowModel,
+  getExpandedRowModel,
+  FlexRender,
+} from "@tanstack/vue-table";
+import { useVirtualizer } from "@tanstack/vue-virtual";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import TableSkeleton from "./table/TableSkeleton.vue";
+import ExpandedLotsTable from "./table/ExpandedLotsTable.vue";
+import { createColumns } from "./table/columns";
+import type { HoldingEntity } from "@/core/domain/models/PortfolioEntities";
+import { useI18n } from '@/composables/useI18n';
+
+const props = defineProps<{
+  data: HoldingEntity[];
+  isLoading?: boolean;
+  onExpand?: (symbol: string) => void;
+  detailsMap?: Record<string, any>;
+}>();
+
+const emit = defineEmits(['expandRow']);
+
+const expanded = ref({});
+
+const { t } = useI18n();
+
+const columns = createColumns(props.onExpand || (() => {}), props.isLoading, t);
+
+const table = useVueTable({
+  get data() {
+    return props.data;
+  },
+  columns,
+  state: {
+    get expanded() {
+      return expanded.value;
+    },
+  },
+  onExpandedChange: (updater) => {
+    const oldExpanded = { ...expanded.value } as Record<string, boolean>;
+    expanded.value =
+      typeof updater === "function" ? updater(expanded.value) : updater;
+    
+    // Check which row became expanded
+    const newExpanded = expanded.value as Record<string, boolean>;
+    for (const rowId in newExpanded) {
+      if (newExpanded[rowId] && !oldExpanded[rowId]) {
+        const row = table.getRow(rowId);
+        if (row && row.original.symbol) {
+          emit('expandRow', row.original.symbol);
+        }
+      }
+    }
+  },
+  getRowCanExpand: () => true,
+  getCoreRowModel: getCoreRowModel(),
+  getExpandedRowModel: getExpandedRowModel(),
+});
+
+// Virtualization Setup
+const parentRef = ref<HTMLElement | null>(null);
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: table.getRowModel().rows.length,
+    getScrollElement: () => parentRef.value,
+    estimateSize: () => 64, // Approximate height of a closed row
+    overscan: 10,
+  })),
+);
+
+const virtualRows = computed(() => virtualizer.value.getVirtualItems());
+const totalSize = computed(() => virtualizer.value.getTotalSize());
+</script>
+
 <template>
   <div
     class="w-full h-full border border-border/40 rounded-2xl bg-card/10 backdrop-blur-md overflow-auto custom-scrollbar"
@@ -117,89 +205,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed } from "vue";
-import {
-  useVueTable,
-  getCoreRowModel,
-  getExpandedRowModel,
-  FlexRender,
-} from "@tanstack/vue-table";
-import { useVirtualizer } from "@tanstack/vue-virtual";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import TableSkeleton from "./table/TableSkeleton.vue";
-import ExpandedLotsTable from "./table/ExpandedLotsTable.vue";
-import { createColumns } from "./table/columns";
-import type { HoldingEntity } from "@/core/domain/models/PortfolioEntities";
-import { useI18n } from '@/composables/useI18n';
-
-const props = defineProps<{
-  data: HoldingEntity[];
-  isLoading?: boolean;
-  onExpand?: (symbol: string) => void;
-  detailsMap?: Record<string, any>;
-}>();
-
-const emit = defineEmits(['expandRow']);
-
-const expanded = ref({});
-
-const { t } = useI18n();
-
-const columns = createColumns(props.onExpand || (() => {}), props.isLoading, t);
-
-const table = useVueTable({
-  get data() {
-    return props.data;
-  },
-  columns,
-  state: {
-    get expanded() {
-      return expanded.value;
-    },
-  },
-  onExpandedChange: (updater) => {
-    const oldExpanded = { ...expanded.value } as Record<string, boolean>;
-    expanded.value =
-      typeof updater === "function" ? updater(expanded.value) : updater;
-    
-    // Check which row became expanded
-    const newExpanded = expanded.value as Record<string, boolean>;
-    for (const rowId in newExpanded) {
-      if (newExpanded[rowId] && !oldExpanded[rowId]) {
-        const row = table.getRow(rowId);
-        if (row && row.original.symbol) {
-          emit('expandRow', row.original.symbol);
-        }
-      }
-    }
-  },
-  getRowCanExpand: () => true,
-  getCoreRowModel: getCoreRowModel(),
-  getExpandedRowModel: getExpandedRowModel(),
-});
-
-// Virtualization Setup
-const parentRef = ref<HTMLElement | null>(null);
-const virtualizer = useVirtualizer(
-  computed(() => ({
-    count: table.getRowModel().rows.length,
-    getScrollElement: () => parentRef.value,
-    estimateSize: () => 64, // Approximate height of a closed row
-    overscan: 10,
-  })),
-);
-
-const virtualRows = computed(() => virtualizer.value.getVirtualItems());
-const totalSize = computed(() => virtualizer.value.getTotalSize());
-</script>
 
 <style scoped>
 .custom-scrollbar::-webkit-scrollbar {

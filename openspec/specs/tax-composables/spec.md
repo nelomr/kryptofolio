@@ -1,0 +1,24 @@
+## ADDED Requirements
+
+### Requirement: Tax Data Composables manage async queries
+The system SHALL provide `useTaxTransactionsQuery` and `useTaxReportQuery` to fetch and cache data using Pinia Colada.
+
+#### Scenario: Fetch transactions returns reactive state
+- **WHEN** `useTaxTransactionsQuery()` is called
+- **THEN** it SHALL return reactive `data`, `isLoading`, and `error` properties
+- **AND** it SHALL automatically fetch data from `ITaxService.getTransactions()` if not cached or if it's stale
+
+### Requirement: Tax Mutation Composables manage async updates
+The system SHALL provide mutation composables such as `useUploadTaxFileMutation`, `useImportWalletMutation`, `useSyncWeb3Mutation`, and `useDeleteTransactionsMutation`.
+
+#### Scenario: Upload mutation invalidates transactions query
+- **WHEN** `useUploadTaxFileMutation().mutate(file)` completes successfully
+- **THEN** it SHALL invalidate the query cache for `tax-transactions`
+- **AND** the UI SHALL automatically reflect the new transactions without a manual refetch call
+
+### Requirement: Tax Business Logic is decoupled from side effects
+The system SHALL provide pure composables for pagination and smart year deduction, independent of data fetching.
+
+#### Scenario: Smart year logic is derived from data
+- **WHEN** `useSmartYearLogic(transactions)` is used
+- **THEN** it SHALL return a computed property representing the deduced fiscal year based solely on the provided data array

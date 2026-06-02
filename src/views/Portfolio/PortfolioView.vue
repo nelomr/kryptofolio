@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * PortfolioView — Component description.
+ */
+
 import { usePortfolioData } from "./composables/usePortfolioData";
 import { useChartData } from "./composables/useChartData";
 import { usePortfolioMetrics } from "@/composables/usePortfolioMetrics";

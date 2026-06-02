@@ -5,8 +5,8 @@
  * field names and native JS types (number, Date) — no raw API strings.
  * No component or Pinia store should ever depend on API response shapes directly.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/hexagonal-architecture/spec.md
- * @see openspec/changes/hex-arch-zod-refactor/specs/fiscal-domain/spec.md
+ * @see openspec/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { AssetId } from './BrandedTypes'

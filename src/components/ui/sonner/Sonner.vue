@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * Sonner — Component description.
+ */
+
 import type { ToasterProps } from "vue-sonner"
 import { reactiveOmit } from "@vueuse/core"
 import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon, XIcon } from "lucide-vue-next"

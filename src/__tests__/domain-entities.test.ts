@@ -6,7 +6,7 @@
  *   - zod-validation: branded types, nominal typing
  *   - fiscal-domain: TaxTransactionEntity, TaxReportEntity, TaxLotEntity
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/
+ * @see openspec/specs/
  */
 
 import { describe, it, expect } from 'vitest'

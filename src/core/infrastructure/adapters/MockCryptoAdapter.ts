@@ -5,7 +5,7 @@
  * Simulates realistic network latency to test loading states in the UI.
  * Switch to this adapter by setting VITE_USE_MOCK=true.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/mock-adapters/spec.md
+ * @see openspec/specs/mock-adapters/spec.md
  */
 
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'

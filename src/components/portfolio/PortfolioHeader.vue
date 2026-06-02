@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * PortfolioHeader — Component description.
+ */
+
 import { RefreshCw } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 

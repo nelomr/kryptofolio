@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * TableCell — Component description.
+ */
+
 import type { HTMLAttributes } from "vue"
 import { cn } from "@/lib/utils"
 

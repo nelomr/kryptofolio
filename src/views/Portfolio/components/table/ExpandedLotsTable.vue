@@ -1,3 +1,66 @@
+<script setup lang="ts">
+/**
+ * ExpandedLotsTable — Component description.
+ */
+
+import { ref } from 'vue'
+import { RefreshCw, MinusCircle, PlusCircle } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table'
+import { CryptoIcon } from '@/components/common/CryptoIcon'
+import LotEventHistory from './LotEventHistory.vue'
+import ExpandedLotsSkeleton from './ExpandedLotsSkeleton.vue'
+import { cn } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/composables/useFormatters'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
+
+const props = defineProps({
+  assetSymbol: { type: String, required: true },
+  assetAmount: { type: Number, required: true },
+  assetCurrentValueEur: { type: Number, required: true },
+  lots: { type: Array as () => any[], default: () => [] },
+  tokenHistory: { type: Object as () => Record<string, any>, default: () => ({}) },
+  isLoadingDetails: { type: Boolean, default: false }
+})
+
+const expandedLots = ref<Set<string>>(new Set())
+
+const toggleLotHistory = (lotId: string) => {
+  const next = new Set(expandedLots.value)
+  next.has(lotId) ? next.delete(lotId) : next.add(lotId)
+  expandedLots.value = next
+}
+
+const getLotHistory = (lotId: string) =>
+  props.tokenHistory?.[lotId]?.history || []
+
+const getLotStatus = (lotId: string) =>
+  props.tokenHistory?.[lotId]?.status || null
+
+const getLotBadgeVariant = (status: string) =>
+  ({ EMPTY: 'profit', PARTIAL: 'outline', FULL: 'secondary' })[status as keyof typeof getLotBadgeVariant] || 'secondary'
+
+const getLotStatusText = (status: string) => {
+  const map: Record<string, string> = { EMPTY: t('lot_status.open'), PARTIAL: t('lot_status.partial'), FULL: t('lot_status.sold') }
+  return map[status] || status
+}
+
+const isLotInLoss = (lot: any) => {
+  if (!props.assetAmount || !props.assetCurrentValueEur) return false
+  const currentPrice = props.assetCurrentValueEur / props.assetAmount
+  return lot.unit_cost > currentPrice
+}
+</script>
+
 <template>
   <div class="p-6 border-l-2 border-primary ml-10">
     <div class="flex items-center gap-2 mb-4">
@@ -95,61 +158,3 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue'
-import { RefreshCw, MinusCircle, PlusCircle } from 'lucide-vue-next'
-import { Badge } from '@/components/ui/badge'
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '@/components/ui/table'
-import { CryptoIcon } from '@/components/common/CryptoIcon'
-import LotEventHistory from './LotEventHistory.vue'
-import ExpandedLotsSkeleton from './ExpandedLotsSkeleton.vue'
-import { cn } from '@/lib/utils'
-import { formatCurrency, formatDate } from '@/composables/useFormatters'
-import { useI18n } from '@/composables/useI18n'
-
-const { t } = useI18n()
-
-const props = defineProps({
-  assetSymbol: { type: String, required: true },
-  assetAmount: { type: Number, required: true },
-  assetCurrentValueEur: { type: Number, required: true },
-  lots: { type: Array as () => any[], default: () => [] },
-  tokenHistory: { type: Object as () => Record<string, any>, default: () => ({}) },
-  isLoadingDetails: { type: Boolean, default: false }
-})
-
-const expandedLots = ref<Set<string>>(new Set())
-
-const toggleLotHistory = (lotId: string) => {
-  const next = new Set(expandedLots.value)
-  next.has(lotId) ? next.delete(lotId) : next.add(lotId)
-  expandedLots.value = next
-}
-
-const getLotHistory = (lotId: string) =>
-  props.tokenHistory?.[lotId]?.history || []
-
-const getLotStatus = (lotId: string) =>
-  props.tokenHistory?.[lotId]?.status || null
-
-const getLotBadgeVariant = (status: string) =>
-  ({ EMPTY: 'profit', PARTIAL: 'outline', FULL: 'secondary' })[status as keyof typeof getLotBadgeVariant] || 'secondary'
-
-const getLotStatusText = (status: string) => {
-  const map: Record<string, string> = { EMPTY: t('lot_status.open'), PARTIAL: t('lot_status.partial'), FULL: t('lot_status.sold') }
-  return map[status] || status
-}
-
-const isLotInLoss = (lot: any) => {
-  if (!props.assetAmount || !props.assetCurrentValueEur) return false
-  const currentPrice = props.assetCurrentValueEur / props.assetAmount
-  return lot.unit_cost > currentPrice
-}
-</script>

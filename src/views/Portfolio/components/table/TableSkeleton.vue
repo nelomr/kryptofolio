@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * TableSkeleton — Component description.
+ */
+
 import { TableRow, TableCell } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
 

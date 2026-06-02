@@ -5,7 +5,7 @@
  * interface without manual type casting. The Symbol ensures the key is
  * globally unique, preventing naming collisions.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/hexagonal-architecture/spec.md
  */
 
 import type { InjectionKey } from 'vue'

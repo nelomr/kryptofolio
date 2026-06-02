@@ -1,3 +1,20 @@
+<script setup lang="ts">
+/**
+ * TokenActiveLots — Component description.
+ */
+
+import { formatCurrency, formatNumber, formatDate } from '@/composables/useFormatters'
+import { Badge } from '@/components/ui/badge'
+import type { TaxLot } from '@/types/portfolio'
+import { useI18n } from '@/composables/useI18n'
+
+const { t } = useI18n()
+
+defineProps<{
+  lots: TaxLot[]
+}>()
+</script>
+
 <template>
   <section>
     <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -34,15 +51,3 @@
   </section>
 </template>
 
-<script setup lang="ts">
-import { formatCurrency, formatNumber, formatDate } from '@/composables/useFormatters'
-import { Badge } from '@/components/ui/badge'
-import type { TaxLot } from '@/types/portfolio'
-import { useI18n } from '@/composables/useI18n'
-
-const { t } = useI18n()
-
-defineProps<{
-  lots: TaxLot[]
-}>()
-</script>

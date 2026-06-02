@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * MetricCard — Component description.
+ */
+
 defineProps<{
   label: string
   /** Tailwind color class for the bottom glow line (via color, e.g. 'via-primary/20') */

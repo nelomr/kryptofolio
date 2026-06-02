@@ -9,7 +9,7 @@
  * The `satisfies PortfolioData` annotation ensures compile-time type safety:
  * any structural mismatch between this mock and the interfaces causes a build error.
  *
- * @see openspec/changes/data-contracts-agnostic-mocks/specs/portfolio-mock-data/spec.md
+ * @see openspec/specs/portfolio-mock-data/spec.md
  */
 
 import type {

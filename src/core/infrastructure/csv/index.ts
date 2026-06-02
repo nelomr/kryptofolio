@@ -5,7 +5,7 @@
  * Bit2Me should be checked BEFORE Tangem since Tangem is a "catch-all"
  * for simple formats.
  *
- * @see openspec/changes/tax-domain-ports-services/design.md
+ * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { ICsvIngestionPort } from '@/core/domain/ports/ICsvIngestionPort'

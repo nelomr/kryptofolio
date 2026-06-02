@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * AppHeader — Component description.
+ */
+
 import { useI18n } from "@/composables/useI18n";
 import CryptoIcon from "@/components/common/CryptoIcon/CryptoIcon.vue";
 

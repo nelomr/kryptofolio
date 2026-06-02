@@ -5,7 +5,7 @@
  * portfolio data (REST API, Mock, LocalStorage) MUST implement this interface.
  * Pinia stores depend only on this abstraction — never on concrete adapters.
  *
- * @see openspec/changes/hex-arch-zod-refactor/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/hexagonal-architecture/spec.md
  */
 
 import type {
