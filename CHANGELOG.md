@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.8.0](https://github.com/nelomr/kryptofolio/compare/v1.7.0...v1.8.0) (2026-06-02)
+
+### ✨ Features
+
+* implement Tax Domain state and UI components ([c640d2a](https://github.com/nelomr/kryptofolio/commit/c640d2ac7a916c88ffbfa4496421735fe4a1c098))
+
 ## [1.7.0](https://github.com/nelomr/kryptofolio/compare/v1.6.0...v1.7.0) (2026-06-01)
 
 ### ✨ Features
