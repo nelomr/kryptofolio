@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.8.1](https://github.com/nelomr/kryptofolio/compare/v1.8.0...v1.8.1) (2026-06-02)
+
+### 🐛 Bug Fixes
+
+* finalize tax report view implementation ([acf80c9](https://github.com/nelomr/kryptofolio/commit/acf80c9b072f435c961d647f7ffb275d344954d7))
+
 ## [1.8.0](https://github.com/nelomr/kryptofolio/compare/v1.7.0...v1.8.0) (2026-06-02)
 
 ### ✨ Features
