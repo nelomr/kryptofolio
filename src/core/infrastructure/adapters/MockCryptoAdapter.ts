@@ -13,8 +13,9 @@ import type {
   PortfolioSummaryEntity,
   CryptoAssetEntity,
   IngestionStatusEntity,
+  TokenHistoryEntity,
 } from '@/core/domain/models/PortfolioEntities'
-import { AssetIdSchema } from '@/core/domain/models/BrandedTypes'
+import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -165,13 +166,49 @@ export class MockCryptoAdapter implements ICryptoPortfolioRepository {
     return holding
   }
 
-  async getTokenHistory(symbol: string): Promise<Record<string, any>> {
+  async getTokenHistory(symbol: string): Promise<TokenHistoryEntity> {
     await delay(250)
-    // Return the rich 3-level mock data
+    // Return the rich 3-level mock data mapped to domain entities
     const mockPortfolio = (await import('@/data/mockPortfolio')).default
-    const lots = mockPortfolio.lots[symbol as keyof typeof mockPortfolio.lots] || []
-    const history = mockPortfolio.history[symbol as keyof typeof mockPortfolio.history] || {}
-    
+    const rawLots = mockPortfolio.lots[symbol as keyof typeof mockPortfolio.lots] || []
+    const rawHistory = mockPortfolio.history[symbol as keyof typeof mockPortfolio.history] || {}
+
+    // Map snake_case mock data to domain entities (TaxLotEntity uses camelCase + Date)
+    const lots = rawLots.map((lot) => ({
+      id: lot.id as import('@/core/domain/models/BrandedTypes').LotId,
+      symbol: lot.symbol,
+      date: new Date(lot.date * 1000),
+      exchange: lot.exchange,
+      originalQty: lot.original_qty,
+      remainingQty: lot.remaining_qty,
+      unitCost: lot.unit_cost,
+      totalCost: lot.total_cost,
+    }))
+
+    // Map lot history: each lot's events to TaxLotHistoryEvent[]
+    const history: Record<string, import('@/core/domain/models/FiscalEntities').TaxLotHistoryEvent[]> = {}
+    for (const [lotId, lotRecord] of Object.entries(rawHistory)) {
+      history[lotId] = (lotRecord as { history: Array<{
+        id: string;
+        disposal_date: number;
+        amount_from_lot: number;
+        sale_price_eur: number;
+        gain_loss_eur: number;
+        is_taxable: boolean;
+        flag?: 'WALLET_ACTIVATION' | null;
+        notes?: string;
+      }> }).history.map((ev) => ({
+        id: ev.id,
+        disposalDate: new Date(ev.disposal_date * 1000),
+        amountFromLot: ev.amount_from_lot,
+        salePriceEur: ev.sale_price_eur,
+        gainLossEur: ev.gain_loss_eur,
+        isTaxable: ev.is_taxable,
+        flag: ev.flag ?? null,
+        notes: ev.notes,
+      }))
+    }
+
     return { lots, history }
   }
 

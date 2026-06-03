@@ -56,12 +56,11 @@ export function formatDate(val: number | string | Date | undefined | null): stri
     date = new Date(val as string);
   }
   if (isNaN(date.getTime())) return String(val).substring(0, 10);
-  const locale = typeof navigator !== 'undefined' && navigator.language ? navigator.language : (import.meta.env.VITE_APP_LOCALE || 'en-US')
-  return new Intl.DateTimeFormat(locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).format(date)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  
+  return `${day}/${month}/${year}`
 }
 
 export function formatDateNumeric(val: number | string | Date | undefined | null): string {

@@ -15,6 +15,8 @@ export const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         outline: "text-foreground",
+        profit: "border-transparent bg-profit/15 text-profit hover:bg-profit/25",
+        loss: "border-transparent bg-loss/15 text-loss hover:bg-loss/25",
       },
     },
     defaultVariants: {

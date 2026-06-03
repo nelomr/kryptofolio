@@ -7,13 +7,13 @@ import TokenDetailsBackdrop from "./modal/TokenDetailsBackdrop.vue";
 import TokenDetailsHeader from "./modal/TokenDetailsHeader.vue";
 import TokenDetailsContent from "./modal/TokenDetailsContent.vue";
 import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
-import type { TaxLot, LotRecord } from "@/types/portfolio";
+import type { TaxLotEntity, TaxLotHistoryEvent } from "@/core/domain/models/FiscalEntities";
 
 const props = defineProps<{
   symbol: string;
   holding?: CryptoAssetEntity | null;
-  lots?: TaxLot[];
-  history?: Record<string, LotRecord>;
+  lots?: TaxLotEntity[];
+  history?: Record<string, TaxLotHistoryEvent[]>;
   loading?: boolean;
   isOpen?: boolean;
 }>();

@@ -20,6 +20,7 @@ import ExpandedLotsSkeleton from './ExpandedLotsSkeleton.vue'
 import { cn } from '@/lib/utils'
 import { formatCurrency, formatDate } from '@/composables/useFormatters'
 import { useI18n } from '@/composables/useI18n'
+import type { TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 
 const { t } = useI18n()
 
@@ -27,8 +28,8 @@ const props = defineProps({
   assetSymbol: { type: String, required: true },
   assetAmount: { type: Number, required: true },
   assetCurrentValueEur: { type: Number, required: true },
-  lots: { type: Array as () => any[], default: () => [] },
-  tokenHistory: { type: Object as () => Record<string, any>, default: () => ({}) },
+  lots: { type: Array as () => TaxLotEntity[], default: () => [] },
+  tokenHistory: { type: Object as () => Record<string, TaxLotHistoryEvent[]>, default: () => ({}) },
   isLoadingDetails: { type: Boolean, default: false }
 })
 
@@ -41,23 +42,28 @@ const toggleLotHistory = (lotId: string) => {
 }
 
 const getLotHistory = (lotId: string) =>
-  props.tokenHistory?.[lotId]?.history || []
+  props.tokenHistory?.[lotId] || []
 
-const getLotStatus = (lotId: string) =>
-  props.tokenHistory?.[lotId]?.status || null
+const getLotStatus = (lot: TaxLotEntity) => {
+  if (lot.remainingQty === 0) return 'EMPTY'
+  if (lot.remainingQty < lot.originalQty) return 'PARTIAL'
+  return 'FULL'
+}
 
-const getLotBadgeVariant = (status: string) =>
-  ({ EMPTY: 'profit', PARTIAL: 'outline', FULL: 'secondary' })[status as keyof typeof getLotBadgeVariant] || 'secondary'
+const getLotBadgeVariant = (status: string): "profit" | "outline" | "secondary" => {
+  const map: Record<string, "profit" | "outline" | "secondary"> = { EMPTY: 'profit', PARTIAL: 'outline', FULL: 'secondary' }
+  return map[status] || 'secondary'
+}
 
 const getLotStatusText = (status: string) => {
   const map: Record<string, string> = { EMPTY: t('lot_status.open'), PARTIAL: t('lot_status.partial'), FULL: t('lot_status.sold') }
   return map[status] || status
 }
 
-const isLotInLoss = (lot: any) => {
+const isLotInLoss = (lot: TaxLotEntity) => {
   if (!props.assetAmount || !props.assetCurrentValueEur) return false
   const currentPrice = props.assetCurrentValueEur / props.assetAmount
-  return lot.unit_cost > currentPrice
+  return lot.unitCost > currentPrice
 }
 </script>
 
@@ -91,7 +97,7 @@ const isLotInLoss = (lot: any) => {
                   v-for="lot in lots"
                   :key="lot.id"
                 >
-                   <TableRow :class="cn('hover:bg-transparent border-b border-border/5', lot.remaining_qty === 0 && 'opacity-40 grayscale')">
+                   <TableRow :class="cn('hover:bg-transparent border-b border-border/5', lot.remainingQty === 0 && 'opacity-40 grayscale')">
                        <TableCell class="py-2 w-10 pl-3">
                           <button
                             v-if="getLotHistory(lot.id).length"
@@ -108,16 +114,15 @@ const isLotInLoss = (lot: any) => {
                          <div class="flex items-center gap-1.5 flex-wrap">
                             <Badge variant="secondary" class="text-[8px] bg-profit/10 text-profit border-none font-black tracking-widest uppercase">{{ t('tx_type.buy') }}</Badge>
                             <Badge
-                              v-if="getLotStatus(lot.id)"
-                              :variant="getLotBadgeVariant(getLotStatus(lot.id)) as any"
+                              :variant="getLotBadgeVariant(getLotStatus(lot))"
                               class="text-[8px] font-black uppercase tracking-widest border-none"
-                            >{{ getLotStatusText(getLotStatus(lot.id)) }}</Badge>
+                            >{{ getLotStatusText(getLotStatus(lot)) }}</Badge>
                          </div>
                       </TableCell>
-                      <TableCell class="py-2 text-right font-mono text-muted-foreground text-[10px] tabular-nums">{{ lot.original_qty.toFixed(4) }}</TableCell>
+                      <TableCell class="py-2 text-right font-mono text-muted-foreground text-[10px] tabular-nums">{{ lot.originalQty.toFixed(4) }}</TableCell>
                       <TableCell class="py-2 text-right font-mono font-bold text-primary text-[10px] tabular-nums">
-                         {{ lot.remaining_qty.toFixed(4) }}
-                         <Badge v-if="lot.remaining_qty === 0" variant="outline" class="ml-2 text-[8px] tracking-widest uppercase opacity-70 border-muted">{{ t('lot_status.sold') }}</Badge>
+                         {{ lot.remainingQty.toFixed(4) }}
+                         <Badge v-if="lot.remainingQty === 0" variant="outline" class="ml-2 text-[8px] tracking-widest uppercase opacity-70 border-muted">{{ t('lot_status.sold') }}</Badge>
                       </TableCell>
                       <TableCell class="py-2 text-right">
                          <div class="flex items-center justify-end gap-1.5">
@@ -127,17 +132,17 @@ const isLotInLoss = (lot: any) => {
                       </TableCell>
                       <TableCell class="py-2 text-right font-mono text-[10px] tabular-nums relative">
                          <div class="flex items-center justify-end gap-2">
-                           <div v-if="isLotInLoss(lot) && lot.remaining_qty > 0" class="group/tooltip relative cursor-help flex items-center">
+                           <div v-if="isLotInLoss(lot) && lot.remainingQty > 0" class="group/tooltip relative cursor-help flex items-center">
                              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse block"></span>
                              <div class="absolute right-0 bottom-full mb-2 w-48 p-2.5 bg-popover border border-amber-500/30 rounded-lg shadow-xl text-[9px] text-popover-foreground opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 normal-case font-sans tracking-normal leading-relaxed text-left">
                                  <span class="font-bold text-amber-500 block mb-1">{{ t('expanded_lots.ai_insight') }}</span>
                                  Este lote califica para <span class="font-bold">{{ t('expanded_lots.tax_loss') }}</span>{{ t('expanded_lots.tax_loss_desc') }}
                              </div>
                            </div>
-                           {{ formatCurrency(lot.unit_cost) }}
+                           {{ formatCurrency(lot.unitCost) }}
                          </div>
                       </TableCell>
-                      <TableCell class="py-2 text-right font-mono text-[10px] tabular-nums">{{ formatCurrency(lot.total_cost) }}</TableCell>
+                      <TableCell class="py-2 text-right font-mono text-[10px] tabular-nums">{{ formatCurrency(lot.totalCost) }}</TableCell>
                    </TableRow>
 
                    <TableRow v-if="expandedLots.has(lot.id)" class="bg-muted/5 border-b border-primary/10">

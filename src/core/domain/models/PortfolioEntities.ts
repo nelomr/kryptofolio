@@ -10,6 +10,7 @@
  */
 
 import type { AssetId } from './BrandedTypes'
+import type { TaxLotEntity, TaxLotHistoryEvent } from './FiscalEntities'
 
 // ---------------------------------------------------------------------------
 // CryptoAssetEntity — single holding in the portfolio (Level 1)
@@ -77,4 +78,18 @@ export interface IngestionStatusEntity {
   message: string
   processedCount: number
   totalCount: number
+}
+
+// ---------------------------------------------------------------------------
+// TokenHistoryEntity — lot hierarchy data for a single asset (3-level view)
+// ---------------------------------------------------------------------------
+
+export interface TokenHistoryEntity {
+  /** FIFO tax lots for this asset, ordered by acquisition date */
+  lots: TaxLotEntity[]
+  /**
+   * Lot history events keyed by lot ID.
+   * Each key is a LotId string, value is the ordered list of disposal events.
+   */
+  history: Record<string, TaxLotHistoryEvent[]>
 }

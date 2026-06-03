@@ -31,36 +31,38 @@ describe('ExpandedLotsTable.vue', () => {
   const mockLots = [
     {
       id: 'lot1',
-      date: 1672531200,
-      original_qty: 1.0,
-      remaining_qty: 1.0,
-      unit_cost: 30000,
-      total_cost: 30000
+      date: new Date(1672531200 * 1000),
+      originalQty: 1.0,
+      remainingQty: 1.0,
+      unitCost: 30000,
+      totalCost: 30000,
+      exchange: 'Kraken',
+      symbol: 'BTC'
     },
     {
       id: 'lot2',
-      date: 1675209600,
-      original_qty: 0.5,
-      remaining_qty: 0.5,
-      unit_cost: 32000,
-      total_cost: 16000
+      date: new Date(1675209600 * 1000),
+      originalQty: 0.5,
+      remainingQty: 0.5,
+      unitCost: 32000,
+      totalCost: 16000,
+      exchange: 'Kraken',
+      symbol: 'BTC'
     }
-  ]
+  ] as any[]
 
   const mockTokenHistory = {
-    lot1: {
-      status: 'OPEN',
-      history: [
-        {
-          disposal_date: 1680000000,
-          is_taxable: true,
-          amount_from_lot: 0.2,
-          sale_price_eur: 8000,
-          gain_loss_eur: 2000
-        }
-      ]
-    }
-  }
+    lot1: [
+      {
+        id: 'event1',
+        disposalDate: new Date(1680000000 * 1000),
+        isTaxable: true,
+        amountFromLot: 0.2,
+        salePriceEur: 8000,
+        gainLossEur: 2000
+      }
+    ]
+  } as any
 
   let wrapper: any
 
@@ -107,9 +109,9 @@ describe('ExpandedLotsTable.vue', () => {
     const history = vm.getLotHistory('lot1')
     
     expect(history).toHaveLength(1)
-    expect(history[0].gain_loss_eur).toBe(2000)
+    expect(history[0].gainLossEur).toBe(2000)
     
-    const status = vm.getLotStatus('lot1')
-    expect(status).toBe('OPEN')
+    const status = vm.getLotStatus(mockLots[0])
+    expect(status).toBe('FULL')
   })
 })

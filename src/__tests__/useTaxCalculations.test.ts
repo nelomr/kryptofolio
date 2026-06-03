@@ -9,7 +9,7 @@ import {
   BADGE_I18N_KEYS,
 } from '@/views/TaxReport/composables/useTaxCalculations'
 import type { TaxTransactionEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const dummyTx = (year: number): TaxTransactionEntity => ({
   id: TransactionIdSchema.parse(`tx-${Math.random()}`),

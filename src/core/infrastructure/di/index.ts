@@ -52,8 +52,16 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   // when stores need to fetch dependencies asynchronously.
   pinia.use(({ app: piniaApp }) => {
     return {
-      $portfolioRepo: piniaApp.runWithContext(() => inject(PORTFOLIO_REPO_KEY)),
-      $taxRepo: piniaApp.runWithContext(() => inject(TAX_REPO_KEY))
+      $portfolioRepo: piniaApp.runWithContext(() => {
+        const repo = inject(PORTFOLIO_REPO_KEY)
+        if (!repo) throw new Error('[DI] PORTFOLIO_REPO_KEY not provided to Vue app context')
+        return repo
+      }),
+      $taxRepo: piniaApp.runWithContext(() => {
+        const repo = inject(TAX_REPO_KEY)
+        if (!repo) throw new Error('[DI] TAX_REPO_KEY not provided to Vue app context')
+        return repo
+      })
     }
   })
 }

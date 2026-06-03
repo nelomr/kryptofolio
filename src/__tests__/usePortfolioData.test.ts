@@ -14,7 +14,7 @@ import { useChartData } from '@/views/Portfolio/composables/useChartData'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
 import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
-import { AssetIdSchema } from '@/core/domain/models/BrandedTypes'
+import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const mockSummary: PortfolioSummaryEntity = {
   metrics: {

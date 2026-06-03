@@ -66,3 +66,27 @@ The system SHALL define a `PortfolioData` root interface that wraps all domain t
 #### Scenario: Non-conforming root object is rejected
 - **WHEN** an object missing `summary.metrics` is assigned to `PortfolioData`
 - **THEN** TypeScript reports a type error on the missing nested field
+
+
+
+## REMOVED Requirements
+
+### Requirement: PortfolioMetrics interface
+**Reason**: The `PortfolioMetrics` interface in `src/types/portfolio.ts` uses legacy snake_case field names (`total_equity_eur`) that duplicate the proper `PortfolioMetricsEntity` domain model in `src/core/domain/models/PortfolioEntities.ts` which uses camelCase (`totalEquityEur`).
+**Migration**: All imports from `@/types/portfolio` SHALL be replaced with imports from `@/core/domain/models/PortfolioEntities`. The Zod DTO schemas in `ExternalPortfolioSchemas.ts` handle the snake_case→camelCase mapping.
+
+### Requirement: HoldingItem interface
+**Reason**: The `HoldingItem` interface in `src/types/portfolio.ts` uses legacy snake_case field names and duplicates the `CryptoAssetEntity` / `HoldingEntity` in `src/core/domain/models/PortfolioEntities.ts`.
+**Migration**: All imports from `@/types/portfolio` for `HoldingItem` SHALL be replaced with `CryptoAssetEntity` or `HoldingEntity` from `@/core/domain/models/PortfolioEntities`.
+
+### Requirement: TaxLot interface
+**Reason**: The `TaxLot` interface in `src/types/portfolio.ts` uses UNIX timestamps as `number` and snake_case names, duplicating `TaxLotEntity` in `src/core/domain/models/FiscalEntities.ts` which uses `Date` objects and camelCase.
+**Migration**: All imports from `@/types/portfolio` for `TaxLot` SHALL be replaced with `TaxLotEntity` from `@/core/domain/models/FiscalEntities`.
+
+### Requirement: LotHistoryEvent interface
+**Reason**: The `LotHistoryEvent` interface in `src/types/portfolio.ts` uses `disposal_date: number` (UNIX) and snake_case names, duplicating `TaxLotHistoryEvent` in `src/core/domain/models/FiscalEntities.ts` which uses `disposalDate: Date` and camelCase.
+**Migration**: All imports from `@/types/portfolio` for `LotHistoryEvent` SHALL be replaced with `TaxLotHistoryEvent` from `@/core/domain/models/FiscalEntities`.
+
+### Requirement: PortfolioData root interface
+**Reason**: The `PortfolioData` root interface wraps the above legacy types and is no longer needed. Portfolio data flows through `PortfolioSummaryEntity` (from domain) and individual entity queries.
+**Migration**: Consumers using `PortfolioData` SHALL migrate to using `PortfolioSummaryEntity` for summary data and `TokenHistoryEntity` for lot/history data, both from domain models.

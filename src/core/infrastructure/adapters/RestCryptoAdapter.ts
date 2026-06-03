@@ -11,18 +11,20 @@
  */
 
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
-import type { IHttpClient } from '@/core/domain/repositories/IHttpClient'
+import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 import type {
   PortfolioSummaryEntity,
   CryptoAssetEntity,
   IngestionStatusEntity,
+  TokenHistoryEntity,
 } from '@/core/domain/models/PortfolioEntities'
 import {
   ExternalPortfolioSummarySchema,
   ExternalIngestionStatusSchema,
   ExternalAssetSchema,
 } from '@/core/infrastructure/dtos/ExternalPortfolioSchemas'
-import { AssetIdSchema } from '@/core/domain/models/BrandedTypes'
+import { ExternalTokenHistorySchema } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
+import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 
 // ---------------------------------------------------------------------------
@@ -106,12 +108,11 @@ export class RestCryptoAdapter implements ICryptoPortfolioRepository {
     }
   }
 
-  async getTokenHistory(symbol: string): Promise<Record<string, unknown>> {
-    const response = await this.http.get<Record<string, unknown>>(
+  async getTokenHistory(symbol: string): Promise<TokenHistoryEntity> {
+    const response = await this.http.get<unknown>(
       `/api/portfolio/token/${symbol}/history`,
     )
-    // Raw pass-through for now; structured when lot history tables are implemented
-    return response.data ?? {}
+    return parseOrFail(ExternalTokenHistorySchema, response.data, 'getTokenHistory')
   }
 
   async getIngestionStatus(): Promise<IngestionStatusEntity> {

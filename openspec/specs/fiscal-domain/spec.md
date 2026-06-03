@@ -51,3 +51,26 @@ The system SHALL define strict TypeScript domain models for all fiscal capabilit
 #### Scenario: ITaxRepository includes uploadTaxFile
 - **WHEN** a class declares `implements ITaxRepository`
 - **THEN** TypeScript SHALL require implementing `uploadTaxFile(file: File): Promise<void>` and `deleteAllTransactions(): Promise<void>` in addition to the existing six methods
+
+
+
+## MODIFIED Requirements
+
+### Requirement: Zod Schemas for Legacy Data Sanitization
+The system SHALL implement complex Zod DTO schemas (`ExternalTaxTransactionSchema`, `ExternalTaxReportSchema`, `ExternalTokenDetailsSchema`) to normalize inconsistencies from the legacy API before they reach the domain layer. The `audit_trail` field SHALL be validated with a proper `ExternalTaxLotHistorySchema` instead of `z.array(z.unknown())`.
+
+#### Scenario: Resolving Transaction Types and Symbols
+- **WHEN** the legacy API sends a transaction with `tx_type: 'BUY'`, `asset_in: 'BTC'`, and `amount_in: 0.5`
+- **THEN** the Zod schema (`preprocess`) MUST map it cleanly so the adapter can construct a `TaxTransactionEntity` with `type: 'BUY'`, `symbol: 'BTC'`, and `amount: 0.5`
+
+#### Scenario: Resolving Numeric Strings and Aliases
+- **WHEN** the legacy API sends metrics like `weighted_average_cost` or string values like `"0.50"`
+- **THEN** Zod MUST cast them to numbers and map them to their standard domain equivalents (e.g., `avg_price_eur`)
+
+#### Scenario: Audit trail entries are typed and validated
+- **WHEN** the legacy API sends a tax report with an `audit_trail` array
+- **THEN** each entry SHALL be validated through `ExternalTaxLotHistorySchema` producing `TaxLotHistoryEvent` domain entities with `disposalDate` as native `Date`, `gainLossEur` as `number`, and `isTaxable` as `boolean`
+
+#### Scenario: Malformed audit trail entries use safe defaults
+- **WHEN** an audit trail entry has missing optional fields (e.g., `flag`, `notes`)
+- **THEN** the schema SHALL produce a valid `TaxLotHistoryEvent` with `undefined` for optional fields and `0` for missing numeric fields

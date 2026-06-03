@@ -15,7 +15,7 @@
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
 import type { TaxTransactionEntity, TaxReportEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { REGISTERED_PARSERS } from '@/core/infrastructure/csv'
 

@@ -80,11 +80,28 @@ pnpm dev
 
 ## 🏗️ Architecture: Hexagonal (Ports & Adapters)
 
-This project strictly adheres to **Clean Architecture** to ensure the UI is completely decoupled from API contracts and external dependencies.
+This project strictly adheres to **Clean Architecture** to ensure the UI is completely decoupled from data fetching, API contracts, and external dependencies.
 
-1. **Domain Layer (`src/core/domain/`)**: Framework agnostic. Defines Entities & Value Objects using TypeScript and `zod` for strict runtime validation. Contains Ports (repository interfaces).
-2. **Infrastructure Layer (`src/core/infrastructure/`)**: Concrete Implementations (Adapters) of the Domain Ports. Handles real `fetch` calls and dependency injection depending on environment variables.
-3. **Application & UI Layer (`src/composables/` & `src/views/`)**: Asynchronous data is managed declaratively via `@pinia/colada` (`useQuery`/`useMutation`). The primary views (`PortfolioView` and `TaxReportView`) act purely as orchestrators for presentation components.
+### 🏛️ Architectural Layers
+
+1. **Domain Layer (`src/core/domain/`)**
+   The heart of the application. **Total Isolation**: It has absolutely zero external framework dependencies (no Vue, Axios, or Zod imports).
+   - **Entities & Value Objects (`models/`)**: Defined using pure TypeScript interfaces. We heavily utilize **Branded Types** (e.g. `AssetId` or `LotId`) to avoid primitive obsession and guarantee type-safety across identifiers.
+   - **Ports (`repositories/`)**: Interfaces defining the contract for data operations. The domain dictates *what* it needs, not *how* to get it.
+
+2. **Infrastructure Layer (`src/core/infrastructure/`)**
+   The outer edge that communicates with the real world and protects the domain.
+   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter` or `MockCryptoAdapter`).
+   - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data (e.g. snake_case or timestamps) to pure Entities and validate payload integrity *before* it ever touches the domain.
+   - **Dependency Injection (`di/`)**: The "Composition Root". It evaluates environment variables to instantiate the correct adapter. It also hosts `pinia.d.ts` for strict global typing of injected repositories.
+
+3. **Application & UI Layer (`src/composables/` & `src/views/`)**
+   - We utilize `@pinia/colada` to declaratively manage asynchronous server state fetching.
+   - **Structural Note**: In this project, **there is no global `src/stores/` or `src/types/` folder**. Types belong to their respective domains, and application state is delegated entirely to Pinia Colada (Server State) and local Composables (UI State). Main views orchestrate using pure injected dependencies.
+
+### 🛡️ Absolute Type Safety & Strict Policies
+- **No `any` Policy**: The production source code is 100% statically typed, with no exceptions. It is rigorously compiled using `vue-tsc --noEmit`.
+- **Global Error Bus**: If a Zod schema in the Anti-Corruption Layer fails, a controlled error is emitted to the `errorBus`, preventing silent runtime crashes and allowing the UI to react gracefully.
 
 ## 🔖 Versioning
 

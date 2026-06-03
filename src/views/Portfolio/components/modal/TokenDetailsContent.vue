@@ -9,23 +9,23 @@ import TokenActiveLots from "./TokenActiveLots.vue";
 import TokenSalesHistory from "./TokenSalesHistory.vue";
 import TokenDetailsSkeleton from "./TokenDetailsSkeleton.vue";
 import type { CryptoAssetEntity } from "@/core/domain/models/PortfolioEntities";
-import type { TaxLot, LotRecord } from "@/types/portfolio";
+import type { TaxLotEntity, TaxLotHistoryEvent } from "@/core/domain/models/FiscalEntities";
 import { useI18n } from '@/composables/useI18n'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   holding?: CryptoAssetEntity | null;
-  lots?: TaxLot[];
-  history?: Record<string, LotRecord>;
+  lots?: TaxLotEntity[];
+  history?: Record<string, TaxLotHistoryEvent[]>;
   loading: boolean;
 }>();
 
 const disposalHistory = computed(() => {
   if (!props.history) return [];
   return Object.values(props.history)
-    .flatMap((record) => record.history || [])
-    .sort((a, b) => b.disposal_date - a.disposal_date);
+    .flatMap((events) => events || [])
+    .sort((a, b) => b.disposalDate.getTime() - a.disposalDate.getTime());
 });
 </script>
 

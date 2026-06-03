@@ -5,13 +5,13 @@
 
 import { formatCurrency, formatNumber, formatDate } from '@/composables/useFormatters'
 import { Badge } from '@/components/ui/badge'
-import type { TaxLot } from '@/types/portfolio'
+import type { TaxLotEntity } from '@/core/domain/models/FiscalEntities'
 import { useI18n } from '@/composables/useI18n'
 
 const { t } = useI18n()
 
 defineProps<{
-  lots: TaxLot[]
+  lots: TaxLotEntity[]
 }>()
 </script>
 
@@ -35,9 +35,9 @@ defineProps<{
         <tbody class="divide-y divide-border/10">
           <tr v-for="lot in lots" :key="lot.id" class="hover:bg-muted/20 transition-colors">
             <td class="px-4 py-3 text-muted-foreground">{{ formatDate(lot.date) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(lot.remaining_qty) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(lot.unit_cost) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-foreground font-semibold tabular-nums">{{ formatCurrency(lot.total_cost) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(lot.remainingQty) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(lot.unitCost) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-foreground font-semibold tabular-nums">{{ formatCurrency(lot.totalCost) }}</td>
             <td class="px-4 py-3 text-center">
                 <Badge variant="outline" class="text-[9px] bg-profit/10 text-profit border-profit/20 uppercase tracking-widest border-none">{{ t('token.active_lots.in_portfolio') }}</Badge>
             </td>

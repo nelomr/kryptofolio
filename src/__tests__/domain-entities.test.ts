@@ -14,7 +14,7 @@ import {
   AssetIdSchema,
   TransactionIdSchema,
   LotIdSchema,
-} from '@/core/domain/models/BrandedTypes'
+} from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import type {
   CryptoAssetEntity,
   PortfolioSummaryEntity,

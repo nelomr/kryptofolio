@@ -13,13 +13,13 @@
  */
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
-import type { IHttpClient } from '@/core/domain/repositories/IHttpClient'
+import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
 import {
   ExternalTaxTransactionSchema,
   ExternalTaxReportSchema,
 } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'

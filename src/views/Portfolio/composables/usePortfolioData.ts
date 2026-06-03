@@ -4,6 +4,7 @@
 
 import { computed, ref } from 'vue'
 import { usePortfolioSummaryQuery, useRebuildMutation, useTokenHistoryQuery, usePortfolioRepo } from '@/composables/queries/usePortfolioQueries'
+import type { TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 
 export function usePortfolioData() {
   // Use Pinia Colada queries instead of the old store
@@ -19,7 +20,7 @@ export function usePortfolioData() {
   const { data: tokenDetails, isLoading: isFetchingDetails } = useTokenHistoryQuery(selectedSymbol)
 
   // Dictionary cache for hierarchical table expanded rows
-  const expandedDetailsMap = ref<Record<string, { lots: any, history: any, isLoading: boolean }>>({})
+  const expandedDetailsMap = ref<Record<string, { lots: TaxLotEntity[], history: Record<string, TaxLotHistoryEvent[]>, isLoading: boolean }>>({})
 
   // Computed metrics
   const metrics = computed(() => summary.value?.metrics || null)

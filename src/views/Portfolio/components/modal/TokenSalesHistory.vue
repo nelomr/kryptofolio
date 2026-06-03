@@ -5,13 +5,13 @@
 
 import { formatCurrency, formatNumber, formatDate } from '@/composables/useFormatters'
 import { Badge } from '@/components/ui/badge'
-import type { LotHistoryEvent } from '@/types/portfolio'
+import type { TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 import { useI18n } from '@/composables/useI18n'
 
 const { t } = useI18n()
 
 defineProps<{
-  history: LotHistoryEvent[]
+  history: TaxLotHistoryEvent[]
 }>()
 </script>
 
@@ -34,11 +34,11 @@ defineProps<{
         </thead>
         <tbody class="divide-y divide-border/10">
           <tr v-for="disp in history" :key="disp.id" class="hover:bg-muted/20 transition-colors">
-            <td class="px-4 py-3 text-muted-foreground">{{ formatDate(disp.disposal_date) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(disp.amount_from_lot) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(disp.sale_price_eur) }}</td>
-            <td class="px-4 py-3 text-right font-mono font-bold tabular-nums" :class="disp.gain_loss_eur >= 0 ? 'text-profit' : 'text-loss'">
-              <span v-if="disp.gain_loss_eur > 0">+</span>{{ formatCurrency(disp.gain_loss_eur) }}
+            <td class="px-4 py-3 text-muted-foreground">{{ formatDate(disp.disposalDate) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(disp.amountFromLot) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(disp.salePriceEur) }}</td>
+            <td class="px-4 py-3 text-right font-mono font-bold tabular-nums" :class="disp.gainLossEur >= 0 ? 'text-profit' : 'text-loss'">
+              <span v-if="disp.gainLossEur > 0">+</span>{{ formatCurrency(disp.gainLossEur) }}
             </td>
             <td class="px-4 py-3 text-center">
                 <Badge variant="outline" class="text-[9px] bg-accent/10 text-accent border-accent/20 uppercase tracking-widest border-none">{{ t('token.sales_history.sold') }}</Badge>

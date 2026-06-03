@@ -14,7 +14,8 @@
  */
 
 import { z } from 'zod'
-import type { TaxTransactionType } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionType, TaxLotHistoryEvent, TaxLotEntity } from '@/core/domain/models/FiscalEntities'
+import { LotIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -191,6 +192,92 @@ const ExternalTaxReportSummarySchema = z
     estimatedIrpfEur: raw.estimated_irpf_eur ?? 0,
   }))
 
+
+// ---------------------------------------------------------------------------
+// ExternalTaxLotHistorySchema — typed audit trail entry
+//
+// Maps the raw API audit trail shape (snake_case, UNIX timestamps) to
+// TaxLotHistoryEvent domain entities (camelCase, native Date objects).
+// Must be defined before ExternalTaxReportSchema which references it.
+// ---------------------------------------------------------------------------
+
+export const ExternalTaxLotHistorySchema = z
+  .object({
+    id: z.string().min(1),
+    disposal_date: timestampToDate,
+    amount_from_lot: numericField,
+    sale_price_eur: numericField,
+    gain_loss_eur: numericField,
+    sale_fee_eur: numericField.optional(),
+    is_taxable: z.boolean().default(false),
+    flag: z.enum(['WALLET_ACTIVATION']).nullable().optional(),
+    notes: z.string().optional(),
+    asset_symbol: z.string().optional(),
+    asset_logo_uri: z.string().optional(),
+    exchange_name: z.string().optional(),
+    exchange_logo_uri: z.string().optional(),
+    operation_type: z.string().optional(),
+  })
+  .transform(
+    (raw): TaxLotHistoryEvent => ({
+      id: raw.id,
+      disposalDate: raw.disposal_date,
+      amountFromLot: raw.amount_from_lot,
+      salePriceEur: raw.sale_price_eur,
+      gainLossEur: raw.gain_loss_eur,
+      saleFeeEur: raw.sale_fee_eur,
+      isTaxable: raw.is_taxable,
+      flag: raw.flag ?? null,
+      notes: raw.notes,
+      assetSymbol: raw.asset_symbol,
+      assetLogoUri: raw.asset_logo_uri,
+      exchangeName: raw.exchange_name,
+      exchangeLogoUri: raw.exchange_logo_uri,
+    }),
+  )
+
+// ---------------------------------------------------------------------------
+// ExternalTaxLotSchema — typed FIFO tax lot
+// ---------------------------------------------------------------------------
+
+export const ExternalTaxLotSchema = z
+  .object({
+    id: z.any().transform(val => LotIdSchema.parse(String(val))),
+    symbol: z.string().optional().default(''),
+    date: timestampToDate,
+    exchange: z.string().optional().default(''),
+    original_qty: numericField,
+    remaining_qty: numericField,
+    unit_cost: numericField,
+    total_cost: numericField,
+    status: z.enum(['FULL', 'PARTIAL', 'EMPTY']).optional(),
+  })
+  .transform(
+    (raw): TaxLotEntity => ({
+      id: raw.id,
+      symbol: raw.symbol,
+      date: raw.date,
+      exchange: raw.exchange,
+      originalQty: raw.original_qty,
+      remainingQty: raw.remaining_qty,
+      unitCost: raw.unit_cost,
+      totalCost: raw.total_cost,
+      status: raw.status,
+    })
+  )
+
+// ---------------------------------------------------------------------------
+// ExternalTokenHistorySchema — mapped response for token history API
+// ---------------------------------------------------------------------------
+
+export const ExternalTokenHistorySchema = z.object({
+  lots: z.array(ExternalTaxLotSchema).optional().default([]),
+  history: z.record(z.string(), z.array(ExternalTaxLotHistorySchema)).optional().default({}),
+}).transform(raw => ({
+  lots: raw.lots,
+  history: raw.history
+}))
+
 // ---------------------------------------------------------------------------
 // ExternalTaxReportSchema — full tax report for a fiscal year
 // ---------------------------------------------------------------------------
@@ -200,13 +287,13 @@ export const ExternalTaxReportSchema = z
     year: z.number().int().min(2000).max(2100),
     method: z.string().default('FIFO'),
     summary: ExternalTaxReportSummarySchema,
-    audit_trail: z.array(z.unknown()).optional().default([]),
+    audit_trail: z.array(ExternalTaxLotHistorySchema).optional().default([]),
   })
   .transform((raw) => ({
     year: raw.year,
     method: raw.method,
     summary: raw.summary,
-    auditTrail: raw.audit_trail as unknown[],
+    auditTrail: raw.audit_trail,
   }))
 
 export type ExternalTaxReportDTO = z.infer<typeof ExternalTaxReportSchema>

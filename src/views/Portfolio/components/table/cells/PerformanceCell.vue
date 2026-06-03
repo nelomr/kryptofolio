@@ -6,8 +6,9 @@
 import { computed } from 'vue'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatPercent } from '@/composables/useFormatters'
+import type { CryptoAssetEntity } from '@/core/domain/models/PortfolioEntities'
 
-const props = defineProps<{ row: any }>()
+const props = defineProps<{ row: CryptoAssetEntity }>()
 
 const pnlRaw = computed(() => props.row.unrealizedPnlEur || props.row.pnlEur || 0)
 const basis = computed(() => props.row.costBasisEur || 0)

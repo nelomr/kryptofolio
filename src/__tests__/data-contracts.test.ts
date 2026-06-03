@@ -17,7 +17,7 @@ import mockPortfolio, {
   mockNonTaxableEvent,
 } from '../data/mockPortfolio'
 
-import type { PortfolioData } from '../types/portfolio'
+import type { PortfolioData } from '../data/mockPortfolio'
 
 // ---------------------------------------------------------------------------
 // Task 4.1 — mockPortfolio satisfies PortfolioData at all 3 levels

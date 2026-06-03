@@ -7,7 +7,7 @@ import { useSpotTransactionsQuery, useFuturesTransactionsQuery, useTaxReportQuer
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
 import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const mockTx: TaxTransactionEntity = {
   id: TransactionIdSchema.parse('tx-mock'),

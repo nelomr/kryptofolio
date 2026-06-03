@@ -12,11 +12,60 @@
  * @see openspec/specs/portfolio-mock-data/spec.md
  */
 
-import type {
-  PortfolioData,
-  TaxLot,
-  LotHistoryEvent,
-} from '../types/portfolio'
+// Raw legacy types for mocking
+export interface PortfolioMetrics {
+  total_equity_eur: number
+  total_realized_pnl_eur: number
+  total_unrealized_pnl_eur: number
+}
+
+export interface HoldingItem {
+  symbol: string
+  amount: number
+  avg_price_eur: number
+  weighted_average_cost: number
+  current_value_eur: number
+  cost_basis_eur: number
+  unrealized_pnl_eur: number
+  pnl_eur: number
+  portfolio_locations: string[]
+}
+
+export interface TaxLot {
+  id: string
+  symbol: string
+  date: number
+  exchange: string
+  original_qty: number
+  remaining_qty: number
+  unit_cost: number
+  total_cost: number
+}
+
+export interface LotHistoryEvent {
+  id: string
+  disposal_date: number
+  amount_from_lot: number
+  sale_price_eur: number
+  gain_loss_eur: number
+  is_taxable: boolean
+  flag?: 'WALLET_ACTIVATION' | null
+  notes?: string
+}
+
+export interface LotRecord {
+  status: 'FULL' | 'PARTIAL' | 'EMPTY'
+  history: LotHistoryEvent[]
+}
+
+export interface PortfolioData {
+  summary: {
+    metrics: PortfolioMetrics
+    holdings: HoldingItem[]
+  }
+  lots: Record<string, TaxLot[]>
+  history: Record<string, Record<string, LotRecord>>
+}
 
 // ---------------------------------------------------------------------------
 // Root mock — injectable directly into a Pinia store's state

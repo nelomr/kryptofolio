@@ -8,7 +8,7 @@
  * @see src/core/domain/repositories/IHttpClient.ts
  */
 
-import type { IHttpClient } from '@/core/domain/repositories/IHttpClient'
+import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 

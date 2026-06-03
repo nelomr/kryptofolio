@@ -1,27 +1,32 @@
 /**
  * Branded Types — Nominal typing for domain identifiers.
  *
- * Uses Zod's `.brand()` to create distinct types that prevent accidental
- * ID swapping at compile time. An `AssetId` cannot be passed where a
- * `TransactionId` is expected, even though both are strings at runtime.
+ * Uses TypeScript phantom branding to create distinct nominal types that
+ * prevent accidental ID swapping at compile time. An `AssetId` cannot be
+ * passed where a `TransactionId` is expected, even though both are strings
+ * at runtime. No external libraries — pure TypeScript only.
  *
- * @see openspec/specs/zod-validation/spec.md
+ * Zod validation schemas for these types live in:
+ * @see src/core/infrastructure/dtos/BrandedTypeSchemas.ts
+ *
+ * @see openspec/specs/domain-purity/spec.md
  */
 
-import { z } from 'zod'
-
 // ---------------------------------------------------------------------------
-// Branded ID Schemas — parse + validate + brand in one step
+// Phantom brand helper — no runtime overhead
 // ---------------------------------------------------------------------------
 
-export const AssetIdSchema = z.string().min(1, 'AssetId cannot be empty').brand<'AssetId'>()
-export const TransactionIdSchema = z.string().min(1, 'TransactionId cannot be empty').brand<'TransactionId'>()
-export const LotIdSchema = z.string().min(1, 'LotId cannot be empty').brand<'LotId'>()
+type Brand<T, B extends string> = T & { readonly __brand: B }
 
 // ---------------------------------------------------------------------------
-// Exported types — inferred from Zod schemas
+// Branded ID types — nominal identity for domain entities
 // ---------------------------------------------------------------------------
 
-export type AssetId = z.infer<typeof AssetIdSchema>
-export type TransactionId = z.infer<typeof TransactionIdSchema>
-export type LotId = z.infer<typeof LotIdSchema>
+/** Nominal type for asset/holding identifiers (e.g. "asset-btc-1") */
+export type AssetId = Brand<string, 'AssetId'>
+
+/** Nominal type for transaction identifiers (e.g. "tx-12345") */
+export type TransactionId = Brand<string, 'TransactionId'>
+
+/** Nominal type for FIFO lot identifiers (e.g. "lot-btc-1") */
+export type LotId = Brand<string, 'LotId'>

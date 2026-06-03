@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { ref } from 'vue'
 import { useAvailableYears } from '../useAvailableYears'
 import type { TaxTransactionEntity } from '@/core/domain/models/FiscalEntities'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { MockTaxAdapter } from '@/core/infrastructure/adapters/MockTaxAdapter'
 
 describe('useAvailableYears', () => {

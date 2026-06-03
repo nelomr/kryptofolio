@@ -11,7 +11,7 @@
 
 import type { ICsvIngestionPort } from '@/core/domain/ports/ICsvIngestionPort'
 import type { TaxTransactionEntity, TaxTransactionType } from '@/core/domain/models/FiscalEntities'
-import { TransactionIdSchema } from '@/core/domain/models/BrandedTypes'
+import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 type RawRow = Record<string, string>
 

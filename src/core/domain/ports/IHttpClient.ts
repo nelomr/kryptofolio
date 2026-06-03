@@ -6,6 +6,7 @@
  * Pinia stores and domain services never depend on a specific HTTP library.
  *
  * @see openspec/specs/hexagonal-architecture/spec.md
+ * @see openspec/specs/domain-purity/spec.md
  */
 
 export interface IHttpClient {

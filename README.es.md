@@ -129,22 +129,23 @@ graph TD
 ### 🏛️ Capas Arquitectónicas
 
 1. **Capa de Dominio (`src/core/domain/`)**
-   El corazón de la aplicación. No tiene dependencias externas de frameworks.
-   - **Entidades y Objetos de Valor (`models/`)**: Definidos usando TypeScript y `zod` para validación estricta en tiempo de ejecución.
+   El corazón de la aplicación. **Aislamiento total**: No tiene dependencias externas de frameworks (sin imports de Vue, Axios, ni Zod).
+   - **Entidades y Objetos de Valor (`models/`)**: Definidos usando interfaces TypeScript puras. Utilizamos **Branded Types** (tipos marca como `AssetId` o `LotId`) para evitar la "primitive obsession" y garantizar type-safety en identificadores.
    - **Puertos (`repositories/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita, no *cómo* obtenerlo.
 
 2. **Capa de Infraestructura (`src/core/infrastructure/`)**
-   El borde exterior que se comunica con el mundo real.
-   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio. (ej. `RestCryptoAdapter` o `MockCryptoAdapter`).
-   - **Inyección de Dependencias (`di/`)**: El "Composition Root". Evalúa las variables de entorno e instancia el adaptador correcto.
+   El borde exterior que se comunica con el mundo real y protege al dominio.
+   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`).
+   - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API (ej. snake_case o timestamps) a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
+   - **Inyección de Dependencias (`di/`)**: El "Composition Root". Evalúa las variables de entorno e instancia el adaptador correcto. Aquí se aloja `pinia.d.ts` para tipar estrictamente los repositorios inyectados de forma global.
 
-3. **Capa de Aplicación y Presentación (`src/composables/queries/` & `src/views/`)**
-   - Utilizamos `@pinia/colada` para gestionar de forma declarativa la obtención asíncrona de datos. Las vistas principales (`PortfolioView` y `TaxReportView`) actúan puramente como orquestadores.
+3. **Capa de Aplicación y Presentación (`src/composables/` & `src/views/`)**
+   - Utilizamos `@pinia/colada` para gestionar de forma declarativa la obtención asíncrona de datos del servidor.
+   - **Nota Estructural**: En este proyecto **no existe la típica carpeta global `src/stores/` ni `src/types/`**. Los tipos pertenecen a sus dominios respectivos, y el estado de la aplicación se delega a Pinia Colada (Server State) y Composables (Local UI State). Las vistas principales orquestan mediante dependencias inyectadas puras.
 
-### 🛡️ Consumo de API y Validación Zod
-
-Para evitar que la UI falle por cambios inesperados en la API del backend, empleamos una estricta **capa anticorrupción**:
-La respuesta en bruto se pasa a través de esquemas Zod. Si el backend devuelve datos malformados, Zod lo intercepta de inmediato, evitando cuelgues en tiempo de ejecución.
+### 🛡️ Type Safety Absoluto y Políticas Estrictas
+- **No `any` Policy**: El código fuente en producción está 100% tipado estáticamente, sin excepciones. Compilado rigurosamente mediante `vue-tsc --noEmit`.
+- **Global Error Bus**: Si un esquema Zod de la Capa Anticorrupción falla, se emite un error controlado al `errorBus`, previniendo cuelgues silenciosos y permitiendo a la UI reaccionar.
 
 ## 🤖 Guías para Agentes y Arquitectura UI
 

@@ -12,6 +12,7 @@ import type {
   PortfolioSummaryEntity,
   CryptoAssetEntity,
   IngestionStatusEntity,
+  TokenHistoryEntity,
 } from '@/core/domain/models/PortfolioEntities'
 
 export interface ICryptoPortfolioRepository {
@@ -30,7 +31,7 @@ export interface ICryptoPortfolioRepository {
    * Fetch the lot history events for a specific asset.
    * @param symbol - The asset ticker
    */
-  getTokenHistory(symbol: string): Promise<Record<string, any>>
+  getTokenHistory(symbol: string): Promise<TokenHistoryEntity>
 
   /**
    * Get the current background ingestion status (polling support).
