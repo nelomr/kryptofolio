@@ -7,6 +7,10 @@ export const es: I18nDictionary = {
   'navbar.settings': 'Ajustes',
   'navbar.logout': 'Cerrar sesión',
 
+  // Common
+  'common.edit_disabled': 'La edición de la transacción {id} está deshabilitada actualmente.',
+  'common.delete_disabled': 'La eliminación de la transacción {id} está deshabilitada actualmente.',
+
   // Portfolio Header
   'portfolio.roi': 'ROI Total',
   'portfolio.invested': 'Capital Invertido',
@@ -62,6 +66,7 @@ export const es: I18nDictionary = {
   
   // Tables & Columns
   'table.asset_type_crypto': 'Cryptocurrency',
+  'table.asset_type_fiat': 'Dinero Fiat',
   'table.asset': 'Activo',
   'table.balance': 'Balance',
   'table.avg_cost': 'Coste Medio',
@@ -162,4 +167,47 @@ export const es: I18nDictionary = {
   'tax.tabs.report': 'Auditoría e Informes',
   'tax.tabs.chat': 'Asistente IA',
   'tax.tabs.in_development': '(En desarrollo)',
+  'tax.tabs.spot': 'Operaciones Spot',
+  'tax.tabs.futures': 'Futuros y Derivados',
+  'tax.tabs.spot_ledger': 'Libro Spot',
+  'tax.tabs.futures_ledger': 'Libro de Futuros',
+  'tax.tabs.spot_dev': 'OPERACIONES SPOT EN DESARROLLO (Filtro Año: {year})',
+  'tax.tabs.futures_dev': 'FUTUROS Y DERIVADOS EN DESARROLLO (Filtro Año: {year})',
+  'tax.tabs.chat_dev': 'ASISTENTE IA EN DESARROLLO',
+  'tax.filters.year': 'Año',
+  'tax.filters.all': 'Todos',
+
+  // Tax Audit Report Tab (TaxFiscalControls + TaxReportDetailsTable)
+  'tax.audit.fiscal_year': 'Ejercicio Fiscal',
+  'tax.audit.method': 'Método de Cálculo',
+  'tax.audit.method_fifo': 'FIFO (Primero en entrar, primero en salir)',
+  'tax.audit.recalculate': 'Recalcular',
+  'tax.audit.recalculating': 'Recalculando...',
+  'tax.audit.download_report': 'Descargar Informe',
+  'tax.audit.downloading': 'Descargando...',
+  'tax.audit.download_pdf': 'PDF',
+  'tax.audit.download_csv': 'CSV',
+  'tax.audit.controls_title': 'Parámetros de Cálculo',
+  'tax.audit.controls_desc': 'Ejercicio fiscal y método FIFO para generación de libro de auditoría AEAT.',
+
+  // Audit Trail Table
+  'tax.audit.table_title': 'Libro de Trazabilidad FIFO (Auditoría AEAT)',
+  'tax.audit.table_empty': 'No hay datos disponibles para el ejercicio seleccionado.',
+  'tax.audit.table_loading': 'Generando Libro de Auditoría...',
+  'tax.audit.col_date': 'Fecha',
+  'tax.audit.col_operation': 'Operación',
+  'tax.audit.col_asset': 'Activo',
+  'tax.audit.col_exchange': 'Exchange',
+  'tax.audit.col_amount': 'Unidades',
+  'tax.audit.col_sale_price': 'Precio Venta',
+  'tax.audit.col_gain_loss': 'PyG',
+  'tax.audit.col_fee': 'Comisión (€)',
+  'tax.audit.col_taxable': 'Imponible',
+  'tax.audit.col_notes': 'Trazabilidad',
+  'tax.audit.taxable_yes': 'SÍ',
+  'tax.audit.taxable_no': 'NO',
+  'tax.audit.badge_gain': 'GANANCIA',
+  'tax.audit.badge_loss': 'PÉRDIDA',
+  'tax.audit.badge_exempt': 'EXENTO',
+  'tax.audit.badge_activation': 'RESERVA',
 };

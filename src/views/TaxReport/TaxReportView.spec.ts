@@ -9,8 +9,12 @@ import IntegrityCard from './components/IntegrityCard.vue'
 vi.mock('./composables/useTaxReportPort', () => ({
   useTaxReportPort: () => ({
     isLoading: false,
+    report: { value: null },
     metrics: { capitalGains: 100, yields: 200, totalLosses: 50, estimatedIrpf: 300 },
     warnings: [],
+    availableYears: [2024],
+    selectedYear: 2024,
+    effectiveYear: 2024,
     syncWeb3: vi.fn(),
     uploadCsv: vi.fn(),
     clearData: vi.fn()
@@ -19,6 +23,12 @@ vi.mock('./composables/useTaxReportPort', () => ({
 
 vi.mock('@/composables/useI18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
+}))
+
+vi.mock('@/composables/queries/useTaxQueries', () => ({
+  useSpotTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isFetching: { value: false } })),
+  useFuturesTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isFetching: { value: false } })),
+  useTaxReportQuery: vi.fn(() => ({ data: { value: null }, isFetching: { value: false } })),
 }))
 
 describe('TaxReportView.vue', () => {

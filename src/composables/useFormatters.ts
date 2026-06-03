@@ -63,3 +63,24 @@ export function formatDate(val: number | string | Date | undefined | null): stri
     year: 'numeric'
   }).format(date)
 }
+
+export function formatDateNumeric(val: number | string | Date | undefined | null): string {
+  if (!val) return '---'
+  let date: Date;
+  if (val instanceof Date) {
+    date = val;
+  } else if (!isNaN(Number(val)) && (typeof val === 'number' || (typeof val === 'string' && val.trim() !== ""))) {
+    const num = Number(val);
+    const timestamp = String(num).length <= 11 ? num * 1000 : num;
+    date = new Date(timestamp);
+  } else {
+    date = new Date(val as string);
+  }
+  if (isNaN(date.getTime())) return String(val).substring(0, 10);
+  
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  
+  return `${day}/${month}/${year}`
+}

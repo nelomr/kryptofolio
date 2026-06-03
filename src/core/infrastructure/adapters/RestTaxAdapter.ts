@@ -55,8 +55,8 @@ export class RestTaxAdapter implements ITaxRepository {
     this.http = http
   }
 
-  async getTransactions(): Promise<TaxTransactionEntity[]> {
-    const response = await this.http.get<unknown[]>('/api/tax/transactions')
+  async getSpotTransactions(): Promise<TaxTransactionEntity[]> {
+    const response = await this.http.get<unknown[]>('/api/tax/transactions/spot')
     const rawArray = Array.isArray(response.data) ? response.data : []
 
     // Parse each transaction individually — failures are logged but don't crash the batch
@@ -87,6 +87,43 @@ export class RestTaxAdapter implements ITaxRepository {
         errorBus.emit('validation-error', {
           message: `A transaction record was skipped due to malformed data.`,
           context: 'getTransactions/row',
+          details: result.error,
+        })
+      }
+    }
+    return parsed
+  }
+
+  async getFuturesTransactions(): Promise<TaxTransactionEntity[]> {
+    const response = await this.http.get<unknown[]>('/api/tax/transactions/futures')
+    const rawArray = Array.isArray(response.data) ? response.data : []
+
+    const parsed: TaxTransactionEntity[] = []
+    for (const rawTx of rawArray) {
+      const result = ExternalTaxTransactionSchema.safeParse(rawTx)
+      if (result.success) {
+        const dto = result.data
+        parsed.push({
+          id: TransactionIdSchema.parse(dto.id),
+          type: dto.type,
+          symbol: dto.symbol,
+          amount: dto.amount,
+          totalEur: dto.totalEur,
+          priceEur: dto.priceEur,
+          feeEur: dto.feeEur,
+          timestamp: dto.timestamp,
+          assetIn: dto.assetIn,
+          assetOut: dto.assetOut,
+          amountIn: dto.amountIn,
+          amountOut: dto.amountOut,
+          exchange: dto.exchange,
+          refId: dto.refId,
+        })
+      } else {
+        console.warn('[RestTaxAdapter] Skipping invalid transaction:', result.error, rawTx)
+        errorBus.emit('validation-error', {
+          message: `A transaction record was skipped due to malformed data.`,
+          context: 'getFuturesTransactions/row',
           details: result.error,
         })
       }
@@ -145,12 +182,13 @@ export class RestTaxAdapter implements ITaxRepository {
   /**
    * Upload a fiscal file as multipart to /api/tax/upload.
    * @throws {TaxOperationError} with code 'UPLOAD_FAILED' on any error
-   * TODO: Backend endpoint /api/tax/upload not yet implemented
+   * @param market - Target market context ('spot' or 'futures')
    */
-  async uploadTaxFile(file: File): Promise<void> {
+  async uploadTaxFile(file: File, market: 'spot' | 'futures'): Promise<void> {
     try {
       const fd = new FormData()
       fd.append('file', file)
+      fd.append('market', market)
       await this.http.postForm('/api/tax/upload', fd)
     } catch (err) {
       throw new TaxOperationError('UPLOAD_FAILED', `File upload failed: ${(err as Error).message}`)
@@ -158,12 +196,13 @@ export class RestTaxAdapter implements ITaxRepository {
   }
 
   /**
-   * Delete all transactions via DELETE /api/tax/transactions.
+   * Delete all transactions via DELETE /api/tax/transactions/:market
    * @throws {TaxOperationError} with code 'DELETE_FAILED' on any error
+   * @param market - Target market context ('spot' or 'futures')
    */
-  async deleteAllTransactions(): Promise<void> {
+  async deleteAllTransactions(market: 'spot' | 'futures'): Promise<void> {
     try {
-      await this.http.delete('/api/tax/transactions')
+      await this.http.delete(`/api/tax/transactions/${market}`)
     } catch (err) {
       throw new TaxOperationError('DELETE_FAILED', `Bulk delete failed: ${(err as Error).message}`)
     }
@@ -190,6 +229,25 @@ export class RestTaxAdapter implements ITaxRepository {
       await this.http.post('/api/tax/sync-web3', {})
     } catch (err) {
       throw new TaxOperationError('SYNC_FAILED', `Web3 sync failed: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Download fiscal report as PDF or CSV.
+   * GET /api/tax/report/download?year=YEAR&format=FORMAT
+   * @throws {TaxOperationError} with code 'DOWNLOAD_FAILED' on any error
+   */
+  async downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob> {
+    try {
+      const response = await this.http.get<Blob>(
+        `/api/tax/report/download?year=${year}&format=${format}`,
+      )
+      return response.data as Blob
+    } catch (err) {
+      throw new TaxOperationError(
+        'DOWNLOAD_FAILED',
+        `Report download failed: ${(err as Error).message}`,
+      )
     }
   }
 }

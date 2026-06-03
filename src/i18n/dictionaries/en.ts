@@ -6,6 +6,11 @@ export const en: I18nDictionary = {
   'navbar.portfolio': 'Portfolio',
   'navbar.settings': 'Settings',
   'navbar.logout': 'Logout',
+
+  // Common
+  'common.edit_disabled': 'Editing transaction {id} is currently disabled.',
+  'common.delete_disabled': 'Deleting transaction {id} is currently disabled.',
+
   'portfolio.roi': 'Total ROI',
   'portfolio.invested': 'Invested Capital',
 
@@ -62,6 +67,7 @@ export const en: I18nDictionary = {
 
   // Tables & Columns
   'table.asset_type_crypto': 'Cryptocurrency',
+  'table.asset_type_fiat': 'Fiat Currency',
   'table.asset': 'Asset',
   'table.balance': 'Balance',
   'table.avg_cost': 'Avg Cost',
@@ -162,4 +168,47 @@ export const en: I18nDictionary = {
   'tax.tabs.report': 'Audit & Reports',
   'tax.tabs.chat': 'AI Assistant',
   'tax.tabs.in_development': '(In development)',
+  'tax.tabs.spot': 'Spot Operations',
+  'tax.tabs.futures': 'Futures & Derivatives',
+  'tax.tabs.spot_ledger': 'Spot Ledger',
+  'tax.tabs.futures_ledger': 'Futures Ledger',
+  'tax.tabs.spot_dev': 'SPOT OPERATIONS IN DEVELOPMENT (Year Filter: {year})',
+  'tax.tabs.futures_dev': 'FUTURES & DERIVATIVES IN DEVELOPMENT (Year Filter: {year})',
+  'tax.tabs.chat_dev': 'AI ASSISTANT IN DEVELOPMENT',
+  'tax.filters.year': 'Year',
+  'tax.filters.all': 'All',
+
+  // Tax Audit Report Tab (TaxFiscalControls + TaxReportDetailsTable)
+  'tax.audit.fiscal_year': 'Fiscal Year',
+  'tax.audit.method': 'Calculation Method',
+  'tax.audit.method_fifo': 'FIFO (First In, First Out)',
+  'tax.audit.recalculate': 'Recalculate',
+  'tax.audit.recalculating': 'Recalculating...',
+  'tax.audit.download_report': 'Download Report',
+  'tax.audit.downloading': 'Downloading...',
+  'tax.audit.download_pdf': 'PDF',
+  'tax.audit.download_csv': 'CSV',
+  'tax.audit.controls_title': 'Calculation Parameters',
+  'tax.audit.controls_desc': 'Fiscal year and FIFO method for AEAT audit book generation.',
+
+  // Audit Trail Table
+  'tax.audit.table_title': 'FIFO Traceability Ledger (AEAT Audit)',
+  'tax.audit.table_empty': 'No data available for the selected fiscal year.',
+  'tax.audit.table_loading': 'Generating Audit Ledger...',
+  'tax.audit.col_date': 'Date',
+  'tax.audit.col_operation': 'Operation',
+  'tax.audit.col_asset': 'Asset',
+  'tax.audit.col_exchange': 'Exchange',
+  'tax.audit.col_amount': 'Units',
+  'tax.audit.col_sale_price': 'Sale Price',
+  'tax.audit.col_gain_loss': 'P&L',
+  'tax.audit.col_fee': 'Fee (€)',
+  'tax.audit.col_taxable': 'Taxable',
+  'tax.audit.col_notes': 'Traceability',
+  'tax.audit.taxable_yes': 'YES',
+  'tax.audit.taxable_no': 'NO',
+  'tax.audit.badge_gain': 'GAIN',
+  'tax.audit.badge_loss': 'LOSS',
+  'tax.audit.badge_exempt': 'EXEMPT',
+  'tax.audit.badge_activation': 'RESERVE',
 };

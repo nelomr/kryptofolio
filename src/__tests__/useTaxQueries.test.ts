@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createApp } from 'vue'
 import { ref } from 'vue'
 import { PiniaColada } from '@pinia/colada'
-import { useTaxTransactionsQuery, useTaxReportQuery } from '@/composables/queries/useTaxQueries'
+import { useSpotTransactionsQuery, useFuturesTransactionsQuery, useTaxReportQuery } from '@/composables/queries/useTaxQueries'
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
 import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
@@ -36,7 +36,8 @@ const mockReport: TaxReportEntity = {
 
 function createMockTaxRepo(): ITaxRepository {
   return {
-    getTransactions: vi.fn().mockResolvedValue([mockTx]),
+    getSpotTransactions: vi.fn().mockResolvedValue([mockTx]),
+    getFuturesTransactions: vi.fn().mockResolvedValue([mockTx]),
     getInvalidTransactions: vi.fn().mockResolvedValue([]),
     getReport: vi.fn().mockResolvedValue(mockReport),
     deleteTransaction: vi.fn().mockResolvedValue(undefined),
@@ -63,12 +64,12 @@ describe('Tax Queries Composables', () => {
     return { app, repo }
   }
 
-  it('useTaxTransactionsQuery fetches transactions and returns reactive state', async () => {
+  it('useSpotTransactionsQuery fetches transactions and returns reactive state', async () => {
     const { app, repo } = setupApp()
     
-    let composable: ReturnType<typeof useTaxTransactionsQuery>
+    let composable: ReturnType<typeof useSpotTransactionsQuery>
     app.runWithContext(() => {
-      composable = useTaxTransactionsQuery()
+      composable = useSpotTransactionsQuery()
     })
 
     expect(composable!.isLoading.value).toBe(true)
@@ -76,7 +77,25 @@ describe('Tax Queries Composables', () => {
     // wait for query resolution
     await new Promise(r => setTimeout(r, 10))
     
-    expect(repo.getTransactions).toHaveBeenCalled()
+    expect(repo.getSpotTransactions).toHaveBeenCalled()
+    expect(composable!.isLoading.value).toBe(false)
+    expect(composable!.data.value).toEqual([mockTx])
+  })
+
+  it('useFuturesTransactionsQuery fetches futures transactions and returns reactive state', async () => {
+    const { app, repo } = setupApp()
+    
+    let composable: ReturnType<typeof useFuturesTransactionsQuery>
+    app.runWithContext(() => {
+      composable = useFuturesTransactionsQuery()
+    })
+
+    expect(composable!.isLoading.value).toBe(true)
+    
+    // wait for query resolution
+    await new Promise(r => setTimeout(r, 10))
+    
+    expect(repo.getFuturesTransactions).toHaveBeenCalled()
     expect(composable!.isLoading.value).toBe(false)
     expect(composable!.data.value).toEqual([mockTx])
   })

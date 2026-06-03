@@ -95,7 +95,8 @@ describe('MockTaxAdapter', () => {
   })
 
   it('implements ITaxRepository interface (duck typing)', () => {
-    expect(typeof adapter.getTransactions).toBe('function')
+    expect(typeof adapter.getSpotTransactions).toBe('function')
+    expect(typeof adapter.getFuturesTransactions).toBe('function')
     expect(typeof adapter.getInvalidTransactions).toBe('function')
     expect(typeof adapter.getReport).toBe('function')
     expect(typeof adapter.deleteTransaction).toBe('function')
@@ -103,8 +104,8 @@ describe('MockTaxAdapter', () => {
     expect(typeof adapter.validateTransaction).toBe('function')
   })
 
-  it('getTransactions returns an array of TaxTransactionEntity', async () => {
-    const txsPromise = adapter.getTransactions()
+  it('getSpotTransactions returns an array of TaxTransactionEntity', async () => {
+    const txsPromise = adapter.getSpotTransactions()
     await vi.runAllTimersAsync()
     const txs = await txsPromise
 

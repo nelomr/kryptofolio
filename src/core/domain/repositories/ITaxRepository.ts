@@ -12,12 +12,17 @@ import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models
 
 export interface ITaxRepository {
   /**
-   * Fetch all tax-relevant transactions.
+   * Fetch all spot tax-relevant transactions.
    */
-  getTransactions(): Promise<TaxTransactionEntity[]>
+  getSpotTransactions(): Promise<TaxTransactionEntity[]>
 
   /**
-   * Fetch transactions flagged as invalid or requiring manual review.
+   * Fetch all futures tax-relevant transactions.
+   */
+  getFuturesTransactions(): Promise<TaxTransactionEntity[]>
+
+  /**
+   * Fetch spot transactions flagged as invalid or requiring manual review.
    */
   getInvalidTransactions(): Promise<TaxTransactionEntity[]>
 
@@ -52,16 +57,18 @@ export interface ITaxRepository {
    * In MockTaxAdapter: parsed locally via papaparse/SheetJS (no network).
    * In RestTaxAdapter: multipart POST to /api/tax/upload.
    * @param file - The File object from an <input type="file"> element
+   * @param market - Target market context ('spot' or 'futures')
    */
-  uploadTaxFile(file: File): Promise<void>
+  uploadTaxFile(file: File, market: 'spot' | 'futures'): Promise<void>
 
   /**
    * Delete all transactions — bulk state reset.
-   * In MockTaxAdapter: clears the mutable in-memory _transactions array.
+   * In MockTaxAdapter: clears the mutable in-memory _spotTransactions or _futuresTransactions array.
    * In RestTaxAdapter: DELETE /api/tax/transactions.
+   * @param market - Target market context ('spot' or 'futures')
    * @throws {TaxOperationError} with code 'DELETE_FAILED' on failure
    */
-  deleteAllTransactions(): Promise<void>
+  deleteAllTransactions(market: 'spot' | 'futures'): Promise<void>
 
   /**
    * Import transactions from a blockchain wallet address.
@@ -76,4 +83,14 @@ export interface ITaxRepository {
    * In RestTaxAdapter: POST /api/tax/sync-web3.
    */
   syncWeb3(): Promise<void>
+
+  /**
+   * Download a fiscal report (PDF or CSV) for a given fiscal year.
+   * In MockTaxAdapter: generates a placeholder Blob for development.
+   * In RestTaxAdapter: streams the file from /api/tax/report/download.
+   * @param year - The fiscal year (e.g. 2024)
+   * @param format - The desired format ('pdf' | 'csv')
+   * @returns A Blob representing the generated file
+   */
+  downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob>
 }

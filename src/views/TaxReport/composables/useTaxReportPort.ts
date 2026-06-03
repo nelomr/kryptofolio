@@ -1,4 +1,12 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useSpotTransactionsQuery, useTaxReportQuery } from '@/composables/queries/useTaxQueries'
+import { 
+  useSyncWeb3Mutation, 
+  useUploadTaxFileMutation, 
+  useDeleteTransactionsMutation 
+} from '@/composables/queries/useTaxMutations'
+import { useSmartYearLogic } from './useTaxCalculations'
+import { toast } from 'vue-sonner'
 
 export interface IntegrityWarning {
   id: string
@@ -8,31 +16,82 @@ export interface IntegrityWarning {
 }
 
 export function useTaxReportPort() {
-  const isLoading = ref(false)
-  const metrics = ref({
-    capitalGains: 12500.50,
-    yields: 340.20,
-    totalLosses: 1500.00,
-    estimatedIrpf: 2450.75
+  // Query spot transactions to determine smart year and available years
+  const { data: spotData } = useSpotTransactionsQuery()
+  const { smartYear } = useSmartYearLogic(computed(() => spotData.value ?? []))
+
+  const availableYears = computed<number[]>(() => {
+    const txs = spotData.value ?? []
+    if (txs.length === 0) return [new Date().getFullYear()]
+    return [...new Set(txs.map((tx) => new Date(tx.timestamp).getFullYear()))].sort(
+      (a, b) => b - a,
+    )
   })
+
+  // Global report year state
+  const selectedYear = ref<number>(new Date().getFullYear())
+  const effectiveYear = computed(() => {
+    if (selectedYear.value !== new Date().getFullYear()) return selectedYear.value
+    return smartYear.value || selectedYear.value
+  })
+
+  const method = ref('FIFO')
+  
+  // Global report query
+  const { data: report, isLoading, refresh: refetchReport } = useTaxReportQuery(effectiveYear, method)
+
+  // Compute metrics from the actual report data
+  const metrics = computed(() => {
+    if (!report.value) {
+      return {
+        capitalGains: 0,
+        yields: 0,
+        totalLosses: 0,
+        estimatedIrpf: 0
+      }
+    }
+    const summary = report.value.summary
+    return {
+      capitalGains: summary.capitalGainsEur,
+      yields: summary.savingsBaseYieldsEur,
+      totalLosses: summary.capitalLossesEur,
+      estimatedIrpf: summary.estimatedIrpfEur
+    }
+  })
+
   const warnings = ref<IntegrityWarning[]>([
     { id: '1', title: 'Missing Data', description: 'Some trades are missing cost basis.', severity: 'warning' }
   ])
 
-  function syncWeb3() {
-    console.log('Syncing Web3... (backend integration pending)')
+  // Map to the real Pinia Colada mutations that talk to ITaxRepository
+  const { mutateAsync: syncWeb3Mutate } = useSyncWeb3Mutation()
+  const { mutateAsync: uploadCsvMutate } = useUploadTaxFileMutation()
+  const { mutateAsync: deleteTxsMutate } = useDeleteTransactionsMutation()
+
+  async function syncWeb3() {
+    await syncWeb3Mutate()
   }
 
-  function uploadCsv() {
-    console.log('Uploading CSV... (backend integration pending)')
+  async function uploadCsv(file?: File, market: 'spot' | 'futures' = 'spot') {
+    if (!file) {
+      toast.info('La subida de CSV requiere seleccionar un archivo (UI pendiente)')
+      return
+    }
+    await uploadCsvMutate({ file, market })
   }
 
-  function clearData() {
-    console.log('Clearing data...')
+  async function clearData(market: 'spot' | 'futures' = 'spot') {
+    await deleteTxsMutate(market)
   }
 
   return {
+    availableYears,
+    selectedYear,
+    effectiveYear,
+    method,
+    report,
     isLoading,
+    refetchReport,
     metrics,
     warnings,
     syncWeb3,

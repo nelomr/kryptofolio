@@ -13,7 +13,7 @@
 
 import { errorBus } from './errorBus'
 
-export type TaxOperationErrorCode = 'UPLOAD_FAILED' | 'DELETE_FAILED' | 'IMPORT_FAILED' | 'SYNC_FAILED'
+export type TaxOperationErrorCode = 'UPLOAD_FAILED' | 'DELETE_FAILED' | 'IMPORT_FAILED' | 'SYNC_FAILED' | 'DOWNLOAD_FAILED'
 
 export class TaxOperationError extends Error {
   readonly code: TaxOperationErrorCode

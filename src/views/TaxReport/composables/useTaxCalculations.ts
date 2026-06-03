@@ -4,13 +4,11 @@
  * No API calls, no Pinia stores, no side effects.
  * All functions are synchronous computed derivations from reactive inputs.
  * This makes them highly testable and composable.
- *
- * @see openspec/specs/tax-composables/spec.md
  */
 
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
-import type { TaxTransactionEntity } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 
 // ---------------------------------------------------------------------------
 // useSmartYearLogic
@@ -139,4 +137,50 @@ export function usePagination<T>(
     nextPage,
     prevPage,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail badge helpers — pure derivations from TaxLotHistoryEvent.
+//
+// Extracted here so TaxReportDetailsTable stays purely presentational, and
+// so any future fiscal table component can reuse the same visual mapping
+// without duplicating the domain logic.
+// ---------------------------------------------------------------------------
+
+export type EventBadgeVariant = 'gain' | 'loss' | 'exempt' | 'activation'
+
+/**
+ * Derives the visual badge variant from a single audit trail event.
+ * Priority: WALLET_ACTIVATION → non-taxable (exempt) → gain / loss by sign.
+ */
+export function getEventVariant(event: TaxLotHistoryEvent): EventBadgeVariant {
+  if (event.flag === 'WALLET_ACTIVATION') return 'activation'
+  if (!event.isTaxable) return 'exempt'
+  return event.gainLossEur >= 0 ? 'gain' : 'loss'
+}
+
+/** Tailwind class sets per badge variant — consistent across all fiscal tables. */
+export const BADGE_CLASSES: Record<EventBadgeVariant, string> = {
+  gain: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
+  loss: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800',
+  exempt: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800',
+  activation: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+}
+
+/**
+ * Maps a variant to its i18n key so callers resolve labels themselves.
+ * Returns a key string — the component calls t() on it.
+ */
+export const BADGE_I18N_KEYS: Record<EventBadgeVariant, string> = {
+  gain: 'tax.audit.badge_gain',
+  loss: 'tax.audit.badge_loss',
+  exempt: 'tax.audit.badge_exempt',
+  activation: 'tax.audit.badge_activation',
+}
+
+/** Returns a Tailwind text-color class for a numeric gain/loss value. */
+export function gainLossClass(value: number): string {
+  if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
+  if (value < 0) return 'text-rose-600 dark:text-rose-400'
+  return 'text-muted-foreground'
 }

@@ -38,6 +38,8 @@ import {
 } from "@/composables/useFormatters";
 import TaxPagination from "./TaxPagination.vue";
 import { usePagination } from "../composables/useTaxCalculations";
+import CryptoIcon from "@/components/common/CryptoIcon/CryptoIcon.vue";
+import { getDeterministicHue } from "@/lib/utils";
 
 const { t } = useI18n();
 
@@ -113,22 +115,27 @@ const paginatedTxs = paginatedData as unknown as import("vue").ComputedRef<
 function getTypeBadgeClass(type: TaxTransactionType): string {
   const t = (type || "").toLowerCase();
   if (t === "buy" || t === "deposit" || t === "airdrop" || t === "reward") {
-    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800";
+    return "bg-profit/10 text-profit border-none";
   }
   if (t === "sell" || t === "withdrawal" || t === "fee") {
-    return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800";
+    return "bg-loss/10 text-loss border-none";
   }
   if (t === "swap" || t === "migration_swap") {
-    return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800";
+    return "bg-violet-500/10 text-violet-500 border-none dark:text-violet-400";
   }
   if (t === "transfer_in" || t === "transfer_out") {
-    return "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800";
+    return "bg-sky-500/10 text-sky-500 border-none dark:text-sky-400";
   }
-  return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700";
+  return "bg-muted/20 text-muted-foreground border-none";
 }
 
 function isWalletActivation(tx: TaxTransactionEntity): boolean {
   return tx.refId?.includes("WALLET_ACTIVATION") ?? false;
+}
+
+function getAssetTypeLabel(symbol: string | undefined): string {
+  const s = (symbol || "").toLowerCase();
+  return ["eur", "usd", "gbp", "chf"].includes(s) ? t("table.asset_type_fiat") : t("table.asset_type_crypto");
 }
 </script>
 
@@ -184,6 +191,7 @@ function isWalletActivation(tx: TaxTransactionEntity): boolean {
               </TableHead>
               <TableHead>{{ t("tax.col.type") }}</TableHead>
               <TableHead>{{ t("tax.col.asset") }}</TableHead>
+              <TableHead>Exchange</TableHead>
               <TableHead class="text-right">{{
                 t("tax.col.amount")
               }}</TableHead>
@@ -227,7 +235,7 @@ function isWalletActivation(tx: TaxTransactionEntity): boolean {
               <TableCell>
                 <Badge
                   v-if="isWalletActivation(tx)"
-                  class="gap-1 border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border-slate-300"
+                  class="gap-1 border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border-slate-300 pointer-events-none"
                   :title="'Reserva inmovilizada por la red (Activación)'"
                 >
                   <Shield class="h-2.5 w-2.5" />
@@ -235,24 +243,47 @@ function isWalletActivation(tx: TaxTransactionEntity): boolean {
                 </Badge>
                 <Badge
                   v-else
-                  class="border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest"
+                  class="text-[8px] font-black uppercase tracking-widest pointer-events-none"
                   :class="getTypeBadgeClass(tx.type)"
                 >
-                  {{ tx.type }}
+                  {{ tx.type.replace(/_/g, ' ') }}
                 </Badge>
               </TableCell>
 
-              <!-- Asset (initial avatar — same UX as legacy) -->
+              <!-- Asset (using CryptoIcon) -->
               <TableCell>
-                <div class="flex items-center gap-2">
-                  <div
-                    class="flex h-6 w-6 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-[10px] font-black text-primary"
-                  >
-                    {{ (tx.symbol || "?").substring(0, 1) }}
+                <div class="flex items-center gap-3 py-1">
+                  <CryptoIcon 
+                    :symbol="tx.symbol || 'generic'" 
+                    :size="32" 
+                    colored
+                    class="bg-linear-to-r from-primary/20 to-primary/5 p-1 rounded-lg border border-primary/10"
+                  />
+                  <div>
+                    <span class="font-black block text-sm tracking-tight">
+                      {{ tx.symbol || '---' }}
+                    </span>
+                    <span class="text-[9px] text-muted-foreground uppercase leading-none font-bold tracking-widest opacity-60">
+                      {{ getAssetTypeLabel(tx.symbol) }}
+                    </span>
                   </div>
-                  <span class="font-semibold text-foreground">{{
-                    tx.symbol
-                  }}</span>
+                </div>
+              </TableCell>
+
+              <!-- Exchange (using LocationsCell badge style) -->
+              <TableCell>
+                <div v-if="tx.exchange" class="flex items-center justify-start">
+                  <Badge
+                    variant="outline"
+                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] dark:text-[hsl(var(--badge-hue),85%,75%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
+                    :style="{ '--badge-hue': getDeterministicHue(tx.exchange) } as any"
+                  >
+                    <CryptoIcon :symbol="tx.exchange" :size="10" colored />
+                    {{ tx.exchange }}
+                  </Badge>
+                </div>
+                <div v-else class="text-[9px] font-black uppercase tracking-tighter opacity-30">
+                  ---
                 </div>
               </TableCell>
 
@@ -281,27 +312,27 @@ function isWalletActivation(tx: TaxTransactionEntity): boolean {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-primary hover:bg-primary/10"
+                    class="text-primary hover:bg-primary/10 cursor-pointer"
                     :title="t('tax.col.actions')"
                     @click="emit('edit', tx)"
                   >
-                    <Pencil class="h-3.5 w-3.5" />
+                    <Pencil class="h-3.5 w-3.5 cursor-pointer" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-destructive hover:bg-destructive/10"
+                    class="text-destructive hover:bg-destructive/10 cursor-pointer"
                     :title="t('tax.delete.btn')"
                     @click="emit('delete', tx.id)"
                   >
-                    <Trash2 class="h-3.5 w-3.5" />
+                    <Trash2 class="h-3.5 w-3.5 cursor-pointer" />
                   </Button>
                 </div>
               </TableCell>
             </TableRow>
 
             <!-- Empty state (same structure as legacy) -->
-            <TableEmpty v-if="!paginatedTxs.length" :colspan="7">
+            <TableEmpty v-if="!paginatedTxs.length" :colspan="8">
               <div
                 class="flex flex-col items-center gap-2 py-12 font-black uppercase tracking-widest text-muted-foreground"
               >

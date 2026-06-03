@@ -28,6 +28,8 @@ export type TaxTransactionType =
   | 'REWARD'
   | 'SWAP'
   | 'MIGRATION_SWAP'
+  | 'FUTURES_TRADE'
+  | 'FUTURES_FUNDING'
   | 'UNKNOWN'
 
 // ---------------------------------------------------------------------------
@@ -111,6 +113,16 @@ export interface TaxLotHistoryEvent {
   /** Special flags, e.g. internal transfer markers */
   flag?: 'WALLET_ACTIVATION' | null
   notes?: string
+  /** Asset symbol (e.g., BTC) */
+  assetSymbol?: string
+  /** URI to the asset SVG logo */
+  assetLogoUri?: string
+  /** Name of the exchange where the operation occurred */
+  exchangeName?: string
+  /** URI to the exchange SVG logo */
+  exchangeLogoUri?: string
+  /** Specific operation type */
+  operationType?: TaxTransactionType
 }
 
 // ---------------------------------------------------------------------------

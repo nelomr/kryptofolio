@@ -30,8 +30,18 @@ const props = defineProps({
 const icons = CryptoIcons as Record<string, string>
 
 const iconSymbolUrl = computed(() => {
-  const s = props.symbol?.toLowerCase() || 'generic'
-  return icons[s] || icons.generic
+  const raw = props.symbol?.toLowerCase() || 'generic'
+  
+  // Agnostic normalization: strip common modifiers and spaces
+  const s = raw
+    .replace(/\bfutures\b/g, '')
+    .replace(/\bspot\b/g, '')
+    .replace(/\bpro\b/g, '')
+    .replace(/\bexchange\b/g, '')
+    .trim()
+    .replace(/\s+/g, '')
+  
+  return icons[s] || icons[raw.replace(/\s+/g, '')] || icons.generic
 })
 
 const iconStyle = computed(() => ({

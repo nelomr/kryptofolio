@@ -24,9 +24,9 @@ export function useUploadTaxFileMutation() {
   const queryCache = useQueryCache()
 
   return useMutation({
-    mutation: (file: File) => repo.uploadTaxFile(file),
-    onSuccess: () => {
-      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY })
+    mutation: (args: { file: File, market: 'spot' | 'futures' }) => repo.uploadTaxFile(args.file, args.market),
+    onSuccess: (_, args) => {
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(args.market) })
     },
   })
 }
@@ -44,7 +44,7 @@ export function useImportWalletMutation() {
     mutation: ({ chain, address }: { chain: string; address: string }) =>
       repo.importWallet(chain, address),
     onSuccess: () => {
-      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY })
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
     },
   })
 }
@@ -61,7 +61,7 @@ export function useSyncWeb3Mutation() {
   return useMutation({
     mutation: () => repo.syncWeb3(),
     onSuccess: () => {
-      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY })
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
     },
   })
 }
@@ -76,11 +76,35 @@ export function useDeleteTransactionsMutation() {
   const queryCache = useQueryCache()
 
   return useMutation({
-    mutation: () => repo.deleteAllTransactions(),
-    onSuccess: () => {
+    mutation: (market: 'spot' | 'futures') => repo.deleteAllTransactions(market),
+    onSuccess: (_, market) => {
       // Invalidate all tax-related queries so the UI clears automatically
-      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY })
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(market) })
       queryCache.invalidateQueries({ key: ['tax-report'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useDownloadTaxReportMutation
+// Downloads the tax report blob and triggers a browser file download.
+// ---------------------------------------------------------------------------
+
+export function useDownloadTaxReportMutation() {
+  const repo = useTaxRepo()
+
+  return useMutation({
+    mutation: async (args: { year: number; format: 'pdf' | 'csv' }) => {
+      const blob = await repo.downloadReport(args.year, args.format)
+      // Trigger browser file download
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `kryptofolio-informe-fiscal-${args.year}-fifo.${args.format}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
     },
   })
 }

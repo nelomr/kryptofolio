@@ -35,21 +35,36 @@ export function useTaxRepo(): ITaxRepository {
 // Query key constants — used by both queries and mutations for invalidation
 // ---------------------------------------------------------------------------
 
-export const TAX_TRANSACTIONS_KEY = ['tax-transactions'] as const
+export const TAX_TRANSACTIONS_KEY = (market?: 'spot' | 'futures') =>
+  market ? (['tax-transactions', market] as const) : (['tax-transactions'] as const)
 export const TAX_REPORT_KEY = (year: number, method: string) =>
   ['tax-report', year, method] as const
 
 // ---------------------------------------------------------------------------
-// useTaxTransactionsQuery
-// Fetches all tax-relevant transactions and caches them via Pinia Colada.
+// useSpotTransactionsQuery
+// Fetches all spot tax-relevant transactions and caches them via Pinia Colada.
 // ---------------------------------------------------------------------------
 
-export function useTaxTransactionsQuery() {
+export function useSpotTransactionsQuery() {
   const repo = useTaxRepo()
 
   return useQuery<TaxTransactionEntity[]>({
-    key: TAX_TRANSACTIONS_KEY,
-    query: () => repo.getTransactions(),
+    key: TAX_TRANSACTIONS_KEY('spot'),
+    query: () => repo.getSpotTransactions(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useFuturesTransactionsQuery
+// Fetches all futures tax-relevant transactions and caches them via Pinia Colada.
+// ---------------------------------------------------------------------------
+
+export function useFuturesTransactionsQuery() {
+  const repo = useTaxRepo()
+
+  return useQuery<TaxTransactionEntity[]>({
+    key: TAX_TRANSACTIONS_KEY('futures'),
+    query: () => repo.getFuturesTransactions(),
   })
 }
 

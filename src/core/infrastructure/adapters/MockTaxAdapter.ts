@@ -22,11 +22,11 @@ import { REGISTERED_PARSERS } from '@/core/infrastructure/csv'
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // ---------------------------------------------------------------------------
-// Rich seed dataset — ~50 transactions, all TaxTransactionType values,
+// Rich seed dataset — ~50 spot transactions, all TaxTransactionType values,
 // two fiscal years (2024 and 2025), FIFO lots, and audit trail entries.
 // ---------------------------------------------------------------------------
 
-function buildSeed(): TaxTransactionEntity[] {
+function buildSpotSeed(): TaxTransactionEntity[] {
   const tx = (
     id: string,
     type: TaxTransactionEntity['type'],
@@ -135,6 +135,51 @@ function buildSeed(): TaxTransactionEntity[] {
 }
 
 // ---------------------------------------------------------------------------
+// Futures seed dataset — Mock data for futures and derivatives
+// ---------------------------------------------------------------------------
+
+function buildFuturesSeed(): TaxTransactionEntity[] {
+  const tx = (
+    id: string,
+    type: TaxTransactionEntity['type'],
+    symbol: string,
+    amount: number,
+    totalEur: number,
+    priceEur: number,
+    feeEur: number,
+    date: string,
+    exchange = 'Kraken Futures',
+    refId?: string,
+  ): TaxTransactionEntity => ({
+    id: TransactionIdSchema.parse(id),
+    type,
+    symbol,
+    amount,
+    totalEur,
+    priceEur,
+    feeEur,
+    timestamp: new Date(date),
+    exchange,
+    refId,
+  })
+
+  return [
+    // --- 2024 — Futures Trades and Funding ---
+    tx('ftx-001', 'FUTURES_TRADE', 'BTC', 0.5, 2_000, 60_000, 5.0, '2024-03-10T10:00:00Z'),
+    tx('ftx-002', 'FUTURES_FUNDING', 'USD', 0, -1.5, 1, 0, '2024-03-10T16:00:00Z'),
+    tx('ftx-003', 'FUTURES_FUNDING', 'USD', 0, -1.2, 1, 0, '2024-03-11T00:00:00Z'),
+    tx('ftx-004', 'FUTURES_TRADE', 'ETH', 10.0, -500, 3_000, 2.5, '2024-05-15T14:30:00Z'),
+    tx('ftx-005', 'SWAP', 'EUR', 1_000, 1_000, 1, 0.5, '2024-06-01T09:00:00Z', 'Kraken Futures', 'conversion-1'),
+
+    // --- 2025 — Futures Trades and Funding ---
+    tx('ftx-006', 'FUTURES_TRADE', 'SOL', 100, 3_500, 150, 4.0, '2025-01-20T11:00:00Z'),
+    tx('ftx-007', 'FUTURES_FUNDING', 'USD', 0, 2.5, 1, 0, '2025-01-20T16:00:00Z'),
+    tx('ftx-008', 'FUTURES_TRADE', 'BTC', 0.1, -200, 95_000, 1.5, '2025-02-15T12:00:00Z'),
+    tx('ftx-009', 'SWAP', 'EUR', -500, -500, 1, 0.25, '2025-03-01T10:00:00Z', 'Kraken Futures', 'conversion-2'),
+  ]
+}
+
+// ---------------------------------------------------------------------------
 // Invalid transactions — 3 edge-case entries for getInvalidTransactions()
 // ---------------------------------------------------------------------------
 
@@ -188,6 +233,11 @@ const MOCK_AUDIT_TRAIL: TaxLotHistoryEvent[] = [
     saleFeeEur: 3.1,
     isTaxable: true,
     notes: 'FIFO: Lot tx-001 partial (0.1 BTC @ 50000 EUR cost)',
+    assetSymbol: 'BTC',
+    assetLogoUri: '/crypto-icons/btc.svg',
+    exchangeName: 'Kraken',
+    exchangeLogoUri: '/exchange-icons/kraken.svg',
+    operationType: 'SELL',
   },
   {
     id: 'lot-evt-002',
@@ -198,6 +248,11 @@ const MOCK_AUDIT_TRAIL: TaxLotHistoryEvent[] = [
     saleFeeEur: 1.75,
     isTaxable: true,
     notes: 'FIFO: Lot tx-002 partial (1 ETH @ 1800 EUR cost)',
+    assetSymbol: 'ETH',
+    assetLogoUri: '/crypto-icons/eth.svg',
+    exchangeName: 'Bitvavo',
+    exchangeLogoUri: '/exchange-icons/bitvavo.svg',
+    operationType: 'SELL',
   },
   {
     id: 'lot-evt-003',
@@ -208,6 +263,11 @@ const MOCK_AUDIT_TRAIL: TaxLotHistoryEvent[] = [
     saleFeeEur: 1.05,
     isTaxable: true,
     notes: 'FIFO: Lot tx-003 partial (30 SOL @ 50 EUR cost)',
+    assetSymbol: 'SOL',
+    assetLogoUri: '/crypto-icons/sol.svg',
+    exchangeName: 'Phantom',
+    exchangeLogoUri: '/exchange-icons/phantom.svg',
+    operationType: 'SELL',
   },
   {
     id: 'lot-evt-004',
@@ -218,6 +278,11 @@ const MOCK_AUDIT_TRAIL: TaxLotHistoryEvent[] = [
     isTaxable: false,
     flag: 'WALLET_ACTIVATION',
     notes: 'XRP Wallet Activation Reserve — non-taxable base reserve',
+    assetSymbol: 'XRP',
+    assetLogoUri: '/crypto-icons/xrp.svg',
+    exchangeName: 'Tangem',
+    exchangeLogoUri: '/exchange-icons/tangem.svg',
+    operationType: 'TRANSFER_OUT',
   },
   {
     id: 'lot-evt-005',
@@ -227,6 +292,11 @@ const MOCK_AUDIT_TRAIL: TaxLotHistoryEvent[] = [
     gainLossEur: 0,
     isTaxable: false,
     notes: 'UNI Airdrop — zero cost basis, declared as general income base',
+    assetSymbol: 'UNI',
+    assetLogoUri: '/crypto-icons/uni.svg',
+    exchangeName: 'Uniswap',
+    exchangeLogoUri: '/exchange-icons/uniswap.svg',
+    operationType: 'AIRDROP',
   },
 ]
 
@@ -245,19 +315,156 @@ const MOCK_REPORT_2024: TaxReportEntity = {
 }
 
 // ---------------------------------------------------------------------------
+// Mock audit trail 2025 — covers all remaining edge cases for FIFO traceability:
+//   - Large taxable gain (BTC partial lot)
+//   - Taxable loss (ETH position closed at a loss)
+//   - Non-taxable SWAP event (SOL→X)
+//   - AIRDROP with zero cost basis (general income)
+//   - Multiple partial lots consumed in a single sale (BTC)
+// ---------------------------------------------------------------------------
+
+const MOCK_AUDIT_TRAIL_2025: TaxLotHistoryEvent[] = [
+  {
+    id: 'lot-evt-2025-001',
+    disposalDate: new Date('2025-06-15T12:00:00Z'),
+    amountFromLot: 0.05,
+    salePriceEur: 96_000,
+    gainLossEur: 2_300,
+    saleFeeEur: 2.4,
+    isTaxable: true,
+    notes: 'FIFO: Lot tx-028 partial (0.05 BTC @ 90000 EUR cost) → ganancia patrimonial',
+    assetSymbol: 'BTC',
+    assetLogoUri: '/crypto-icons/btc.svg',
+    exchangeName: 'Kraken',
+    exchangeLogoUri: '/exchange-icons/kraken.svg',
+    operationType: 'SELL',
+  },
+  {
+    id: 'lot-evt-2025-002',
+    disposalDate: new Date('2025-07-20T14:00:00Z'),
+    amountFromLot: 1.5,
+    salePriceEur: 3_500,
+    gainLossEur: -750,
+    saleFeeEur: 2.625,
+    isTaxable: true,
+    notes: 'FIFO: Lot tx-029 partial (1.5 ETH @ 3000 EUR cost) → pérdida patrimonial compensable',
+    assetSymbol: 'ETH',
+    assetLogoUri: '/crypto-icons/eth.svg',
+    exchangeName: 'Bitvavo',
+    exchangeLogoUri: '/exchange-icons/bitvavo.svg',
+    operationType: 'SELL',
+  },
+  {
+    id: 'lot-evt-2025-003',
+    disposalDate: new Date('2025-08-05T10:00:00Z'),
+    amountFromLot: 20,
+    salePriceEur: 80,
+    gainLossEur: 600,
+    saleFeeEur: 0.8,
+    isTaxable: true,
+    notes: 'FIFO: Lot tx-027 partial (20 SOL @ 80 EUR cost) → ganancia patrimonial',
+    assetSymbol: 'SOL',
+    assetLogoUri: '/crypto-icons/sol.svg',
+    exchangeName: 'Kraken',
+    exchangeLogoUri: '/exchange-icons/kraken.svg',
+    operationType: 'SELL',
+  },
+  {
+    id: 'lot-evt-2025-004',
+    disposalDate: new Date('2025-01-10T09:00:00Z'),
+    amountFromLot: 0.3,
+    salePriceEur: 0,
+    gainLossEur: 0,
+    saleFeeEur: 0.5,
+    isTaxable: false,
+    notes: 'SWAP SOL→X: permuta crypto-to-crypto — exenta bajo Art.37.1.h LIRPF si activos funcionalmente equivalentes',
+    assetSymbol: 'SOL',
+    assetLogoUri: '/crypto-icons/sol.svg',
+    exchangeName: 'Bit2Me',
+    exchangeLogoUri: '/exchange-icons/bit2me.svg',
+    operationType: 'SWAP',
+  },
+  {
+    id: 'lot-evt-2025-005',
+    disposalDate: new Date('2025-09-20T14:00:00Z'),
+    amountFromLot: 200,
+    salePriceEur: 0.6,
+    gainLossEur: -10,
+    saleFeeEur: 0.06,
+    isTaxable: true,
+    notes: 'FIFO: Lot tx-033 partial (200 XRP @ 0.6 EUR cost) → pérdida mínima patrimonial',
+    assetSymbol: 'XRP',
+    assetLogoUri: '/crypto-icons/xrp.svg',
+    exchangeName: 'Kraken',
+    exchangeLogoUri: '/exchange-icons/kraken.svg',
+    operationType: 'SELL',
+  },
+  {
+    id: 'lot-evt-2025-006',
+    disposalDate: new Date('2025-04-01T12:00:00Z'),
+    amountFromLot: 50,
+    salePriceEur: 0,
+    gainLossEur: 0,
+    isTaxable: false,
+    notes: 'B2M Reward — base imponible general, valorado a precio de mercado en fecha de devengo',
+    assetSymbol: 'B2M',
+    assetLogoUri: '/crypto-icons/b2m.svg',
+    exchangeName: 'Bit2Me',
+    exchangeLogoUri: '/exchange-icons/bit2me.svg',
+    operationType: 'REWARD',
+  },
+  {
+    id: 'lot-evt-2025-007',
+    disposalDate: new Date('2025-10-07T23:40:00Z'),
+    amountFromLot: 957.64,
+    salePriceEur: 0.468,
+    gainLossEur: -30.54,
+    saleFeeEur: 1.795,
+    isTaxable: true,
+    notes: 'FIFO: Lot tx-031 completo (957.64 ENA @ 0.5 EUR cost) → venta con pérdida pequeña',
+    assetSymbol: 'ENA',
+    assetLogoUri: '/crypto-icons/ena.svg',
+    exchangeName: 'Kraken',
+    exchangeLogoUri: '/exchange-icons/kraken.svg',
+    operationType: 'SELL',
+  },
+]
+
+const MOCK_REPORT_2025: TaxReportEntity = {
+  year: 2025,
+  method: 'FIFO',
+  summary: {
+    capitalGainsEur: 2_900,
+    capitalLossesEur: 790.54,
+    savingsBaseYieldsEur: 80,
+    generalBaseAirdropsEur: 0,
+    netPatrimonialResultEur: 2_109.46,
+    estimatedIrpfEur: 401.8,
+  },
+  auditTrail: MOCK_AUDIT_TRAIL_2025,
+}
+
+// ---------------------------------------------------------------------------
 // MockTaxAdapter — stateful, mutable instance
 // ---------------------------------------------------------------------------
 
 export class MockTaxAdapter implements ITaxRepository {
-  private _transactions: TaxTransactionEntity[]
+  private _spotTransactions: TaxTransactionEntity[]
+  private _futuresTransactions: TaxTransactionEntity[]
 
   constructor() {
-    this._transactions = buildSeed()
+    this._spotTransactions = buildSpotSeed()
+    this._futuresTransactions = buildFuturesSeed()
   }
 
-  async getTransactions(): Promise<TaxTransactionEntity[]> {
+  async getSpotTransactions(): Promise<TaxTransactionEntity[]> {
     await delay(350)
-    return [...this._transactions]
+    return [...this._spotTransactions]
+  }
+
+  async getFuturesTransactions(): Promise<TaxTransactionEntity[]> {
+    await delay(350)
+    return [...this._futuresTransactions]
   }
 
   async getInvalidTransactions(): Promise<TaxTransactionEntity[]> {
@@ -268,6 +475,7 @@ export class MockTaxAdapter implements ITaxRepository {
   async getReport(year: number, method: string): Promise<TaxReportEntity> {
     await delay(500)
     if (year === 2024) return MOCK_REPORT_2024
+    if (year === 2025) return MOCK_REPORT_2025
     return {
       year,
       method,
@@ -285,33 +493,43 @@ export class MockTaxAdapter implements ITaxRepository {
 
   async deleteTransaction(id: string): Promise<void> {
     await delay(100)
-    this._transactions = this._transactions.filter((tx) => tx.id !== id)
+    this._spotTransactions = this._spotTransactions.filter((tx) => tx.id !== id)
+    this._futuresTransactions = this._futuresTransactions.filter((tx) => tx.id !== id)
   }
 
   async updateTransaction(id: string, data: Partial<TaxTransactionEntity>): Promise<void> {
     await delay(150)
-    const idx = this._transactions.findIndex((tx) => tx.id === id)
-    if (idx !== -1) {
-      this._transactions[idx] = { ...this._transactions[idx], ...data }
+    const idxSpot = this._spotTransactions.findIndex((tx) => tx.id === id)
+    if (idxSpot !== -1) {
+      this._spotTransactions[idxSpot] = { ...this._spotTransactions[idxSpot], ...data }
+      return
+    }
+    const idxFutures = this._futuresTransactions.findIndex((tx) => tx.id === id)
+    if (idxFutures !== -1) {
+      this._futuresTransactions[idxFutures] = { ...this._futuresTransactions[idxFutures], ...data }
     }
   }
 
   async validateTransaction(payload: Partial<TaxTransactionEntity>): Promise<void> {
     await delay(150)
     if (!payload.id) return
-    const idx = this._transactions.findIndex((tx) => tx.id === payload.id)
-    if (idx !== -1) {
-      // Mark the transaction as validated — no structural change, just merge
-      this._transactions[idx] = { ...this._transactions[idx], ...payload }
+    const idxSpot = this._spotTransactions.findIndex((tx) => tx.id === payload.id)
+    if (idxSpot !== -1) {
+      this._spotTransactions[idxSpot] = { ...this._spotTransactions[idxSpot], ...payload }
+      return
+    }
+    const idxFutures = this._futuresTransactions.findIndex((tx) => tx.id === payload.id)
+    if (idxFutures !== -1) {
+      this._futuresTransactions[idxFutures] = { ...this._futuresTransactions[idxFutures], ...payload }
     }
   }
 
   /**
-   * Parse a CSV or XLSX file locally and append results to _transactions.
+   * Parse a CSV or XLSX file locally and append results to _spotTransactions or _futuresTransactions.
    * No network request is made. Uses papaparse for CSV, SheetJS for XLSX.
    * @throws {TaxOperationError} with code 'UPLOAD_FAILED' if format unknown
    */
-  async uploadTaxFile(file: File): Promise<void> {
+  async uploadTaxFile(file: File, market: 'spot' | 'futures'): Promise<void> {
     await delay(200)
 
     let rawRows: Record<string, string>[] = []
@@ -337,13 +555,21 @@ export class MockTaxAdapter implements ITaxRepository {
     }
 
     const newEntities = parser.parse(rawRows)
-    this._transactions = [...this._transactions, ...newEntities]
+    if (market === 'futures') {
+      this._futuresTransactions = [...this._futuresTransactions, ...newEntities]
+    } else {
+      this._spotTransactions = [...this._spotTransactions, ...newEntities]
+    }
   }
 
-  /** Clears all transactions — in-memory only. */
-  async deleteAllTransactions(): Promise<void> {
+  /** Clears all transactions for a given market — in-memory only. */
+  async deleteAllTransactions(market: 'spot' | 'futures'): Promise<void> {
     await delay(100)
-    this._transactions = []
+    if (market === 'futures') {
+      this._futuresTransactions = []
+    } else {
+      this._spotTransactions = []
+    }
   }
 
   /**
@@ -361,6 +587,42 @@ export class MockTaxAdapter implements ITaxRepository {
   async syncWeb3(): Promise<void> {
     await delay(1200)
     console.info('[MockTaxAdapter] syncWeb3 called — no-op in mock mode')
+  }
+
+  /**
+   * Mock report download — generates a minimal Blob representing the file.
+   * In real mode this would stream from the backend. Here we produce a
+   * human-readable text blob so the browser download is testable end-to-end.
+   */
+  async downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob> {
+    await delay(600)
+    const report = year === 2024 ? MOCK_REPORT_2024 : year === 2025 ? MOCK_REPORT_2025 : null
+    const lines: string[] = [
+      `Kryptofolio — Informe Fiscal FIFO ${year}`,
+      `Método: FIFO | Formato: ${format.toUpperCase()}`,
+      '---',
+    ]
+    if (report) {
+      lines.push(
+        `Ganancias patrimoniales: ${report.summary.capitalGainsEur} EUR`,
+        `Pérdidas patrimoniales:  ${report.summary.capitalLossesEur} EUR`,
+        `Rendimientos (Yields):   ${report.summary.savingsBaseYieldsEur} EUR`,
+        `Resultado neto:          ${report.summary.netPatrimonialResultEur} EUR`,
+        `IRPF estimado:           ${report.summary.estimatedIrpfEur} EUR`,
+        '---',
+        'Trazabilidad de Lotes FIFO:',
+        ...report.auditTrail.map(
+          (e) =>
+            `  [${new Date(e.disposalDate).toISOString().slice(0, 10)}] ` +
+            `${e.amountFromLot} uds @ ${e.salePriceEur}€ → PyG: ${e.gainLossEur}€ ` +
+            `(${e.isTaxable ? 'IMPONIBLE' : 'NO IMPONIBLE'}) — ${e.notes ?? ''}`,
+        ),
+      )
+    } else {
+      lines.push('Sin datos para el ejercicio seleccionado.')
+    }
+    const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;'
+    return new Blob([lines.join('\n')], { type: mimeType })
   }
 
   // ---------------------------------------------------------------------------

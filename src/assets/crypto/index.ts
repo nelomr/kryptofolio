@@ -224,6 +224,7 @@ import EtnIcon from './etn.svg'
 import EtpIcon from './etp.svg'
 import EtzIcon from './etz.svg'
 import EulIcon from './eul.svg'
+import EurIcon from './eur.svg'
 import EursIcon from './eurs.svg'
 import EverIcon from './ever.svg'
 import EvxIcon from './evx.svg'
@@ -630,6 +631,7 @@ import UmaIcon from './uma.svg'
 import UniIcon from './uni.svg'
 import UosIcon from './uos.svg'
 import UqcIcon from './uqc.svg'
+import UsdIcon from './usd.svg'
 import UsdcIcon from './usdc.svg'
 import UsddIcon from './usdd.svg'
 import UsdpIcon from './usdp.svg'
@@ -943,6 +945,7 @@ export const CryptoIcons = {
   'etp': EtpIcon,
   'etz': EtzIcon,
   'eul': EulIcon,
+  'eur': EurIcon,
   'eurs': EursIcon,
   'ever': EverIcon,
   'evx': EvxIcon,
@@ -1349,6 +1352,7 @@ export const CryptoIcons = {
   'uni': UniIcon,
   'uos': UosIcon,
   'uqc': UqcIcon,
+  'usd': UsdIcon,
   'usdc': UsdcIcon,
   'usdd': UsddIcon,
   'usdp': UsdpIcon,

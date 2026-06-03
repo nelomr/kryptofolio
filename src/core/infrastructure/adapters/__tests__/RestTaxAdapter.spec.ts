@@ -35,7 +35,7 @@ describe('RestTaxAdapter.uploadTaxFile() — happy path', () => {
     const adapter = new RestTaxAdapter(http)
     const file = new File(['txid,refid'], 'test.csv', { type: 'text/csv' })
 
-    await adapter.uploadTaxFile(file)
+    await adapter.uploadTaxFile(file, 'spot')
 
     expect(http.postForm).toHaveBeenCalledOnce()
     const [url, formData] = (http.postForm as ReturnType<typeof vi.fn>).mock.calls[0]
@@ -47,7 +47,7 @@ describe('RestTaxAdapter.uploadTaxFile() — happy path', () => {
     const http = makeHttp()
     const adapter = new RestTaxAdapter(http)
     const file = new File(['data'], 'test.csv', { type: 'text/csv' })
-    await expect(adapter.uploadTaxFile(file)).resolves.toBeUndefined()
+    await expect(adapter.uploadTaxFile(file, 'spot')).resolves.toBeUndefined()
   })
 })
 
@@ -63,8 +63,8 @@ describe('RestTaxAdapter.uploadTaxFile() — error path', () => {
     const adapter = new RestTaxAdapter(http)
     const file = new File(['data'], 'test.csv', { type: 'text/csv' })
 
-    await expect(adapter.uploadTaxFile(file)).rejects.toThrow(TaxOperationError)
-    await expect(adapter.uploadTaxFile(file)).rejects.toMatchObject({ code: 'UPLOAD_FAILED' })
+    await expect(adapter.uploadTaxFile(file, 'spot')).rejects.toThrow(TaxOperationError)
+    await expect(adapter.uploadTaxFile(file, 'spot')).rejects.toMatchObject({ code: 'UPLOAD_FAILED' })
   })
 })
 
@@ -73,19 +73,20 @@ describe('RestTaxAdapter.uploadTaxFile() — error path', () => {
 // ---------------------------------------------------------------------------
 
 describe('RestTaxAdapter.deleteAllTransactions() — happy path', () => {
-  it('sends a DELETE to /api/tax/transactions', async () => {
+  it('sends a DELETE to /api/tax/transactions/spot', async () => {
     const http = makeHttp()
     const adapter = new RestTaxAdapter(http)
+    ;(http.delete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { success: true } })
 
-    await adapter.deleteAllTransactions()
+    await adapter.deleteAllTransactions('spot')
 
-    expect(http.delete).toHaveBeenCalledWith('/api/tax/transactions')
+    expect(http.delete).toHaveBeenCalledWith('/api/tax/transactions/spot')
   })
 
   it('resolves void on success', async () => {
     const http = makeHttp()
     const adapter = new RestTaxAdapter(http)
-    await expect(adapter.deleteAllTransactions()).resolves.toBeUndefined()
+    await expect(adapter.deleteAllTransactions('spot')).resolves.toBeUndefined()
   })
 })
 
@@ -100,7 +101,7 @@ describe('RestTaxAdapter.deleteAllTransactions() — error path', () => {
     })
     const adapter = new RestTaxAdapter(http)
 
-    await expect(adapter.deleteAllTransactions()).rejects.toThrow(TaxOperationError)
-    await expect(adapter.deleteAllTransactions()).rejects.toMatchObject({ code: 'DELETE_FAILED' })
+    await expect(adapter.deleteAllTransactions('spot')).rejects.toThrow(TaxOperationError)
+    await expect(adapter.deleteAllTransactions('spot')).rejects.toMatchObject({ code: 'DELETE_FAILED' })
   })
 })
