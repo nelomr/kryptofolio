@@ -24,6 +24,8 @@ export const en: I18nDictionary = {
 
   // Portfolio Header
   'portfolio.analytics': 'Analytics',
+  'portfolio.holdings': 'Holdings',
+  'portfolio.metrics': 'Metrics',
   'portfolio.syncing': '(Syncing...)',
   'portfolio.no_assets': 'No assets found in the portfolio.',
   'portfolio.subtitle': 'Institutional FIFO Engine • Fiscal Year 2026',

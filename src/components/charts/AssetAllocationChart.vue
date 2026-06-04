@@ -3,7 +3,7 @@
  * AssetAllocationChart — Component description.
  */
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -13,6 +13,7 @@ import {
   type ChartData,
   type ChartOptions,
 } from 'chart.js'
+import CustomChartLegend from './CustomChartLegend.vue'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -20,6 +21,7 @@ interface AssetSlice {
   label: string
   value: number
   color: string
+  change24h?: number
 }
 
 const props = defineProps<{
@@ -44,13 +46,7 @@ const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
   cutout: '80%',
   plugins: {
     legend: {
-      position: 'right' as const,
-      labels: {
-        color: '#94a3b8',
-        boxWidth: 12,
-        padding: 16,
-        font: { size: 12 },
-      },
+      display: false, // Ocultar leyenda nativa
     },
     tooltip: {
       callbacks: {
@@ -70,14 +66,44 @@ const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
     animateScale: false,
   },
 }))
+
+const totalValue = computed(() => {
+  return props.assets.reduce((sum, a) => sum + a.value, 0)
+})
+
+const formatCurrency = (val: number) => {
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val)
+}
+
+const chartRef = ref<any>(null)
+
+function handleLegendHover(index: number | null) {
+  const chartInstance = chartRef.value?.chart
+  if (!chartInstance) return
+
+  if (index !== null) {
+    chartInstance.setActiveElements([{ datasetIndex: 0, index }])
+    chartInstance.tooltip.setActiveElements([{ datasetIndex: 0, index }], { x: 0, y: 0 })
+  } else {
+    chartInstance.setActiveElements([])
+    chartInstance.tooltip.setActiveElements([], { x: 0, y: 0 })
+  }
+  chartInstance.update()
+}
 </script>
 
 <template>
-  <div
-    v-if="assets.length > 0"
-    data-testid="allocation-chart"
-    class="relative w-full h-60"
-  >
-    <Doughnut :data="chartData" :options="chartOptions" />
+  <div v-if="assets.length > 0" data-testid="allocation-chart" class="flex flex-col h-full w-full">
+    <div class="relative w-full h-48 mb-4">
+      <Doughnut ref="chartRef" :data="chartData" :options="chartOptions" />
+      <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <span class="text-xs text-muted-foreground uppercase font-medium tracking-wider">Total</span>
+        <span class="text-xl font-bold text-foreground">{{ formatCurrency(totalValue) }}</span>
+      </div>
+    </div>
+    
+    <div class="flex-1 overflow-y-auto">
+      <CustomChartLegend :assets="assets" @hover="handleLegendHover" />
+    </div>
   </div>
 </template>

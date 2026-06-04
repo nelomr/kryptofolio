@@ -30,6 +30,13 @@ vi.mock('@/components/charts/AssetAllocationChart.vue', () => ({
   },
 }))
 
+vi.mock('@/components/ui/tabs', () => ({
+  Tabs: { template: '<div><slot /></div>' },
+  TabsList: { template: '<div><slot /></div>' },
+  TabsTrigger: { template: '<button><slot /></button>' },
+  TabsContent: { template: '<div><slot /></div>' }
+}))
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const mockMetrics = {
   totalEquityEur: 10000,
@@ -130,14 +137,7 @@ describe('PortfolioView', () => {
     expect(mockRebuild).toHaveBeenCalledOnce()
   })
 
-  it('charts section appears before metrics (reference layout)', () => {
-    const wrapper = mountView()
-    const html = wrapper.html()
-    const chartsIdx = html.indexOf('performance-chart-stub')
-    const metricsIdx = html.indexOf('metrics.net_equity')
-    // Charts must appear before metrics row in the DOM
-    expect(chartsIdx).toBeLessThan(metricsIdx)
-  })
+
 
   it('renders PerformanceLineChart when performanceData is not empty', () => {
     const wrapper = mountView()

@@ -7,13 +7,25 @@ import type { ChartData, ChartOptions } from 'chart.js'
 let capturedChartData: ChartData<'doughnut'> | null = null
 let capturedOptions: ChartOptions<'doughnut'> | null = null
 
+const mockSetActiveElements = vi.fn()
+const mockTooltipSetActiveElements = vi.fn()
+const mockUpdate = vi.fn()
+
 vi.mock('vue-chartjs', () => ({
   Doughnut: {
     name: 'Doughnut',
     props: ['data', 'options'],
-    setup(props: { data: ChartData<'doughnut'>; options: ChartOptions<'doughnut'> }) {
+    setup(props: { data: ChartData<'doughnut'>; options: ChartOptions<'doughnut'> }, { expose }: any) {
       capturedChartData = props.data
       capturedOptions = props.options
+      expose({
+        chart: {
+          setActiveElements: mockSetActiveElements,
+          tooltip: { setActiveElements: mockTooltipSetActiveElements },
+          update: mockUpdate
+        }
+      })
+      return {}
     },
     template: '<canvas data-testid="doughnut-canvas"></canvas>',
   },
@@ -81,11 +93,35 @@ describe('AssetAllocationChart', () => {
     expect(capturedChartData?.datasets[0].data).toEqual([60, 30, 10])
   })
 
-  it('applies 80% cutout option', () => {
+  it('applies 80% cutout option and hides native legend', () => {
     mount(AssetAllocationChart, {
       props: { assets: sampleAssets },
       global: { plugins: [createTestingPinia({ createSpy: vi.fn })] },
     })
-    expect((capturedOptions as any)?.cutout).toBe('80%')
+    const opts = capturedOptions as any
+    expect(opts.cutout).toBe('80%')
+    expect(opts.plugins.legend.display).toBe(false)
+  })
+
+  it('highlights doughnut slice when legend item is hovered', async () => {
+    const wrapper = mount(AssetAllocationChart, {
+      props: { assets: sampleAssets },
+      global: { plugins: [createTestingPinia({ createSpy: vi.fn })] },
+    })
+    
+    // Find the CustomChartLegend component and emit hover
+    const legend = wrapper.findComponent({ name: 'CustomChartLegend' })
+    expect(legend.exists()).toBe(true)
+    
+    // Emit hover on index 1
+    await legend.vm.$emit('hover', 1)
+    
+    expect(mockSetActiveElements).toHaveBeenCalledWith([{ datasetIndex: 0, index: 1 }])
+    expect(mockTooltipSetActiveElements).toHaveBeenCalledWith([{ datasetIndex: 0, index: 1 }], { x: 0, y: 0 })
+    expect(mockUpdate).toHaveBeenCalled()
+    
+    // Emit hover null
+    await legend.vm.$emit('hover', null)
+    expect(mockSetActiveElements).toHaveBeenCalledWith([])
   })
 })

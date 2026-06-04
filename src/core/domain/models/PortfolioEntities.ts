@@ -33,6 +33,8 @@ export interface CryptoAssetEntity {
   unrealizedPnlEur: number
   /** Combined PnL (unrealized) in EUR — UI-facing alias */
   pnlEur: number
+  /** Percentage change in value over the last 24 hours */
+  change24h?: number
   /** List of wallets/exchanges where the asset is held */
   portfolioLocations: string[]
 }

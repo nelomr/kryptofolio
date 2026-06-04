@@ -7,8 +7,10 @@ import PerformanceLineChart from '@/components/charts/PerformanceLineChart.vue'
 import AssetAllocationChart from '@/components/charts/AssetAllocationChart.vue'
 
 interface ChartDataPoint {
-  time: string
+  time: string | number
   value: number
+  type?: 'deposit' | 'withdrawal'
+  amount?: number
 }
 
 interface AssetSlice {

@@ -36,25 +36,41 @@ export function useChartData(
     if (!metrics.value) return []
     
     const currentEquity = metrics.value.totalEquityEur
-    const baseEquity = currentEquity * 0.95 // Assume started 5% lower 7 days ago
+    const baseEquity = currentEquity * 0.85 // Assume started 15% lower 30 days ago
     const history = []
     
     const now = new Date()
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now)
-      d.setDate(d.getDate() - i)
+    const days = 30
+    const pointsPerDay = 24 // hourly
+    const totalPoints = days * pointsPerDay
+    
+    for (let i = totalPoints; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 60 * 60 * 1000)
+      const progress = 1 - (i / totalPoints)
+      // Generar una curva más natural usando una onda senoidal y menos ruido
+      const wave = Math.sin(progress * Math.PI * 3) * (currentEquity * 0.03)
+      const randomNoise = i === 0 ? 0 : (Math.random() - 0.5) * 0.005 * currentEquity
+      const value = baseEquity + ((currentEquity - baseEquity) * progress) + wave + randomNoise
       
-      // Add some random walk for intermediate days, and use exactly currentEquity for today
-      const progress = 1 - (i / 6) // 0 to 1
-      const randomNoise = i === 0 ? 0 : (Math.random() - 0.5) * 0.02 * currentEquity // +/- 1% noise
-      const value = baseEquity + ((currentEquity - baseEquity) * progress) + randomNoise
-      
-      history.push({
-        time: d.toISOString().split('T')[0],
+      const point: any = {
+        time: Math.floor(d.getTime() / 1000),
         value: Number(value.toFixed(2))
-      })
+      }
+      
+      // Simular eventos de marcadores fijos (ej. hace ~4 días y ~20 días)
+      if (i === totalPoints - 100) {
+        point.type = 'deposit'
+        point.amount = 5000
+      } else if (i === totalPoints - 500) {
+        point.type = 'withdrawal'
+        point.amount = 2000
+      }
+      
+      history.push(point)
     }
-    return history
+    
+    // Sort just in case
+    return history.sort((a, b) => a.time - b.time)
   })
 
   return {

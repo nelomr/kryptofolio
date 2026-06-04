@@ -23,6 +23,8 @@ export const es: I18nDictionary = {
   'portfolio.roi': 'ROI Total',
   'portfolio.invested': 'Capital Invertido',
   'portfolio.analytics': 'Analítica',
+  'portfolio.holdings': 'Holdings',
+  'portfolio.metrics': 'Métricas',
   'portfolio.syncing': '(Sincronizando...)',
   'portfolio.no_assets': 'No se han encontrado activos en la cartera.',
   'portfolio.subtitle': 'Motor FIFO Institucional • Año Fiscal 2026',

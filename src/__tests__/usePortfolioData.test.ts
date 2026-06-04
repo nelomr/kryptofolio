@@ -120,7 +120,7 @@ describe('Portfolio Data Composable (portfolio-data-composable)', () => {
     // Wait for query resolution
     await new Promise(resolve => setTimeout(resolve, 10))
 
-    expect(chartComposable!.performanceData.value.length).toBe(7)
+    expect(chartComposable!.performanceData.value.length).toBe(721)
     expect(chartComposable!.performanceData.value[0]).toHaveProperty('time')
     expect(chartComposable!.performanceData.value[0]).toHaveProperty('value')
 
