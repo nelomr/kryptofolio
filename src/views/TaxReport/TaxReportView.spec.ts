@@ -25,6 +25,14 @@ vi.mock('@/composables/useI18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
 }))
 
+vi.mock('./composables/useWalletsPort', () => ({
+  useWalletsPort: () => ({
+    walletNames: ['All Wallets'],
+    uploadWalletCsv: vi.fn(),
+    isUploading: false
+  })
+}))
+
 vi.mock('@/composables/queries/useTaxQueries', () => ({
   useSpotTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isLoading: { value: false } })),
   useFuturesTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isLoading: { value: false } })),

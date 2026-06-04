@@ -51,6 +51,20 @@ export class FetchHttpClient implements IHttpClient {
   delete<T>(url: string): Promise<{ data: T }> {
     return request<T>(url, { method: 'DELETE' })
   }
+
+  async postForm<T>(url: string, formData: FormData): Promise<{ data: T }> {
+    const response = await fetch(`${BASE_URL}${url}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText} — ${url}`);
+    }
+
+    const data: T = await response.json();
+    return { data };
+  }
 }
 
 // Export with AxiosHttpClient alias for backward compatibility with main.ts import

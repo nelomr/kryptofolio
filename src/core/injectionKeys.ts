@@ -23,3 +23,7 @@ export const TAX_REPO_KEY: InjectionKey<ITaxRepository> = Symbol('ITaxRepository
 /** Injection key for the i18n port (Ports) */
 import type { I18nPort } from './domain/ports/I18nPort'
 export const I18N_PORT_KEY: InjectionKey<I18nPort> = Symbol('I18nPort')
+
+/** Injection key for the wallet repository (Ports) */
+import type { IWalletRepository } from './domain/ports/IWalletRepository'
+export const WALLET_REPO_KEY: InjectionKey<IWalletRepository> = Symbol('IWalletRepository')

@@ -167,6 +167,11 @@ export const es: I18nDictionary = {
   'tax.header.badge': 'Motor de Cumplimiento',
   'tax.header.sync': 'Sync Web3',
   'tax.header.upload': 'Subir CSV',
+  'tax.wallets.upload': 'Subir Wallets',
+  'tax.wallets.upload_success': 'Wallets actualizadas con éxito',
+  'tax.wallets.upload_error': 'Error al subir las wallets',
+  'tax.wallets.all': 'Todas las Wallets',
+  'tax.wallets.tooltip_title': 'Formato CSV requerido:',
   'tax.header.pending': 'Funcionalidad pendiente de integración con backend',
   'tax.header.delete_title': 'Eliminar datos',
   

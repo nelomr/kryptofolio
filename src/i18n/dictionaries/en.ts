@@ -168,6 +168,11 @@ export const en: I18nDictionary = {
   'tax.header.badge': 'Compliance Engine',
   'tax.header.sync': 'Sync Web3',
   'tax.header.upload': 'Upload CSV',
+  'tax.wallets.upload': 'Upload Wallets',
+  'tax.wallets.upload_success': 'Wallets updated successfully',
+  'tax.wallets.upload_error': 'Failed to upload wallets',
+  'tax.wallets.all': 'All Wallets',
+  'tax.wallets.tooltip_title': 'CSV Format Required:',
   'tax.header.pending': 'Backend integration pending',
   'tax.header.delete_title': 'Delete data',
   

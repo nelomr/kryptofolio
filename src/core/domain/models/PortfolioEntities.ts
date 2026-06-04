@@ -93,3 +93,20 @@ export interface TokenHistoryEntity {
    */
   history: Record<string, TaxLotHistoryEvent[]>
 }
+
+// ---------------------------------------------------------------------------
+// WalletEntities — logical wallets and their chain addresses
+// ---------------------------------------------------------------------------
+
+export type WalletType = 'COLD_WALLET' | 'HOT_WALLET'
+
+export interface ChainAddressEntity {
+  blockchain: string
+  address: string
+}
+
+export interface LogicalWalletEntity {
+  name: string
+  type: WalletType
+  chainAddresses: ChainAddressEntity[]
+}
