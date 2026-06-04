@@ -52,9 +52,11 @@ function parseOrFail<T>(
 ): T {
   const result = schema.safeParse(rawData)
   if (!result.success) {
-    const message = `API returned malformed data in ${context}. The UI may show stale data.`
-    console.error(`[RestCryptoAdapter] ${message}`, result.error)
-    errorBus.emit('validation-error', { message, context, details: result.error })
+    errorBus.emit('validation-error', { 
+      message: 'errors.validation.api_malformed_data',
+      context: context, 
+      details: result.error 
+    })
     throw new DomainValidationError(context, result.error)
   }
   return result.data!

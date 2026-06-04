@@ -14,11 +14,12 @@
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
 import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
-import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 import {
   ExternalTaxTransactionSchema,
   ExternalTaxReportSchema,
 } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
+import { CexFuturesLedgerSchema } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
@@ -36,9 +37,11 @@ function parseOrFail<T>(
 ): T {
   const result = schema.safeParse(rawData)
   if (!result.success) {
-    const message = `Tax API returned malformed data in ${context}. Data may be incomplete.`
-    console.error(`[RestTaxAdapter] ${message}`, result.error)
-    errorBus.emit('validation-error', { message, context, details: result.error })
+    errorBus.emit('validation-error', { 
+      message: 'errors.validation.api_malformed_data',
+      context: context, 
+      details: result.error 
+    })
     throw new DomainValidationError(context, result.error)
   }
   return result.data!
@@ -85,7 +88,7 @@ export class RestTaxAdapter implements ITaxRepository {
         // Single-row failure: log and emit but continue processing the rest
         console.warn('[RestTaxAdapter] Skipping invalid transaction:', result.error, rawTx)
         errorBus.emit('validation-error', {
-          message: `A transaction record was skipped due to malformed data.`,
+          message: 'errors.validation.malformed_record',
           context: 'getTransactions/row',
           details: result.error,
         })
@@ -122,8 +125,29 @@ export class RestTaxAdapter implements ITaxRepository {
       } else {
         console.warn('[RestTaxAdapter] Skipping invalid transaction:', result.error, rawTx)
         errorBus.emit('validation-error', {
-          message: `A transaction record was skipped due to malformed data.`,
+          message: 'errors.validation.malformed_record',
           context: 'getFuturesTransactions/row',
+          details: result.error,
+        })
+      }
+    }
+    return parsed
+  }
+
+  async getFuturesDerivatives(): Promise<TaxDerivativeEntity[]> {
+    const response = await this.http.get<unknown[]>('/api/tax/transactions/futures-derivatives')
+    const rawArray = Array.isArray(response.data) ? response.data : []
+
+    const parsed: TaxDerivativeEntity[] = []
+    for (const rawTx of rawArray) {
+      const result = CexFuturesLedgerSchema.safeParse(rawTx)
+      if (result.success) {
+        parsed.push(result.data)
+      } else {
+        console.warn('[RestTaxAdapter] Skipping invalid futures derivative entry:', result.error, rawTx)
+        errorBus.emit('validation-error', {
+          message: 'errors.validation.malformed_derivative',
+          context: 'getFuturesDerivatives/row',
           details: result.error,
         })
       }

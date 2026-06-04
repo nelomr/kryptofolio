@@ -14,7 +14,7 @@ import { useQuery } from '@pinia/colada'
 import type { Ref } from 'vue'
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
-import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 
 // ---------------------------------------------------------------------------
 // Helper: inject the Tax repository (throws if not provided)
@@ -81,5 +81,22 @@ export function useTaxReportQuery(year: Ref<number>, method: Ref<string>) {
     key: () => TAX_REPORT_KEY(year.value, method.value),
     query: () => repo.getReport(year.value, method.value),
     enabled: () => year.value > 0,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useFuturesDerivativesQuery
+// Fetches futures derivatives transactions mapped to TaxDerivativeEntity.
+// Uses a distinct cache key from the legacy futures query to avoid conflicts.
+// ---------------------------------------------------------------------------
+
+export const FUTURES_DERIVATIVES_KEY = ['tax-transactions', 'futures-derivatives'] as const
+
+export function useFuturesDerivativesQuery() {
+  const repo = useTaxRepo()
+
+  return useQuery<TaxDerivativeEntity[]>({
+    key: FUTURES_DERIVATIVES_KEY,
+    query: () => repo.getFuturesDerivatives(),
   })
 }

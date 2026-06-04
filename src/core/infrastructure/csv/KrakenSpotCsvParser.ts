@@ -59,7 +59,10 @@ export class KrakenSpotCsvParser implements ICsvIngestionPort {
     }
 
     if (skipped > 0) {
-      errorBus.emit('validation-error', { message: `Kraken parser skipped ${skipped} invalid or unsupported operations.` })
+      errorBus.emit('validation-error', {
+        message: 'errors.validation.parser_skipped_rows',
+        params: { parser: 'Kraken', skipped }
+      })
     }
 
     return results

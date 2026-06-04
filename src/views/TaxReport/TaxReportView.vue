@@ -5,6 +5,7 @@ import IntegrityCard from "./components/IntegrityCard.vue";
 import TaxReportTab from "./components/TaxReportTab.vue";
 import YearFilter from "./components/YearFilter.vue";
 import TaxTransactionsTable from "./components/TaxTransactionsTable.vue";
+import TaxDerivativesTable from "./components/TaxDerivativesTable.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookText, FileText, MessageSquare } from "lucide-vue-next";
 import { useTaxReportPort } from "./composables/useTaxReportPort";
@@ -17,13 +18,14 @@ const { isLoading, metrics, warnings, syncWeb3, uploadCsv, clearData } =
 
 const {
   spotLoading,
-  futuresLoading,
+  derivativesLoading,
   availableYears,
   spotYearFilter,
-  futuresYearFilter,
+  derivativesYearFilter,
   filteredSpot,
-  filteredFutures,
+  filteredDerivatives,
   handleEdit,
+  handleEditDerivative,
   handleDelete,
 } = useTaxLedgers();
 </script>
@@ -68,8 +70,9 @@ const {
       </TabsList>
 
       <TabsContent value="ledgers" class="space-y-4 mt-4">
-        <!-- Integrity summary card (Fiscal Hospital) moved here -->
+        <!-- Integrity summary card (Fiscal Hospital) TODO: Functionality not implemented yet 
         <IntegrityCard :warnings="warnings" :isLoading="isLoading" />
+        -->
 
         <!-- Operations Ledgers Sub-Tabs -->
         <Tabs defaultValue="spot" class="space-y-4 mt-4">
@@ -90,9 +93,6 @@ const {
 
           <TabsContent value="spot">
             <div class="flex items-center justify-between py-2 mb-4">
-              <h4 class="text-sm font-semibold uppercase text-muted-foreground">
-                {{ t("tax.tabs.spot_ledger") }}
-              </h4>
               <YearFilter
                 :available-years="availableYears"
                 v-model="spotYearFilter"
@@ -108,19 +108,16 @@ const {
           </TabsContent>
           <TabsContent value="futures">
             <div class="flex items-center justify-between py-2 mb-4">
-              <h4 class="text-sm font-semibold uppercase text-muted-foreground">
-                {{ t("tax.tabs.futures_ledger") }}
-              </h4>
               <YearFilter
                 :available-years="availableYears"
-                v-model="futuresYearFilter"
+                v-model="derivativesYearFilter"
               />
             </div>
 
-            <TaxTransactionsTable
-              :transactions="filteredFutures"
-              :isLoading="futuresLoading"
-              @edit="handleEdit"
+            <TaxDerivativesTable
+              :transactions="filteredDerivatives"
+              :isLoading="derivativesLoading"
+              @edit="handleEditDerivative"
               @delete="handleDelete"
             />
           </TabsContent>

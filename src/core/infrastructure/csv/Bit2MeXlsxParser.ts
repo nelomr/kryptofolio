@@ -62,7 +62,10 @@ export class Bit2MeXlsxParser implements ICsvIngestionPort {
     }
 
     if (skipped > 0) {
-      errorBus.emit('validation-error', { message: `Bit2Me parser skipped ${skipped} invalid or unsupported rows.` })
+      errorBus.emit('validation-error', {
+        message: 'errors.validation.parser_skipped_rows',
+        params: { parser: 'Bit2Me', skipped }
+      })
     }
 
     return results

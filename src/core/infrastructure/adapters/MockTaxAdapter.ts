@@ -14,7 +14,7 @@
  */
 
 import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
-import type { TaxTransactionEntity, TaxReportEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionEntity, TaxReportEntity, TaxLotHistoryEvent, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { REGISTERED_PARSERS } from '@/core/infrastructure/csv'
@@ -176,6 +176,70 @@ function buildFuturesSeed(): TaxTransactionEntity[] {
     tx('ftx-007', 'FUTURES_FUNDING', 'USD', 0, 2.5, 1, 0, '2025-01-20T16:00:00Z'),
     tx('ftx-008', 'FUTURES_TRADE', 'BTC', 0.1, -200, 95_000, 1.5, '2025-02-15T12:00:00Z'),
     tx('ftx-009', 'SWAP', 'EUR', -500, -500, 1, 0.25, '2025-03-01T10:00:00Z', 'Kraken Futures', 'conversion-2'),
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Futures Derivatives seed — Rich mock data using TaxDerivativeEntity shape.
+// Covers: FUTURES_TRADE (profit/loss), FUTURES_FUNDING, CONVERSION.
+// Two fiscal years (2024 and 2025), various contracts (BTC, ETH, XRP, SOL).
+// ---------------------------------------------------------------------------
+
+function buildFuturesDerivativesSeed(): TaxDerivativeEntity[] {
+  const fx = (
+    id: string,
+    type: TaxDerivativeEntity['type'],
+    contractSymbol: string,
+    underlyingAsset: string,
+    amount: number,
+    tradePrice: number,
+    realizedPnl: number,
+    fees: number,
+    funding: number,
+    date: string,
+    exchange = 'Kraken Futures',
+    status = 'CLOSED',
+    refId?: string,
+  ): TaxDerivativeEntity => ({
+    id: TransactionIdSchema.parse(id),
+    type,
+    contractSymbol,
+    underlyingAsset,
+    amount,
+    tradePrice,
+    realizedPnl,
+    fees,
+    funding,
+    timestamp: new Date(date),
+    exchange,
+    status,
+    refId,
+  })
+
+  return [
+    // --- 2024 — BTC Futures ---
+    fx('dftx-001', 'FUTURES_TRADE', 'pf_btcusd', 'btc', 0.5, 60_000, 2_000, 5.0, 0, '2024-03-10T10:00:00Z'),
+    fx('dftx-002', 'FUTURES_FUNDING', 'pf_btcusd', 'btc', 0, 0, 0, 0, -1.5, '2024-03-10T16:00:00Z', 'Kraken Futures', 'SETTLED'),
+    fx('dftx-003', 'FUTURES_FUNDING', 'pf_btcusd', 'btc', 0, 0, 0, 0, -1.2, '2024-03-11T00:00:00Z', 'Kraken Futures', 'SETTLED'),
+    // --- 2024 — ETH Futures (loss) ---
+    fx('dftx-004', 'FUTURES_TRADE', 'pf_ethusd', 'eth', 10.0, 3_000, -500, 2.5, 0, '2024-05-15T14:30:00Z'),
+    fx('dftx-005', 'FUTURES_FUNDING', 'pf_ethusd', 'eth', 0, 0, 0, 0, -0.8, '2024-05-15T16:00:00Z', 'Kraken Futures', 'SETTLED'),
+    // --- 2024 — Conversion (collateral) ---
+    fx('dftx-006', 'CONVERSION', 'pf_btcusd', 'btc', 1_000, 1, 0, 0.5, 0, '2024-06-01T09:00:00Z', 'Kraken Futures', 'SETTLED', 'conversion-1'),
+
+    // --- 2025 — SOL Futures (profit) ---
+    fx('dftx-007', 'FUTURES_TRADE', 'pf_solusd', 'sol', 100, 150, 3_500, 4.0, 0, '2025-01-20T11:00:00Z'),
+    fx('dftx-008', 'FUTURES_FUNDING', 'pf_solusd', 'sol', 0, 0, 0, 0, 2.5, '2025-01-20T16:00:00Z', 'Kraken Futures', 'SETTLED'),
+    // --- 2025 — BTC Futures (small loss) ---
+    fx('dftx-009', 'FUTURES_TRADE', 'pf_btcusd', 'btc', 0.1, 95_000, -200, 1.5, 0, '2025-02-15T12:00:00Z'),
+    fx('dftx-010', 'FUTURES_FUNDING', 'pf_btcusd', 'btc', 0, 0, 0, 0, -0.5, '2025-02-15T16:00:00Z', 'Kraken Futures', 'SETTLED'),
+    // --- 2025 — XRP Futures (profit) ---
+    fx('dftx-011', 'FUTURES_TRADE', 'pf_xrpusd', 'xrp', 5_000, 0.55, 800, 1.2, 0, '2025-03-10T10:00:00Z'),
+    fx('dftx-012', 'FUTURES_FUNDING', 'pf_xrpusd', 'xrp', 0, 0, 0, 0, 1.8, '2025-03-10T16:00:00Z', 'Kraken Futures', 'SETTLED'),
+    // --- 2025 — ETH Futures (profit) ---
+    fx('dftx-013', 'FUTURES_TRADE', 'pf_ethusd', 'eth', 5.0, 3_500, 1_200, 3.0, 0, '2025-04-20T09:00:00Z'),
+    // --- 2025 — Conversion ---
+    fx('dftx-014', 'CONVERSION', 'pf_solusd', 'sol', -500, 1, 0, 0.25, 0, '2025-03-01T10:00:00Z', 'Kraken Futures', 'SETTLED', 'conversion-2'),
   ]
 }
 
@@ -451,10 +515,12 @@ const MOCK_REPORT_2025: TaxReportEntity = {
 export class MockTaxAdapter implements ITaxRepository {
   private _spotTransactions: TaxTransactionEntity[]
   private _futuresTransactions: TaxTransactionEntity[]
+  private _futuresDerivatives: TaxDerivativeEntity[]
 
   constructor() {
     this._spotTransactions = buildSpotSeed()
     this._futuresTransactions = buildFuturesSeed()
+    this._futuresDerivatives = buildFuturesDerivativesSeed()
   }
 
   async getSpotTransactions(): Promise<TaxTransactionEntity[]> {
@@ -465,6 +531,11 @@ export class MockTaxAdapter implements ITaxRepository {
   async getFuturesTransactions(): Promise<TaxTransactionEntity[]> {
     await delay(350)
     return [...this._futuresTransactions]
+  }
+
+  async getFuturesDerivatives(): Promise<TaxDerivativeEntity[]> {
+    await delay(350)
+    return [...this._futuresDerivatives]
   }
 
   async getInvalidTransactions(): Promise<TaxTransactionEntity[]> {

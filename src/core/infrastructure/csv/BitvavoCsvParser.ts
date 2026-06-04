@@ -49,7 +49,10 @@ export class BitvavoCsvParser implements ICsvIngestionPort {
     }
 
     if (skipped > 0) {
-      errorBus.emit('validation-error', { message: `Bitvavo parser skipped ${skipped} invalid or unsupported rows.` })
+      errorBus.emit('validation-error', {
+        message: 'errors.validation.parser_skipped_rows',
+        params: { parser: 'Bitvavo', skipped }
+      })
     }
 
     return results

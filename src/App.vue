@@ -9,15 +9,22 @@ import { Toaster } from "@/components/ui/sonner";
 import { errorBus } from "@/core/infrastructure/errors/errorBus";
 import type { ValidationErrorPayload } from "@/core/infrastructure/errors/errorBus";
 import AppHeader from "@/components/layout/AppHeader.vue";
+import { useI18n } from "@/composables/useI18n";
 // ---------------------------------------------------------------------------
 // Global error handling — listens to the errorBus and shows Sonner toasts
 // when Zod safeParse fails in any adapter.
 // @see openspec/specs/global-error-handling/spec.md
 // ---------------------------------------------------------------------------
 
+const { t } = useI18n();
+
 function handleValidationError(payload: ValidationErrorPayload) {
-  toast.error("Data Validation Error", {
-    description: payload.message,
+  const stringParams = payload.params
+    ? Object.fromEntries(Object.entries(payload.params).map(([k, v]) => [k, String(v)]))
+    : undefined;
+
+  toast.error(t("errors.validation.title") || "Data Validation Error", {
+    description: t(payload.message, stringParams) || payload.message,
     duration: 6000,
   });
 }

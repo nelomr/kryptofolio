@@ -8,7 +8,7 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
-import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
+import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 
 export interface ITaxRepository {
   /**
@@ -17,9 +17,18 @@ export interface ITaxRepository {
   getSpotTransactions(): Promise<TaxTransactionEntity[]>
 
   /**
-   * Fetch all futures tax-relevant transactions.
+   * Fetch all futures tax-relevant transactions (legacy, generic shape).
+   * @deprecated Prefer getFuturesDerivatives() for new UI components.
    */
   getFuturesTransactions(): Promise<TaxTransactionEntity[]>
+
+  /**
+   * Fetch futures/derivatives transactions mapped to the dedicated TaxDerivativeEntity.
+   * Returns structured data with contractSymbol, realizedPnl, funding, and status fields
+   * that are specific to derivatives and not expressible in the generic TaxTransactionEntity.
+   */
+  getFuturesDerivatives(): Promise<TaxDerivativeEntity[]>
+
 
   /**
    * Fetch spot transactions flagged as invalid or requiring manual review.

@@ -11,6 +11,14 @@ export const es: I18nDictionary = {
   'common.edit_disabled': 'La edición de la transacción {id} está deshabilitada actualmente.',
   'common.delete_disabled': 'La eliminación de la transacción {id} está deshabilitada actualmente.',
 
+  // Errors
+  'errors.validation.title': 'Error de Validación de Datos',
+  'errors.validation.parser_skipped_rows': 'El parser de {parser} omitió {skipped} filas inválidas o no soportadas.',
+  'errors.validation.malformed_record': 'Un registro de transacción fue omitido debido a datos malformados.',
+  'errors.validation.malformed_derivative': 'Un registro de derivados fue omitido debido a datos malformados.',
+  'errors.validation.api_malformed_data': 'La API del Portfolio devolvió datos malformados.',
+  'errors.validation.csv_required': 'La subida de CSV requiere seleccionar un archivo.',
+
   // Portfolio Header
   'portfolio.roi': 'ROI Total',
   'portfolio.invested': 'Capital Invertido',
@@ -132,6 +140,14 @@ export const es: I18nDictionary = {
   'tax.col.price': 'Precio (€)',
   'tax.col.total': 'Total (€)',
   'tax.col.actions': 'Acciones',
+  // Derivatives table columns
+  'tax.col.contract': 'Contrato',
+  'tax.col.trade_price': 'Precio operacion',
+  'tax.col.pnl': 'PnL (€)',
+  'tax.col.fees_funding': 'Fees + Funding',
+  'tax.col.status': 'Estado',
+  'tax.derivatives.title': 'Transacciones de Futuros y Derivados',
+  'tax.derivatives.empty': 'No se encontraron operaciones de derivados.',
   'tax.upload.title': 'Subir Archivo Fiscal',
   'tax.upload.subtitle': 'Compatible con CSV y XLSX de Kraken, Bitvavo, BitUnix, Tangem y Bit2Me.',
   'tax.upload.btn': 'Subir Archivo',

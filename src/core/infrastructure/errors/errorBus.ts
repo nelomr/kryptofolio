@@ -18,6 +18,7 @@
 
 type ValidationErrorPayload = {
   message: string
+  params?: Record<string, string | number>
   context?: string
   details?: unknown
 }
@@ -25,6 +26,7 @@ type ValidationErrorPayload = {
 type OperationErrorPayload = {
   code: string
   message: string
+  params?: Record<string, string | number>
 }
 
 type ErrorBusEvents = {

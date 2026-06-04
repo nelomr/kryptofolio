@@ -13,6 +13,53 @@
 import type { TransactionId, LotId } from './BrandedTypes'
 
 // ---------------------------------------------------------------------------
+// FuturesTransactionType — operation types specific to futures/derivatives
+// ---------------------------------------------------------------------------
+
+export type FuturesTransactionType =
+  | 'FUTURES_TRADE'
+  | 'FUTURES_FUNDING'
+  | 'CONVERSION'
+  | 'UNKNOWN'
+
+// ---------------------------------------------------------------------------
+// TaxDerivativeEntity — single futures/derivatives fiscal transaction
+//
+// This entity represents the futures-specific shape of a transaction.
+// Fields map 1:1 to Kraken Futures CSV columns after normalization.
+// AEAT fiscal compliance: realized_pnl is the taxable event for derivados.
+// ---------------------------------------------------------------------------
+
+export interface TaxDerivativeEntity {
+  /** Branded nominal ID */
+  id: TransactionId
+  /** Normalized futures operation type */
+  type: FuturesTransactionType
+  /** Full contract symbol as provided by the exchange (e.g. pf_xrpusd) */
+  contractSymbol: string
+  /** Underlying asset extracted from the contract (e.g. xrp from pf_xrpusd) */
+  underlyingAsset: string
+  /** Size of the position / number of contracts traded */
+  amount: number
+  /** Execution price of the operation in EUR */
+  tradePrice: number
+  /** Realized PnL in EUR — the primary taxable figure for AEAT IRPF */
+  realizedPnl: number
+  /** Transaction fee in EUR */
+  fees: number
+  /** Realized funding rate cost/gain in EUR */
+  funding: number
+  /** Native Date object for the transaction */
+  timestamp: Date
+  /** Exchange or wallet source (e.g. Kraken) */
+  exchange?: string
+  /** Reference ID from the exchange */
+  refId?: string
+  /** Position status (e.g. CLOSED) */
+  status?: string
+}
+
+// ---------------------------------------------------------------------------
 // Transaction Types — all known operation types from legacy system
 // ---------------------------------------------------------------------------
 

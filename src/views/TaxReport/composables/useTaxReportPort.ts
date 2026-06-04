@@ -7,6 +7,7 @@ import {
 } from '@/composables/queries/useTaxMutations'
 import { useSmartYearLogic } from './useTaxCalculations'
 import { toast } from 'vue-sonner'
+import { useI18n } from '@/composables/useI18n'
 
 export interface IntegrityWarning {
   id: string
@@ -19,6 +20,7 @@ export function useTaxReportPort() {
   // Query spot transactions to determine smart year and available years
   const { data: spotData } = useSpotTransactionsQuery()
   const { smartYear } = useSmartYearLogic(computed(() => spotData.value ?? []))
+  const { t } = useI18n()
 
   const availableYears = computed<number[]>(() => {
     const txs = spotData.value ?? []
@@ -74,7 +76,7 @@ export function useTaxReportPort() {
 
   async function uploadCsv(file?: File, market: 'spot' | 'futures' = 'spot') {
     if (!file) {
-      toast.info('La subida de CSV requiere seleccionar un archivo (UI pendiente)')
+      toast.info(t('errors.validation.csv_required'))
       return
     }
     await uploadCsvMutate({ file, market })

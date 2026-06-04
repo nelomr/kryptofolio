@@ -52,7 +52,10 @@ export class TangemCsvParser implements ICsvIngestionPort {
     }
 
     if (skipped > 0) {
-      errorBus.emit('validation-error', { message: `Tangem parser skipped ${skipped} invalid or unsupported rows.` })
+      errorBus.emit('validation-error', {
+        message: 'errors.validation.parser_skipped_rows',
+        params: { parser: 'Tangem', skipped }
+      })
     }
 
     return results
@@ -67,8 +70,6 @@ export class TangemCsvParser implements ICsvIngestionPort {
     if (!symbol) return null
 
     const amount = Math.abs(parseFloat(row.Amount ?? '0'))
-    const fee = parseFloat(row.Fee ?? '0')
-    const notes = row.Notes ?? ''
     const isWalletActivation = rawType === 'WALLET_ACTIVATION'
 
     // Build a deterministic refId for WALLET_ACTIVATION (AEAT audit trail)

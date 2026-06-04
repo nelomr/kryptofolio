@@ -41,7 +41,10 @@ export class BitUnixCsvParser implements ICsvIngestionPort {
     }
 
     if (skipped > 0) {
-      errorBus.emit('validation-error', { message: `BitUnix parser skipped ${skipped} invalid or unsupported rows.` })
+      errorBus.emit('validation-error', {
+        message: 'errors.validation.parser_skipped_rows',
+        params: { parser: 'BitUnix', skipped }
+      })
     }
 
     return results
