@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.12.0](https://github.com/nelomr/kryptofolio/compare/v1.11.0...v1.12.0) (2026-06-04)
+
+### ✨ Features
+
+* **portfolio:** redesign charts with light theme and interactive legends ([7bb7766](https://github.com/nelomr/kryptofolio/commit/7bb7766e3d175fa9729e0be4701e6bfa23f4e673))
+
 ## [1.11.0](https://github.com/nelomr/kryptofolio/compare/v1.10.0...v1.11.0) (2026-06-04)
 
 ### ✨ Features
