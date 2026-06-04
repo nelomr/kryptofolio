@@ -3,6 +3,16 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.10.0](https://github.com/nelomr/kryptofolio/compare/v1.9.0...v1.10.0) (2026-06-04)
+
+### ✨ Features
+
+* separate futures tax derivatives into dedicated table and standardize error i18n ([ce2637c](https://github.com/nelomr/kryptofolio/commit/ce2637ce601fbb807595fc1fd36ed2d4785ec526))
+
+### ♻️  Refactors
+
+* **core:** enforce strict Hexagonal Architecture and Zod ACL ([eb9574a](https://github.com/nelomr/kryptofolio/commit/eb9574ab1a7d44818ddbd505b689ec201128b5c7))
+
 ## [1.9.0](https://github.com/nelomr/kryptofolio/compare/v1.8.1...v1.9.0) (2026-06-03)
 
 ### ✨ Features
