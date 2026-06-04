@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.11.0](https://github.com/nelomr/kryptofolio/compare/v1.10.0...v1.11.0) (2026-06-04)
+
+### ✨ Features
+
+* add manual wallet configuration and CSV ingestion ([4ac6e19](https://github.com/nelomr/kryptofolio/commit/4ac6e192ce659337e7e2327372fdb3b512dbe88a))
+
 ## [1.10.0](https://github.com/nelomr/kryptofolio/compare/v1.9.0...v1.10.0) (2026-06-04)
 
 ### ✨ Features
