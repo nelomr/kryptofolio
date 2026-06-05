@@ -3,6 +3,16 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.13.0](https://github.com/nelomr/kryptofolio/compare/v1.12.0...v1.13.0) (2026-06-05)
+
+### ✨ Features
+
+* implement crypto kpi dashboard cards ([e4755c1](https://github.com/nelomr/kryptofolio/commit/e4755c18d733dca698b00ad470b623a8b5826b7d))
+
+### ♻️  Refactors
+
+* **ui:** integrate robust css-first design system and native shadcn tokens ([a452739](https://github.com/nelomr/kryptofolio/commit/a4527397dd8bada70b1252b3a570cda0f728c04e))
+
 ## [1.12.0](https://github.com/nelomr/kryptofolio/compare/v1.11.0...v1.12.0) (2026-06-04)
 
 ### ✨ Features
