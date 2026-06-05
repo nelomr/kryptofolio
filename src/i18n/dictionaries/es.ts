@@ -35,6 +35,23 @@ export const es: I18nDictionary = {
   'metrics.unrealized_pnl': 'PyG No Realizado',
   'metrics.realized_pnl': 'PyG Realizado (Imponible)',
 
+  // KPI Metrics Dashboard
+  'metrics.error_loading': 'Error al cargar KPIs:',
+  'metrics.roi_total_label': 'ROI Total',
+  'metrics.roi_delta_desc': 'en 24h',
+  'metrics.invested_label': 'Invertido',
+  'metrics.max_drawdown_label': 'Max Drawdown',
+  'metrics.drawdown_delta_desc': 'desde ATH',
+  'metrics.recovered_label': 'Recuperado',
+  'metrics.win_rate_label': 'Tasa de Acierto',
+  'metrics.trades_won': 'Ganadas',
+  'metrics.trades_lost': 'Perdidas',
+  'metrics.trades_total': 'Totales',
+  'metrics.average_r_label': 'R Promedio',
+  'metrics.best_worst_label': 'Mejor / Peor',
+  'metrics.dispersion_label': 'Dispersión',
+  'metrics.portfolio': 'del Portfolio',
+
   // Token Summary Cards
   'token.balance': 'Balance',
   'token.current_value': 'Valor Actual',

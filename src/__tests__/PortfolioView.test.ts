@@ -13,6 +13,31 @@ vi.mock('lucide-vue-next', () => ({
   Wallet: { template: '<svg class="lucide-wallet"></svg>' },
 }))
 
+// ── Colada stubs ──────────────────────────────────────────────────────────────
+vi.mock('@pinia/colada', () => ({
+  useQuery: vi.fn().mockReturnValue({
+    data: ref({
+      totalRoiPercent: 0,
+      totalRoiFiat: 0,
+      delta24hFiat: 0,
+      investedFiat: 0,
+      maxDrawdownPercent: 0,
+      maxDrawdownFiat: 0,
+      recoveredFiat: 0,
+      winRatePercent: 0,
+      winningTrades: 0,
+      losingTrades: 0,
+      totalTrades: 0,
+      averageR: 0,
+      portfolioDispersion: 0,
+      bestAsset: { symbol: 'BTC', name: 'Bitcoin', allocationPercent: 50, roiPercent: 10 },
+      worstAsset: { symbol: 'XRP', name: 'Ripple', allocationPercent: 10, roiPercent: -5 }
+    }),
+    isLoading: ref(false),
+    error: ref(null)
+  })
+}))
+
 // ── Chart stubs ───────────────────────────────────────────────────────────────
 vi.mock('@/components/charts/PerformanceLineChart.vue', () => ({
   default: {
@@ -56,7 +81,7 @@ const mockPerformance = [
 
 import * as chartData from '@/views/Portfolio/composables/useChartData'
 
-import { I18N_PORT_KEY } from '@/core/injectionKeys'
+import { I18N_PORT_KEY, CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
 
 function mountView(
   dataOverrides: Partial<ReturnType<typeof portfolioData.usePortfolioData>> = {},
@@ -94,6 +119,25 @@ function mountView(
           translate: (key: string) => key,
           setLanguage: vi.fn(),
           getCurrentLanguage: vi.fn().mockReturnValue('en')
+        },
+        [CRYPTO_METRICS_REPO_KEY as symbol]: {
+          getKpis: vi.fn().mockResolvedValue({
+            totalRoiPercent: 0,
+            totalRoiFiat: 0,
+            delta24hFiat: 0,
+            investedFiat: 0,
+            maxDrawdownPercent: 0,
+            maxDrawdownFiat: 0,
+            recoveredFiat: 0,
+            winRatePercent: 0,
+            winningTrades: 0,
+            losingTrades: 0,
+            totalTrades: 0,
+            averageR: 0,
+            portfolioDispersion: 0,
+            bestAsset: { symbol: 'BTC', name: 'Bitcoin', allocationPercent: 50, roiPercent: 10 },
+            worstAsset: { symbol: 'XRP', name: 'Ripple', allocationPercent: 10, roiPercent: -5 }
+          })
         }
       }
     },
@@ -158,13 +202,13 @@ describe('PortfolioView', () => {
     expect(wrapper.find('[data-testid="allocation-chart-stub"]').exists()).toBe(false)
   })
 
-  it('renders the metrics grid (3 cols on md)', () => {
+  it('renders the metrics grid (4 cols on lg)', () => {
     const wrapper = mountView()
-    expect(wrapper.find('.grid.md\\:grid-cols-3').exists()).toBe(true)
+    expect(wrapper.find('.grid.lg\\:grid-cols-4').exists()).toBe(true)
   })
 
-  it('displays formatted equity value', () => {
+  it('displays the mocked KPI data from Colada', () => {
     const wrapper = mountView()
-    expect(wrapper.text()).toMatch(/10[.,]?000/)
+    expect(wrapper.text()).toContain('BTC / XRP')
   })
 })

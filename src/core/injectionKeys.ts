@@ -27,3 +27,7 @@ export const I18N_PORT_KEY: InjectionKey<I18nPort> = Symbol('I18nPort')
 /** Injection key for the wallet repository (Ports) */
 import type { IWalletRepository } from './domain/ports/IWalletRepository'
 export const WALLET_REPO_KEY: InjectionKey<IWalletRepository> = Symbol('IWalletRepository')
+
+/** Injection key for the crypto metrics repository (Ports) */
+import type { ICryptoMetricsRepository } from './domain/ports/ICryptoMetricsRepository'
+export const CRYPTO_METRICS_REPO_KEY: InjectionKey<ICryptoMetricsRepository> = Symbol('ICryptoMetricsRepository')

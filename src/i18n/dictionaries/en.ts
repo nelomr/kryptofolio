@@ -36,6 +36,23 @@ export const en: I18nDictionary = {
   'metrics.unrealized_pnl': 'Unrealized P&L',
   'metrics.realized_pnl': 'Realized P&L (Taxable)',
 
+  // KPI Metrics Dashboard
+  'metrics.error_loading': 'Error loading KPIs:',
+  'metrics.roi_total_label': 'Total ROI',
+  'metrics.roi_delta_desc': 'in 24h',
+  'metrics.invested_label': 'Invested',
+  'metrics.max_drawdown_label': 'Max Drawdown',
+  'metrics.drawdown_delta_desc': 'from ATH',
+  'metrics.recovered_label': 'Recovered',
+  'metrics.win_rate_label': 'Win Rate',
+  'metrics.trades_won': 'Won',
+  'metrics.trades_lost': 'Lost',
+  'metrics.trades_total': 'Total',
+  'metrics.average_r_label': 'Average R',
+  'metrics.best_worst_label': 'Best / Worst',
+  'metrics.dispersion_label': 'Dispersion',
+  'metrics.portfolio': 'of Portfolio',
+
   // Token Summary Cards
   'token.balance': 'Balance',
   'token.current_value': 'Current Value',

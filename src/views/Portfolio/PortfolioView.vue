@@ -5,14 +5,10 @@
 
 import { usePortfolioData } from "./composables/usePortfolioData";
 import { useChartData } from "./composables/useChartData";
-import { usePortfolioMetrics } from "@/composables/usePortfolioMetrics";
-import { formatCurrency } from "@/composables/useFormatters";
-
 import { useI18n } from "@/composables/useI18n";
 
 import PortfolioHeader from "@/components/portfolio/PortfolioHeader.vue";
-import MetricsRow from "@/components/portfolio/MetricsRow.vue";
-import MetricsRowSkeleton from "@/components/portfolio/MetricsRowSkeleton.vue";
+import MetricsDashboard from "./components/metrics/MetricsDashboard.vue";
 import ChartsRow from "@/components/portfolio/ChartsRow.vue";
 import ChartsRowSkeleton from "@/components/portfolio/ChartsRowSkeleton.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,15 +37,6 @@ const {
   handleRowExpand,
 } = usePortfolioData();
 
-// 2. Formatting & Calculations
-const {
-  pnlValue,
-  roiFormatted,
-  isBullish,
-  realizedIsPositive,
-  realizedPnlValue,
-} = usePortfolioMetrics(metrics);
-
 // 3. UI Chart Data Transformation
 const { allocationData, performanceData } = useChartData(
   metrics,
@@ -76,17 +63,8 @@ const { allocationData, performanceData } = useChartData(
       </div>
 
       <TabsContent value="holdings" class="flex-1 min-h-0 flex flex-col gap-6 lg:gap-8 mt-0 border-0 p-0 outline-none">
-        <!-- Metrics row -->
-        <MetricsRowSkeleton v-if="isFetching" />
-        <MetricsRow
-          v-else
-          :totalEquity="formatCurrency(metrics?.totalEquityEur)"
-          :unrealizedPnl="formatCurrency(pnlValue)"
-          :realizedPnl="formatCurrency(realizedPnlValue)"
-          :roiFormatted="roiFormatted"
-          :isBullish="isBullish"
-          :realizedIsPositive="realizedIsPositive"
-        />
+        <!-- Metrics dashboard -->
+        <MetricsDashboard />
 
         <!-- Holdings Table -->
         <LotHierarchyTable

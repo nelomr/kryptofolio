@@ -3,13 +3,15 @@ import { inject } from 'vue'
 import type { Pinia } from 'pinia'
 
 // --- Hexagonal Architecture: Dependency Injection Setup ---
-import { PORTFOLIO_REPO_KEY, TAX_REPO_KEY, I18N_PORT_KEY, WALLET_REPO_KEY } from '@/core/injectionKeys'
+import { PORTFOLIO_REPO_KEY, TAX_REPO_KEY, I18N_PORT_KEY, WALLET_REPO_KEY, CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
 import { MockCryptoAdapter } from '@/core/infrastructure/adapters/MockCryptoAdapter'
 import { MockTaxAdapter } from '@/core/infrastructure/adapters/MockTaxAdapter'
 import { RestCryptoAdapter } from '@/core/infrastructure/adapters/RestCryptoAdapter'
 import { RestTaxAdapter } from '@/core/infrastructure/adapters/RestTaxAdapter'
 import { MockWalletRepository } from '@/core/infrastructure/adapters/MockWalletRepository'
 import { RestWalletRepository } from '@/core/infrastructure/adapters/RestWalletRepository'
+import { MockCryptoMetricsAdapter } from '@/core/infrastructure/adapters/MockCryptoMetricsAdapter'
+import { RestCryptoMetricsAdapter } from '@/core/infrastructure/adapters/RestCryptoMetricsAdapter'
 import { AxiosHttpClient } from '@/core/infrastructure/http/AxiosHttpClient'
 import { EnvI18nAdapter } from '@/core/infrastructure/i18n/EnvI18nAdapter'
 import { es } from '@/i18n/dictionaries/es'
@@ -44,6 +46,10 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
     ? new MockWalletRepository()
     : new RestWalletRepository(httpClient)
 
+  const cryptoMetricsRepo = useMock
+    ? new MockCryptoMetricsAdapter()
+    : new RestCryptoMetricsAdapter(httpClient)
+
   const lang = import.meta.env.VITE_APP_LANG || 'en'
   const dictionary = lang === 'en' ? en : es
   const i18nAdapter = new EnvI18nAdapter(dictionary)
@@ -53,6 +59,7 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   app.provide(TAX_REPO_KEY, taxRepo)
   app.provide(I18N_PORT_KEY, i18nAdapter)
   app.provide(WALLET_REPO_KEY, walletRepo)
+  app.provide(CRYPTO_METRICS_REPO_KEY, cryptoMetricsRepo)
 
   // 3. Inject repositories directly into Pinia stores
   // This solves the "[Vue warn]: inject() can only be used inside setup()" 
@@ -72,6 +79,11 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
       $walletRepo: piniaApp.runWithContext(() => {
         const repo = inject(WALLET_REPO_KEY)
         if (!repo) throw new Error('[DI] WALLET_REPO_KEY not provided to Vue app context')
+        return repo
+      }),
+      $cryptoMetricsRepo: piniaApp.runWithContext(() => {
+        const repo = inject(CRYPTO_METRICS_REPO_KEY)
+        if (!repo) throw new Error('[DI] CRYPTO_METRICS_REPO_KEY not provided to Vue app context')
         return repo
       })
     }
