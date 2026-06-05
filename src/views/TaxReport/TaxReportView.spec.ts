@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import TaxReportView from './TaxReportView.vue'
 import TaxReportHeader from './components/TaxReportHeader.vue'
 import TaxReportSummaryCards from './components/TaxReportSummaryCards.vue'
-import IntegrityCard from './components/IntegrityCard.vue' // TODO: IntegrityCard functionality pending
+
 
 // Mock the composable
 vi.mock('./composables/useTaxReportPort', () => ({
@@ -33,12 +33,15 @@ vi.mock('./composables/useWalletsPort', () => ({
   })
 }))
 
-vi.mock('@/composables/queries/useTaxQueries', () => ({
-  useSpotTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isLoading: { value: false } })),
-  useFuturesTransactionsQuery: vi.fn(() => ({ data: { value: [] }, isLoading: { value: false } })),
-  useFuturesDerivativesQuery: vi.fn(() => ({ data: { value: [] }, isLoading: { value: false } })),
-  useTaxReportQuery: vi.fn(() => ({ data: { value: null }, isLoading: { value: false } })),
-}))
+vi.mock('@/composables/queries/useTaxQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useSpotTransactionsQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useFuturesTransactionsQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useFuturesDerivativesQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
+    useTaxReportQuery: vi.fn(() => ({ data: vue.ref(null), isLoading: vue.ref(false) })),
+  }
+})
 
 describe('TaxReportView.vue', () => {
   it('renders all dumb components', () => {
@@ -46,8 +49,7 @@ describe('TaxReportView.vue', () => {
       global: {
         stubs: {
           TaxReportHeader: true,
-          TaxReportSummaryCards: true,
-          IntegrityCard: true
+          TaxReportSummaryCards: true
         }
       }
     })

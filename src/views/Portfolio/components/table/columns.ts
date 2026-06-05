@@ -22,7 +22,7 @@ export const createColumns = (
           e.stopPropagation()
           row.toggleExpanded()
         },
-        class: "p-2 hover:bg-muted/50 rounded-md transition-colors w-full h-full flex justify-center items-center group"
+        class: "p-2 rounded-md transition-colors w-full h-full flex justify-center items-center group"
       }, [
         row.getIsExpanded() 
           ? h(ChevronDown, { class: "w-4 h-4 text-primary" })
@@ -60,7 +60,7 @@ export const createColumns = (
     accessorKey: 'currentValueEur',
     header: () => h('div', { class: "text-right" }, t('table.market_value')),
     cell: ({ getValue }: CellContext<CryptoAssetEntity, unknown>) => {
-        const val = getValue() || 0
+        const val = (getValue() as number) || 0
         return h('div', { class: "text-right font-mono font-black text-sm tracking-tighter tabular-nums" }, formatCurrency(val))
     },
   },

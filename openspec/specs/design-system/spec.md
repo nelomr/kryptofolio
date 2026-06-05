@@ -21,3 +21,23 @@ The `DESIGN.md` file SHALL include machine-readable design tokens defined in a Y
 - **WHEN** the `DESIGN.md` file is structured
 - **THEN** it MUST contain a `colors:` block mapping the Tailwind CSS variables (e.g. `primary`, `profit`, `loss`) to their respective string representations, ensuring synchronization with `src/style.css`.
 
+### Requirement: Centralized CSS Theme Variables
+The system SHALL define all foundational UI tokens (Colors, Typography, Radii, Shadows) exclusively within the `src/style.css` file using Tailwind v4 `@theme inline`.
+
+#### Scenario: Compilation of Tailwind styles
+- **WHEN** the application builds via Vite
+- **THEN** it generates the corresponding CSS utility classes for the custom tokens (e.g., `text-profit`, `bg-surface-2`).
+
+### Requirement: Strict Light Mode Policy
+The system SHALL only support a light-mode color palette, and must not include any dark-mode variants.
+
+#### Scenario: Rendering the UI
+- **WHEN** the application is loaded
+- **THEN** it displays colors strictly from the defined white/bone background scales without switching to dark backgrounds.
+
+### Requirement: Standardized Font Families
+The system SHALL use 'Inter' for all standard alphanumeric text and 'JetBrains Mono' for all numerical data.
+
+#### Scenario: Displaying financial values
+- **WHEN** a component renders numerical data
+- **THEN** the `.num` class or equivalent `tabular-nums` `font-mono` utilities are applied.

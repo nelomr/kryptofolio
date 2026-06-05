@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 
 // Use vi.hoisted so mocks are available when vi.mock factory runs
-const { mockSetData, mockAddSeries, mockRemove, mockCreateChart, mockSetVisibleRange, mockApplyOptions, mockCreateSeriesMarkers, mockSetMarkers } =
+const { mockSetData, mockAddSeries, mockRemove, mockCreateChart, mockSetVisibleRange, mockApplyOptions, mockCreateSeriesMarkers } =
   vi.hoisted(() => {
     const mockFitContent = vi.fn()
     const mockSetVisibleRange = vi.fn()
@@ -116,8 +116,8 @@ describe('PerformanceLineChart', () => {
       global: { plugins: [createTestingPinia({ createSpy: vi.fn })] },
     })
     expect(mockCreateSeriesMarkers).toHaveBeenCalled()
-    const markersCallArgs = mockCreateSeriesMarkers.mock.calls[0][1]
-    expect(markersCallArgs[0]).toMatchObject({
+    const markersCallArgs = (mockCreateSeriesMarkers as any).mock.calls[0][1]
+    expect(markersCallArgs?.[0]).toMatchObject({
       time: '2025-01-04',
       position: 'belowBar',
       color: '#10b981',

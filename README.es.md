@@ -27,6 +27,19 @@
 - **Testing**: Vitest
 - **Gestor de Paquetes**: pnpm
 
+## 🎨 Sistema de Diseño Institucional
+
+Kryptofolio implementa un sistema de diseño estricto **Institucional Light** (Tailwind v4). Puedes leer las especificaciones completas en [DESIGN.md](DESIGN.md).
+
+**Reglas Clave de Uso:**
+- **Modo Light Estricto:** La interfaz es exclusivamente modo claro para mantener un aspecto institucional de alto contraste. No uses clases `dark:`.
+- **Datos Numéricos:** Todos los datos numéricos (precios, porcentajes, fechas, IDs) DEBEN usar la clase utility `.num` (que aplica `font-mono` de JetBrains Mono y `tabular-nums`) para asegurar una alineación vertical perfecta en tablas y widgets.
+- **Color Semántico:** No usamos colores genéricos de Tailwind (`blue-500`, `slate-100`). Usamos tokens semánticos:
+  - **Superficies:** `bg-surface`, `bg-surface-2`, `bg-surface-3`
+  - **Texto:** `text-fg`, `text-muted`, `text-muted-2`
+  - **Financieros:** `text-profit`, `text-loss`, `text-warning`, `text-info`
+  - **Interacciones:** `--color-accent` es un índigo institucional. Para hovers sutiles en botones ghost o selects, usa SIEMPRE `hover:bg-accent-soft hover:text-accent-2`.
+
 ## 🚀 Inicio Rápido
 
 ### Configuración del Entorno

@@ -182,13 +182,13 @@ watch(
     </div>
 
     <!-- Timeframe Filters -->
-    <div class="absolute top-2 right-2 z-10 flex gap-1 bg-background/50 backdrop-blur-md rounded p-1 border border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div class="absolute top-2 right-2 z-10 flex gap-1 bg-background rounded p-1 border border-border/50 opacity-0 group-hover:opacity-100 transition-opacity">
       <button 
         v-for="tf in timeframes" 
         :key="tf"
         @click="setTimeframe(tf)"
         class="text-xs px-2 py-1 rounded transition-colors font-medium"
-        :class="activeTimeframe === tf ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'"
+        :class="activeTimeframe === tf ? 'bg-surface-2 text-fg border border-border' : 'text-muted-foreground hover:bg-surface-2 border border-transparent'"
       >
         {{ tf }}
       </button>

@@ -20,7 +20,7 @@ const locs = computed(() => props.row.portfolioLocations || [])
       v-for="loc in locs"
       :key="loc"
       variant="outline"
-      class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1 text-[hsl(var(--badge-hue),75%,35%)] dark:text-[hsl(var(--badge-hue),85%,75%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] hover:bg-[hsla(var(--badge-hue),80%,50%,0.2)]"
+      class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1 text-[hsl(var(--badge-hue),75%,35%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] hover:bg-[hsla(var(--badge-hue),80%,50%,0.2)]"
       :style="{ '--badge-hue': getDeterministicHue(loc) } as CSSProperties"
     >
       <CryptoIcon :symbol="loc" :size="10" colored />

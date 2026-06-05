@@ -21,9 +21,9 @@ defineProps<{
       <span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_var(--color-primary)] opacity-80"></span>
       {{ t('token.active_lots.title') }}
     </h3>
-    <div class="overflow-x-auto rounded-lg border border-border/20 bg-muted/10 shadow-inner">
-      <table class="w-full text-left text-sm">
-        <thead class="bg-muted/30 text-muted-foreground border-b border-border/20 uppercase text-[10px] tracking-widest font-bold">
+    <div class="overflow-x-auto rounded-lg border border-border/20 bg-card shadow-inner">
+      <table class="w-full text-left text-sm whitespace-nowrap">
+        <thead class="bg-card text-muted-foreground border-b border-border/20 uppercase text-[10px] tracking-widest font-bold">
           <tr>
             <th class="px-4 py-3">{{ t('token.active_lots.date') }}</th>
             <th class="px-4 py-3 text-right">{{ t('token.active_lots.remaining_qty') }}</th>
@@ -33,7 +33,7 @@ defineProps<{
           </tr>
         </thead>
         <tbody class="divide-y divide-border/10">
-          <tr v-for="lot in lots" :key="lot.id" class="hover:bg-muted/20 transition-colors">
+          <tr v-for="lot in lots" :key="lot.id" class="hover:bg-accent transition-colors">
             <td class="px-4 py-3 text-muted-foreground">{{ formatDate(lot.date) }}</td>
             <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(lot.remainingQty) }}</td>
             <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(lot.unitCost) }}</td>

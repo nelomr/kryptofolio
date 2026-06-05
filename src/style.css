@@ -2,84 +2,80 @@
 @import "./styles/theme.css";
 @import "./styles/responsive-fixes.css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafbfc;
+  --color-surface-3: #f4f6f8;
+  
+  --color-fg: #0a0f1c;
+  --color-fg-2: #1f2937;
+  --color-muted: #6b7280;
+  --color-muted-2: #9ca3af;
+  --color-ring: rgba(30, 58, 138, 0.5);
+  
+  --color-border: #e5e7eb;
+  --color-border-soft: rgba(10, 14, 26, 0.06);
+  --color-border-medium: rgba(10, 14, 26, 0.10);
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-brand: #1e3a8a;
+  --color-brand-hover: #1d4ed8;
+  --color-brand-soft: rgba(30, 58, 138, 0.08);
+  --color-brand-medium: rgba(30, 58, 138, 0.14);
+  
+  --color-profit: #00875a;
+  --color-profit-soft: rgba(0, 135, 90, 0.10);
+  --color-profit-medium: rgba(0, 135, 90, 0.18);
+  
+  --color-loss: #d14343;
+  --color-loss-soft: rgba(209, 67, 67, 0.10);
+  --color-loss-medium: rgba(209, 67, 67, 0.18);
 
-  --color-profit: oklch(0.627 0.194 149.214); /* Custom Emerald */
-  --color-loss: oklch(0.637 0.237 25.331);   /* Custom Rose */
+  --color-warning: #b45309;
+  --color-warning-soft: rgba(180, 83, 9, 0.10);
+  
+  --color-info: #1d4ed8;
+  --color-info-soft: rgba(29, 78, 216, 0.08);
+
+  /* Shadcn mappings */
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-fg);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-fg);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-fg);
+  --color-primary: var(--color-fg);
+  --color-primary-foreground: var(--color-bg);
+  --color-secondary: var(--color-surface-2);
+  --color-secondary-foreground: var(--color-fg);
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--color-brand-soft);
+  --color-accent-foreground: var(--color-brand-hover);
+  --color-destructive: var(--color-loss);
+  --color-destructive-foreground: var(--color-bg);
+  --color-input: var(--color-border);
 
   --font-sans: "Inter", "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --shadow-alucard-card: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-alucard-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
+  /* Re-mapping core radius utilities so rounded-md uses radius, etc. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  --radius: var(--radius-md);
 
-:root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* Re-mapping core shadow utilities so shadow-md gives card shadow */
+  --shadow-sm: 0 1px 2px rgba(10, 14, 26, 0.04), 0 2px 6px rgba(10, 14, 26, 0.03);
+  --shadow-md: 0 1px 2px rgba(10, 14, 26, 0.04), 0 8px 24px rgba(10, 14, 26, 0.04);
+  --shadow-lg: 0 4px 12px rgba(10, 14, 26, 0.06), 0 24px 48px rgba(10, 14, 26, 0.08);
+  
+  /* Retain exact design names for direct usage */
+  --shadow-soft: var(--shadow-sm);
+  --shadow-card: var(--shadow-md);
+  --shadow-modal: var(--shadow-lg);
 }
 
 @layer base {
@@ -87,6 +83,9 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-bg text-fg font-sans;
+  }
+  .num {
+    @apply font-mono tabular-nums;
   }
 }

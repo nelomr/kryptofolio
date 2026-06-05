@@ -72,8 +72,9 @@ const paginatedEvents = paginatedData as unknown as import('vue').ComputedRef<Ta
 const BADGE_VARIANTS = {
   positive: 'bg-profit/10 text-profit border-none',
   negative: 'bg-loss/10 text-loss border-none',
-  neutral: 'bg-violet-500/10 text-violet-500 border-none dark:text-violet-400',
-  default: 'bg-muted/20 text-muted-foreground border-none',
+  warning: 'bg-warning-soft text-warning border-none',
+  neutral: 'bg-info-soft text-info border-none',
+  default: 'bg-background text-muted-foreground border-none',
 } as const
 
 const OPERATION_THEMES: Record<TaxTransactionType, keyof typeof BADGE_VARIANTS> = {
@@ -110,7 +111,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
 <template>
   <div class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
     <!-- Card Header -->
-    <div class="flex items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-4">
+    <div class="flex items-center justify-between border-b border-border bg-card px-6 py-4">
       <h3 class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
         <BookOpenCheck class="h-3.5 w-3.5 text-primary" />
         {{ t('tax.audit.table_title') }}
@@ -190,7 +191,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                 <div v-if="event.exchangeName" class="flex items-center justify-start">
                   <Badge
                     variant="outline"
-                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] dark:text-[hsl(var(--badge-hue),85%,75%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
+                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
                     :style="{ '--badge-hue': getDeterministicHue(event.exchangeName) } as any"
                   >
                     <CryptoIcon :symbol="event.exchangeName" :size="10" colored />
@@ -226,7 +227,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
             <!-- Empty state -->
             <TableEmpty v-if="!paginatedEvents.length" :colspan="8">
               <div class="flex flex-col items-center gap-2 py-12 font-black uppercase tracking-widest text-muted-foreground">
-                <span class="mb-2 rounded-2xl border border-border bg-muted/50 p-4">
+                <span class="mb-2 rounded-2xl border border-border bg-card p-4">
                   <Archive class="h-8 w-8 text-muted-foreground/50" />
                 </span>
                 <span class="text-xs">{{ t('tax.audit.table_empty') }}</span>

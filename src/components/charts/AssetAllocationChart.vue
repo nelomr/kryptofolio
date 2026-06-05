@@ -49,6 +49,11 @@ const chartOptions = computed<ChartOptions<'doughnut'>>(() => ({
       display: false, // Ocultar leyenda nativa
     },
     tooltip: {
+      backgroundColor: 'rgb(10, 15, 28)', // Solid dark color matching fg
+      titleColor: '#fff',
+      bodyColor: '#fff',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+      borderWidth: 1,
       callbacks: {
         label: (ctx) => {
           const total = (ctx.dataset.data as number[]).reduce(

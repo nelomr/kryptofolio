@@ -86,7 +86,7 @@ const {
   >
     <!-- Card Header -->
     <div
-      class="flex items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-4"
+      class="flex items-center justify-between border-b border-border bg-card px-6 py-4"
     >
       <h3
         class="text-xs font-black uppercase tracking-widest text-muted-foreground"
@@ -114,7 +114,7 @@ const {
             <TableRow class="text-[10px] uppercase tracking-widest">
               <!-- Sortable: Date -->
               <TableHead
-                class="cursor-pointer select-none hover:text-primary"
+                class="cursor-pointer select-none hover:text-accent-foreground"
                 @click="toggleSort('timestamp')"
               >
                 <span class="flex items-center gap-1">
@@ -139,7 +139,7 @@ const {
               }}</TableHead>
               <!-- Sortable: PnL -->
               <TableHead
-                class="cursor-pointer select-none text-right hover:text-primary"
+                class="cursor-pointer select-none text-right hover:text-accent-foreground"
                 @click="toggleSort('realizedPnl')"
               >
                 <span class="flex items-center justify-end gap-1">
@@ -169,7 +169,7 @@ const {
             <TableRow
               v-for="tx in paginatedTxs"
               :key="tx.id"
-              class="group text-xs transition-colors"
+              class="group text-xs"
             >
               <!-- Date -->
               <TableCell class="font-mono text-muted-foreground">{{
@@ -265,7 +265,7 @@ const {
                 <div v-if="tx.exchange" class="flex items-center justify-start">
                   <Badge
                     variant="outline"
-                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] dark:text-[hsl(var(--badge-hue),85%,75%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
+                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
                     :style="
                       { '--badge-hue': getDeterministicHue(tx.exchange) } as any
                     "
@@ -306,7 +306,7 @@ const {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-primary hover:bg-primary/10 cursor-pointer"
+                    class="text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
                     :title="t('tax.col.actions')"
                     @click="emit('edit', tx)"
                   >
@@ -315,7 +315,7 @@ const {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-destructive hover:bg-destructive/10 cursor-pointer"
+                    class="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                     :title="t('tax.delete.btn')"
                     @click="emit('delete', tx.id)"
                   >
@@ -331,7 +331,7 @@ const {
                 class="flex flex-col items-center gap-2 py-12 font-black uppercase tracking-widest text-muted-foreground"
               >
                 <span
-                  class="mb-2 rounded-2xl border border-border bg-muted/50 p-4 text-2xl"
+                  class="mb-2 rounded-2xl border border-border bg-card p-4 text-2xl"
                   >📈</span
                 >
                 <span class="text-xs">{{ t("tax.derivatives.empty") }}</span>

@@ -12,8 +12,7 @@ defineProps<{
 
 <template>
   <div
-    class="relative overflow-hidden rounded-lg border bg-card/20 backdrop-blur-2xl border-border/40 shadow-alucard-card group transition-all duration-700"
-    :class="glowColor ? `hover:border-${glowColor.replace('via-', '').replace('/20', '')}/20` : 'hover:border-primary/20'"
+    class="relative overflow-hidden rounded-lg border bg-card/20 backdrop-blur-2xl border-border/40 shadow-soft hover:shadow-card group transition-all duration-700"
   >
     <!-- Bottom glow line -->
     <div

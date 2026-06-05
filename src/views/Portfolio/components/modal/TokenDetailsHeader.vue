@@ -17,7 +17,7 @@ defineEmits(['close'])
 </script>
 
 <template>
-  <div class="px-6 py-5 border-b border-border bg-muted/10 flex justify-between items-center">
+  <div class="px-6 py-5 border-b border-border bg-card flex justify-between items-center">
     <div class="flex items-center gap-3">
       <CryptoIcon :symbol="symbol" :size="40" colored />
       <div>
@@ -31,7 +31,7 @@ defineEmits(['close'])
     </div>
     <button
       @click="$emit('close')"
-      class="text-muted-foreground hover:text-foreground transition-colors bg-muted/20 hover:bg-muted/40 p-2 rounded-full focus:outline-none"
+      class="text-muted-foreground hover:text-foreground transition-colors bg-card hover:bg-surface-2 p-2 rounded-full focus:outline-none"
     >
       <X class="h-5 w-5" />
     </button>

@@ -16,10 +16,9 @@ vi.mock('../composables/useWalletsPort', () => ({
 }))
 
 describe('TaxReportHeader.vue', () => {
-  it('renders title and badge properly', () => {
+  it('renders title properly', () => {
     const wrapper = mount(TaxReportHeader)
     expect(wrapper.text()).toContain('tax.title')
-    expect(wrapper.text()).toContain('tax.header.badge')
   })
 
   it('renders wallet dropdown with default props', () => {

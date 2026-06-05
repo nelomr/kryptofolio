@@ -28,60 +28,60 @@ const props = withDefaults(defineProps<{
 <template>
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
     <!-- Capital Gains -->
-    <Card class="bg-card/50 backdrop-blur-sm border-primary/10 hover:border-primary/30 transition-colors">
+    <Card class="bg-card/50 backdrop-blur-sm shadow-soft hover:shadow-card transition-all duration-300">
       <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle class="text-sm font-medium text-muted-foreground">
           {{ t('tax.summary.capital_gains') }}
         </CardTitle>
-        <TrendingUp class="h-4 w-4 text-emerald-500" />
+        <TrendingUp class="h-4 w-4 text-profit" />
       </CardHeader>
       <CardContent>
-        <div class="text-2xl font-bold" :class="{'text-emerald-500': props.metrics.capitalGains > 0}">
+        <div class="text-2xl font-bold num" :class="{'text-profit': props.metrics.capitalGains > 0}">
           {{ formatCurrency(props.metrics.capitalGains) }}
         </div>
       </CardContent>
     </Card>
 
     <!-- Yields -->
-    <Card class="bg-card/50 backdrop-blur-sm border-primary/10 hover:border-primary/30 transition-colors">
+    <Card class="bg-card/50 backdrop-blur-sm shadow-soft hover:shadow-card transition-all duration-300">
       <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle class="text-sm font-medium text-muted-foreground">
           {{ t('tax.summary.yields') }}
         </CardTitle>
-        <PiggyBank class="h-4 w-4 text-blue-500" />
+        <PiggyBank class="h-4 w-4 text-info" />
       </CardHeader>
       <CardContent>
-        <div class="text-2xl font-bold" :class="{'text-blue-500': props.metrics.yields > 0}">
+        <div class="text-2xl font-bold num" :class="{'text-info': props.metrics.yields > 0}">
           {{ formatCurrency(props.metrics.yields) }}
         </div>
       </CardContent>
     </Card>
 
     <!-- Total Losses -->
-    <Card class="bg-card/50 backdrop-blur-sm border-primary/10 hover:border-primary/30 transition-colors">
+    <Card class="bg-card/50 backdrop-blur-sm shadow-soft hover:shadow-card transition-all duration-300">
       <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle class="text-sm font-medium text-muted-foreground">
           {{ t('tax.summary.total_losses') }}
         </CardTitle>
-        <TrendingDown class="h-4 w-4 text-rose-500" />
+        <TrendingDown class="h-4 w-4 text-loss" />
       </CardHeader>
       <CardContent>
-        <div class="text-2xl font-bold" :class="{'text-rose-500': props.metrics.totalLosses > 0}">
+        <div class="text-2xl font-bold num" :class="{'text-loss': props.metrics.totalLosses > 0}">
           {{ formatCurrency(props.metrics.totalLosses) }}
         </div>
       </CardContent>
     </Card>
 
     <!-- Estimated IRPF -->
-    <Card class="bg-card/50 backdrop-blur-sm border-primary/10 hover:border-primary/30 transition-colors">
+    <Card class="bg-card/50 backdrop-blur-sm shadow-soft hover:shadow-card transition-all duration-300">
       <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle class="text-sm font-medium text-muted-foreground">
           {{ t('tax.summary.estimated_irpf') }}
         </CardTitle>
-        <Receipt class="h-4 w-4 text-amber-500" />
+        <Receipt class="h-4 w-4 text-warning" />
       </CardHeader>
       <CardContent>
-        <div class="text-2xl font-bold text-amber-500">
+        <div class="text-2xl font-bold text-warning num">
           {{ formatCurrency(props.metrics.estimatedIrpf) }}
         </div>
       </CardContent>

@@ -149,6 +149,7 @@ describe('RestCryptoAdapter — Zod validation failure → error bus', () => {
       post: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      postForm: vi.fn(),
     }
 
     const adapter = new RestCryptoAdapter(badHttpClient)
@@ -172,6 +173,7 @@ describe('RestCryptoAdapter — Zod validation failure → error bus', () => {
       post: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      postForm: vi.fn(),
     }
 
     const adapter = new RestCryptoAdapter(badHttpClient)

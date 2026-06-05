@@ -32,6 +32,8 @@ dist-ssr
 .agent/*
 .atl/
 .atl/*
+.design/
+.design/*
 opencode.json
 propuestas/
 

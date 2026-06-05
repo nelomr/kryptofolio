@@ -88,12 +88,12 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
 
 <template>
   <div
-    class="w-full h-full border border-border/40 rounded-2xl bg-card/10 backdrop-blur-md overflow-auto custom-scrollbar"
+    class="w-full h-full border border-border/40 rounded-2xl bg-card overflow-auto custom-scrollbar"
     ref="parentRef"
   >
     <Table>
       <TableHeader
-        class="sticky top-0 bg-background/95 backdrop-blur-xl z-20 shadow-sm"
+        class="sticky top-0 bg-background z-20 shadow-sm"
       >
         <TableRow
           v-for="headerGroup in table.getHeaderGroups()"
@@ -142,7 +142,7 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
               <template v-if="table.getRowModel().rows[virtualRow.index]">
                 <!-- Main Row (Level 1) -->
                 <TableRow
-                  class="group select-none transition-colors duration-300 hover:bg-primary/[0.03] border-b border-border/5"
+                  class="group select-none border-b border-border/5"
                   :data-state="
                     table.getRowModel().rows[virtualRow.index].getIsExpanded()
                       ? 'expanded'
@@ -168,7 +168,7 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
                   v-if="
                     table.getRowModel().rows[virtualRow.index].getIsExpanded()
                   "
-                  class="bg-muted/10 border-b border-border/10"
+                  class="border-b border-border/10"
                 >
                   <TableCell :colspan="columns.length" class="p-0">
                     <ExpandedLotsTable

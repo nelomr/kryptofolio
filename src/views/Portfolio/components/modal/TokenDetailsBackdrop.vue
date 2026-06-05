@@ -3,7 +3,7 @@
  * TokenDetailsBackdrop — Component description.
  */
 
-defineEmits(['close'])
+defineEmits(["close"]);
 </script>
 
 <template>
@@ -12,7 +12,6 @@ defineEmits(['close'])
     aria-hidden="true"
     @click="$emit('close')"
   >
-    <div class="absolute inset-0 bg-background/80 backdrop-blur-sm"></div>
+    <div class="absolute inset-0"></div>
   </div>
 </template>
-

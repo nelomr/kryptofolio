@@ -16,6 +16,7 @@ function createMockTaxRepo(): ITaxRepository {
   return {
     getSpotTransactions: vi.fn(),
     getFuturesTransactions: vi.fn(),
+    getFuturesDerivatives: vi.fn(),
     getInvalidTransactions: vi.fn(),
     getReport: vi.fn(),
     deleteTransaction: vi.fn(),

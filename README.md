@@ -23,9 +23,22 @@
 - **Framework**: Vue 3 (Composition API + `<script setup>`)
 - **State Management**: [Pinia](https://pinia.vuejs.org/) + [Pinia Colada](https://pinia-colada.esm.dev/)
 - **Styling**: TailwindCSS 4
-- **Charts**: Lightweight Charts (TradingView)
+- **Charts**: Lightweight Charts (TradingView) & vue-chartjs (Chart.js)
 - **Testing**: Vitest
 - **Package Manager**: pnpm
+
+## 🎨 Institutional Design System
+
+Kryptofolio implements a strict **Institutional Light** design system (Tailwind v4). You can read the full specifications in [DESIGN.md](DESIGN.md).
+
+**Key Rules & Usage:**
+- **Strict Light Mode:** The interface is exclusively light mode to maintain a high-contrast, institutional appearance. Do not use `dark:` classes.
+- **Tabular Data:** All numerical data (prices, percentages, dates, IDs) MUST use the `.num` utility class (which applies `font-mono` from JetBrains Mono and `tabular-nums`) to ensure perfect vertical alignment in tables and widgets.
+- **Semantic Coloring:** We do not use generic Tailwind colors (`blue-500`, `slate-100`). Use semantic tokens:
+  - **Surfaces:** `bg-surface`, `bg-surface-2`, `bg-surface-3`
+  - **Text:** `text-fg`, `text-muted`, `text-muted-2`
+  - **Financial:** `text-profit`, `text-loss`, `text-warning`, `text-info`
+  - **Interactions:** `--color-accent` is a deep institutional indigo. For subtle hovers in ghost buttons or selects, ALWAYS use `hover:bg-accent-soft hover:text-accent-2`.
 
 ## 🚀 Quick Start
 

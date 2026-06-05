@@ -1,10 +1,10 @@
 @layer base {
   /*
-  Alucard Capital - Theme System
+  Kryptofolio - Theme System
   Note: Semantic variables have been migrated to direct palette classes
   defined in tailwind.config.js for a more performant and consistent UI.
 */
 :root {
-  /* Alucard Palette Reference - Tokens injected via Tailwind */
+  /* Kryptofolio Palette Reference - Tokens injected via Tailwind */
 }
 }

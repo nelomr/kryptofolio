@@ -68,7 +68,7 @@ const handleImageError = (event: Event) => {
       :src="iconSymbolUrl" 
       :alt="symbol" 
       class="w-full h-full object-contain"
-      :class="[!colored && 'grayscale brightness-0 dark:invert']"
+      :class="[!colored && 'grayscale brightness-0']"
       @error="handleImageError"
     />
   </div>

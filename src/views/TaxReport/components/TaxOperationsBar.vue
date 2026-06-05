@@ -49,7 +49,7 @@ async function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-  await uploadFile(file);
+  await uploadFile({ file, market: 'spot' });
   // Reset input so same file can be re-selected
   if (fileInput.value) fileInput.value.value = "";
 }
@@ -65,7 +65,7 @@ async function handleImport() {
 
 async function handleDeleteAll() {
   if (!confirm(t("tax.delete.confirm"))) return;
-  await deleteAll();
+  await deleteAll('spot');
 }
 
 const isAnyLoading = computed(

@@ -71,11 +71,11 @@ export function getTypeBadgeClass(type: FuturesTransactionType): string {
     case 'FUTURES_TRADE':
       return 'bg-primary/10 text-primary border-none'
     case 'FUTURES_FUNDING':
-      return 'bg-amber-500/10 text-amber-500 border-none dark:text-amber-400'
+      return 'bg-warning-soft text-warning border-none'
     case 'CONVERSION':
-      return 'bg-violet-500/10 text-violet-500 border-none dark:text-violet-400'
+      return 'bg-info-soft text-info border-none'
     default:
-      return 'bg-muted/20 text-muted-foreground border-none'
+      return 'bg-background text-muted-foreground border-none'
   }
 }
 
@@ -90,9 +90,9 @@ export function getPnlClass(pnl: number): string {
 export function getStatusBadgeClass(status: string | undefined): string {
   const s = (status ?? '').toUpperCase()
   if (s === 'CLOSED' || s === 'SETTLED')
-    return 'bg-muted/20 text-muted-foreground border border-border/40'
+    return 'bg-background text-muted-foreground border border-border/40'
   if (s === 'OPEN') return 'bg-profit/10 text-profit border border-profit/20'
-  return 'bg-muted/20 text-muted-foreground border border-border/40'
+  return 'bg-background text-muted-foreground border border-border/40'
 }
 
 /** Net cost impact of fees and funding on a position (signed) */

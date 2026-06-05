@@ -121,12 +121,12 @@ function getTypeBadgeClass(type: TaxTransactionType): string {
     return "bg-loss/10 text-loss border-none";
   }
   if (t === "swap" || t === "migration_swap") {
-    return "bg-violet-500/10 text-violet-500 border-none dark:text-violet-400";
+    return "bg-info-soft text-info border-none";
   }
   if (t === "transfer_in" || t === "transfer_out") {
-    return "bg-sky-500/10 text-sky-500 border-none dark:text-sky-400";
+    return "bg-info-soft text-info border-none";
   }
-  return "bg-muted/20 text-muted-foreground border-none";
+  return "bg-background text-muted-foreground border-none";
 }
 
 function isWalletActivation(tx: TaxTransactionEntity): boolean {
@@ -135,18 +135,20 @@ function isWalletActivation(tx: TaxTransactionEntity): boolean {
 
 function getAssetTypeLabel(symbol: string | undefined): string {
   const s = (symbol || "").toLowerCase();
-  return ["eur", "usd", "gbp", "chf"].includes(s) ? t("table.asset_type_fiat") : t("table.asset_type_crypto");
+  return ["eur", "usd", "gbp", "chf"].includes(s)
+    ? t("table.asset_type_fiat")
+    : t("table.asset_type_crypto");
 }
 </script>
 
 <template>
-  <!-- Alucard-style card container — same structural UX as legacy -->
+  <!-- Kryptofolio-style card container -->
   <div
     class="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
   >
     <!-- Card Header -->
     <div
-      class="flex items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-4"
+      class="flex items-center justify-between border-b border-border bg-card px-6 py-4"
     >
       <h3
         class="text-xs font-black uppercase tracking-widest text-muted-foreground"
@@ -174,7 +176,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
             <TableRow class="text-[10px] uppercase tracking-widest">
               <!-- Sortable: Date -->
               <TableHead
-                class="cursor-pointer select-none hover:text-primary"
+                class="cursor-pointer select-none hover:text-accent-foreground"
                 @click="toggleSort('timestamp')"
               >
                 <span class="flex items-center gap-1">
@@ -197,7 +199,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
               }}</TableHead>
               <!-- Sortable: Price -->
               <TableHead
-                class="cursor-pointer select-none text-right hover:text-primary"
+                class="cursor-pointer select-none text-right hover:text-accent-foreground"
                 @click="toggleSort('priceEur')"
               >
                 <span class="flex items-center justify-end gap-1">
@@ -224,7 +226,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
             <TableRow
               v-for="tx in paginatedTxs"
               :key="tx.id"
-              class="group text-xs transition-colors"
+              class="group text-xs"
             >
               <!-- Date -->
               <TableCell class="font-mono text-muted-foreground">
@@ -235,7 +237,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
               <TableCell>
                 <Badge
                   v-if="isWalletActivation(tx)"
-                  class="gap-1 border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border-slate-300 pointer-events-none"
+                  class="gap-1 border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-surface-3 text-muted border-border pointer-events-none"
                   :title="'Reserva inmovilizada por la red (Activación)'"
                 >
                   <Shield class="h-2.5 w-2.5" />
@@ -246,24 +248,26 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                   class="text-[8px] font-black uppercase tracking-widest pointer-events-none"
                   :class="getTypeBadgeClass(tx.type)"
                 >
-                  {{ tx.type.replace(/_/g, ' ') }}
+                  {{ tx.type.replace(/_/g, " ") }}
                 </Badge>
               </TableCell>
 
               <!-- Asset (using CryptoIcon) -->
               <TableCell>
                 <div class="flex items-center gap-3 py-1">
-                  <CryptoIcon 
-                    :symbol="tx.symbol || 'generic'" 
-                    :size="32" 
+                  <CryptoIcon
+                    :symbol="tx.symbol || 'generic'"
+                    :size="32"
                     colored
                     class="bg-linear-to-r from-primary/20 to-primary/5 p-1 rounded-lg border border-primary/10"
                   />
                   <div>
                     <span class="font-black block text-sm tracking-tight">
-                      {{ tx.symbol || '---' }}
+                      {{ tx.symbol || "---" }}
                     </span>
-                    <span class="text-[9px] text-muted-foreground uppercase leading-none font-bold tracking-widest opacity-60">
+                    <span
+                      class="text-[9px] text-muted-foreground uppercase leading-none font-bold tracking-widest opacity-60"
+                    >
                       {{ getAssetTypeLabel(tx.symbol) }}
                     </span>
                   </div>
@@ -275,14 +279,19 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                 <div v-if="tx.exchange" class="flex items-center justify-start">
                   <Badge
                     variant="outline"
-                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] dark:text-[hsl(var(--badge-hue),85%,75%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
-                    :style="{ '--badge-hue': getDeterministicHue(tx.exchange) } as any"
+                    class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
+                    :style="
+                      { '--badge-hue': getDeterministicHue(tx.exchange) } as any
+                    "
                   >
                     <CryptoIcon :symbol="tx.exchange" :size="10" colored />
                     {{ tx.exchange }}
                   </Badge>
                 </div>
-                <div v-else class="text-[9px] font-black uppercase tracking-tighter opacity-30">
+                <div
+                  v-else
+                  class="text-[9px] font-black uppercase tracking-tighter opacity-30"
+                >
                   ---
                 </div>
               </TableCell>
@@ -312,7 +321,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-primary hover:bg-primary/10 cursor-pointer"
+                    class="text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
                     :title="t('tax.col.actions')"
                     @click="emit('edit', tx)"
                   >
@@ -321,7 +330,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-destructive hover:bg-destructive/10 cursor-pointer"
+                    class="text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                     :title="t('tax.delete.btn')"
                     @click="emit('delete', tx.id)"
                   >
@@ -337,7 +346,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                 class="flex flex-col items-center gap-2 py-12 font-black uppercase tracking-widest text-muted-foreground"
               >
                 <span
-                  class="mb-2 rounded-2xl border border-border bg-muted/50 p-4 text-2xl"
+                  class="mb-2 rounded-2xl border border-border bg-card p-4 text-2xl"
                   >📋</span
                 >
                 <span class="text-xs">{{ t("tax.transactions.empty") }}</span>

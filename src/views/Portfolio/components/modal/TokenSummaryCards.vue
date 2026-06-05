@@ -18,7 +18,7 @@ defineProps<{
 <template>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <!-- Balance -->
-    <div class="bg-card/40 backdrop-blur-md border border-border/20 shadow-alucard-soft rounded-xl p-4 hover:border-border/40 transition-colors">
+    <div class="bg-card border border-border/20 shadow-soft rounded-xl p-4 hover:shadow-card transition-all duration-300">
       <div class="flex items-center gap-2 mb-2">
         <Wallet class="w-4 h-4 text-muted-foreground" />
         <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{{ t('token.balance') }}</span>
@@ -27,7 +27,7 @@ defineProps<{
     </div>
 
     <!-- Valor Actual -->
-    <div class="bg-card/40 backdrop-blur-md border border-border/20 shadow-alucard-soft rounded-xl p-4 hover:border-border/40 transition-colors">
+    <div class="bg-card border border-border/20 shadow-soft rounded-xl p-4 hover:shadow-card transition-all duration-300">
       <div class="flex items-center gap-2 mb-2">
         <Coins class="w-4 h-4 text-muted-foreground" />
         <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{{ t('token.current_value') }}</span>
@@ -36,7 +36,7 @@ defineProps<{
     </div>
 
     <!-- Coste de Adquisición -->
-    <div class="bg-card/40 backdrop-blur-md border border-border/20 shadow-alucard-soft rounded-xl p-4 hover:border-border/40 transition-colors">
+    <div class="bg-card border border-border/20 shadow-soft rounded-xl p-4 hover:shadow-card transition-all duration-300">
       <div class="flex items-center gap-2 mb-2">
         <TrendingDown class="w-4 h-4 text-muted-foreground" />
         <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{{ t('token.base_cost') }}</span>
@@ -45,7 +45,7 @@ defineProps<{
     </div>
 
     <!-- PnL Latente -->
-    <div class="bg-card/40 backdrop-blur-md border border-border/20 shadow-alucard-soft rounded-xl p-4 relative overflow-hidden group hover:border-border/40 transition-colors">
+    <div class="bg-card border border-border/20 shadow-soft rounded-xl p-4 relative overflow-hidden group hover:shadow-card transition-all duration-300">
       <!-- Glow effect -->
       <div 
         class="absolute inset-0 opacity-5 transition-opacity duration-500 group-hover:opacity-10"

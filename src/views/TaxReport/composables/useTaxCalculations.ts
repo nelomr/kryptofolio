@@ -161,10 +161,10 @@ export function getEventVariant(event: TaxLotHistoryEvent): EventBadgeVariant {
 
 /** Tailwind class sets per badge variant — consistent across all fiscal tables. */
 export const BADGE_CLASSES: Record<EventBadgeVariant, string> = {
-  gain: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800',
-  loss: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800',
-  exempt: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800',
-  activation: 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+  gain: 'bg-profit-soft text-profit border-profit/20',
+  loss: 'bg-loss-soft text-loss border-loss/20',
+  exempt: 'bg-info-soft text-info border-info/20',
+  activation: 'bg-surface-3 text-muted border-border',
 }
 
 /**
@@ -180,7 +180,7 @@ export const BADGE_I18N_KEYS: Record<EventBadgeVariant, string> = {
 
 /** Returns a Tailwind text-color class for a numeric gain/loss value. */
 export function gainLossClass(value: number): string {
-  if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
-  if (value < 0) return 'text-rose-600 dark:text-rose-400'
+  if (value > 0) return 'text-profit'
+  if (value < 0) return 'text-loss'
   return 'text-muted-foreground'
 }

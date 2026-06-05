@@ -24,9 +24,9 @@
 }
 
 .responsive-table-wrapper::-webkit-scrollbar-track {
-  @apply bg-slate-100 rounded-full;
+  @apply bg-surface-2 rounded-full;
 }
 
 .responsive-table-wrapper::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+  @apply bg-border rounded-full hover:bg-muted-2 transition-colors;
 }

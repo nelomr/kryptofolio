@@ -38,8 +38,10 @@ function createMockTaxRepo(): ITaxRepository {
   return {
     getSpotTransactions: vi.fn().mockResolvedValue([mockTx]),
     getFuturesTransactions: vi.fn().mockResolvedValue([mockTx]),
+    getFuturesDerivatives: vi.fn().mockResolvedValue([]),
     getInvalidTransactions: vi.fn().mockResolvedValue([]),
     getReport: vi.fn().mockResolvedValue(mockReport),
+    downloadReport: vi.fn().mockResolvedValue(new Blob()),
     deleteTransaction: vi.fn().mockResolvedValue(undefined),
     updateTransaction: vi.fn().mockResolvedValue(undefined),
     validateTransaction: vi.fn().mockResolvedValue(undefined),

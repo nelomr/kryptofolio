@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<{
         {{ t('tax.integrity.analyzing') }}
       </div>
       
-      <div v-else-if="warnings.length === 0" class="flex items-center gap-2 text-emerald-500">
+      <div v-else-if="warnings.length === 0" class="flex items-center gap-2 text-profit">
         <CheckCircle2 class="h-5 w-5" />
         <span class="text-sm font-medium">{{ t('tax.integrity.healthy') }}</span>
       </div>
@@ -44,10 +44,10 @@ const props = withDefaults(defineProps<{
           :key="warning.id"
           :variant="warning.severity === 'critical' ? 'destructive' : 'default'"
           :class="{
-            'border-amber-500/50 text-amber-600 dark:text-amber-500': warning.severity === 'warning',
+            'border-warning/50 text-warning': warning.severity === 'warning',
           }"
         >
-          <AlertTriangle class="h-4 w-4" :class="{ 'text-amber-500': warning.severity === 'warning' }" />
+          <AlertTriangle class="h-4 w-4" :class="{ 'text-warning': warning.severity === 'warning' }" />
           <AlertTitle>{{ warning.title }}</AlertTitle>
           <AlertDescription>
             {{ warning.description }}

@@ -153,11 +153,11 @@ describe('Tax Calculations Composables', () => {
 
   describe('gainLossClass', () => {
     it('returns emerald class for positive values', () => {
-      expect(gainLossClass(100)).toContain('emerald')
+      expect(gainLossClass(100)).toContain('text-profit')
     })
 
     it('returns rose class for negative values', () => {
-      expect(gainLossClass(-0.01)).toContain('rose')
+      expect(gainLossClass(-0.01)).toContain('text-loss')
     })
 
     it('returns muted class for zero', () => {

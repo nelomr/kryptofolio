@@ -34,7 +34,7 @@ const totalValue = computed(() => {
       :key="asset.label"
       @mouseenter="emit('hover', index)"
       @mouseleave="emit('hover', null)"
-      class="flex items-center justify-between text-sm hover:bg-muted/50 p-1.5 rounded transition-colors cursor-default"
+      class="flex items-center justify-between text-sm hover:bg-surface-2 p-1.5 rounded transition-colors cursor-default"
     >
       <div class="flex items-center gap-2">
         <span 
@@ -52,7 +52,7 @@ const totalValue = computed(() => {
         <span class="text-xs text-muted-foreground/70">24h</span>
         <span 
           class="text-xs font-semibold"
-          :class="(asset.change24h || 0) >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+          :class="(asset.change24h || 0) >= 0 ? 'text-profit' : 'text-loss'"
         >
           {{ formatPercent(asset.change24h) }}
         </span>

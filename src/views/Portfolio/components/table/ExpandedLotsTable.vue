@@ -74,7 +74,7 @@ const isLotInLoss = (lot: TaxLotEntity) => {
       <RefreshCw v-if="isLoadingDetails" class="w-3 h-3 animate-spin text-muted-foreground" />
     </div>
     
-    <Table class="bg-card/40 border border-border/50 rounded-lg overflow-hidden">
+    <Table class="bg-card border border-border/50 rounded-lg overflow-hidden">
        <TableHeader>
           <TableRow class="hover:bg-transparent">
              <TableHead class="h-8 text-[9px] w-8"></TableHead>
@@ -97,7 +97,7 @@ const isLotInLoss = (lot: TaxLotEntity) => {
                   v-for="lot in lots"
                   :key="lot.id"
                 >
-                   <TableRow :class="cn('hover:bg-transparent border-b border-border/5', lot.remainingQty === 0 && 'opacity-40 grayscale')">
+                   <TableRow :class="cn('border-b border-border/5 transition-colors', lot.remainingQty === 0 && 'opacity-40 grayscale')">
                        <TableCell class="py-2 w-10 pl-3">
                           <button
                             v-if="getLotHistory(lot.id).length"
@@ -133,9 +133,9 @@ const isLotInLoss = (lot: TaxLotEntity) => {
                       <TableCell class="py-2 text-right font-mono text-[10px] tabular-nums relative">
                          <div class="flex items-center justify-end gap-2">
                            <div v-if="isLotInLoss(lot) && lot.remainingQty > 0" class="group/tooltip relative cursor-help flex items-center">
-                             <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse block"></span>
-                             <div class="absolute right-0 bottom-full mb-2 w-48 p-2.5 bg-popover border border-amber-500/30 rounded-lg shadow-xl text-[9px] text-popover-foreground opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 normal-case font-sans tracking-normal leading-relaxed text-left">
-                                 <span class="font-bold text-amber-500 block mb-1">{{ t('expanded_lots.ai_insight') }}</span>
+                             <span class="w-1.5 h-1.5 rounded-full bg-warning animate-pulse block"></span>
+                             <div class="absolute right-0 bottom-full mb-2 w-48 p-2.5 bg-popover border border-warning rounded-lg shadow-xl text-[9px] text-popover-foreground opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-50 normal-case font-sans tracking-normal leading-relaxed text-left">
+                                 <span class="font-bold text-warning block mb-1">{{ t('expanded_lots.ai_insight') }}</span>
                                  Este lote califica para <span class="font-bold">{{ t('expanded_lots.tax_loss') }}</span>{{ t('expanded_lots.tax_loss_desc') }}
                              </div>
                            </div>
@@ -145,7 +145,7 @@ const isLotInLoss = (lot: TaxLotEntity) => {
                       <TableCell class="py-2 text-right font-mono text-[10px] tabular-nums">{{ formatCurrency(lot.totalCost) }}</TableCell>
                    </TableRow>
 
-                   <TableRow v-if="expandedLots.has(lot.id)" class="bg-muted/5 border-b border-primary/10">
+                   <TableRow v-if="expandedLots.has(lot.id)" class="border-b border-primary/10">
                       <TableCell colspan="8" class="p-0">
                          <LotEventHistory :events="getLotHistory(lot.id)" />
                       </TableCell>

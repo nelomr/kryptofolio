@@ -5,10 +5,10 @@
  * @see openspec/specs/tax-csv-ingestion/spec.md
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { RestTaxAdapter } from '../RestTaxAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
-import type { IHttpClient } from '@/core/domain/repositories/IHttpClient'
+import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 
 // ---------------------------------------------------------------------------
 // Mock IHttpClient

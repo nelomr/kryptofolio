@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import TaxReportHeader from "./components/TaxReportHeader.vue";
 import TaxReportSummaryCards from "./components/TaxReportSummaryCards.vue";
-import IntegrityCard from "./components/IntegrityCard.vue";
+
 import TaxReportTab from "./components/TaxReportTab.vue";
 import YearFilter from "./components/YearFilter.vue";
 import TaxTransactionsTable from "./components/TaxTransactionsTable.vue";
@@ -13,7 +13,7 @@ import { useTaxLedgers } from "./composables/useTaxLedgers";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();
-const { isLoading, metrics, warnings, syncWeb3, uploadCsv, clearData } =
+const { metrics, syncWeb3, uploadCsv, clearData } =
   useTaxReportPort();
 
 const {
@@ -48,7 +48,7 @@ const {
     <TaxReportSummaryCards :metrics="metrics" />
 
     <Tabs defaultValue="ledgers" class="space-y-4">
-      <TabsList class="bg-card/50 backdrop-blur-sm border-primary/10">
+      <TabsList>
         <TabsTrigger value="ledgers" class="cursor-pointer">
           <div class="flex items-center gap-2">
             <BookText class="w-4 h-4" />
@@ -76,16 +76,16 @@ const {
 
         <!-- Operations Ledgers Sub-Tabs -->
         <Tabs defaultValue="spot" class="space-y-4 mt-4">
-          <TabsList class="bg-transparent border border-primary/10">
+          <TabsList>
             <TabsTrigger
               value="spot"
-              class="cursor-pointer rounded-sm data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              class="cursor-pointer"
             >
               {{ t("tax.tabs.spot") }}
             </TabsTrigger>
             <TabsTrigger
               value="futures"
-              class="cursor-pointer rounded-sm data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+              class="cursor-pointer"
             >
               {{ t("tax.tabs.futures") }}
             </TabsTrigger>

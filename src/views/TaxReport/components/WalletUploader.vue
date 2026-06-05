@@ -43,7 +43,7 @@ function handleWalletFileChange(event: Event) {
         <TooltipTrigger as-child>
           <Button
             variant="outline"
-            class="gap-2 cursor-pointer text-blue-600 border-blue-600/20 hover:bg-blue-400/10 hover:text-blue-300 transition-colors duration-300 shadow-sm"
+            class="gap-2 cursor-pointer text-info border-info/20 hover:bg-info-soft transition-colors duration-300"
             :disabled="isUploading"
             @click="walletFileInput?.click()"
           >
@@ -52,27 +52,27 @@ function handleWalletFileChange(event: Event) {
           </Button>
         </TooltipTrigger>
         <TooltipContent
-          class="max-w-xs text-sm p-3 border-blue-400/20 bg-background/95 backdrop-blur shadow-lg"
+          class="max-w-xs text-sm p-3 border border-border bg-background shadow-modal"
         >
           <p
-            class="font-bold mb-2 border-b border-blue-400/20 pb-1 text-blue-400"
+            class="font-bold mb-2 border-b border-border pb-1 text-info"
           >
             {{ t("tax.wallets.tooltip_title") }}
           </p>
-          <ul class="list-disc pl-4 space-y-1 text-black">
+          <ul class="list-disc pl-4 space-y-1 text-fg">
             <li>
-              <strong class="text-blue-500">wallet_name</strong>: (e.g., "My
+              <strong class="text-info">wallet_name</strong>: (e.g., "My
               Ledger")
             </li>
             <li>
-              <strong class="text-blue-500">wallet_type</strong>: (HOT_WALLET |
+              <strong class="text-info">wallet_type</strong>: (HOT_WALLET |
               COLD_WALLET)
             </li>
             <li>
-              <strong class="text-blue-500">blockchain</strong>: (e.g.,
+              <strong class="text-info">blockchain</strong>: (e.g.,
               "Ethereum")
             </li>
-            <li><strong class="text-blue-500">address</strong>: (0x...)</li>
+            <li><strong class="text-info">address</strong>: (0x...)</li>
           </ul>
         </TooltipContent>
       </Tooltip>
