@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.0](https://github.com/nelomr/kryptofolio/compare/v1.14.1...v1.15.0) (2026-06-06)
+
+### ✨ Features
+
+* **architecture:** migrate project to pnpm monorepo workspace ([9accea3](https://github.com/nelomr/kryptofolio/commit/9accea36701616f4456ecdc5e0d73da32fea8c7a))
+
 ## [1.14.1](https://github.com/nelomr/kryptofolio/compare/v1.14.0...v1.14.1) (2026-06-06)
 
 ### 🐛 Bug Fixes
