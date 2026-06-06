@@ -18,14 +18,18 @@
 - **🛡️ Privacidad Primero:** Totalmente self-hosted. El backend utiliza una base de datos SQLite local (`fiscal.db`), asegurando que tus claves y tu historial de transacciones nunca salgan de tu máquina.
 - **🏗️ Arquitectura Hexagonal:** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI está completamente desacoplada de la obtención de datos, permitiendo una alta testabilidad y validación robusta en tiempo de ejecución mediante Zod.
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Stack Tecnológico y Monorepo
 
 - **Framework**: Vue 3 (Composition API + `<script setup>`)
 - **Gestión de Estado**: [Pinia](https://pinia.vuejs.org/) + [Pinia Colada](https://pinia-colada.esm.dev/)
 - **Estilos**: TailwindCSS 4
 - **Gráficos**: Lightweight Charts (TradingView)
 - **Testing**: Vitest
-- **Gestor de Paquetes**: pnpm
+- **Workspace**: pnpm workspaces (Monorepo)
+
+El repositorio está estructurado como un monorepo para soportar futuros paquetes desacoplados:
+- `apps/frontend/`: La aplicación principal en Vue 3.
+- `packages/`: Lógica compartida, contratos y configuraciones (futuro).
 
 ## 🎨 Sistema de Diseño Institucional
 
@@ -89,24 +93,24 @@ Asegúrate de tener [pnpm](https://pnpm.io/) instalado.
 git clone https://github.com/nelomr/portfolio-dashboard.git
 cd portfolio-dashboard
 
-# 2. Instalar dependencias
+# 2. Instalar dependencias en la raíz del workspace
 pnpm install
 
-# 3. Iniciar el servidor de desarrollo (con HMR)
+# 3. Iniciar el servidor de desarrollo (ejecuta apps/frontend gracias al workspace filter)
 pnpm dev
 ```
 
 ### 🧪 Pruebas y Validación
 
-Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta estos comandos para validar tus cambios localmente antes de enviar una PR:
+Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta estos comandos en la **raíz del proyecto** para validar tus cambios localmente:
 
 | Comando | Descripción |
 |---------|-------------|
-| `pnpm dev` | Inicia el servidor de desarrollo local. |
-| `pnpm test` | Ejecuta la suite completa de pruebas unitarias de **Vitest** (Adaptadores, UI y Dominio). |
-| `pnpm test:ui` | Abre el dashboard de interfaz de Vitest para la depuración interactiva de pruebas. |
-| `pnpm typecheck` | Ejecuta **Vue-TSC** para validar estáticamente los tipos en todos los componentes sin emitir archivos de salida. |
-| `pnpm build` | Compila y empaqueta la aplicación para su despliegue en producción. |
+| `pnpm dev` | Inicia el servidor de desarrollo local del frontend (`-F @kryptofolio/frontend`). |
+| `pnpm test` | Ejecuta de forma recursiva (`-r`) la suite completa de pruebas unitarias en todo el workspace. |
+| `pnpm test:ui` | Abre el dashboard de interfaz de Vitest en el frontend. |
+| `pnpm typecheck` | Ejecuta estáticamente **Vue-TSC** recursivamente en todos los paquetes del workspace. |
+| `pnpm build` | Compila y empaqueta el frontend para su despliegue en producción. |
 
 ## 📦 Arquitectura: Hexagonal (Puertos y Adaptadores)
 

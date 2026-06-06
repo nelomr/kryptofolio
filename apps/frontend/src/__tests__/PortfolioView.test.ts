@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import PortfolioView from '@/views/Portfolio/PortfolioView.vue'
 import * as portfolioData from '@/views/Portfolio/composables/usePortfolioData'
 
@@ -54,15 +54,6 @@ const mockMetrics = {
   totalRealizedPnlEur: 100,
 }
 
-const mockAllocation = [
-  { label: 'BTC', value: 6000, color: '#F7931A' },
-  { label: 'ETH', value: 4000, color: '#627EEA' },
-]
-
-const mockPerformance = [
-  { time: '2025-01-01', value: 9500 },
-  { time: '2025-01-07', value: 10000 },
-]
 
 
 import { I18N_PORT_KEY, CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'

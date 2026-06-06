@@ -39,9 +39,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type check
+        working-directory: apps/frontend
         run: pnpm typecheck
 
       - name: Unit tests
+        working-directory: apps/frontend
         run: pnpm test
 
   # ─────────────────────────────────────────────

@@ -18,14 +18,18 @@
 - **🛡️ Privacy First:** Fully self-hosted. The backend utilizes a local SQLite database (`fiscal.db`), ensuring your keys and transaction history never leave your machine.
 - **🏗️ Hexagonal Architecture:** Strict separation of concerns (Ports & Adapters). The UI layer is completely decoupled from data fetching, enabling high testability and robust runtime validation via Zod.
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack & Monorepo
 
 - **Framework**: Vue 3 (Composition API + `<script setup>`)
 - **State Management**: [Pinia](https://pinia.vuejs.org/) + [Pinia Colada](https://pinia-colada.esm.dev/)
 - **Styling**: TailwindCSS 4
 - **Charts**: Lightweight Charts (TradingView) & vue-chartjs (Chart.js)
 - **Testing**: Vitest
-- **Package Manager**: pnpm
+- **Workspace**: pnpm workspaces (Monorepo)
+
+The repository is structured as a monorepo to support future decoupled packages:
+- `apps/frontend/`: The main Vue 3 application.
+- `packages/`: Shared logic, contracts, and configurations (future).
 
 ## 🎨 Institutional Design System
 
@@ -84,10 +88,10 @@ Ensure you have [pnpm](https://pnpm.io/) installed.
 git clone https://github.com/nelomr/portfolio-dashboard.git
 cd portfolio-dashboard
 
-# 2. Install dependencies
+# 2. Install dependencies at the workspace root
 pnpm install
 
-# 3. Start the development server (with HMR)
+# 3. Start the development server (runs apps/frontend via workspace filter)
 pnpm dev
 ```
 
