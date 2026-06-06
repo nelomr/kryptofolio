@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.14.0](https://github.com/nelomr/kryptofolio/compare/v1.13.0...v1.14.0) (2026-06-06)
+
+### ✨ Features
+
+* add interactive portfolio performance history chart ([f85a38d](https://github.com/nelomr/kryptofolio/commit/f85a38d4779ea2d56d035e72f35d613585b8c696))
+
 ## [1.13.0](https://github.com/nelomr/kryptofolio/compare/v1.12.0...v1.13.0) (2026-06-05)
 
 ### ✨ Features
