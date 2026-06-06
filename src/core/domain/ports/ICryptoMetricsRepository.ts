@@ -23,6 +23,25 @@ export interface CryptoKpis {
   portfolioDispersion: number; // Sigma (Volatility)
 }
 
+export type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
+
+export interface PerformancePoint {
+  timestamp: number; // Unix timestamp
+  valueFiat: number;
+  costBasisFiat: number;
+}
+
+export interface PerformanceMetrics {
+  returnFiat: number;
+  returnPercent: number;
+  volatilityPercent: number;
+  bestDayPercent: number;
+}
+
 export interface ICryptoMetricsRepository {
   getKpis(): Promise<CryptoKpis>;
+  getPerformanceHistory(range: TimeRange): Promise<{
+    history: PerformancePoint[];
+    metrics: PerformanceMetrics;
+  }>;
 }

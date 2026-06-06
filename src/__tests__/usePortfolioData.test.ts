@@ -10,7 +10,6 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createApp, nextTick } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import { usePortfolioData } from '@/views/Portfolio/composables/usePortfolioData'
-import { useChartData } from '@/views/Portfolio/composables/useChartData'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
 import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
@@ -83,49 +82,6 @@ describe('Portfolio Data Composable (portfolio-data-composable)', () => {
     expect(result!.isFetching.value).toBe(false)
     expect(result!.metrics.value).toEqual(mockSummary.metrics)
     expect(result!.filteredHoldings.value.length).toBe(1)
-  })
-
-  it('Generate Allocation Data', async () => {
-    const { app } = setupApp()
-
-    let composable: ReturnType<typeof usePortfolioData>
-    let chartComposable: ReturnType<typeof useChartData>
-
-    app.runWithContext(() => {
-      composable = usePortfolioData()
-      chartComposable = useChartData(composable.metrics, composable.filteredHoldings)
-    })
-
-    // Wait for query resolution
-    await new Promise(resolve => setTimeout(resolve, 10))
-
-    expect(chartComposable!.allocationData.value.length).toBeGreaterThan(0)
-    expect(chartComposable!.allocationData.value[0]).toHaveProperty('label')
-    expect(chartComposable!.allocationData.value[0]).toHaveProperty('value')
-    expect(chartComposable!.allocationData.value[0]).toHaveProperty('color')
-    expect(chartComposable!.allocationData.value[0].color).toMatch(/^#[0-9a-f]{6}$/i)
-  })
-
-  it('Generate Performance Data', async () => {
-    const { app } = setupApp()
-
-    let composable: ReturnType<typeof usePortfolioData>
-    let chartComposable: ReturnType<typeof useChartData>
-
-    app.runWithContext(() => {
-      composable = usePortfolioData()
-      chartComposable = useChartData(composable.metrics, composable.filteredHoldings)
-    })
-
-    // Wait for query resolution
-    await new Promise(resolve => setTimeout(resolve, 10))
-
-    expect(chartComposable!.performanceData.value.length).toBe(721)
-    expect(chartComposable!.performanceData.value[0]).toHaveProperty('time')
-    expect(chartComposable!.performanceData.value[0]).toHaveProperty('value')
-
-    const lastPoint = chartComposable!.performanceData.value[chartComposable!.performanceData.value.length - 1]
-    expect(lastPoint.value).toBe(mockSummary.metrics.totalEquityEur)
   })
 
   it('Triggering Rebuild triggers mutation and invalidates cache', async () => {

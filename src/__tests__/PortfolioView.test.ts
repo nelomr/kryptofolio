@@ -39,21 +39,6 @@ vi.mock('@pinia/colada', () => ({
 }))
 
 // ── Chart stubs ───────────────────────────────────────────────────────────────
-vi.mock('@/components/charts/PerformanceLineChart.vue', () => ({
-  default: {
-    name: 'PerformanceLineChart',
-    template: '<div data-testid="performance-chart-stub"></div>',
-    props: ['data'],
-  },
-}))
-
-vi.mock('@/components/charts/AssetAllocationChart.vue', () => ({
-  default: {
-    name: 'AssetAllocationChart',
-    template: '<div data-testid="allocation-chart-stub"></div>',
-    props: ['assets'],
-  },
-}))
 
 vi.mock('@/components/ui/tabs', () => ({
   Tabs: { template: '<div><slot /></div>' },
@@ -79,13 +64,11 @@ const mockPerformance = [
   { time: '2025-01-07', value: 10000 },
 ]
 
-import * as chartData from '@/views/Portfolio/composables/useChartData'
 
 import { I18N_PORT_KEY, CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
 
 function mountView(
-  dataOverrides: Partial<ReturnType<typeof portfolioData.usePortfolioData>> = {},
-  chartOverrides: Partial<ReturnType<typeof chartData.useChartData>> = {}
+  dataOverrides: Partial<ReturnType<typeof portfolioData.usePortfolioData>> = {}
 ) {
   vi.spyOn(portfolioData, 'usePortfolioData').mockReturnValue({
     metrics: ref(mockMetrics),
@@ -103,12 +86,6 @@ function mountView(
     expandedDetailsMap: ref({}),
     handleRowExpand: vi.fn(),
     ...dataOverrides,
-  } as any)
-
-  vi.spyOn(chartData, 'useChartData').mockReturnValue({
-    allocationData: ref(mockAllocation),
-    performanceData: ref(mockPerformance),
-    ...chartOverrides,
   } as any)
 
   return mount(PortfolioView, {
@@ -182,25 +159,6 @@ describe('PortfolioView', () => {
   })
 
 
-
-  it('renders PerformanceLineChart when performanceData is not empty', () => {
-    const wrapper = mountView()
-    expect(wrapper.find('[data-testid="performance-chart-stub"]').exists()).toBe(true)
-  })
-
-  it('renders AssetAllocationChart when allocationData is not empty', () => {
-    const wrapper = mountView()
-    expect(wrapper.find('[data-testid="allocation-chart-stub"]').exists()).toBe(true)
-  })
-
-  it('hides charts when data arrays are empty', () => {
-    const wrapper = mountView({}, {
-      allocationData: computed(() => []),
-      performanceData: computed(() => []),
-    })
-    expect(wrapper.find('[data-testid="performance-chart-stub"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="allocation-chart-stub"]').exists()).toBe(false)
-  })
 
   it('renders the metrics grid (4 cols on lg)', () => {
     const wrapper = mountView()

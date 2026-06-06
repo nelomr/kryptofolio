@@ -50,3 +50,31 @@ export const CryptoKpisSchema = z.object({
   },
   portfolioDispersion: val.portfolio_dispersion,
 }));
+
+export const PerformancePointSchema = z.object({
+  ts: z.number(),
+  value: z.number(),
+  cost: z.number(),
+}).transform((val) => ({
+  timestamp: val.ts,
+  valueFiat: val.value,
+  costBasisFiat: val.cost,
+}));
+
+export const PerformanceHistoryResponseSchema = z.object({
+  data: z.array(PerformancePointSchema),
+  summary: z.object({
+    return_fiat: z.number(),
+    return_percent: z.number(),
+    volatility: z.number(),
+    best_day: z.number(),
+  }),
+}).transform((val) => ({
+  history: val.data,
+  metrics: {
+    returnFiat: val.summary.return_fiat,
+    returnPercent: val.summary.return_percent,
+    volatilityPercent: val.summary.volatility,
+    bestDayPercent: val.summary.best_day,
+  },
+}));

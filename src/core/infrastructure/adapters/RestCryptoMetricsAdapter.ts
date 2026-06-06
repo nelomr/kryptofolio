@@ -1,6 +1,6 @@
-import type { ICryptoMetricsRepository, CryptoKpis } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { ICryptoMetricsRepository, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics } from '@/core/domain/ports/ICryptoMetricsRepository'
 import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
-import { CryptoKpisSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
+import { CryptoKpisSchema, PerformanceHistoryResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 
 export class DomainValidationError extends Error {
@@ -40,5 +40,10 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsRepository {
   async getKpis(): Promise<CryptoKpis> {
     const response = await this.http.get<unknown>('/api/portfolio/kpis')
     return parseOrFail(CryptoKpisSchema, response.data, 'getKpis')
+  }
+
+  async getPerformanceHistory(range: TimeRange): Promise<{ history: PerformancePoint[]; metrics: PerformanceMetrics }> {
+    const response = await this.http.get<unknown>(`/api/portfolio/performance?range=${range}`)
+    return parseOrFail(PerformanceHistoryResponseSchema, response.data, 'getPerformanceHistory')
   }
 }

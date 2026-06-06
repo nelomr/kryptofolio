@@ -27,12 +27,12 @@ const MOCK_HOLDINGS: CryptoAssetEntity[] = [
   {
     id: AssetIdSchema.parse('asset-btc-mock'),
     symbol: 'BTC',
-    amount: 0.71,
-    avgPriceEur: 35_000,
-    currentValueEur: 63_900,
-    costBasisEur: 24_850,
-    unrealizedPnlEur: 39_050,
-    pnlEur: 39_050,
+    amount: 1.02,
+    avgPriceEur: 30_198,
+    currentValueEur: 92_462.14,
+    costBasisEur: 30_802.20,
+    unrealizedPnlEur: 61_659.94,
+    pnlEur: 61_659.94,
     portfolioLocations: ['Kraken', 'Tangem'],
   },
   {
@@ -138,11 +138,11 @@ const MOCK_HOLDINGS: CryptoAssetEntity[] = [
 
 const MOCK_SUMMARY: PortfolioSummaryEntity = {
   metrics: {
-    totalEquityEur: 114_018.31,
-    totalCostBasisEur: 52_167.80,
+    totalEquityEur: 142_580.45,
+    totalCostBasisEur: 58_120.00,
     totalRealizedPnlEur: 12_234.50,
-    totalUnrealizedPnlEur: 61_850.51,
-    totalPnlEur: 74_085.01,
+    totalUnrealizedPnlEur: 72_225.95,
+    totalPnlEur: 84_460.45,
   },
   holdings: MOCK_HOLDINGS,
 }
