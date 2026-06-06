@@ -1,7 +1,7 @@
 import type { I18nDictionary } from '@/core/domain/models/I18nDictionary';
 
 export const es: I18nDictionary = {
-  'dashboard.title': 'Kriptofolio',
+  'dashboard.title': 'Kryptofolio',
   'dashboard.greeting': 'Hola {name}',
   'navbar.portfolio': 'Portafolio',
   'navbar.settings': 'Ajustes',
