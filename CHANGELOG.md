@@ -3,6 +3,16 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.1](https://github.com/nelomr/kryptofolio/compare/v1.15.0...v1.15.1) (2026-06-08)
+
+### ✨ Features
+
+* migrate adapters to BFF and adjust release pacing ([c77a22e](https://github.com/nelomr/kryptofolio/commit/c77a22ef366d7d02fb7577df51a1657a83df6781))
+
+### 📝 Documentation
+
+* **specs:** sync phase-2-bff-docs specs to main library ([d508278](https://github.com/nelomr/kryptofolio/commit/d508278e15414778d47bebbcd78b066759059dff))
+
 ## [1.15.0](https://github.com/nelomr/kryptofolio/compare/v1.14.1...v1.15.0) (2026-06-06)
 
 ### ✨ Features
