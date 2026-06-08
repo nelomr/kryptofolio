@@ -3,12 +3,13 @@ import { ref } from 'vue'
 import { useAvailableYears } from '../useAvailableYears'
 import type { TaxTransactionEntity } from '@/core/domain/models/FiscalEntities'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
-import { MockTaxAdapter } from '@/core/infrastructure/adapters/MockTaxAdapter'
 
 describe('useAvailableYears', () => {
   it('computes available years correctly from mock dataset', async () => {
-    const adapter = new MockTaxAdapter()
-    const mockTxs = await adapter.getSpotTransactions()
+    const mockTxs = [
+      { id: TransactionIdSchema.parse('tx-1'), timestamp: new Date('2024-05-01') } as TaxTransactionEntity,
+      { id: TransactionIdSchema.parse('tx-2'), timestamp: new Date('2025-06-01') } as TaxTransactionEntity
+    ]
     
     const transactions = ref<TaxTransactionEntity[]>(mockTxs)
     const availableYears = useAvailableYears(transactions)

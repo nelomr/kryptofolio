@@ -11,6 +11,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "pnpm -F @kryptofolio/frontend dev",
+    "dev:mock": "pnpm --parallel -F @kryptofolio/frontend -F @dashboar-portfolio/api-gateway dev",
     "build": "pnpm -F @kryptofolio/frontend build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

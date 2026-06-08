@@ -21,13 +21,13 @@
       {
         "preset": "conventionalcommits",
         "releaseRules": [
-          { "type": "feat",     "release": "minor" },
+          { "type": "feat",     "release": "patch" },
           { "type": "fix",      "release": "patch" },
           { "type": "perf",     "release": false },
           { "type": "refactor", "release": false },
           { "type": "docs",     "release": false },
           { "type": "test",     "release": false },
-          { "breaking": true,   "release": "major" }
+          { "breaking": true,   "release": "minor" }
         ]
       }
     ],

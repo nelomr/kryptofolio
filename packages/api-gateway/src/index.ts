@@ -1,19 +1,58 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import mockPortfolio from './data/mockPortfolio';
+import { MOCK_TRANSACTIONS, MOCK_TAX_REPORT, MOCK_FUTURES_TRANSACTIONS, MOCK_FUTURES_DERIVATIVES } from './data/mockTax';
+import { MOCK_KPIS, generatePerformanceHistory } from './data/mockMetrics';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
 
 export const app = new Hono();
+app.use('/*', cors());
 
-const routes = app.get('/api/health', (c) => {
-  return c.json({ status: 'ok' }, 200);
-});
+const routes = app.basePath('/api')
+  .get('/health', (c) => c.json({ status: 'ok' }, 200))
+  // Portfolio
+  .get('/portfolio/summary', (c) => c.json(mockPortfolio.summary, 200))
+  .get('/portfolio/token/:symbol', (c) => c.json({}, 200))
+  .get('/portfolio/token/:symbol/history', (c) => {
+    const symbol = c.req.param('symbol').toUpperCase();
+    const lots = (mockPortfolio.lots as Record<string, any>)[symbol] || [];
+    const history = (mockPortfolio.history as Record<string, any>)[symbol] || {};
+    return c.json({ lots, history }, 200);
+  })
+  .post('/portfolio/rebuild', zValidator('json', z.object({}).optional()), (c) => c.json({ success: true }, 200))
+  // Wallets
+  .get('/wallets', (c) => c.json([{ name: 'Main Kraken', type: 'EXCHANGE', chainAddresses: [] }], 200))
+  .post('/wallets/upload', (c) => c.json([{ name: 'Imported', type: 'WALLET', chainAddresses: [] }], 200))
+  // Tax
+  .get('/tax/transactions/spot', (c) => c.json(MOCK_TRANSACTIONS, 200))
+  .get('/tax/transactions/futures', (c) => c.json(MOCK_FUTURES_TRANSACTIONS, 200))
+  .get('/tax/transactions/futures-derivatives', (c) => c.json(MOCK_FUTURES_DERIVATIVES, 200))
+  .get('/tax/transactions/invalid', (c) => c.json([], 200))
+  .get('/tax/report', (c) => c.json(MOCK_TAX_REPORT, 200))
+  .delete('/tax/transactions/:id', (c) => c.json({ success: true }, 200))
+  .put('/tax/transactions/:id', zValidator('json', z.record(z.unknown())), (c) => c.json({ success: true }, 200))
+  .post('/tax/transactions/validate', zValidator('json', z.record(z.unknown())), (c) => c.json({ success: true }, 200))
+  .post('/tax/upload', (c) => c.json({ success: true }, 200))
+  .delete('/tax/transactions/market/:market', (c) => c.json({ success: true }, 200))
+  .post('/tax/import-wallet', zValidator('json', z.object({ chain: z.string(), address: z.string() })), (c) => c.json({ success: true }, 200))
+  .post('/tax/sync-web3', zValidator('json', z.object({}).optional()), (c) => c.json({ success: true }, 200))
+  .get('/tax/report/download', (c) => c.body('PDF content', 200))
+  // Metrics
+  .get('/metrics/kpis', (c) => c.json(MOCK_KPIS, 200))
+  .get('/metrics/performance', (c) => {
+    const days = Number(c.req.query('days') || '30');
+    return c.json(generatePerformanceHistory(days), 200);
+  })
+  .get('/metrics/token/:symbol', (c) => c.json({}, 200))
+  // Ingestion
+  .get('/ingestion/status', (c) => c.json({ status: 'idle', progress: 0, message: '', processedCount: 0, totalCount: 0 }, 200));
 
 export type AppType = typeof routes;
 
 const port = 3001;
 if (process.env.NODE_ENV !== 'test') {
   console.log(`BFF is running on port ${port}`);
-  serve({
-    fetch: app.fetch,
-    port
-  });
+  serve({ fetch: app.fetch, port });
 }

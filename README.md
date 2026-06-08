@@ -93,9 +93,15 @@ cd portfolio-dashboard
 # 2. Install dependencies at the workspace root
 pnpm install
 
-# 3. Start the development server (runs apps/frontend via workspace filter)
+# 3. Start the development environment
+# To run the frontend with real APIs:
 pnpm dev
+
+# OR, to run the frontend along with the local Backend-for-Frontend (BFF) Mock server:
+pnpm run dev:mock
 ```
+
+> **Note:** The `dev:mock` command concurrently spins up the Vite frontend and the Hono API Gateway, allowing the frontend to consume strictly validated mock data via RPC.
 
 ## 🏗️ Architecture: Hexagonal (Ports & Adapters)
 

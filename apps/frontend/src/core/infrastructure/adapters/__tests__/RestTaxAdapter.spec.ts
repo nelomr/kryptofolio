@@ -1,6 +1,6 @@
 /**
  * RestTaxAdapter — Vitest unit tests for new operational methods (TDD red phase)
- * Tests uploadTaxFile and deleteAllTransactions via mocked IHttpClient.
+ * Tests uploadTaxFile and deleteAllTransactions via mocked bffClient.
  *
  * @see openspec/specs/tax-csv-ingestion/spec.md
  */
@@ -8,59 +8,65 @@
 import { describe, it, expect, vi } from 'vitest'
 import { RestTaxAdapter } from '../RestTaxAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
-import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 
-// ---------------------------------------------------------------------------
-// Mock IHttpClient
-// ---------------------------------------------------------------------------
-
-function makeHttp(overrides: Partial<IHttpClient> = {}): IHttpClient {
+vi.mock('../../http/BffClient', () => {
   return {
-    get: vi.fn().mockResolvedValue({ data: [] }),
-    post: vi.fn().mockResolvedValue({ data: {} }),
-    put: vi.fn().mockResolvedValue({ data: {} }),
-    delete: vi.fn().mockResolvedValue({ data: {} }),
-    postForm: vi.fn().mockResolvedValue({ data: {} }),
-    ...overrides,
+    bffClient: {
+      api: {
+        tax: {
+          upload: {
+            $post: vi.fn()
+          },
+          transactions: {
+            market: {
+              ':market': {
+                $delete: vi.fn()
+              }
+            }
+          }
+        }
+      }
+    }
   }
-}
-
-// ---------------------------------------------------------------------------
-// uploadTaxFile — happy path
-// ---------------------------------------------------------------------------
+})
 
 describe('RestTaxAdapter.uploadTaxFile() — happy path', () => {
-  it('sends a multipart POST to /api/tax/upload', async () => {
-    const http = makeHttp()
-    const adapter = new RestTaxAdapter(http)
+  it('sends a multipart POST to bffClient.api.tax.upload', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.upload.$post.mockResolvedValueOnce({ ok: true })
+    
+    const adapter = new RestTaxAdapter()
     const file = new File(['txid,refid'], 'test.csv', { type: 'text/csv' })
 
     await adapter.uploadTaxFile(file, 'spot')
 
-    expect(http.postForm).toHaveBeenCalledOnce()
-    const [url, formData] = (http.postForm as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(url).toBe('/api/tax/upload')
-    expect(formData).toBeInstanceOf(FormData)
+    // @ts-ignore
+    expect(bffClient.api.tax.upload.$post).toHaveBeenCalledOnce()
+    // @ts-ignore
+    const arg = bffClient.api.tax.upload.$post.mock.calls[0][0]
+    expect(arg).toHaveProperty('form')
+    expect(arg.form.file).toBeInstanceOf(File)
   })
 
   it('resolves void on success', async () => {
-    const http = makeHttp()
-    const adapter = new RestTaxAdapter(http)
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.upload.$post.mockResolvedValueOnce({ ok: true })
+    
+    const adapter = new RestTaxAdapter()
     const file = new File(['data'], 'test.csv', { type: 'text/csv' })
     await expect(adapter.uploadTaxFile(file, 'spot')).resolves.toBeUndefined()
   })
 })
 
-// ---------------------------------------------------------------------------
-// uploadTaxFile — error path
-// ---------------------------------------------------------------------------
-
 describe('RestTaxAdapter.uploadTaxFile() — error path', () => {
   it('throws TaxOperationError with code UPLOAD_FAILED on HTTP error', async () => {
-    const http = makeHttp({
-      postForm: vi.fn().mockRejectedValue(new Error('Network error')),
-    })
-    const adapter = new RestTaxAdapter(http)
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.upload.$post.mockRejectedValue(new Error('Network error'))
+    
+    const adapter = new RestTaxAdapter()
     const file = new File(['data'], 'test.csv', { type: 'text/csv' })
 
     await expect(adapter.uploadTaxFile(file, 'spot')).rejects.toThrow(TaxOperationError)
@@ -68,38 +74,37 @@ describe('RestTaxAdapter.uploadTaxFile() — error path', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// deleteAllTransactions — happy path
-// ---------------------------------------------------------------------------
-
 describe('RestTaxAdapter.deleteAllTransactions() — happy path', () => {
-  it('sends a DELETE to /api/tax/transactions/spot', async () => {
-    const http = makeHttp()
-    const adapter = new RestTaxAdapter(http)
-    ;(http.delete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: { success: true } })
+  it('sends a DELETE to bffClient.api.tax.transactions.market', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.transactions.market[':market'].$delete.mockResolvedValueOnce({ ok: true })
+    
+    const adapter = new RestTaxAdapter()
 
     await adapter.deleteAllTransactions('spot')
 
-    expect(http.delete).toHaveBeenCalledWith('/api/tax/transactions/spot')
+    // @ts-ignore
+    expect(bffClient.api.tax.transactions.market[':market'].$delete).toHaveBeenCalledWith({ param: { market: 'spot' } })
   })
 
   it('resolves void on success', async () => {
-    const http = makeHttp()
-    const adapter = new RestTaxAdapter(http)
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.transactions.market[':market'].$delete.mockResolvedValueOnce({ ok: true })
+    
+    const adapter = new RestTaxAdapter()
     await expect(adapter.deleteAllTransactions('spot')).resolves.toBeUndefined()
   })
 })
 
-// ---------------------------------------------------------------------------
-// deleteAllTransactions — error path
-// ---------------------------------------------------------------------------
-
 describe('RestTaxAdapter.deleteAllTransactions() — error path', () => {
   it('throws TaxOperationError with code DELETE_FAILED on HTTP error', async () => {
-    const http = makeHttp({
-      delete: vi.fn().mockRejectedValue(new Error('500 Internal Server Error')),
-    })
-    const adapter = new RestTaxAdapter(http)
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.tax.transactions.market[':market'].$delete.mockRejectedValue(new Error('500 Internal Server Error'))
+    
+    const adapter = new RestTaxAdapter()
 
     await expect(adapter.deleteAllTransactions('spot')).rejects.toThrow(TaxOperationError)
     await expect(adapter.deleteAllTransactions('spot')).rejects.toMatchObject({ code: 'DELETE_FAILED' })

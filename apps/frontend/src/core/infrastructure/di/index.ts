@@ -12,7 +12,6 @@ import { MockWalletRepository } from '@/core/infrastructure/adapters/MockWalletR
 import { RestWalletRepository } from '@/core/infrastructure/adapters/RestWalletRepository'
 import { MockCryptoMetricsAdapter } from '@/core/infrastructure/adapters/MockCryptoMetricsAdapter'
 import { RestCryptoMetricsAdapter } from '@/core/infrastructure/adapters/RestCryptoMetricsAdapter'
-import { AxiosHttpClient } from '@/core/infrastructure/http/AxiosHttpClient'
 import { EnvI18nAdapter } from '@/core/infrastructure/i18n/EnvI18nAdapter'
 import { es } from '@/i18n/dictionaries/es'
 import { en } from '@/i18n/dictionaries/en'
@@ -32,23 +31,21 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   }
 
   // 1. Instantiate infrastructure
-  const httpClient = new AxiosHttpClient()
-
   const portfolioRepo = useMock
     ? new MockCryptoAdapter()
-    : new RestCryptoAdapter(httpClient)
+    : new RestCryptoAdapter()
 
   const taxRepo = useMock
     ? new MockTaxAdapter()
-    : new RestTaxAdapter(httpClient)
+    : new RestTaxAdapter()
 
   const walletRepo = useMock
     ? new MockWalletRepository()
-    : new RestWalletRepository(httpClient)
+    : new RestWalletRepository()
 
   const cryptoMetricsRepo = useMock
     ? new MockCryptoMetricsAdapter()
-    : new RestCryptoMetricsAdapter(httpClient)
+    : new RestCryptoMetricsAdapter()
 
   const lang = import.meta.env.VITE_APP_LANG || 'en'
   const dictionary = lang === 'en' ? en : es

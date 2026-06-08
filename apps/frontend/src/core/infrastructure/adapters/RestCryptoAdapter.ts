@@ -1,17 +1,13 @@
 /**
  * RestCryptoAdapter — Production HTTP adapter for portfolio data.
  *
- * Implements ICryptoPortfolioRepository using a real HTTP client (IHttpClient).
- * All incoming API responses are parsed through Zod schemas before entering
- * the domain. If safeParse fails, the error is emitted to the global errorBus
- * and a DomainValidationError is thrown (caught by the Pinia store).
+ * Implements ICryptoPortfolioRepository using Hono RPC (hc).
  *
  * @see openspec/specs/hexagonal-architecture/spec.md
  * @see openspec/specs/global-error-handling/spec.md
  */
 
 import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
-import type { IHttpClient } from '@/core/domain/ports/IHttpClient'
 import type {
   PortfolioSummaryEntity,
   CryptoAssetEntity,
@@ -26,10 +22,7 @@ import {
 import { ExternalTokenHistorySchema } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
 import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
-
-// ---------------------------------------------------------------------------
-// Domain error for controlled upstream catching
-// ---------------------------------------------------------------------------
+import { bffClient } from '../http/BffClient'
 
 export class DomainValidationError extends Error {
   public readonly zodErrors: unknown
@@ -40,10 +33,6 @@ export class DomainValidationError extends Error {
     this.zodErrors = zodErrors
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helper — parse with safeParse, emit to bus on failure, throw controlled error
-// ---------------------------------------------------------------------------
 
 function parseOrFail<T>(
   schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -62,20 +51,11 @@ function parseOrFail<T>(
   return result.data!
 }
 
-// ---------------------------------------------------------------------------
-// Adapter
-// ---------------------------------------------------------------------------
-
 export class RestCryptoAdapter implements ICryptoPortfolioRepository {
-  private readonly http: IHttpClient
-
-  constructor(http: IHttpClient) {
-    this.http = http
-  }
-
   async getSummary(): Promise<PortfolioSummaryEntity> {
-    const response = await this.http.get<unknown>('/api/portfolio/summary')
-    const dto = parseOrFail(ExternalPortfolioSummarySchema, response.data, 'getSummary')
+    const res = await bffClient.api.portfolio.summary.$get()
+    const rawData = await res.json()
+    const dto = parseOrFail(ExternalPortfolioSummarySchema, rawData, 'getSummary')
 
     return {
       metrics: dto.metrics,
@@ -94,8 +74,9 @@ export class RestCryptoAdapter implements ICryptoPortfolioRepository {
   }
 
   async getTokenDetails(symbol: string): Promise<CryptoAssetEntity> {
-    const response = await this.http.get<unknown>(`/api/portfolio/token/${symbol}`)
-    const dto = parseOrFail(ExternalAssetSchema, response.data, `getTokenDetails(${symbol})`)
+    const res = await bffClient.api.portfolio.token[':symbol'].$get({ param: { symbol } })
+    const rawData = await res.json()
+    const dto = parseOrFail(ExternalAssetSchema, rawData, `getTokenDetails(${symbol})`)
 
     return {
       id: AssetIdSchema.parse(dto.id),
@@ -111,18 +92,18 @@ export class RestCryptoAdapter implements ICryptoPortfolioRepository {
   }
 
   async getTokenHistory(symbol: string): Promise<TokenHistoryEntity> {
-    const response = await this.http.get<unknown>(
-      `/api/portfolio/token/${symbol}/history`,
-    )
-    return parseOrFail(ExternalTokenHistorySchema, response.data, 'getTokenHistory')
+    const res = await bffClient.api.portfolio.token[':symbol'].history.$get({ param: { symbol } })
+    const rawData = await res.json()
+    return parseOrFail(ExternalTokenHistorySchema, rawData, 'getTokenHistory')
   }
 
   async getIngestionStatus(): Promise<IngestionStatusEntity> {
-    const response = await this.http.get<unknown>('/api/ingestion/status')
-    return parseOrFail(ExternalIngestionStatusSchema, response.data, 'getIngestionStatus')
+    const res = await bffClient.api.ingestion.status.$get()
+    const rawData = await res.json()
+    return parseOrFail(ExternalIngestionStatusSchema, rawData, 'getIngestionStatus')
   }
 
   async triggerRebuild(): Promise<void> {
-    await this.http.post('/api/portfolio/rebuild')
+    await bffClient.api.portfolio.rebuild.$post()
   }
 }

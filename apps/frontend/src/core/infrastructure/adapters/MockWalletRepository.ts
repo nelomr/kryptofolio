@@ -3,11 +3,24 @@ import type { IWalletRepository } from '@/core/domain/ports/IWalletRepository';
 import type { LogicalWalletEntity, WalletType } from '@/core/domain/models/PortfolioEntities';
 import { WalletCsvRowSchema } from '@/core/infrastructure/dtos/WalletDtos';
 
+import { bffClient } from '../http/BffClient';
+
 export class MockWalletRepository implements IWalletRepository {
-  private wallets: LogicalWalletEntity[] = [];
+  private wallets: LogicalWalletEntity[] | null = null;
 
   async getWallets(): Promise<LogicalWalletEntity[]> {
-    return Promise.resolve(this.wallets);
+    if (this.wallets) {
+      return this.wallets;
+    }
+    try {
+      const res = await bffClient.api.wallets.$get();
+      if (!res.ok) throw new Error('Failed to fetch wallets from BFF');
+      this.wallets = (await res.json()) as LogicalWalletEntity[];
+      return this.wallets;
+    } catch (e) {
+      // Fallback for tests if BFF is offline
+      return [];
+    }
   }
 
   async uploadWalletCsv(file: File): Promise<LogicalWalletEntity[]> {

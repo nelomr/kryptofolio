@@ -98,9 +98,15 @@ cd portfolio-dashboard
 # 2. Instalar dependencias en la raíz del workspace
 pnpm install
 
-# 3. Iniciar el servidor de desarrollo (ejecuta apps/frontend gracias al workspace filter)
+# 3. Iniciar el entorno de desarrollo
+# Para ejecutar el frontend con APIs reales:
 pnpm dev
+
+# O BIEN, para ejecutar el frontend junto con el servidor Backend-for-Frontend (BFF) Mock local:
+pnpm run dev:mock
 ```
+
+> **Nota:** El comando `dev:mock` levanta concurrentemente el frontend en Vite y el API Gateway en Hono, permitiendo que el frontend consuma datos de prueba estrictamente validados a través de RPC.
 
 ### 🧪 Pruebas y Validación
 

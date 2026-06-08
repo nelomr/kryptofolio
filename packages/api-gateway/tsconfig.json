@@ -4,7 +4,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "moduleResolution": "Bundler",
-    "strict": true
+    "strict": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
