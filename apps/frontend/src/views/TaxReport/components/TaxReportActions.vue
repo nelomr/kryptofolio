@@ -6,13 +6,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { RefreshCw, Upload, Trash2 } from 'lucide-vue-next'
+import { RefreshCw, Upload } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 
 const emit = defineEmits<{
   (e: 'sync'): void
   (e: 'upload'): void
-  (e: 'clear'): void
 }>()
 
 const { t } = useI18n()
@@ -62,15 +61,4 @@ const { t } = useI18n()
       </TooltipContent>
     </Tooltip>
   </TooltipProvider>
-
-  <!-- Clear Data Button -->
-  <Button
-    variant="destructive"
-    size="icon"
-    class="cursor-pointer"
-    @click="emit('clear')"
-    :title="t('tax.header.delete_title')"
-  >
-    <Trash2 class="h-4 w-4" />
-  </Button>
 </template>

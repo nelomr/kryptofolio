@@ -27,15 +27,7 @@ describe('TaxReportHeader.vue', () => {
     expect(buttonTexts.some(t => t.includes('All Wallets'))).toBe(true)
   })
 
-  it('emits clear event when trash button is clicked', async () => {
-    const wrapper = mount(TaxReportHeader)
-    // Find the destructive clear button by title
-    const clearButton = wrapper.find('button[title="tax.header.delete_title"]')
-    expect(clearButton.exists()).toBe(true)
-    
-    await clearButton.trigger('click')
-    expect(wrapper.emitted()).toHaveProperty('clear')
-  })
+
 
   it('has Sync Web3 and Subir CSV buttons disabled', () => {
     const wrapper = mount(TaxReportHeader)

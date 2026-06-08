@@ -20,6 +20,7 @@ export interface PortfolioMetrics {
 }
 
 export interface HoldingItem {
+  id: string
   symbol: string
   amount: number
   avg_price_eur: number
@@ -40,6 +41,7 @@ export interface TaxLot {
   remaining_qty: number
   unit_cost: number
   total_cost: number
+  status?: 'FULL' | 'PARTIAL' | 'EMPTY'
 }
 
 export interface LotHistoryEvent {
@@ -53,18 +55,13 @@ export interface LotHistoryEvent {
   notes?: string
 }
 
-export interface LotRecord {
-  status: 'FULL' | 'PARTIAL' | 'EMPTY'
-  history: LotHistoryEvent[]
-}
-
 export interface PortfolioData {
   summary: {
     metrics: PortfolioMetrics
     holdings: HoldingItem[]
   }
   lots: Record<string, TaxLot[]>
-  history: Record<string, Record<string, LotRecord>>
+  history: Record<string, Record<string, LotHistoryEvent[]>>
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +77,7 @@ const mockPortfolio = {
     },
     holdings: [
       {
+        id: 'hold_btc_1',
         symbol: 'BTC',
         amount: 0.5432,
         avg_price_eur: 35_000.00,
@@ -91,6 +89,7 @@ const mockPortfolio = {
         portfolio_locations: ['Ledger', 'Kraken', 'Bit2Me'],
       },
       {
+        id: 'hold_eth_1',
         symbol: 'ETH',
         amount: 4.5,
         avg_price_eur: 1_800.00,
@@ -116,6 +115,7 @@ const mockPortfolio = {
         remaining_qty: 0.3,
         unit_cost: 20_000.00,
         total_cost: 10_000.00,
+        status: 'PARTIAL',
       },
       {
         id: 'lot_btc_2',
@@ -126,6 +126,7 @@ const mockPortfolio = {
         remaining_qty: 0.0432,
         unit_cost: 26_500.00,
         total_cost: 1_144.80,
+        status: 'FULL',
       },
     ],
     ETH: [
@@ -138,6 +139,7 @@ const mockPortfolio = {
         remaining_qty: 4.5,
         unit_cost: 1_800.00,
         total_cost: 8_100.00,
+        status: 'FULL',
       },
     ],
     SOL: [
@@ -150,6 +152,7 @@ const mockPortfolio = {
         remaining_qty: 50,
         unit_cost: 60.00,
         total_cost: 3_000.00,
+        status: 'PARTIAL',
       },
     ],
   },
@@ -157,46 +160,34 @@ const mockPortfolio = {
   // Level 3 — lot history keyed by symbol → lot ID
   history: {
     BTC: {
-      lot_btc_1: {
-        status: 'PARTIAL' as const,
-        history: [
-          {
-            id: 'event_btc_1_1',
-            disposal_date: 1_680_307_200, // 2023-04-01
-            amount_from_lot: 0.2,
-            sale_price_eur: 30_000.00,
-            gain_loss_eur: 2_000.00,
-            is_taxable: true,
-            notes: 'Partial sale',
-          },
-        ],
-      },
-      lot_btc_2: {
-        status: 'EMPTY' as const,
-        history: [],
-      },
+      lot_btc_1: [
+        {
+          id: 'event_btc_1_1',
+          disposal_date: 1_680_307_200, // 2023-04-01
+          amount_from_lot: 0.2,
+          sale_price_eur: 30_000.00,
+          gain_loss_eur: 2_000.00,
+          is_taxable: true,
+          notes: 'Partial sale',
+        },
+      ],
+      lot_btc_2: [],
     },
     ETH: {
-      lot_eth_1: {
-        status: 'EMPTY' as const,
-        history: [],
-      },
+      lot_eth_1: [],
     },
     SOL: {
-      lot_sol_1: {
-        status: 'PARTIAL' as const,
-        history: [
-          {
-            id: 'event_sol_1_1',
-            disposal_date: 1_702_339_200, // 2023-12-12
-            amount_from_lot: 50,
-            sale_price_eur: 110.00,
-            gain_loss_eur: 2_500.00,
-            is_taxable: true,
-            notes: 'Partial profit taking',
-          },
-        ],
-      },
+      lot_sol_1: [
+        {
+          id: 'event_sol_1_1',
+          disposal_date: 1_702_339_200, // 2023-12-12
+          amount_from_lot: 50,
+          sale_price_eur: 110.00,
+          gain_loss_eur: 2_500.00,
+          is_taxable: true,
+          notes: 'Partial profit taking',
+        },
+      ],
     },
   },
 } satisfies PortfolioData

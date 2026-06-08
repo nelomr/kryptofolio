@@ -59,8 +59,10 @@ cp .env.production.example .env.production
 ```
 
 **Key Variables:**
-- `VITE_USE_MOCK`: Set to `true` to use the local mock adapters. Set to `false` to use the real REST API adapters connecting to the backend.
-- `VITE_API_BASE_URL`: The URL of the backend (e.g., `http://localhost:8000`).
+- `MODE`: (BFF Level) Set to `mock` to serve static JSON data, or `prod` to act as an RPC proxy.
+- `PROD_API_URL`: (BFF Level) The URL of the production backend the BFF proxies to in `prod` mode.
+- `SECRET_API_KEY`: (BFF Level) Token injected by the BFF when proxying requests in `prod` mode.
+- `VITE_API_BASE_URL`: The URL of the BFF from the frontend's perspective (e.g., `http://localhost:8787`).
 - `VITE_APP_LANG`: The language for the interface. Valid options are currently `es` or `en`.
 
 ### 🌍 Internationalization (i18n)
@@ -116,9 +118,9 @@ This project strictly adheres to **Clean Architecture** to ensure the UI is comp
 
 2. **Infrastructure Layer (`src/core/infrastructure/`)**
    The outer edge that communicates with the real world and protects the domain.
-   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter` or `MockCryptoAdapter`).
+   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Note: Mocks are now managed exclusively at the BFF layer.
    - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data (e.g. snake_case or timestamps) to pure Entities and validate payload integrity *before* it ever touches the domain.
-   - **Dependency Injection (`di/`)**: The "Composition Root". It evaluates environment variables to instantiate the correct adapter. It also hosts `pinia.d.ts` for strict global typing of injected repositories.
+   - **Dependency Injection (`di/`)**: The "Composition Root". It instantiates the REST adapters and wires them into Vue (via provide/inject) and Pinia (via a store plugin).
 
 3. **Application & UI Layer (`src/composables/` & `src/views/`)**
    - We utilize `@pinia/colada` to declaratively manage asynchronous server state fetching.

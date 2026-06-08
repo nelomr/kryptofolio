@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import TaxReportHeader from "./components/TaxReportHeader.vue";
 import TaxReportSummaryCards from "./components/TaxReportSummaryCards.vue";
 
@@ -28,6 +29,8 @@ const {
   handleEditDerivative,
   handleDelete,
 } = useTaxLedgers();
+
+const activeMarket = ref<'spot' | 'futures'>('spot');
 </script>
 
 <template>
@@ -43,7 +46,7 @@ const {
     </div>
 
     <!-- Adapter orchestrating Dumb components -->
-    <TaxReportHeader @sync="syncWeb3" @upload="uploadCsv" @clear="clearData" />
+    <TaxReportHeader @sync="syncWeb3" @upload="uploadCsv" />
 
     <TaxReportSummaryCards :metrics="metrics" />
 
@@ -75,7 +78,7 @@ const {
         -->
 
         <!-- Operations Ledgers Sub-Tabs -->
-        <Tabs defaultValue="spot" class="space-y-4 mt-4">
+        <Tabs v-model="activeMarket" class="space-y-4 mt-4">
           <TabsList>
             <TabsTrigger
               value="spot"

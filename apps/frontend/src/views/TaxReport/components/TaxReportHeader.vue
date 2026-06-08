@@ -9,7 +9,6 @@ const { t } = useI18n();
 const emit = defineEmits<{
   (e: "sync"): void;
   (e: "upload"): void;
-  (e: "clear"): void;
   (e: "walletChange", wallet: string): void;
 }>();
 </script>
@@ -32,7 +31,6 @@ const emit = defineEmits<{
       <TaxReportActions
         @sync="emit('sync')"
         @upload="emit('upload')"
-        @clear="emit('clear')"
       />
     </div>
   </header>

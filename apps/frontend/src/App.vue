@@ -23,7 +23,12 @@ function handleValidationError(payload: ValidationErrorPayload) {
     ? Object.fromEntries(Object.entries(payload.params).map(([k, v]) => [k, String(v)]))
     : undefined;
 
+  // Use a predictable ID based on the message so duplicate errors are merged/replaced
+  // rather than stacking infinitely on the screen.
+  const toastId = `err-${payload.message}`;
+
   toast.error(t("errors.validation.title") || "Data Validation Error", {
+    id: toastId,
     description: t(payload.message, stringParams) || payload.message,
     duration: 6000,
   });
@@ -54,8 +59,7 @@ onUnmounted(() => {
     </main>
 
     <!-- Global Toast Notifications (shadcn-vue Sonner) -->
-    <!-- Position top-right, rich colors for error visibility -->
-    <Toaster rich-colors position="top-right" />
+    <Toaster position="top-right" :close-button="true" />
   </div>
 </template>
 

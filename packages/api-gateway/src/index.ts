@@ -7,8 +7,49 @@ import { MOCK_KPIS, generatePerformanceHistory } from './data/mockMetrics';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 
-export const app = new Hono();
+export const app = new Hono<{ Bindings: { MODE?: string, SECRET_API_KEY?: string, PROD_API_URL?: string } }>();
 app.use('/*', cors());
+
+// Proxy Middleware for PROD mode
+app.use('/api/*', async (c, next) => {
+  const mode = c.env?.MODE || process.env.MODE || 'mock';
+  const apiKey = c.env?.SECRET_API_KEY || process.env.SECRET_API_KEY || '';
+  const apiUrl = c.env?.PROD_API_URL || process.env.PROD_API_URL || 'http://localhost:8080';
+
+  if (mode !== 'prod') {
+    return await next(); // Proceed to mock handlers
+  }
+
+  const url = new URL(c.req.url);
+  const targetUrl = `${apiUrl}${url.pathname}${url.search}`;
+  
+  const headers = new Headers(c.req.raw.headers);
+  if (apiKey) {
+    headers.set('Authorization', `Bearer ${apiKey}`);
+  }
+  headers.delete('host');
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: c.req.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(c.req.method) ? undefined : await c.req.raw.blob()
+    });
+
+    const resHeaders = new Headers(response.headers);
+    // Don't forward content-encoding to let Hono handle it
+    resHeaders.delete('content-encoding');
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: resHeaders
+    });
+  } catch (error: any) {
+    console.error('[Proxy Error]', error);
+    return c.json({ error: 'Proxy Request Failed', details: error.message }, 502);
+  }
+});
 
 const routes = app.basePath('/api')
   .get('/health', (c) => c.json({ status: 'ok' }, 200))

@@ -1,33 +1,33 @@
 export const MOCK_KPIS = {
-  totalRoiPercent: 145.20,
-  totalRoiFiat: 84460.45,
-  investedFiat: 58120.00,
-  delta24hFiat: 312.84,
-  maxDrawdownPercent: -22.40,
-  maxDrawdownFiat: -17640.20,
-  recoveredFiat: 102100.65,
-  winRatePercent: 85.50,
-  totalTrades: 48,
-  winningTrades: 41,
-  losingTrades: 7,
-  averageR: 18.40,
-  bestAsset: {
+  total_roi_percent: 145.20,
+  total_roi_fiat: 84460.45,
+  invested_fiat: 58120.00,
+  delta_24h_fiat: 312.84,
+  max_drawdown_percent: -22.40,
+  max_drawdown_fiat: -17640.20,
+  recovered_fiat: 102100.65,
+  win_rate_percent: 85.50,
+  total_trades: 48,
+  winning_trades: 41,
+  losing_trades: 7,
+  average_r: 18.40,
+  best_asset: {
     symbol: 'SOL',
     name: 'Solana',
-    allocationPercent: 20,
-    roiPercent: 312.40,
+    allocation_percent: 20,
+    roi_percent: 312.40,
   },
-  worstAsset: {
+  worst_asset: {
     symbol: 'ADA',
     name: 'Cardano',
-    allocationPercent: 10,
-    roiPercent: -18.20,
+    allocation_percent: 10,
+    roi_percent: -18.20,
   },
-  portfolioDispersion: 41.2,
+  portfolio_dispersion: 41.2,
 };
 
 export function generatePerformanceHistory(days: number) {
-  const history = [];
+  const data = [];
   const now = Math.floor(Date.now() / 1000);
 
   const targetCost = 58120.00;
@@ -37,12 +37,12 @@ export function generatePerformanceHistory(days: number) {
   let currentValue = targetEquity;
 
   for (let i = 0; i <= days; i++) {
-    const timestamp = now - (i * 86400);
+    const ts = now - (i * 86400);
     
-    history.unshift({
-      timestamp,
-      valueFiat: currentValue,
-      costBasisFiat: currentCost
+    data.unshift({
+      ts,
+      value: currentValue,
+      cost: currentCost
     });
 
     // Move backwards for the previous day
@@ -50,19 +50,19 @@ export function generatePerformanceHistory(days: number) {
     currentValue -= (Math.random() - 0.45) * 800;
   }
 
-  const firstPoint = history[0];
-  const lastPoint = history[history.length - 1];
+  const firstPoint = data[0];
+  const lastPoint = data[data.length - 1];
   
-  const returnFiat = lastPoint.valueFiat - firstPoint.valueFiat;
-  const returnPercent = (returnFiat / firstPoint.valueFiat) * 100;
+  const return_fiat = lastPoint.value - firstPoint.value;
+  const return_percent = (return_fiat / firstPoint.value) * 100;
 
   return {
-    history,
-    metrics: {
-      returnFiat,
-      returnPercent,
-      volatilityPercent: 41.2,
-      bestDayPercent: 12.4
+    data,
+    summary: {
+      return_fiat,
+      return_percent,
+      volatility: 41.2,
+      best_day: 12.4
     }
   };
 }

@@ -7,7 +7,9 @@ This document outlines the architecture, routing, and data integrity logic of th
 The API Gateway acts as a Backend-for-Frontend (BFF) built on **Hono**. It serves as the single entry point for the frontend, abstracting away internal data sources, mock logic, and legacy APIs. The gateway ensures that the frontend only interacts with a consistent set of interfaces via Hono RPC (`hc`).
 
 > [!NOTE]
-> During development or when running the `mock` environment, this BFF serves sophisticated static data subsets directly out of memory, completely replacing the need for local JSON imports in the frontend.
+> The BFF supports two operational modes (configured via the `MODE` environment variable):
+> - **`mock`**: Serves sophisticated static data subsets directly out of memory, eliminating the need for local JSON imports.
+> - **`prod`**: Acts as a secure reverse proxy, forwarding requests to the actual backend (`PROD_API_URL`) while injecting sensitive credentials like `SECRET_API_KEY`.
 
 ## Architecture & Data Flow
 

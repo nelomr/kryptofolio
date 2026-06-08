@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MockCryptoAdapter } from '@/core/infrastructure/adapters/MockCryptoAdapter'
-import { MockTaxAdapter } from '@/core/infrastructure/adapters/MockTaxAdapter'
 import { RestCryptoAdapter } from '@/core/infrastructure/adapters/RestCryptoAdapter'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 
@@ -127,64 +125,6 @@ vi.mock('../core/infrastructure/http/BffClient', () => {
   }
 })
 
-describe('MockCryptoAdapter', () => {
-  let adapter: MockCryptoAdapter
-
-  beforeEach(() => {
-    adapter = new MockCryptoAdapter()
-    vi.useFakeTimers()
-  })
-
-  it('implements ICryptoPortfolioRepository interface', () => {
-    expect(typeof adapter.getSummary).toBe('function')
-    expect(typeof adapter.getTokenDetails).toBe('function')
-    expect(typeof adapter.getTokenHistory).toBe('function')
-    expect(typeof adapter.getIngestionStatus).toBe('function')
-    expect(typeof adapter.triggerRebuild).toBe('function')
-  })
-
-  it('getSummary returns a PortfolioSummaryEntity shape', async () => {
-    const summaryPromise = adapter.getSummary()
-    await vi.runAllTimersAsync()
-    const summary = await summaryPromise
-
-    expect(summary).toBeDefined()
-    expect(typeof summary.metrics.totalEquityEur).toBe('number')
-    expect(summary.holdings.length).toBeGreaterThan(0)
-  })
-})
-
-describe('MockTaxAdapter', () => {
-  let adapter: MockTaxAdapter
-
-  beforeEach(() => {
-    adapter = new MockTaxAdapter()
-    vi.useFakeTimers()
-  })
-
-  it('implements ITaxRepository interface', () => {
-    expect(typeof adapter.getSpotTransactions).toBe('function')
-    expect(typeof adapter.getReport).toBe('function')
-  })
-
-  it('getSpotTransactions returns an array of TaxTransactionEntity', async () => {
-    const txsPromise = adapter.getSpotTransactions()
-    await vi.runAllTimersAsync()
-    const txs = await txsPromise
-
-    expect(Array.isArray(txs)).toBe(true)
-    expect(txs.length).toBeGreaterThan(0)
-  })
-
-  it('getReport returns a TaxReportEntity shape', async () => {
-    const reportPromise = adapter.getReport(2024, 'FIFO')
-    await vi.runAllTimersAsync()
-    const report = await reportPromise
-
-    expect(report.year).toBe(2024)
-    expect(typeof report.summary.capitalGainsEur).toBe('number')
-  })
-})
 
 describe('RestCryptoAdapter — Zod validation failure → error bus', () => {
   it('emits to errorBus when the API returns malformed data', async () => {

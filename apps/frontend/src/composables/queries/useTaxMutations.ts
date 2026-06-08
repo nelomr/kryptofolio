@@ -80,6 +80,9 @@ export function useDeleteTransactionsMutation() {
     onSuccess: (_, market) => {
       // Invalidate all tax-related queries so the UI clears automatically
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(market) })
+      if (market === 'futures') {
+        queryCache.invalidateQueries({ key: ['tax-transactions', 'futures-derivatives'] })
+      }
       queryCache.invalidateQueries({ key: ['tax-report'] })
     },
   })

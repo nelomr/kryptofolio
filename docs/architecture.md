@@ -17,7 +17,7 @@ Instead of the frontend making direct external calls or relying on hardcoded sta
 The frontend communicates with the BFF entirely through `hono/client` (`hc<AppType>`). This guarantees end-to-end type safety. The legacy `IHttpClient` string-based interface has been entirely removed.
 
 > [!TIP]
-> The `BffClient.ts` handles the environment variables cleanly. In mock mode (`VITE_USE_MOCK=true`), it securely routes to `http://localhost:3001` (the local API Gateway). Otherwise, it targets `VITE_API_BASE_URL`.
+> The `BffClient.ts` handles the environment variables cleanly. It securely routes to `VITE_API_BASE_URL` which points to our API Gateway.
 
 ```mermaid
 sequenceDiagram
@@ -37,12 +37,12 @@ sequenceDiagram
     Pinia Store (State)-->>UI Component (Vue): Reactive Data Update
 ```
 
-### Mock Mode vs Real Mode
+### Backend-for-Frontend as the Single Source of Truth
 
-The Hexagonal Architecture allows the frontend to swap between `RestCryptoAdapter` and `MockCryptoAdapter` transparently. However, to simplify development, even the `MockCryptoAdapter` utilizes the BFF to fetch static, referentially-validated data sets.
+The Hexagonal Architecture previously allowed the frontend to swap between `RestCryptoAdapter` and local mock adapters. However, to simplify development and eliminate dual maintenance, **mocks are now managed exclusively at the BFF layer**.
 
-- **Real Mode (`RestCryptoAdapter`)**: Fetches data from external real APIs (or the production API Gateway in the future).
-- **Mock Mode (`MockCryptoAdapter`)**: Fetches data from the local API Gateway running in development mode, ensuring the frontend still experiences network latency and asynchronous loading states.
+- **Frontend Consistency**: The frontend always injects and utilizes the `Rest*` adapters, which point to the BFF.
+- **BFF Modes**: The BFF itself dictates whether it serves static mock data (`MODE=mock`) or proxies requests to a live backend (`MODE=prod`). This ensures the frontend consistently experiences network latency, asynchronous loading states, and identical payloads regardless of the environment.
 
 ## Anti-Corruption Layer (ACL)
 
