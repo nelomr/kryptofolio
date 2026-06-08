@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.2](https://github.com/nelomr/kryptofolio/compare/v1.15.1...v1.15.2) (2026-06-08)
+
+### ✨ Features
+
+* migrate frontend to Hono RPC with dynamic BFF proxy ([05a179a](https://github.com/nelomr/kryptofolio/commit/05a179a65a3565e7c08d5544dcd2c5ed776a814c))
+
 ## [1.15.1](https://github.com/nelomr/kryptofolio/compare/v1.15.0...v1.15.1) (2026-06-08)
 
 ### ✨ Features
