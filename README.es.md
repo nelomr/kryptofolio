@@ -27,9 +27,11 @@
 - **Testing**: Vitest
 - **Workspace**: pnpm workspaces (Monorepo)
 
-El repositorio está estructurado como un monorepo para soportar futuros paquetes desacoplados:
+El repositorio está estructurado como un monorepo para soportar paquetes desacoplados:
 - `apps/frontend/`: La aplicación principal en Vue 3.
+- `packages/api-gateway/`: El Backend For Frontend (BFF) basado en Hono que provee seguridad de tipos E2E.
 - `packages/`: Lógica compartida, contratos y configuraciones (futuro).
+- `docs/`: Documentación técnica detallando la arquitectura, integración de APIs y extensibilidad.
 
 ## 🎨 Sistema de Diseño Institucional
 

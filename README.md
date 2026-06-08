@@ -27,9 +27,11 @@
 - **Testing**: Vitest
 - **Workspace**: pnpm workspaces (Monorepo)
 
-The repository is structured as a monorepo to support future decoupled packages:
+The repository is structured as a monorepo to support decoupled packages:
 - `apps/frontend/`: The main Vue 3 application.
+- `packages/api-gateway/`: The Hono-based Backend For Frontend (BFF) providing E2E type safety.
 - `packages/`: Shared logic, contracts, and configurations (future).
+- `docs/`: Technical documentation covering Architecture, API Integrations, and Extensibility.
 
 ## 🎨 Institutional Design System
 

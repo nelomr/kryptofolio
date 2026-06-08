@@ -1,0 +1,21 @@
+{
+  "name": "@dashboar-portfolio/api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.4",
+    "hono": "^4.12.23"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.1",
+    "tsx": "^4.22.4",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
