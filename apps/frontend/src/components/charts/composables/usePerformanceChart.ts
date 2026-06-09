@@ -2,7 +2,7 @@ import { onMounted, onUnmounted, watch, type Ref } from 'vue'
 import { createChart, ColorType, LineStyle, AreaSeries, LineSeries } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, MouseEventParams, UTCTimestamp } from 'lightweight-charts'
 import { useResizeObserver } from '@vueuse/core'
-import type { PerformancePoint } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { PerformancePoint } from '@/core/domain/ports/ICryptoMetricsPort'
 import { formatCurrency, formatDate } from '@/composables/useFormatters'
 import { useI18n } from '@/composables/useI18n'
 

@@ -1,14 +1,14 @@
 import { inject } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
-import type { ICryptoMetricsRepository, TimeRange } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { ICryptoMetricsPort, TimeRange } from '@/core/domain/ports/ICryptoMetricsPort'
 import type { Ref } from 'vue'
 
-export function useCryptoMetricsRepo(): ICryptoMetricsRepository {
+export function useCryptoMetricsRepo(): ICryptoMetricsPort {
   const repo = inject(CRYPTO_METRICS_REPO_KEY)
   if (!repo) {
     throw new Error(
-      '[useCryptoMetricsQueries] ICryptoMetricsRepository not provided. ' +
+      '[useCryptoMetricsQueries] ICryptoMetricsPort not provided. ' +
       'Ensure main.ts calls pinia.use() to inject repositories.'
     )
   }

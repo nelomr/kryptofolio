@@ -8,7 +8,7 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Limpia (Clean Architecture). Diseñado como una plataforma de visualización pura que utiliza un sistema estricto FIFO para la presentación de datos, y técnicamente preparado para una integración fluida con Agentes de IA (Vercel AI SDK + Mastra).
+> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Diseñado como una plataforma de visualización pura que utiliza un sistema estricto FIFO para la presentación de datos, y técnicamente preparado para una integración fluida con Agentes de IA (Vercel AI SDK + Mastra).
 
 ## ✨ Características Principales
 
@@ -122,7 +122,7 @@ Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta es
 
 ## 📦 Arquitectura: Hexagonal (Puertos y Adaptadores)
 
-Este proyecto se adhiere estrictamente a la **Arquitectura Limpia** (Clean Architecture) para asegurar que la interfaz de usuario esté completamente desacoplada de la obtención de datos, contratos de API y dependencias externas.
+Este proyecto se adhiere estrictamente a la **Arquitectura Hexagonal** (Puertos y Adaptadores) para asegurar que la interfaz de usuario esté completamente desacoplada de la obtención de datos, contratos de API y dependencias externas.
 
 ```mermaid
 graph TD
@@ -156,11 +156,14 @@ graph TD
 1. **Capa de Dominio (`src/core/domain/`)**
    El corazón de la aplicación. **Aislamiento total**: No tiene dependencias externas de frameworks (sin imports de Vue, Axios, ni Zod).
    - **Entidades y Objetos de Valor (`models/`)**: Definidos usando interfaces TypeScript puras. Utilizamos **Branded Types** (tipos marca como `AssetId` o `LotId`) para evitar la "primitive obsession" y garantizar type-safety en identificadores.
-   - **Puertos (`repositories/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita, no *cómo* obtenerlo.
+   - **Puertos (`ports/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita, no *cómo* obtenerlo. Nota: NO existe la carpeta `repositories`; las interfaces de repositorios son puertos de salida.
 
-2. **Capa de Infraestructura (`src/core/infrastructure/`)**
+2. **Capa de Aplicación (`src/core/application/`)**
+   - **Casos de Uso (`use-cases/`)**: Clases TypeScript puras que coordinan los Puertos del Dominio. Contienen la lógica de orquestación de negocio sin reactividad de Vue ni dependencias de frameworks.
+
+3. **Capa de Infraestructura (`src/core/infrastructure/`)**
    El borde exterior que se comunica con el mundo real y protege al dominio.
-   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`).
+   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`). Deben tener el sufijo `Adapter`.
    - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API (ej. snake_case o timestamps) a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
    - **Inyección de Dependencias (`di/`)**: El "Composition Root". Evalúa las variables de entorno e instancia el adaptador correcto. Aquí se aloja `pinia.d.ts` para tipar estrictamente los repositorios inyectados de forma global.
 

@@ -6,7 +6,7 @@
  *   - TaxFiscalControls (presentational): exposes year selector + action buttons.
  *   - TaxReportDetailsTable (presentational): renders FIFO audit trail.
  *
- * All data access is performed via the ITaxRepository port (injected adapter),
+ * All data access is performed via the ITaxPort port (injected adapter),
  * through the useTaxReportQuery composable, maintaining clean Hexagonal Architecture.
  * No direct API calls from this component.
  *

@@ -1,12 +1,12 @@
 /**
  * RestTaxAdapter — Production HTTP adapter for fiscal/tax data.
  *
- * Implements ITaxRepository using Hono RPC (hc).
+ * Implements ITaxPort using Hono RPC (hc).
  *
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
-import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
+import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
 import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 import {
   ExternalTaxTransactionSchema,
@@ -36,7 +36,7 @@ function parseOrFail<T>(
   return result.data!
 }
 
-export class RestTaxAdapter implements ITaxRepository {
+export class RestTaxAdapter implements ITaxPort {
   async getSpotTransactions(): Promise<TaxTransactionEntity[]> {
     const res = await bffClient.api.tax.transactions.spot.$get()
     const rawArray = await res.json()

@@ -1,52 +1,31 @@
-# hexagonal-architecture Specification
+# Hexagonal Architecture Specification
 
 ## Purpose
-TBD - created by archiving change hex-arch-zod-refactor. Update Purpose after archive.
+Defines the strict implementation details of the Hexagonal Architecture (Ports and Adapters) in the Kryptofolio frontend.
+
 ## Requirements
+
 ### Requirement: Define abstract repository ports
-The system SHALL define abstract interfaces for repositories (`ICryptoPortfolioRepository`) and HTTP clients (`IHttpClient`) inside the `domain` layer.
+The system SHALL define abstract interfaces for data access (e.g., `ICryptoPortfolioPort`, `ITaxPort`, `ICryptoMetricsPort`) and infrastructure-level interfaces (e.g., `IHttpClient`) exclusively inside the `domain/ports` layer. The `repositories/` folder SHALL NOT exist.
 
 #### Scenario: Interface availability
 - **WHEN** a developer attempts to implement a new data adapter
-- **THEN** they MUST implement the `ICryptoPortfolioRepository` interface
-
-### Requirement: Dependency Injection for adapters
-The system SHALL resolve which adapter implementation to use at runtime via a Dependency Injection container in `main.ts`, based on environment variables (e.g., `VITE_USE_MOCK`).
-
-#### Scenario: Production environment
-- **WHEN** the application starts with `VITE_USE_MOCK=false`
-- **THEN** the DI container provides `RestCryptoAdapter`
-
-#### Scenario: Development environment
-- **WHEN** the application starts with `VITE_USE_MOCK=true`
-- **THEN** the DI container provides `MockCryptoAdapter`
-
-
-
-
-## MODIFIED Requirements
-
-### Requirement: Define abstract repository ports
-The system SHALL define abstract interfaces for repositories (`ICryptoPortfolioRepository`, `ITaxRepository`) inside the `domain/repositories` layer, and infrastructure-level interfaces (`IHttpClient`) inside the `domain/ports` layer. The `IHttpClient` interface SHALL reside at `src/core/domain/ports/IHttpClient.ts`, not in `repositories/`.
-
-#### Scenario: Interface availability
-- **WHEN** a developer attempts to implement a new data adapter
-- **THEN** they MUST implement the `ICryptoPortfolioRepository` interface from `domain/repositories`
+- **THEN** they MUST implement the appropriate interface (e.g. `ICryptoPortfolioPort`) from `domain/ports`
 
 #### Scenario: IHttpClient is a port
 - **WHEN** an adapter needs HTTP communication
-- **THEN** it SHALL import `IHttpClient` from `@/core/domain/ports/IHttpClient` (not from `repositories`)
+- **THEN** it SHALL import `IHttpClient` from `@/core/domain/ports/IHttpClient`
 
 #### Scenario: getTokenHistory is fully typed
-- **WHEN** `ICryptoPortfolioRepository.getTokenHistory(symbol)` is inspected
+- **WHEN** `ICryptoPortfolioPort.getTokenHistory(symbol)` is inspected
 - **THEN** it SHALL return `Promise<TokenHistoryEntity>` where `TokenHistoryEntity` is a properly defined domain entity containing `lots: TaxLotEntity[]` and `history: Record<string, TaxLotHistoryEvent[]>`
 
 ### Requirement: Dependency Injection for adapters
-The system SHALL resolve which adapter implementation to use at runtime via a Dependency Injection container in `main.ts`, based on environment variables (e.g., `VITE_USE_MOCK`). The DI setup SHALL include runtime validation and Pinia type augmentation.
+The system SHALL resolve which adapter implementation to use at runtime via a Dependency Injection container in `main.ts`, based on environment variables (e.g., `VITE_USE_MOCK`). The DI setup SHALL include runtime validation and Pinia type augmentation. Infrastructure implementations of domain ports SHALL be named with the `Adapter` suffix (e.g., `RestCryptoAdapter.ts`, `RestWalletAdapter.ts`). Implementations MUST NOT end in `Repository`.
 
 #### Scenario: Production environment
 - **WHEN** the application starts with `VITE_USE_MOCK=false`
-- **THEN** the DI container provides `RestCryptoAdapter`
+- **THEN** the DI container provides `RestCryptoAdapter` (and similarly for other adapters)
 
 #### Scenario: Development environment
 - **WHEN** the application starts with `VITE_USE_MOCK=true`
@@ -58,9 +37,7 @@ The system SHALL resolve which adapter implementation to use at runtime via a De
 
 #### Scenario: Pinia DI properties are typed
 - **WHEN** `$portfolioRepo` or `$taxRepo` is accessed on a Pinia store instance
-- **THEN** TypeScript SHALL resolve them as `ICryptoPortfolioRepository` and `ITaxRepository` respectively, via `PiniaCustomProperties` module augmentation
-
-## ADDED Requirements
+- **THEN** TypeScript SHALL resolve them as `ICryptoPortfolioPort` and `ITaxPort` respectively, via `PiniaCustomProperties` module augmentation
 
 ### Requirement: Domain layer has zero external library imports
 All files inside `src/core/domain/` SHALL import only from other domain files, TypeScript built-ins, or ambient declarations. No external npm package (zod, axios, lodash, etc.) SHALL be imported in the domain layer.

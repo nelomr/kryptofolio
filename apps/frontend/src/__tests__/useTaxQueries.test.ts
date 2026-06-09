@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import { useSpotTransactionsQuery, useFuturesTransactionsQuery, useTaxReportQuery } from '@/composables/queries/useTaxQueries'
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
-import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
+import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
 import type { TaxTransactionEntity, TaxReportEntity } from '@/core/domain/models/FiscalEntities'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
@@ -34,7 +34,7 @@ const mockReport: TaxReportEntity = {
   auditTrail: [],
 }
 
-function createMockTaxRepo(): ITaxRepository {
+function createMockTaxRepo(): ITaxPort {
   return {
     getSpotTransactions: vi.fn().mockResolvedValue([mockTx]),
     getFuturesTransactions: vi.fn().mockResolvedValue([mockTx]),

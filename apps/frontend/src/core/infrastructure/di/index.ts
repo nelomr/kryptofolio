@@ -6,7 +6,7 @@ import type { Pinia } from 'pinia'
 import { PORTFOLIO_REPO_KEY, TAX_REPO_KEY, I18N_PORT_KEY, WALLET_REPO_KEY, CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
 import { RestCryptoAdapter } from '@/core/infrastructure/adapters/RestCryptoAdapter'
 import { RestTaxAdapter } from '@/core/infrastructure/adapters/RestTaxAdapter'
-import { RestWalletRepository } from '@/core/infrastructure/adapters/RestWalletRepository'
+import { RestWalletAdapter } from '@/core/infrastructure/adapters/RestWalletAdapter'
 import { RestCryptoMetricsAdapter } from '@/core/infrastructure/adapters/RestCryptoMetricsAdapter'
 import { EnvI18nAdapter } from '@/core/infrastructure/i18n/EnvI18nAdapter'
 import { es } from '@/i18n/dictionaries/es'
@@ -23,7 +23,7 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   // 1. Instantiate infrastructure
   const portfolioRepo = new RestCryptoAdapter()
   const taxRepo = new RestTaxAdapter()
-  const walletRepo = new RestWalletRepository()
+  const walletRepo = new RestWalletAdapter()
   const cryptoMetricsRepo = new RestCryptoMetricsAdapter()
 
   const lang = import.meta.env.VITE_APP_LANG || 'en'

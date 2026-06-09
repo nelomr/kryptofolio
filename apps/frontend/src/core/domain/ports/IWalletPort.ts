@@ -1,6 +1,6 @@
 import type { LogicalWalletEntity } from '@/core/domain/models/PortfolioEntities';
 
-export interface IWalletRepository {
+export interface IWalletPort {
   /**
    * Retrieves the current list of manually configured wallets.
    */

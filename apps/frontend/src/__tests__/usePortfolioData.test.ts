@@ -1,7 +1,7 @@
 /**
  * Unit Tests — usePortfolioData composable (Pinia Colada Migration)
  *
- * UPDATED: Tests now inject a mock ICryptoPortfolioRepository and rely on
+ * UPDATED: Tests now inject a mock ICryptoPortfolioPort and rely on
  * @pinia/colada for async state management. The manual store is gone.
  */
 
@@ -11,7 +11,7 @@ import { createApp, nextTick } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import { usePortfolioData } from '@/views/Portfolio/composables/usePortfolioData'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'
-import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
+import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
 import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
 import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
@@ -38,7 +38,7 @@ const mockSummary: PortfolioSummaryEntity = {
   ],
 }
 
-function createMockRepo(overrides?: Partial<ICryptoPortfolioRepository>): ICryptoPortfolioRepository {
+function createMockRepo(overrides?: Partial<ICryptoPortfolioPort>): ICryptoPortfolioPort {
   return {
     getSummary: vi.fn().mockResolvedValue(mockSummary),
     getTokenDetails: vi.fn().mockResolvedValue(mockSummary.holdings[0]),

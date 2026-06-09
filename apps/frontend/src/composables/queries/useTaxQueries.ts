@@ -2,7 +2,7 @@
  * useTaxData — Pinia Colada queries for the Tax domain.
  *
  * Provides reactive, cached data fetching for tax transactions and reports.
- * All data is fetched strictly via the ITaxRepository port (API-first, decoupled).
+ * All data is fetched strictly via the ITaxPort port (API-first, decoupled).
  *
  * Pattern mirrors usePortfolioQueries.ts — useQuery for reads, injected adapter.
  *
@@ -13,18 +13,22 @@ import { inject } from 'vue'
 import { useQuery } from '@pinia/colada'
 import type { Ref } from 'vue'
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
-import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
+import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
 import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
+import { GetSpotTransactionsUseCase } from '@/core/application/use-cases/GetSpotTransactionsUseCase'
+import { GetFuturesTransactionsUseCase } from '@/core/application/use-cases/GetFuturesTransactionsUseCase'
+import { GetTaxReportUseCase } from '@/core/application/use-cases/GetTaxReportUseCase'
+import { GetFuturesDerivativesUseCase } from '@/core/application/use-cases/GetFuturesDerivativesUseCase'
 
 // ---------------------------------------------------------------------------
 // Helper: inject the Tax repository (throws if not provided)
 // ---------------------------------------------------------------------------
 
-export function useTaxRepo(): ITaxRepository {
+export function useTaxRepo(): ITaxPort {
   const repo = inject(TAX_REPO_KEY)
   if (!repo) {
     throw new Error(
-      '[useTaxData] ITaxRepository not provided. ' +
+      '[useTaxData] ITaxPort not provided. ' +
         'Ensure App.vue provides TAX_REPO_KEY via the DI plugin.',
     )
   }
@@ -47,10 +51,11 @@ export const TAX_REPORT_KEY = (year: number, method: string) =>
 
 export function useSpotTransactionsQuery() {
   const repo = useTaxRepo()
+  const useCase = new GetSpotTransactionsUseCase(repo)
 
   return useQuery<TaxTransactionEntity[]>({
     key: TAX_TRANSACTIONS_KEY('spot'),
-    query: () => repo.getSpotTransactions(),
+    query: () => useCase.execute(),
   })
 }
 
@@ -61,10 +66,11 @@ export function useSpotTransactionsQuery() {
 
 export function useFuturesTransactionsQuery() {
   const repo = useTaxRepo()
+  const useCase = new GetFuturesTransactionsUseCase(repo)
 
   return useQuery<TaxTransactionEntity[]>({
     key: TAX_TRANSACTIONS_KEY('futures'),
-    query: () => repo.getFuturesTransactions(),
+    query: () => useCase.execute(),
   })
 }
 
@@ -76,10 +82,11 @@ export function useFuturesTransactionsQuery() {
 
 export function useTaxReportQuery(year: Ref<number>, method: Ref<string>) {
   const repo = useTaxRepo()
+  const useCase = new GetTaxReportUseCase(repo)
 
   return useQuery<TaxReportEntity>({
     key: () => TAX_REPORT_KEY(year.value, method.value),
-    query: () => repo.getReport(year.value, method.value),
+    query: () => useCase.execute(year.value, method.value),
     enabled: () => year.value > 0,
   })
 }
@@ -94,9 +101,10 @@ export const FUTURES_DERIVATIVES_KEY = ['tax-transactions', 'futures-derivatives
 
 export function useFuturesDerivativesQuery() {
   const repo = useTaxRepo()
+  const useCase = new GetFuturesDerivativesUseCase(repo)
 
   return useQuery<TaxDerivativeEntity[]>({
     key: FUTURES_DERIVATIVES_KEY,
-    query: () => repo.getFuturesDerivatives(),
+    query: () => useCase.execute(),
   })
 }

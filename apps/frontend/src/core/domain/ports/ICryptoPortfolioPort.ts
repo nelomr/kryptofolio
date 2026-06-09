@@ -1,9 +1,12 @@
 /**
- * ICryptoPortfolioRepository — Port for portfolio data access.
+ * ICryptoPortfolioPort — Port for portfolio data access.
  *
- * Defines the contract for fetching portfolio data. Any adapter that provides
- * portfolio data (REST API, Mock, LocalStorage) MUST implement this interface.
- * Pinia stores depend only on this abstraction — never on concrete adapters.
+ * This port isolates the application from the API gateway or database.
+ * Use Cases interact ONLY with this port.
+ *
+ * It is implemented by:
+ *  - RestCryptoAdapter (for production, via Hono RPC)
+ *  - MockCryptoAdapter (for local testing/development)
  *
  * @see openspec/specs/hexagonal-architecture/spec.md
  */
@@ -15,7 +18,7 @@ import type {
   TokenHistoryEntity,
 } from '@/core/domain/models/PortfolioEntities'
 
-export interface ICryptoPortfolioRepository {
+export interface ICryptoPortfolioPort {
   /**
    * Fetch the full portfolio summary including metrics and all holdings.
    */

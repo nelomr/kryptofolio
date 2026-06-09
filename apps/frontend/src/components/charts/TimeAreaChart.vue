@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, toRef } from 'vue'
-import type { PerformancePoint } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { PerformancePoint } from '@/core/domain/ports/ICryptoMetricsPort'
 import { usePerformanceChart } from './composables/usePerformanceChart'
 
 const props = defineProps<{

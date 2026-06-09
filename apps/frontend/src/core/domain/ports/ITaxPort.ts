@@ -1,16 +1,19 @@
 /**
- * ITaxRepository — Port for tax and fiscal data access.
+ * ITaxPort — Port for tax and fiscal data access.
  *
- * Defines the contract for all tax-related data operations. Adapters
- * implementing this interface will handle mapping the complex legacy API
- * shapes (asset_in/asset_out, tx_type, etc.) to clean domain entities.
+ * This port abstracts the API Gateway operations for fiscal data (spot, futures)
+ * and tax report generation.
+ *
+ * It is implemented by:
+ *  - RestTaxAdapter (for production)
+ *  - MockTaxAdapter (for local testing)
  *
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
 import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
 
-export interface ITaxRepository {
+export interface ITaxPort {
   /**
    * Fetch all spot tax-relevant transactions.
    */

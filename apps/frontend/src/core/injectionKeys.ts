@@ -9,25 +9,27 @@
  */
 
 import type { InjectionKey } from 'vue'
-import type { ICryptoPortfolioRepository } from './domain/repositories/ICryptoPortfolioRepository'
-import type { ITaxRepository } from './domain/repositories/ITaxRepository'
+import type { ICryptoPortfolioPort } from './domain/ports/ICryptoPortfolioPort'
+import type { ITaxPort } from './domain/ports/ITaxPort'
 
 /** Injection key for the portfolio repository (Ports) */
-export const PORTFOLIO_REPO_KEY: InjectionKey<ICryptoPortfolioRepository> = Symbol(
-  'ICryptoPortfolioRepository',
+export const PORTFOLIO_REPO_KEY: InjectionKey<ICryptoPortfolioPort> = Symbol(
+  'ICryptoPortfolioPort',
 )
 
 /** Injection key for the tax repository (Ports) */
-export const TAX_REPO_KEY: InjectionKey<ITaxRepository> = Symbol('ITaxRepository')
+export const TAX_REPO_KEY: InjectionKey<ITaxPort> = Symbol('ITaxPort')
 
 /** Injection key for the i18n port (Ports) */
 import type { I18nPort } from './domain/ports/I18nPort'
 export const I18N_PORT_KEY: InjectionKey<I18nPort> = Symbol('I18nPort')
 
 /** Injection key for the wallet repository (Ports) */
-import type { IWalletRepository } from './domain/ports/IWalletRepository'
-export const WALLET_REPO_KEY: InjectionKey<IWalletRepository> = Symbol('IWalletRepository')
+import type { IWalletPort } from './domain/ports/IWalletPort'
+export const WALLET_REPO_KEY: InjectionKey<IWalletPort> = Symbol('IWalletPort')
 
 /** Injection key for the crypto metrics repository (Ports) */
-import type { ICryptoMetricsRepository } from './domain/ports/ICryptoMetricsRepository'
-export const CRYPTO_METRICS_REPO_KEY: InjectionKey<ICryptoMetricsRepository> = Symbol('ICryptoMetricsRepository')
+import type { ICryptoMetricsPort } from './domain/ports/ICryptoMetricsPort'
+export const CRYPTO_METRICS_REPO_KEY: InjectionKey<ICryptoMetricsPort> = Symbol(
+  'ICryptoMetricsPort',
+)

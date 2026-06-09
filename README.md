@@ -8,7 +8,7 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and Clean Architecture. Designed as a pure visualization platform utilizing a strict FIFO system for data presentation, and technically primed for seamless integration with AI Agents (Vercel AI SDK + Mastra).
+> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). Designed as a pure visualization platform utilizing a strict FIFO system for data presentation, and technically primed for seamless integration with AI Agents (Vercel AI SDK + Mastra).
 
 ## ✨ Key Features
 
@@ -107,18 +107,21 @@ pnpm run dev:mock
 
 ## 🏗️ Architecture: Hexagonal (Ports & Adapters)
 
-This project strictly adheres to **Clean Architecture** to ensure the UI is completely decoupled from data fetching, API contracts, and external dependencies.
+This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters) to ensure the UI is completely decoupled from data fetching, API contracts, and external dependencies.
 
 ### 🏛️ Architectural Layers
 
 1. **Domain Layer (`src/core/domain/`)**
    The heart of the application. **Total Isolation**: It has absolutely zero external framework dependencies (no Vue, Axios, or Zod imports).
    - **Entities & Value Objects (`models/`)**: Defined using pure TypeScript interfaces. We heavily utilize **Branded Types** (e.g. `AssetId` or `LotId`) to avoid primitive obsession and guarantee type-safety across identifiers.
-   - **Ports (`repositories/`)**: Interfaces defining the contract for data operations. The domain dictates *what* it needs, not *how* to get it.
+   - **Ports (`ports/`)**: Interfaces defining the contract for data operations. The domain dictates *what* it needs, not *how* to get it. Note: There is NO `repositories` folder; repository interfaces are outgoing ports.
 
-2. **Infrastructure Layer (`src/core/infrastructure/`)**
+2. **Application Layer (`src/core/application/`)**
+   - **Use Cases (`use-cases/`)**: Pure TypeScript classes that coordinate the Domain Ports. They contain the business orchestration logic without any Vue reactivity or framework imports.
+
+3. **Infrastructure Layer (`src/core/infrastructure/`)**
    The outer edge that communicates with the real world and protects the domain.
-   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Note: Mocks are now managed exclusively at the BFF layer.
+   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Must be suffixed with `Adapter`. Note: Mocks are now managed exclusively at the BFF layer.
    - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data (e.g. snake_case or timestamps) to pure Entities and validate payload integrity *before* it ever touches the domain.
    - **Dependency Injection (`di/`)**: The "Composition Root". It instantiates the REST adapters and wires them into Vue (via provide/inject) and Pinia (via a store plugin).
 

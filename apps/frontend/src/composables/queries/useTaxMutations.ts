@@ -12,6 +12,11 @@
 
 import { useMutation, useQueryCache } from '@pinia/colada'
 import { useTaxRepo, TAX_TRANSACTIONS_KEY } from '@/composables/queries/useTaxQueries'
+import { UploadTaxFileUseCase } from '@/core/application/use-cases/UploadTaxFileUseCase'
+import { ImportWalletUseCase } from '@/core/application/use-cases/ImportWalletUseCase'
+import { SyncWeb3UseCase } from '@/core/application/use-cases/SyncWeb3UseCase'
+import { DeleteAllTransactionsUseCase } from '@/core/application/use-cases/DeleteAllTransactionsUseCase'
+import { DownloadTaxReportUseCase } from '@/core/application/use-cases/DownloadTaxReportUseCase'
 
 // ---------------------------------------------------------------------------
 // useUploadTaxFileMutation
@@ -22,9 +27,10 @@ import { useTaxRepo, TAX_TRANSACTIONS_KEY } from '@/composables/queries/useTaxQu
 export function useUploadTaxFileMutation() {
   const repo = useTaxRepo()
   const queryCache = useQueryCache()
+  const useCase = new UploadTaxFileUseCase(repo)
 
   return useMutation({
-    mutation: (args: { file: File, market: 'spot' | 'futures' }) => repo.uploadTaxFile(args.file, args.market),
+    mutation: (args: { file: File, market: 'spot' | 'futures' }) => useCase.execute(args.file, args.market),
     onSuccess: (_, args) => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(args.market) })
     },
@@ -39,10 +45,11 @@ export function useUploadTaxFileMutation() {
 export function useImportWalletMutation() {
   const repo = useTaxRepo()
   const queryCache = useQueryCache()
+  const useCase = new ImportWalletUseCase(repo)
 
   return useMutation({
     mutation: ({ chain, address }: { chain: string; address: string }) =>
-      repo.importWallet(chain, address),
+      useCase.execute(chain, address),
     onSuccess: () => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
     },
@@ -57,9 +64,10 @@ export function useImportWalletMutation() {
 export function useSyncWeb3Mutation() {
   const repo = useTaxRepo()
   const queryCache = useQueryCache()
+  const useCase = new SyncWeb3UseCase(repo)
 
   return useMutation({
-    mutation: () => repo.syncWeb3(),
+    mutation: () => useCase.execute(),
     onSuccess: () => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
     },
@@ -74,9 +82,10 @@ export function useSyncWeb3Mutation() {
 export function useDeleteTransactionsMutation() {
   const repo = useTaxRepo()
   const queryCache = useQueryCache()
+  const useCase = new DeleteAllTransactionsUseCase(repo)
 
   return useMutation({
-    mutation: (market: 'spot' | 'futures') => repo.deleteAllTransactions(market),
+    mutation: (market: 'spot' | 'futures') => useCase.execute(market),
     onSuccess: (_, market) => {
       // Invalidate all tax-related queries so the UI clears automatically
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(market) })
@@ -95,10 +104,11 @@ export function useDeleteTransactionsMutation() {
 
 export function useDownloadTaxReportMutation() {
   const repo = useTaxRepo()
+  const useCase = new DownloadTaxReportUseCase(repo)
 
   return useMutation({
     mutation: async (args: { year: number; format: 'pdf' | 'csv' }) => {
-      const blob = await repo.downloadReport(args.year, args.format)
+      const blob = await useCase.execute(args.year, args.format)
       // Trigger browser file download
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')

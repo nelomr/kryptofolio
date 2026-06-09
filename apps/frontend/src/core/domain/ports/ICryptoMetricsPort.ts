@@ -38,7 +38,7 @@ export interface PerformanceMetrics {
   bestDayPercent: number;
 }
 
-export interface ICryptoMetricsRepository {
+export interface ICryptoMetricsPort {
   getKpis(): Promise<CryptoKpis>;
   getPerformanceHistory(range: TimeRange): Promise<{
     history: PerformancePoint[];

@@ -1,4 +1,4 @@
-import type { ICryptoMetricsRepository, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics } from '@/core/domain/ports/ICryptoMetricsPort'
 import { CryptoKpisSchema, PerformanceHistoryResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { bffClient } from '../http/BffClient'
@@ -30,7 +30,7 @@ function parseOrFail<T>(
   return result.data!
 }
 
-export class RestCryptoMetricsAdapter implements ICryptoMetricsRepository {
+export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
   async getKpis(): Promise<CryptoKpis> {
     const res = await bffClient.api.metrics.kpis.$get()
     const rawData = await res.json()

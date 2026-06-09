@@ -23,7 +23,7 @@ vi.mock('../../http/BffClient', () => {
 })
 
 describe('RestCryptoMetricsAdapter', () => {
-  it('implements ICryptoMetricsRepository interface', () => {
+  it('implements ICryptoMetricsPort interface', () => {
     const adapter = new RestCryptoMetricsAdapter()
     expect(typeof adapter.getKpis).toBe('function')
   })

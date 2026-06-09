@@ -10,7 +10,7 @@ const { t } = useI18n()
 // Inject repository
 const cryptoMetricsRepo = inject(CRYPTO_METRICS_REPO_KEY)
 if (!cryptoMetricsRepo) {
-  throw new Error('ICryptoMetricsRepository not provided')
+  throw new Error('ICryptoMetricsPort not provided')
 }
 
 // Fetch data using Colada

@@ -1,13 +1,14 @@
 /**
  * RestCryptoAdapter — Production HTTP adapter for portfolio data.
  *
- * Implements ICryptoPortfolioRepository using Hono RPC (hc).
+ * Implements ICryptoPortfolioPort using Hono RPC (hc).
  *
  * @see openspec/specs/hexagonal-architecture/spec.md
  * @see openspec/specs/global-error-handling/spec.md
  */
 
-import type { ICryptoPortfolioRepository } from '@/core/domain/repositories/ICryptoPortfolioRepository'
+
+import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
 import type {
   PortfolioSummaryEntity,
   CryptoAssetEntity,
@@ -51,7 +52,7 @@ function parseOrFail<T>(
   return result.data!
 }
 
-export class RestCryptoAdapter implements ICryptoPortfolioRepository {
+export class RestCryptoAdapter implements ICryptoPortfolioPort {
   async getSummary(): Promise<PortfolioSummaryEntity> {
     const res = await bffClient.api.portfolio.summary.$get()
     const rawData = await res.json()

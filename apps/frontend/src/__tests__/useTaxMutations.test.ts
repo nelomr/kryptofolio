@@ -10,9 +10,9 @@ import {
 } from '@/composables/queries/useTaxMutations'
 import { TAX_TRANSACTIONS_KEY } from '@/composables/queries/useTaxQueries'
 import { TAX_REPO_KEY } from '@/core/injectionKeys'
-import type { ITaxRepository } from '@/core/domain/repositories/ITaxRepository'
+import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
 
-function createMockTaxRepo(): ITaxRepository {
+function createMockTaxRepo(): ITaxPort {
   return {
     getSpotTransactions: vi.fn(),
     getFuturesTransactions: vi.fn(),

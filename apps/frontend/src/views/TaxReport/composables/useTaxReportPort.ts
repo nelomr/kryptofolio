@@ -65,7 +65,7 @@ export function useTaxReportPort() {
     { id: '1', title: 'Missing Data', description: 'Some trades are missing cost basis.', severity: 'warning' }
   ])
 
-  // Map to the real Pinia Colada mutations that talk to ITaxRepository
+  // Map to the real Pinia Colada mutations that talk to ITaxPort
   const { mutateAsync: syncWeb3Mutate } = useSyncWeb3Mutation()
   const { mutateAsync: uploadCsvMutate } = useUploadTaxFileMutation()
   const { mutateAsync: deleteTxsMutate } = useDeleteTransactionsMutation()

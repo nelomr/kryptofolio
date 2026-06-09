@@ -57,7 +57,7 @@ describe('CryptoKpiCards.vue', () => {
     expect(wrapper.text()).toContain('+15.50%')
   })
 
-  it('throws an error if ICryptoMetricsRepository is not provided', () => {
+  it('throws an error if ICryptoMetricsPort is not provided', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     
     expect(() => {
@@ -68,7 +68,7 @@ describe('CryptoKpiCards.vue', () => {
           }
         }
       })
-    }).toThrow('ICryptoMetricsRepository not provided')
+    }).toThrow('ICryptoMetricsPort not provided')
 
     consoleErrorSpy.mockRestore()
   })

@@ -7,7 +7,7 @@ import TimeFilter from '@/components/ui/time-filter/TimeFilter.vue'
 import TimeAreaChart from '@/components/charts/TimeAreaChart.vue'
 import ChartSkeleton from '@/components/charts/ChartSkeleton.vue'
 import { usePerformanceHistoryQuery } from '@/composables/queries/useCryptoMetricsQueries'
-import type { TimeRange } from '@/core/domain/ports/ICryptoMetricsRepository'
+import type { TimeRange } from '@/core/domain/ports/ICryptoMetricsPort'
 
 const { t } = useI18n()
 const selectedRange = ref<TimeRange>('1M')
