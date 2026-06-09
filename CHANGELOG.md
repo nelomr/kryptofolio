@@ -3,6 +3,16 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.3](https://github.com/nelomr/kryptofolio/compare/v1.15.2...v1.15.3) (2026-06-09)
+
+### ✨ Features
+
+* implement asset allocation donut chart and metrics ([3ed4479](https://github.com/nelomr/kryptofolio/commit/3ed447968b7d111ba139b93bba054de49c9c4ede))
+
+### ♻️  Refactors
+
+* enforce strict hexagonal architecture and application layer ([6ee5257](https://github.com/nelomr/kryptofolio/commit/6ee525774166f91af499839143f53f34652c93fd))
+
 ## [1.15.2](https://github.com/nelomr/kryptofolio/compare/v1.15.1...v1.15.2) (2026-06-08)
 
 ### ✨ Features
