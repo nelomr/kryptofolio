@@ -78,3 +78,27 @@ export const PerformanceHistoryResponseSchema = z.object({
     bestDayPercent: val.summary.best_day,
   },
 }));
+
+export const AssetAllocationItemSchema = z.object({
+  symbol: z.string(),
+  name: z.string(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  allocation_pct: z.number(),
+  value_fiat: z.number()
+}).transform((val) => ({
+  symbol: val.symbol,
+  name: val.name,
+  colorHex: val.color,
+  allocationPercent: val.allocation_pct,
+  valueFiat: val.value_fiat
+}));
+
+export const AssetAllocationResponseSchema = z.object({
+  assets: z.array(AssetAllocationItemSchema),
+  total_assets: z.number(),
+  hhi: z.number()
+}).transform((val) => ({
+  items: val.assets,
+  totalAssets: val.total_assets,
+  hhiScore: val.hhi
+}));

@@ -5,6 +5,15 @@ export interface AssetKpi {
   roiPercent: number;
 }
 
+export interface AssetAllocationItem {
+  symbol: string;
+  name: string;
+  colorHex: string;
+  allocationPercent: number;
+  valueFiat: number;
+}
+
+
 export interface CryptoKpis {
   totalRoiPercent: number;
   totalRoiFiat: number;
@@ -43,5 +52,10 @@ export interface ICryptoMetricsPort {
   getPerformanceHistory(range: TimeRange): Promise<{
     history: PerformancePoint[];
     metrics: PerformanceMetrics;
+  }>;
+  getAssetAllocation(): Promise<{
+    items: AssetAllocationItem[];
+    totalAssets: number;
+    hhiScore: number;
   }>;
 }

@@ -31,7 +31,11 @@ vi.mock('@pinia/colada', () => ({
       averageR: 0,
       portfolioDispersion: 0,
       bestAsset: { symbol: 'BTC', name: 'Bitcoin', allocationPercent: 50, roiPercent: 10 },
-      worstAsset: { symbol: 'XRP', name: 'Ripple', allocationPercent: 10, roiPercent: -5 }
+      worstAsset: { symbol: 'XRP', name: 'Ripple', allocationPercent: 10, roiPercent: -5 },
+      // Asset Allocation Query requirements
+      items: [{ symbol: 'BTC', name: 'Bitcoin', allocationPercent: 100, valueFiat: 1000, colorHex: '#F7931A' }],
+      totalAssets: '1 Activo',
+      hhiScore: 10000
     }),
     isLoading: ref(false),
     error: ref(null)

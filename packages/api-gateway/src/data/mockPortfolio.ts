@@ -1,18 +1,8 @@
 /**
  * Mock Portfolio Fixture — Backend-agnostic data for UI development and tests.
- *
- * Covers the full 3-level hierarchy:
- *   Level 1 → PortfolioMetrics + HoldingItem[]
- *   Level 2 → TaxLot[] per symbol
- *   Level 3 → LotHistoryEvent[] per lot
- *
- * The `satisfies PortfolioData` annotation ensures compile-time type safety:
- * any structural mismatch between this mock and the interfaces causes a build error.
- *
- * @see openspec/specs/portfolio-mock-data/spec.md
+ * This mock is mathematically correlated across holdings, lots, history, metrics, and tax.
  */
 
-// Raw legacy types for mocking
 export interface PortfolioMetrics {
   total_equity_eur: number
   total_realized_pnl_eur: number
@@ -64,46 +54,64 @@ export interface PortfolioData {
   history: Record<string, Record<string, LotHistoryEvent[]>>
 }
 
-// ---------------------------------------------------------------------------
-// Root mock — injectable directly into a Pinia store's state
-// ---------------------------------------------------------------------------
-
 const mockPortfolio = {
   summary: {
     metrics: {
-      total_equity_eur: 45_231.89,
-      total_realized_pnl_eur: 12_234.50,
-      total_unrealized_pnl_eur: 5_340.20,
+      total_equity_eur: 72_500.00,
+      total_realized_pnl_eur: 3_000.00,
+      total_unrealized_pnl_eur: 30_500.00,
     },
     holdings: [
       {
         id: 'hold_btc_1',
         symbol: 'BTC',
-        amount: 0.5432,
-        avg_price_eur: 35_000.00,
-        weighted_average_cost: 34_500.00,
-        current_value_eur: 31_505.60,
-        cost_basis_eur: 19_012.00,
-        unrealized_pnl_eur: 12_493.60,
-        pnl_eur: 12_493.60,
-        portfolio_locations: ['Ledger', 'Kraken', 'Bit2Me'],
+        amount: 0.5,
+        avg_price_eur: 40_000.00,
+        weighted_average_cost: 40_000.00,
+        current_value_eur: 30_000.00,
+        cost_basis_eur: 20_000.00,
+        unrealized_pnl_eur: 10_000.00,
+        pnl_eur: 10_000.00,
+        portfolio_locations: ['Kraken', 'Ledger'],
       },
       {
         id: 'hold_eth_1',
         symbol: 'ETH',
-        amount: 4.5,
-        avg_price_eur: 1_800.00,
-        weighted_average_cost: 1_750.00,
-        current_value_eur: 10_350.00,
-        cost_basis_eur: 8_100.00,
-        unrealized_pnl_eur: 2_250.00,
-        pnl_eur: 2_250.00,
-        portfolio_locations: ['Metamask', 'Binance'],
+        amount: 10,
+        avg_price_eur: 1_500.00,
+        weighted_average_cost: 1_500.00,
+        current_value_eur: 25_000.00,
+        cost_basis_eur: 15_000.00,
+        unrealized_pnl_eur: 10_000.00,
+        pnl_eur: 10_000.00,
+        portfolio_locations: ['Binance'],
+      },
+      {
+        id: 'hold_sol_1',
+        symbol: 'SOL',
+        amount: 100,
+        avg_price_eur: 20.00,
+        weighted_average_cost: 20.00,
+        current_value_eur: 15_000.00,
+        cost_basis_eur: 2_000.00,
+        unrealized_pnl_eur: 13_000.00,
+        pnl_eur: 16_000.00, // 13k unrealized + 3k realized
+        portfolio_locations: ['Phantom'],
+      },
+      {
+        id: 'hold_ada_1',
+        symbol: 'ADA',
+        amount: 5000,
+        avg_price_eur: 1.00,
+        weighted_average_cost: 1.00,
+        current_value_eur: 2_500.00,
+        cost_basis_eur: 5_000.00,
+        unrealized_pnl_eur: -2_500.00,
+        pnl_eur: -2_500.00,
+        portfolio_locations: ['Bit2Me'],
       },
     ],
   },
-
-  // Level 2 — FIFO tax lots keyed by symbol
   lots: {
     BTC: [
       {
@@ -112,20 +120,9 @@ const mockPortfolio = {
         date: 1_672_531_200, // 2023-01-01
         exchange: 'Kraken',
         original_qty: 0.5,
-        remaining_qty: 0.3,
-        unit_cost: 20_000.00,
-        total_cost: 10_000.00,
-        status: 'PARTIAL',
-      },
-      {
-        id: 'lot_btc_2',
-        symbol: 'BTC',
-        date: 1_688_169_600, // 2023-07-01
-        exchange: 'Bit2Me',
-        original_qty: 0.0432,
-        remaining_qty: 0.0432,
-        unit_cost: 26_500.00,
-        total_cost: 1_144.80,
+        remaining_qty: 0.5,
+        unit_cost: 40_000.00,
+        total_cost: 20_000.00,
         status: 'FULL',
       },
     ],
@@ -135,10 +132,10 @@ const mockPortfolio = {
         symbol: 'ETH',
         date: 1_675_209_600, // 2023-02-01
         exchange: 'Binance',
-        original_qty: 4.5,
-        remaining_qty: 4.5,
-        unit_cost: 1_800.00,
-        total_cost: 8_100.00,
+        original_qty: 10,
+        remaining_qty: 10,
+        unit_cost: 1_500.00,
+        total_cost: 15_000.00,
         status: 'FULL',
       },
     ],
@@ -146,44 +143,41 @@ const mockPortfolio = {
       {
         id: 'lot_sol_1',
         symbol: 'SOL',
-        date: 1_693_526_400, // 2023-09-01
-        exchange: 'Phantom',
-        original_qty: 100,
-        remaining_qty: 50,
-        unit_cost: 60.00,
-        total_cost: 3_000.00,
+        date: 1_688_169_600, // 2023-07-01
+        exchange: 'Binance',
+        original_qty: 200,
+        remaining_qty: 100,
+        unit_cost: 20.00,
+        total_cost: 4_000.00,
         status: 'PARTIAL',
       },
     ],
+    ADA: [
+      {
+        id: 'lot_ada_1',
+        symbol: 'ADA',
+        date: 1_693_526_400, // 2023-09-01
+        exchange: 'Bit2Me',
+        original_qty: 5000,
+        remaining_qty: 5000,
+        unit_cost: 1.00,
+        total_cost: 5_000.00,
+        status: 'FULL',
+      },
+    ],
   },
-
-  // Level 3 — lot history keyed by symbol → lot ID
   history: {
-    BTC: {
-      lot_btc_1: [
-        {
-          id: 'event_btc_1_1',
-          disposal_date: 1_680_307_200, // 2023-04-01
-          amount_from_lot: 0.2,
-          sale_price_eur: 30_000.00,
-          gain_loss_eur: 2_000.00,
-          is_taxable: true,
-          notes: 'Partial sale',
-        },
-      ],
-      lot_btc_2: [],
-    },
-    ETH: {
-      lot_eth_1: [],
-    },
+    BTC: { lot_btc_1: [] },
+    ETH: { lot_eth_1: [] },
+    ADA: { lot_ada_1: [] },
     SOL: {
       lot_sol_1: [
         {
           id: 'event_sol_1_1',
           disposal_date: 1_702_339_200, // 2023-12-12
-          amount_from_lot: 50,
-          sale_price_eur: 110.00,
-          gain_loss_eur: 2_500.00,
+          amount_from_lot: 100,
+          sale_price_eur: 50.00,
+          gain_loss_eur: 3_000.00, // (50 - 20) * 100
           is_taxable: true,
           notes: 'Partial profit taking',
         },
@@ -194,15 +188,10 @@ const mockPortfolio = {
 
 export default mockPortfolio
 
-// ---------------------------------------------------------------------------
-// Edge-case named exports (for targeted unit tests)
-// ---------------------------------------------------------------------------
-
-/** A fully-consumed FIFO lot — remaining_qty === 0, original_qty > 0 */
 export const mockFullyConsumedLot: TaxLot = {
-  id: 'lot_btc_consumed',
+  id: 'lot_old_consumed',
   symbol: 'BTC',
-  date: 1_640_995_200, // 2022-01-01
+  date: 1_640_995_200,
   exchange: 'Kraken',
   original_qty: 0.25,
   remaining_qty: 0,
@@ -210,14 +199,13 @@ export const mockFullyConsumedLot: TaxLot = {
   total_cost: 9_500.00,
 }
 
-/** A non-taxable disposal event (e.g. internal wallet transfer) */
 export const mockNonTaxableEvent: LotHistoryEvent = {
   id: 'event_nontaxable_1',
-  disposal_date: 1_677_628_800, // 2023-03-01
+  disposal_date: 1_677_628_800,
   amount_from_lot: 0.05,
   sale_price_eur: 22_000.00,
   gain_loss_eur: 0,
   is_taxable: false,
   flag: 'WALLET_ACTIVATION',
-  notes: 'Transfer to cold wallet — not a taxable swap',
+  notes: 'Transfer to cold wallet',
 }

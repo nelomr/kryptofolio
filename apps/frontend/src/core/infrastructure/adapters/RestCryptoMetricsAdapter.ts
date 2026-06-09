@@ -1,5 +1,5 @@
-import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics } from '@/core/domain/ports/ICryptoMetricsPort'
-import { CryptoKpisSchema, PerformanceHistoryResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
+import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics, AssetAllocationItem } from '@/core/domain/ports/ICryptoMetricsPort'
+import { CryptoKpisSchema, PerformanceHistoryResponseSchema, AssetAllocationResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { bffClient } from '../http/BffClient'
 
@@ -41,5 +41,11 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
     const res = await bffClient.api.metrics.performance.$get({ query: { days: range === '1M' ? '30' : '365' } })
     const rawData = await res.json()
     return parseOrFail(PerformanceHistoryResponseSchema, rawData, 'getPerformanceHistory')
+  }
+
+  async getAssetAllocation(): Promise<{ items: AssetAllocationItem[]; totalAssets: number; hhiScore: number }> {
+    const res = await bffClient.api.metrics.allocation.$get()
+    const rawData = await res.json()
+    return parseOrFail(AssetAllocationResponseSchema, rawData, 'getAssetAllocation')
   }
 }

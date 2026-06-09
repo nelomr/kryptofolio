@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import mockPortfolio from './data/mockPortfolio';
 import { MOCK_TRANSACTIONS, MOCK_TAX_REPORT, MOCK_FUTURES_TRANSACTIONS, MOCK_FUTURES_DERIVATIVES } from './data/mockTax';
-import { MOCK_KPIS, generatePerformanceHistory } from './data/mockMetrics';
+import { MOCK_KPIS, generatePerformanceHistory, MOCK_ASSET_ALLOCATION } from './data/mockMetrics';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 
@@ -82,6 +82,7 @@ const routes = app.basePath('/api')
   .get('/tax/report/download', (c) => c.body('PDF content', 200))
   // Metrics
   .get('/metrics/kpis', (c) => c.json(MOCK_KPIS, 200))
+  .get('/metrics/allocation', (c) => c.json(MOCK_ASSET_ALLOCATION, 200))
   .get('/metrics/performance', (c) => {
     const days = Number(c.req.query('days') || '30');
     return c.json(generatePerformanceHistory(days), 200);

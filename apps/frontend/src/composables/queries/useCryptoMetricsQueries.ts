@@ -32,3 +32,12 @@ export function usePerformanceHistoryQuery(range: Ref<TimeRange>) {
     query: () => repo.getPerformanceHistory(range.value),
   })
 }
+
+export function useAssetAllocationQuery() {
+  const repo = useCryptoMetricsRepo()
+
+  return useQuery({
+    key: ['crypto-asset-allocation'],
+    query: () => repo.getAssetAllocation(),
+  })
+}

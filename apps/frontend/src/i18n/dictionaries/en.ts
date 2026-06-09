@@ -62,6 +62,11 @@ export const en: I18nDictionary = {
   'metrics.best_worst_label': 'Best / Worst',
   'metrics.dispersion_label': 'Dispersion',
   'metrics.portfolio': 'of Portfolio',
+  'metrics.asset_allocation': 'Asset Allocation',
+  'metrics.distribution': 'Distribution',
+  'metrics.assets_kicker_upper': 'ASSETS',
+  'metrics.assets_kicker': 'Assets',
+  'metrics.hhi_kicker': 'HHI',
 
   // Token Summary Cards
   'token.balance': 'Balance',
