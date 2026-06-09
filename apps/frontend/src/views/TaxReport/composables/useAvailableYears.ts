@@ -1,16 +1,14 @@
-import { computed, type Ref } from 'vue'
-import type { TaxTransactionEntity } from '@/core/domain/models/FiscalEntities'
+import { computed } from 'vue'
+import { useAvailableYearsQuery } from '@/composables/queries/useTaxQueries'
 
 /**
- * Computes available years in descending order from a list of transactions.
- * Defaults to the current year if the list is empty.
+ * Fetches available years from the ITaxPort.
+ * Replaces the old frontend-calculated logic.
  */
-export function useAvailableYears(transactions: Ref<TaxTransactionEntity[] | undefined>) {
+export function useAvailableYears() {
+  const query = useAvailableYearsQuery()
+  
   return computed<number[]>(() => {
-    const txs = transactions.value ?? []
-    if (txs.length === 0) return [new Date().getFullYear()]
-    return [...new Set(txs.map((tx) => new Date(tx.timestamp).getFullYear()))].sort(
-      (a, b) => b - a,
-    )
+    return query.data.value ?? [new Date().getFullYear()]
   })
 }

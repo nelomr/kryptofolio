@@ -24,7 +24,7 @@ export function useTaxLedgers() {
     ...(spotData.value ?? []),
     ...(futuresData.value ?? []),
   ]);
-  const availableYears = useAvailableYears(allTransactions);
+  const availableYears = useAvailableYears();
 
   // 3. Local Filters State — each table has independent year filter
   const spotYearFilter = ref<string | null>(null);

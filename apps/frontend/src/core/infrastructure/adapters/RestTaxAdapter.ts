@@ -150,6 +150,20 @@ export class RestTaxAdapter implements ITaxPort {
     }
   }
 
+  async getAvailableYears(): Promise<number[]> {
+    // If the backend lacks a dedicated endpoint, we calculate it here in the adapter
+    // to keep the frontend completely pure and dumb.
+    try {
+      const txs = await this.getSpotTransactions()
+      if (txs.length === 0) return [new Date().getFullYear()]
+      return [...new Set(txs.map((tx) => new Date(tx.timestamp).getFullYear()))].sort(
+        (a, b) => b - a,
+      )
+    } catch {
+      return [new Date().getFullYear()]
+    }
+  }
+
   async deleteTransaction(id: string): Promise<void> {
     await bffClient.api.tax.transactions[':id'].$delete({ param: { id } })
   }

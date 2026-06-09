@@ -58,8 +58,24 @@ export class RestCryptoAdapter implements ICryptoPortfolioPort {
     const rawData = await res.json()
     const dto = parseOrFail(ExternalPortfolioSummarySchema, rawData, 'getSummary')
 
+    const pnlValue = dto.metrics.totalUnrealizedPnlEur ?? 0
+    const realizedPnlValue = dto.metrics.totalRealizedPnlEur ?? 0
+    
+    let roiPercentage = 0
+    if (dto.metrics.totalEquityEur > 0) {
+      const costBasis = dto.metrics.totalEquityEur - pnlValue
+      if (costBasis > 0) {
+        roiPercentage = (pnlValue / costBasis) * 100
+      }
+    }
+
     return {
-      metrics: dto.metrics,
+      metrics: {
+        ...dto.metrics,
+        roiPercentage,
+        isBullish: pnlValue >= 0,
+        realizedIsPositive: realizedPnlValue >= 0
+      },
       holdings: dto.holdings.map((h) => ({
         id: AssetIdSchema.parse(h.id),
         symbol: h.symbol,

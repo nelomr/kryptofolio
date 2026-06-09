@@ -57,6 +57,12 @@ export interface PortfolioMetricsEntity {
   totalUnrealizedPnlEur: number
   /** Total PnL (realized + unrealized) in EUR */
   totalPnlEur: number
+  /** ROI percentage based on cost basis */
+  roiPercentage: number
+  /** Indicates if unrealized PnL is positive or neutral */
+  isBullish: boolean
+  /** Indicates if realized PnL is positive or neutral */
+  realizedIsPositive: boolean
 }
 
 // ---------------------------------------------------------------------------

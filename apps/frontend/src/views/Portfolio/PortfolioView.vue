@@ -9,9 +9,9 @@ import { useI18n } from "@/composables/useI18n";
 import PortfolioHeader from "@/components/portfolio/PortfolioHeader.vue";
 import MetricsDashboard from "./components/metrics/MetricsDashboard.vue";
 import PerformanceHistory from "./components/metrics/PerformanceHistory.vue";
+import VolatilityHeatmap from "./components/metrics/VolatilityHeatmap.vue";
 import AssetAllocation from "./components/metrics/AssetAllocation.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
 
 import LotHierarchyTable from "./components/LotHierarchyTable.vue";
 import TokenDetailsModal from "./components/TokenDetailsModal.vue";
@@ -80,11 +80,11 @@ const {
         value="metrics"
         class="flex-1 min-h-0 flex flex-col gap-6 lg:gap-8 mt-0 border-0 p-0 outline-none"
       >
+        <div class="grid lg:grid-cols-2 gap-6 lg:gap-8">
           <PerformanceHistory />
-        <!-- Asset Allocation & Risk -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           <AssetAllocation />
         </div>
+        <VolatilityHeatmap />
       </TabsContent>
     </Tabs>
 

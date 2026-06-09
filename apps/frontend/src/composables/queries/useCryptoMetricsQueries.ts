@@ -41,3 +41,12 @@ export function useAssetAllocationQuery() {
     query: () => repo.getAssetAllocation(),
   })
 }
+
+export function useVolatilityHeatmapQuery(year: Ref<number>) {
+  const repo = useCryptoMetricsRepo()
+
+  return useQuery({
+    key: () => ['crypto-volatility-heatmap', year.value],
+    query: () => repo.getVolatilityHeatmap(year.value),
+  })
+}

@@ -19,6 +19,7 @@ import { GetSpotTransactionsUseCase } from '@/core/application/use-cases/GetSpot
 import { GetFuturesTransactionsUseCase } from '@/core/application/use-cases/GetFuturesTransactionsUseCase'
 import { GetTaxReportUseCase } from '@/core/application/use-cases/GetTaxReportUseCase'
 import { GetFuturesDerivativesUseCase } from '@/core/application/use-cases/GetFuturesDerivativesUseCase'
+import { GetAvailableYearsUseCase } from '@/core/application/use-cases/GetAvailableYearsUseCase'
 
 // ---------------------------------------------------------------------------
 // Helper: inject the Tax repository (throws if not provided)
@@ -43,6 +44,7 @@ export const TAX_TRANSACTIONS_KEY = (market?: 'spot' | 'futures') =>
   market ? (['tax-transactions', market] as const) : (['tax-transactions'] as const)
 export const TAX_REPORT_KEY = (year: number, method: string) =>
   ['tax-report', year, method] as const
+export const AVAILABLE_YEARS_KEY = ['tax-available-years'] as const
 
 // ---------------------------------------------------------------------------
 // useSpotTransactionsQuery
@@ -105,6 +107,21 @@ export function useFuturesDerivativesQuery() {
 
   return useQuery<TaxDerivativeEntity[]>({
     key: FUTURES_DERIVATIVES_KEY,
+    query: () => useCase.execute(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useAvailableYearsQuery
+// Fetches the array of available fiscal years (e.g. [2024, 2023])
+// ---------------------------------------------------------------------------
+
+export function useAvailableYearsQuery() {
+  const repo = useTaxRepo()
+  const useCase = new GetAvailableYearsUseCase(repo)
+
+  return useQuery<number[]>({
+    key: AVAILABLE_YEARS_KEY,
     query: () => useCase.execute(),
   })
 }

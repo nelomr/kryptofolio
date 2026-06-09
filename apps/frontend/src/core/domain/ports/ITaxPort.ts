@@ -46,6 +46,11 @@ export interface ITaxPort {
   getReport(year: number, method: string): Promise<TaxReportEntity>
 
   /**
+   * Fetch the list of available fiscal years from the transactions.
+   */
+  getAvailableYears(): Promise<number[]>
+
+  /**
    * Soft-delete a transaction by ID.
    * @param id - The transaction's string ID
    */

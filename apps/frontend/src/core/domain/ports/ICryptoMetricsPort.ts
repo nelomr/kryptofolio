@@ -47,6 +47,24 @@ export interface PerformanceMetrics {
   bestDayPercent: number;
 }
 
+export interface HeatmapDay {
+  dateStr: string; // YYYY-MM-DD
+  returnPercent: number;
+}
+
+export interface HeatmapStats {
+  best: number;
+  worst: number;
+  positiveDays: number;
+  totalDays: number;
+  avg: number;
+}
+
+export interface VolatilityHeatmapEntity {
+  grid: (HeatmapDay | null)[][];
+  stats: HeatmapStats;
+}
+
 export interface ICryptoMetricsPort {
   getKpis(): Promise<CryptoKpis>;
   getPerformanceHistory(range: TimeRange): Promise<{
@@ -58,4 +76,5 @@ export interface ICryptoMetricsPort {
     totalAssets: number;
     hhiScore: number;
   }>;
+  getVolatilityHeatmap(year: number): Promise<VolatilityHeatmapEntity>;
 }

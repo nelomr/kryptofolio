@@ -102,3 +102,13 @@ export const AssetAllocationResponseSchema = z.object({
   totalAssets: val.total_assets,
   hhiScore: val.hhi
 }));
+
+export const HeatmapDaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  pct: z.number()
+}).transform((val) => ({
+  dateStr: val.date,
+  returnPercent: val.pct
+}));
+
+export const VolatilityHeatmapResponseSchema = z.array(HeatmapDaySchema);

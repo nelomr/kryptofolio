@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import mockPortfolio from './data/mockPortfolio';
 import { MOCK_TRANSACTIONS, MOCK_TAX_REPORT, MOCK_FUTURES_TRANSACTIONS, MOCK_FUTURES_DERIVATIVES } from './data/mockTax';
-import { MOCK_KPIS, generatePerformanceHistory, MOCK_ASSET_ALLOCATION } from './data/mockMetrics';
+import { MOCK_KPIS, generatePerformanceHistory, MOCK_ASSET_ALLOCATION, generateVolatilityHeatmap } from './data/mockMetrics';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 
@@ -86,6 +86,10 @@ const routes = app.basePath('/api')
   .get('/metrics/performance', (c) => {
     const days = Number(c.req.query('days') || '30');
     return c.json(generatePerformanceHistory(days), 200);
+  })
+  .get('/metrics/heatmap', (c) => {
+    const year = Number(c.req.query('year') || new Date().getFullYear());
+    return c.json(generateVolatilityHeatmap(year), 200);
   })
   .get('/metrics/token/:symbol', (c) => c.json({}, 200))
   // Ingestion

@@ -77,3 +77,41 @@ export const MOCK_ASSET_ALLOCATION = {
   total_assets: 4,
   hhi: 3341
 };
+
+export function generateVolatilityHeatmap(year: number) {
+  const data = [];
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+  // Parameters correlated with MOCK_KPIS
+  const maxDrawdown = -15.40;
+  const bestDay = 12.4;
+  const dailyAverageExpectancy = 0.2; // Bullish bias to reach 72% ROI
+
+  for (let month = 0; month < 12; month++) {
+    for (let day = 1; day <= daysInMonth[month]; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      // Base noise with slight bullish bias
+      let pct = dailyAverageExpectancy + (Math.random() - 0.45) * 5;
+      
+      // Simulate market cycles (clustering volatility)
+      const cycle = Math.sin((day + month * 30) / 14) * 3;
+      pct += cycle;
+
+      // Simulate outlier days (fat tails)
+      if (Math.random() > 0.95) pct += (Math.random() * 6);
+      if (Math.random() < 0.05) pct -= (Math.random() * 8);
+
+      // Clamp to the defined KPI extremes
+      if (pct > bestDay) pct = bestDay;
+      if (pct < maxDrawdown) pct = maxDrawdown;
+
+      // Force the exact best day once to guarantee stats correlation
+      if (month === 10 && day === 12) pct = bestDay;
+      
+      data.push({ date: dateStr, pct: Number(pct.toFixed(2)) });
+    }
+  }
+  return data;
+}

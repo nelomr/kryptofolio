@@ -5,11 +5,12 @@ import { useAssetAllocationQuery } from '@/composables/queries/useCryptoMetricsQ
 import AssetAllocationLegend from './AssetAllocationLegend.vue'
 import { useI18n } from '@/composables/useI18n'
 import { Doughnut } from 'vue-chartjs'
-import { Chart as ChartJS, ArcElement, Tooltip } from 'chart.js'
+import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip } from 'chart.js'
 import { useAssetAllocationChart, backgroundTrackPlugin } from '@/components/charts/composables/useAssetAllocationChart'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
-ChartJS.register(ArcElement, Tooltip)
+ChartJS.register(ArcElement, ChartTooltip)
 
 const { t } = useI18n()
 const { data, isLoading, error } = useAssetAllocationQuery()
@@ -19,7 +20,7 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
 </script>
 
 <template>
-  <Card class="flex flex-col h-full col-span-1 lg:col-span-1">
+  <Card class="flex flex-col h-full w-full">
     <CardHeader class="flex flex-row items-start justify-between pb-2">
       <div class="flex flex-col gap-1">
         <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{{ t('metrics.asset_allocation') }}</span>
@@ -66,11 +67,29 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
     
     <div v-if="data" class="border-t border-border/50 bg-surface-1 px-4 py-3 flex items-center gap-6 overflow-x-auto text-sm mt-auto">
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('metrics.assets_kicker') }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.assets_kicker') }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('metrics.assets_kicker_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium text-foreground num">{{ data.totalAssets }}</span>
       </div>
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('metrics.hhi_kicker') }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.hhi_kicker') }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('metrics.hhi_kicker_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium text-foreground num">{{ new Intl.NumberFormat('en-US').format(data.hhiScore) }}</span>
       </div>
     </div>

@@ -9,18 +9,16 @@ import type { PortfolioMetricsEntity } from '@/core/domain/models/PortfolioEntit
 /**
  * Derives presentation-level metrics from raw portfolio data.
  * Keeps PortfolioView free of computed-logic clutter.
+ * Business calculations (ROI, PnL) are done by the adapter,
+ * this file only maps to CSS classes and formatted strings.
  */
 export function usePortfolioMetrics(metrics: Ref<PortfolioMetricsEntity | null>) {
   const pnlValue = computed(() => metrics.value?.totalUnrealizedPnlEur ?? 0)
-
   const realizedPnlValue = computed(() => metrics.value?.totalRealizedPnlEur ?? 0)
 
-  const roiPercentage = computed(() => {
-    if (!metrics.value || metrics.value.totalEquityEur === 0) return 0
-    const costBasis = metrics.value.totalEquityEur - pnlValue.value
-    if (costBasis <= 0) return 0
-    return (pnlValue.value / costBasis) * 100
-  })
+  const roiPercentage = computed(() => metrics.value?.roiPercentage ?? 0)
+  const isBullish = computed(() => metrics.value?.isBullish ?? false)
+  const realizedIsPositive = computed(() => metrics.value?.realizedIsPositive ?? false)
 
   /** Pre-formatted ROI string with sign, e.g. "+5.23%" */
   const roiFormatted = computed(() => {
@@ -34,10 +32,6 @@ export function usePortfolioMetrics(metrics: Ref<PortfolioMetricsEntity | null>)
     if (pnlValue.value < 0) return 'text-loss'
     return 'text-muted-foreground'
   })
-
-  const isBullish = computed(() => pnlValue.value >= 0)
-
-  const realizedIsPositive = computed(() => realizedPnlValue.value >= 0)
 
   return {
     pnlValue,

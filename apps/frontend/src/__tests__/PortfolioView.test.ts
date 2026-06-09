@@ -35,7 +35,10 @@ vi.mock('@pinia/colada', () => ({
       // Asset Allocation Query requirements
       items: [{ symbol: 'BTC', name: 'Bitcoin', allocationPercent: 100, valueFiat: 1000, colorHex: '#F7931A' }],
       totalAssets: '1 Activo',
-      hhiScore: 10000
+      hhiScore: 10000,
+      // Volatility Heatmap Query requirements
+      grid: Array.from({ length: 7 }, () => Array(15).fill(null)),
+      stats: { best: 0, worst: 0, positiveDays: 0, totalDays: 0, avg: 0 }
     }),
     isLoading: ref(false),
     error: ref(null)

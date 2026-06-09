@@ -6,13 +6,14 @@ import { formatCurrency, formatPercent } from '@/composables/useFormatters'
 import TimeFilter from '@/components/ui/time-filter/TimeFilter.vue'
 import TimeAreaChart from '@/components/charts/TimeAreaChart.vue'
 import ChartSkeleton from '@/components/charts/ChartSkeleton.vue'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { usePerformanceHistoryQuery } from '@/composables/queries/useCryptoMetricsQueries'
 import type { TimeRange } from '@/core/domain/ports/ICryptoMetricsPort'
 
 const { t } = useI18n()
 const selectedRange = ref<TimeRange>('1M')
 
-const { data, isLoading } = usePerformanceHistoryQuery(selectedRange)
+const { data, isLoading, error } = usePerformanceHistoryQuery(selectedRange)
 
 const currentCostBasis = computed(() => {
   if (!data.value?.history?.length) return 0
@@ -21,7 +22,7 @@ const currentCostBasis = computed(() => {
 </script>
 
 <template>
-  <Card class="flex flex-col h-full col-span-1 md:col-span-3 lg:col-span-3">
+  <Card class="flex flex-col h-full w-full">
     <CardHeader class="flex flex-row items-start justify-between pb-2">
       <div class="flex flex-col gap-1">
         <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{{ t('portfolio.metrics_tabs.performance.kicker') }}</span>
@@ -34,27 +35,66 @@ const currentCostBasis = computed(() => {
     </CardHeader>
     <CardContent class="flex-1 p-0 pt-4 px-4 pb-4">
       <ChartSkeleton v-if="isLoading" class="h-[350px]" />
+      <div v-else-if="error" class="h-[350px] flex items-center justify-center text-muted-foreground text-sm text-center px-4">
+        {{ t('metrics.error_loading') }}
+      </div>
       <TimeAreaChart v-else-if="data?.history" :data="data.history" />
     </CardContent>
     <div v-if="data?.metrics" class="border-t border-border/50 bg-surface-1 px-4 py-3 flex items-center gap-6 overflow-x-auto text-sm">
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('portfolio.metrics_tabs.performance.stats.return', { range: selectedRange }) }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.return', { range: selectedRange }) }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.return_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium" :class="data.metrics.returnFiat >= 0 ? 'text-profit' : 'text-loss'">
           {{ data.metrics.returnFiat >= 0 ? '+' : '' }}{{ formatCurrency(data.metrics.returnFiat) }}
         </span>
       </div>
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('portfolio.metrics_tabs.performance.stats.vs_cost') }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.vs_cost') }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.vs_cost_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium" :class="data.metrics.returnPercent >= 0 ? 'text-profit' : 'text-loss'">
           {{ data.metrics.returnPercent >= 0 ? '+' : '' }}{{ formatPercent(data.metrics.returnPercent) }}
         </span>
       </div>
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('portfolio.metrics_tabs.performance.stats.volatility') }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.volatility') }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.volatility_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium text-foreground">{{ formatPercent(data.metrics.volatilityPercent) }}</span>
       </div>
       <div class="stat flex flex-col gap-0.5">
-        <span class="text-xs text-muted-foreground uppercase tracking-wide font-medium">{{ t('portfolio.metrics_tabs.performance.stats.best_day') }}</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.best_day') }}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.best_day_desc') }}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <span class="font-medium" :class="data.metrics.bestDayPercent >= 0 ? 'text-profit' : 'text-loss'">
           {{ data.metrics.bestDayPercent >= 0 ? '+' : '' }}{{ formatPercent(data.metrics.bestDayPercent) }}
         </span>

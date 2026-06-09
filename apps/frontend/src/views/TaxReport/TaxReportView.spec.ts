@@ -40,6 +40,7 @@ vi.mock('@/composables/queries/useTaxQueries', async () => {
     useFuturesTransactionsQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
     useFuturesDerivativesQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
     useTaxReportQuery: vi.fn(() => ({ data: vue.ref(null), isLoading: vue.ref(false) })),
+    useAvailableYearsQuery: vi.fn(() => ({ data: vue.ref([2024]), isLoading: vue.ref(false) })),
   }
 })
 
