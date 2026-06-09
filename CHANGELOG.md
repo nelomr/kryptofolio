@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.4](https://github.com/nelomr/kryptofolio/compare/v1.15.3...v1.15.4) (2026-06-09)
+
+### ✨ Features
+
+* implement volatility heatmap and isolate domain logic ([a465611](https://github.com/nelomr/kryptofolio/commit/a46561179a7c77ea46a827a7bcb6928b878b7ffb))
+
 ## [1.15.3](https://github.com/nelomr/kryptofolio/compare/v1.15.2...v1.15.3) (2026-06-09)
 
 ### ✨ Features

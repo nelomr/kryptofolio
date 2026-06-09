@@ -1,7 +1,7 @@
 {
   "name": "kryptofolio-workspace",
   "private": true,
-  "version": "1.15.3",
+  "version": "1.15.4",
   "description": "Kryptofolio - An open-source crypto portfolio tracker built with Vue 3.",
   "type": "module",
   "repository": {
