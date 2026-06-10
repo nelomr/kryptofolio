@@ -1,5 +1,6 @@
-import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics, AssetAllocationItem, HeatmapDay, VolatilityHeatmapEntity, HeatmapStats } from '@/core/domain/ports/ICryptoMetricsPort'
+import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics, AssetAllocationItem, HeatmapDay, VolatilityHeatmapEntity, HeatmapStats, RiskMetrics } from '@/core/domain/ports/ICryptoMetricsPort'
 import { CryptoKpisSchema, PerformanceHistoryResponseSchema, AssetAllocationResponseSchema, VolatilityHeatmapResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
+import { RiskMetricsSchema } from '@/core/infrastructure/dtos/RiskMetricsSchema'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { bffClient } from '../http/BffClient'
 
@@ -126,4 +127,11 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
       avg: last105.length > 0 ? sum / last105.length : 0,
     };
   }
+
+  async getRiskMetrics(): Promise<RiskMetrics> {
+    const res = await bffClient.api.metrics.risk.$get()
+    const rawData = await res.json()
+    return parseOrFail(RiskMetricsSchema, rawData, 'getRiskMetrics')
+  }
 }
+

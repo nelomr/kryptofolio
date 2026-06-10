@@ -11,6 +11,7 @@ import MetricsDashboard from "./components/metrics/MetricsDashboard.vue";
 import PerformanceHistory from "./components/metrics/PerformanceHistory.vue";
 import VolatilityHeatmap from "./components/metrics/VolatilityHeatmap.vue";
 import AssetAllocation from "./components/metrics/AssetAllocation.vue";
+import RiskMetricsCard from "./components/metrics/RiskMetricsCard.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import LotHierarchyTable from "./components/LotHierarchyTable.vue";
@@ -80,11 +81,14 @@ const {
         value="metrics"
         class="flex-1 min-h-0 flex flex-col gap-6 lg:gap-8 mt-0 border-0 p-0 outline-none"
       >
-        <div class="grid lg:grid-cols-2 gap-6 lg:gap-8">
+        <div class="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
           <PerformanceHistory />
-          <AssetAllocation />
+          <VolatilityHeatmap />
         </div>
-        <VolatilityHeatmap />
+        <div class="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
+          <AssetAllocation />
+          <RiskMetricsCard />
+        </div>
       </TabsContent>
     </Tabs>
 

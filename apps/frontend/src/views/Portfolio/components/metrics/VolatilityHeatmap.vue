@@ -24,7 +24,7 @@ const { heatmapCells, stats, getCellBg } = useVolatilityGrid(data);
 </script>
 
 <template>
-  <Card class="flex flex-col h-full rounded-[24px] shadow-soft">
+  <Card class="flex flex-col rounded-[24px] shadow-soft">
     <CardHeader
       class="flex flex-row justify-between items-start gap-4 p-6 pb-4"
     >

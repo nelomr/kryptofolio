@@ -40,6 +40,22 @@ export const en: I18nDictionary = {
   'portfolio.metrics_tabs.performance.stats.best_day_desc': 'The highest percentage gain recorded in a single day.',
   'portfolio.metrics_tabs.performance.tooltip.equity': 'Equity:',
   'portfolio.metrics_tabs.performance.tooltip.cost': 'Cost:',
+
+  // Risk Metrics
+  'portfolio.metrics_tabs.risk.kicker': 'Sharpe Ratio · Rolling 30D',
+  'portfolio.metrics_tabs.risk.title': 'Sharpe Ratio',
+  'portfolio.metrics_tabs.risk.desc': 'Risk-adjusted return. Over 1 = return compensates for volatility. Green band = excellent zone.',
+  'portfolio.metrics_tabs.risk.current': 'Current Sharpe',
+  'portfolio.metrics_tabs.risk.stats.sharpe': 'Sharpe YTD',
+  'portfolio.metrics_tabs.risk.stats.sharpe_desc': 'Sharpe ratio calculated over the current year (Year To Date).',
+  'portfolio.metrics_tabs.risk.stats.sortino': 'Sortino',
+  'portfolio.metrics_tabs.risk.stats.sortino_desc': 'Similar to Sharpe, but only penalizes negative volatility (drawdowns).',
+  'portfolio.metrics_tabs.risk.stats.calmar': 'Calmar',
+  'portfolio.metrics_tabs.risk.stats.calmar_desc': 'Annualized return divided by maximum drawdown.',
+  'portfolio.metrics_tabs.risk.zones.excellent': 'EXCELLENT',
+  'portfolio.metrics_tabs.risk.zones.acceptable': 'ACCEPTABLE',
+  'portfolio.metrics_tabs.risk.zones.loss': 'LOSS',
+
   'portfolio.syncing': '(Syncing...)',
   'portfolio.no_assets': 'No assets found in the portfolio.',
   'portfolio.subtitle': 'Institutional FIFO Engine • Fiscal Year 2026',

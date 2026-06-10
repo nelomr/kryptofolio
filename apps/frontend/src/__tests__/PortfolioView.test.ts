@@ -38,7 +38,14 @@ vi.mock('@pinia/colada', () => ({
       hhiScore: 10000,
       // Volatility Heatmap Query requirements
       grid: Array.from({ length: 7 }, () => Array(15).fill(null)),
-      stats: { best: 0, worst: 0, positiveDays: 0, totalDays: 0, avg: 0 }
+      stats: { best: 0, worst: 0, positiveDays: 0, totalDays: 0, avg: 0 },
+      // Risk Metrics Query requirements
+      sharpeRatio: 2.18,
+      sortinoRatio: 2.62,
+      calmarRatio: 3.41,
+      betaVsBtc: 0.87,
+      alphaPercent: 4.2,
+      history: [1.5, 1.8, 2.0, 2.18]
     }),
     isLoading: ref(false),
     error: ref(null)
@@ -52,6 +59,42 @@ vi.mock('@/components/ui/tabs', () => ({
   TabsList: { template: '<div><slot /></div>' },
   TabsTrigger: { template: '<button><slot /></button>' },
   TabsContent: { template: '<div><slot /></div>' }
+}))
+
+vi.mock('vue-chartjs', () => ({
+  Line: { template: '<div class="mock-line-chart"></div>' },
+  Doughnut: { template: '<div class="mock-doughnut-chart"></div>' }
+}))
+
+vi.mock('lightweight-charts', () => ({
+  ColorType: { Solid: 'Solid' },
+  LineStyle: { Dashed: 1, Solid: 0 },
+  AreaSeries: {},
+  LineSeries: {},
+  HistogramSeries: {},
+  CrosshairMode: { Normal: 0, Magnet: 1 },
+  PriceScaleMode: { Normal: 0 },
+  createChart: vi.fn().mockReturnValue({
+    addSeries: vi.fn().mockReturnValue({
+      setData: vi.fn(),
+      applyOptions: vi.fn()
+    }),
+    addHistogramSeries: vi.fn().mockReturnValue({
+      setData: vi.fn(),
+      applyOptions: vi.fn()
+    }),
+    addLineSeries: vi.fn().mockReturnValue({
+      setData: vi.fn(),
+      applyOptions: vi.fn()
+    }),
+    applyOptions: vi.fn(),
+    timeScale: vi.fn().mockReturnValue({
+      fitContent: vi.fn(),
+      applyOptions: vi.fn()
+    }),
+    remove: vi.fn(),
+    subscribeCrosshairMove: vi.fn()
+  })
 }))
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────

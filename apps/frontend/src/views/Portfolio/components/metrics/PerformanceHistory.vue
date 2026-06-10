@@ -22,7 +22,7 @@ const currentCostBasis = computed(() => {
 </script>
 
 <template>
-  <Card class="flex flex-col h-full w-full">
+  <Card class="flex flex-col w-full">
     <CardHeader class="flex flex-row items-start justify-between pb-2">
       <div class="flex flex-col gap-1">
         <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{{ t('portfolio.metrics_tabs.performance.kicker') }}</span>

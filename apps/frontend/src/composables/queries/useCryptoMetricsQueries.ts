@@ -50,3 +50,12 @@ export function useVolatilityHeatmapQuery(year: Ref<number>) {
     query: () => repo.getVolatilityHeatmap(year.value),
   })
 }
+
+export function useRiskMetricsQuery() {
+  const repo = useCryptoMetricsRepo()
+
+  return useQuery({
+    key: ['crypto-risk-metrics'],
+    query: () => repo.getRiskMetrics(),
+  })
+}

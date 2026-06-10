@@ -20,7 +20,7 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
 </script>
 
 <template>
-  <Card class="flex flex-col h-full w-full">
+  <Card class="flex flex-col w-full">
     <CardHeader class="flex flex-row items-start justify-between pb-2">
       <div class="flex flex-col gap-1">
         <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{{ t('metrics.asset_allocation') }}</span>
@@ -46,13 +46,13 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
         <!-- Doughnut Chart from vue-chartjs -->
         <div class="relative w-[180px] h-[180px] xl:w-[200px] xl:h-[200px] flex-shrink-0 mx-auto xl:mx-0">
           <!-- Center Text placed behind canvas so tooltips render on top -->
-          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span class="font-sans text-[10px] font-medium tracking-[0.18em] text-muted-foreground uppercase">{{ t('metrics.assets_kicker_upper') }}</span>
             <span class="font-mono text-[22px] font-bold text-foreground num mt-1">{{ data.totalAssets }}</span>
           </div>
           
           <Doughnut 
-            class="relative z-10"
+            class="relative"
             v-if="chartData.datasets[0].data.length > 0"
             :data="chartData" 
             :options="chartOptions" 

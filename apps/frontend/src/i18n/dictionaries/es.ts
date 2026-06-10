@@ -39,6 +39,22 @@ export const es: I18nDictionary = {
   'portfolio.metrics_tabs.performance.stats.best_day_desc': 'El porcentaje de ganancia más alto registrado en un solo día.',
   'portfolio.metrics_tabs.performance.tooltip.equity': 'Capital:',
   'portfolio.metrics_tabs.performance.tooltip.cost': 'Coste:',
+
+  // Risk Metrics
+  'portfolio.metrics_tabs.risk.kicker': 'Ratio de Sharpe · Rolling 30D',
+  'portfolio.metrics_tabs.risk.title': 'Sharpe Ratio',
+  'portfolio.metrics_tabs.risk.desc': 'Rentabilidad ajustada al riesgo. Sobre 1 = rentabilidad compensa volatilidad. Banda verde = zona excelente.',
+  'portfolio.metrics_tabs.risk.current': 'Sharpe actual',
+  'portfolio.metrics_tabs.risk.stats.sharpe': 'Sharpe YTD',
+  'portfolio.metrics_tabs.risk.stats.sharpe_desc': 'Ratio de Sharpe calculado sobre el año en curso (Year To Date).',
+  'portfolio.metrics_tabs.risk.stats.sortino': 'Sortino',
+  'portfolio.metrics_tabs.risk.stats.sortino_desc': 'Similar al Sharpe, pero solo penaliza la volatilidad negativa (caídas).',
+  'portfolio.metrics_tabs.risk.stats.calmar': 'Calmar',
+  'portfolio.metrics_tabs.risk.stats.calmar_desc': 'Rentabilidad anualizada dividida por el máximo drawdown.',
+  'portfolio.metrics_tabs.risk.zones.excellent': 'EXCELENTE',
+  'portfolio.metrics_tabs.risk.zones.acceptable': 'ACEPTABLE',
+  'portfolio.metrics_tabs.risk.zones.loss': 'PÉRDIDA',
+  
   'portfolio.syncing': '(Sincronizando...)',
   'portfolio.no_assets': 'No se han encontrado activos en la cartera.',
   'portfolio.subtitle': 'Motor FIFO Institucional • Año Fiscal 2026',

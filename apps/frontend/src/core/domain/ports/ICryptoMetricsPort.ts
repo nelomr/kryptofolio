@@ -13,7 +13,6 @@ export interface AssetAllocationItem {
   valueFiat: number;
 }
 
-
 export interface CryptoKpis {
   totalRoiPercent: number;
   totalRoiFiat: number;
@@ -32,7 +31,7 @@ export interface CryptoKpis {
   portfolioDispersion: number; // Sigma (Volatility)
 }
 
-export type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
+export type TimeRange = "1D" | "1W" | "1M" | "1Y" | "ALL";
 
 export interface PerformancePoint {
   timestamp: number; // Unix timestamp
@@ -65,6 +64,15 @@ export interface VolatilityHeatmapEntity {
   stats: HeatmapStats;
 }
 
+export interface RiskMetrics {
+  sharpeRatio: number;
+  sortinoRatio: number;
+  betaVsBtc: number;
+  alphaPercent: number;
+  calmarRatio: number;
+  history: number[];
+}
+
 export interface ICryptoMetricsPort {
   getKpis(): Promise<CryptoKpis>;
   getPerformanceHistory(range: TimeRange): Promise<{
@@ -77,4 +85,5 @@ export interface ICryptoMetricsPort {
     hhiScore: number;
   }>;
   getVolatilityHeatmap(year: number): Promise<VolatilityHeatmapEntity>;
+  getRiskMetrics(): Promise<RiskMetrics>;
 }

@@ -115,3 +115,12 @@ export function generateVolatilityHeatmap(year: number) {
   }
   return data;
 }
+
+export const MOCK_RISK_METRICS = {
+  sharpe_ratio: 2.18,
+  sortino_ratio: 2.62,
+  beta_vs_btc: 0.87,
+  alpha_pct: 4.2,
+  calmar_ratio: 3.41,
+  history: [1.5, 1.8, 2.0, 2.18]
+};
