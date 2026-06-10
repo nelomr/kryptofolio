@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.5](https://github.com/nelomr/kryptofolio/compare/v1.15.4...v1.15.5) (2026-06-10)
+
+### ✨ Features
+
+* add portfolio risk metrics widget with rolling sharpe ratio ([5cc8bad](https://github.com/nelomr/kryptofolio/commit/5cc8bad82036e6b19ab866d55339797a2ecd3a49))
+
 ## [1.15.4](https://github.com/nelomr/kryptofolio/compare/v1.15.3...v1.15.4) (2026-06-09)
 
 ### ✨ Features
