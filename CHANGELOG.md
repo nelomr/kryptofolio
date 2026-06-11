@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.6](https://github.com/nelomr/kryptofolio/compare/v1.15.5...v1.15.6) (2026-06-11)
+
+### ✨ Features
+
+* integrate Local Secrets Vault, dynamic registry, and Hexagonal Architecture ([832238d](https://github.com/nelomr/kryptofolio/commit/832238dcab3fc83bac6f5fe1cea8be207ba9fdd2))
+
 ## [1.15.5](https://github.com/nelomr/kryptofolio/compare/v1.15.4...v1.15.5) (2026-06-10)
 
 ### ✨ Features
