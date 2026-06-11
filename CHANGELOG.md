@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.8](https://github.com/nelomr/kryptofolio/compare/v1.15.7...v1.15.8) (2026-06-11)
+
+### ✨ Features
+
+* complete hexagonal architecture refactor for vault and language settings with updated documentation ([533682f](https://github.com/nelomr/kryptofolio/commit/533682f37290e7b0f7c50db50c289eb18391cca7))
+
 ## [1.15.7](https://github.com/nelomr/kryptofolio/compare/v1.15.6...v1.15.7) (2026-06-11)
 
 ### ✨ Features
