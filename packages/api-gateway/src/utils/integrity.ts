@@ -1,5 +1,5 @@
 import Big from 'big.js';
-import type { HoldingItem } from '../data/mockPortfolio';
+import type { HoldingItem } from '../data/mockPortfolio.ts';
 
 type MinimalTransaction = {
   symbol: string;

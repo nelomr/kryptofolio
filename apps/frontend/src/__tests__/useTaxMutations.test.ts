@@ -27,6 +27,7 @@ function createMockTaxRepo(): ITaxPort {
     importWallet: vi.fn().mockResolvedValue(undefined),
     syncWeb3: vi.fn().mockResolvedValue(undefined),
     downloadReport: vi.fn().mockResolvedValue(new Blob()),
+    getAvailableYears: vi.fn(),
   }
 }
 

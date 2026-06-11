@@ -1,66 +1,67 @@
-import { computed, type Ref } from 'vue'
-import type { AssetAllocationItem } from '@/core/domain/ports/ICryptoMetricsPort'
-import type { ChartData, ChartOptions, Plugin } from 'chart.js'
-import { useI18n } from '@/composables/useI18n'
+import { computed, type Ref } from "vue";
+import type { AssetAllocationItem } from "@/core/domain/ports/ICryptoMetricsPort";
+import type { ChartData, ChartOptions, Plugin } from "chart.js";
 
 // Helper to get CSS variables
 const getCSSVar = (name: string) => {
-  if (typeof window === 'undefined') return ''
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-}
+  if (typeof window === "undefined") return "";
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+};
 
 // Custom plugin to draw the background track (matching the old SVG behavior)
-export const backgroundTrackPlugin: Plugin<'doughnut'> = {
-  id: 'backgroundTrack',
+export const backgroundTrackPlugin: Plugin<"doughnut"> = {
+  id: "backgroundTrack",
   beforeDraw: (chart) => {
-    const { ctx, chartArea } = chart
-    const innerRadius = (chart as any).innerRadius
-    const outerRadius = (chart as any).outerRadius
-    if (!innerRadius || !outerRadius) return
+    const { ctx, chartArea } = chart;
+    const innerRadius = (chart as any).innerRadius;
+    const outerRadius = (chart as any).outerRadius;
+    if (!innerRadius || !outerRadius) return;
 
-    const x = (chartArea.left + chartArea.right) / 2
-    const y = (chartArea.top + chartArea.bottom) / 2
-    const radius = (innerRadius + outerRadius) / 2
-    const thickness = outerRadius - innerRadius
-    
-    const borderColor = getCSSVar('--color-border') || '#f4f6f8'
+    const x = (chartArea.left + chartArea.right) / 2;
+    const y = (chartArea.top + chartArea.bottom) / 2;
+    const radius = (innerRadius + outerRadius) / 2;
+    const thickness = outerRadius - innerRadius;
 
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(x, y, radius, 0, 2 * Math.PI)
-    ctx.lineWidth = thickness
-    ctx.strokeStyle = borderColor
-    ctx.stroke()
-    ctx.restore()
-  }
-}
+    const borderColor = getCSSVar("--color-border") || "#f4f6f8";
 
-export function useAssetAllocationChart(itemsRef: Ref<AssetAllocationItem[] | undefined>) {
-  const { t } = useI18n()
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 2 * Math.PI);
+    ctx.lineWidth = thickness;
+    ctx.strokeStyle = borderColor;
+    ctx.stroke();
+    ctx.restore();
+  },
+};
 
-  const chartData = computed<ChartData<'doughnut'>>(() => {
-    const items = itemsRef.value || []
+export function useAssetAllocationChart(
+  itemsRef: Ref<AssetAllocationItem[] | undefined>,
+) {
+  const chartData = computed<ChartData<"doughnut">>(() => {
+    const items = itemsRef.value || [];
     return {
-      labels: items.map(i => i.symbol),
+      labels: items.map((i) => i.symbol),
       datasets: [
         {
-          data: items.map(i => i.allocationPercent),
-          backgroundColor: items.map(i => i.colorHex),
+          data: items.map((i) => i.allocationPercent),
+          backgroundColor: items.map((i) => i.colorHex),
           borderWidth: 0,
           hoverOffset: 4,
           borderRadius: 0,
-        }
-      ]
-    }
-  })
+        },
+      ],
+    };
+  });
 
-  const chartOptions = computed<ChartOptions<'doughnut'>>(() => {
+  const chartOptions = computed<ChartOptions<"doughnut">>(() => {
     return {
       responsive: true,
       maintainAspectRatio: true,
-      cutout: '74%',
+      cutout: "74%",
       layout: {
-        padding: 4
+        padding: 4,
       },
       plugins: {
         legend: {
@@ -68,34 +69,34 @@ export function useAssetAllocationChart(itemsRef: Ref<AssetAllocationItem[] | un
         },
         tooltip: {
           enabled: true,
-          backgroundColor: getCSSVar('--color-surface-2') || '#1e293b',
-          titleColor: getCSSVar('--color-foreground') || '#f8fafc',
-          bodyColor: getCSSVar('--color-muted-foreground') || '#94a3b8',
-          borderColor: getCSSVar('--color-border') || '#334155',
+          backgroundColor: getCSSVar("--color-surface-2") || "#1e293b",
+          titleColor: getCSSVar("--color-foreground") || "#f8fafc",
+          bodyColor: getCSSVar("--color-muted-foreground") || "#94a3b8",
+          borderColor: getCSSVar("--color-border") || "#334155",
           borderWidth: 1,
           padding: 10,
           cornerRadius: 8,
           callbacks: {
             label: (context) => {
-              const label = context.label || ''
-              const value = context.parsed || 0
-              return ` ${label}: ${value}%`
-            }
-          }
-        }
+              const label = context.label || "";
+              const value = context.parsed || 0;
+              return ` ${label}: ${value}%`;
+            },
+          },
+        },
       },
       animation: {
         animateScale: true,
         animateRotate: true,
         duration: 800,
-        easing: 'easeOutQuart'
-      }
-    }
-  })
+        easing: "easeOutQuart",
+      },
+    };
+  });
 
   return {
     chartData,
     chartOptions,
-    backgroundTrackPlugin
-  }
+    backgroundTrackPlugin,
+  };
 }

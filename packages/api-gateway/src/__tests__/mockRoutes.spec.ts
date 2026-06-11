@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { app } from '../index';
+import { app } from '../index.ts';
 
 describe('BFF Mock Routes', () => {
   it('GET /api/portfolio/summary returns 200 OK and mock summary data', async () => {
@@ -28,7 +28,7 @@ describe('BFF Mock Routes', () => {
     const res = await app.request('/api/tax/report');
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.summary).toHaveProperty('capitalGainsEur');
-    expect(data).toHaveProperty('auditTrail');
+    expect(data.summary).toHaveProperty('capital_gains_eur');
+    expect(data).toHaveProperty('audit_trail');
   });
 });

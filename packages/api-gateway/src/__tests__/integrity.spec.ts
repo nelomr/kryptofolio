@@ -1,29 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { validatePortfolioIntegrity } from '../utils/integrity';
-import mockPortfolio from '../data/mockPortfolio';
-import { MOCK_TRANSACTIONS } from '../data/mockTax';
+import { validatePortfolioIntegrity } from '../utils/integrity.ts';
+import mockPortfolio from '../data/mockPortfolio.ts';
+import { MOCK_TRANSACTIONS } from '../data/mockTax.ts';
 
 describe('Integrity validation', () => {
+  const normalizedTransactions = MOCK_TRANSACTIONS.map(tx => ({
+    symbol: tx.asset_in || tx.asset_out || '',
+    type: tx.tx_type,
+    amount: tx.amount_in || tx.amount_out || 0
+  }));
+
   it('should return isValid true for valid data matching', () => {
     // The current mock data should perfectly match
-    const report = validatePortfolioIntegrity(mockPortfolio.summary.holdings, MOCK_TRANSACTIONS);
+    const report = validatePortfolioIntegrity(mockPortfolio.summary.holdings, normalizedTransactions);
     expect(report.isValid).toBe(true);
     expect(report.discrepancies).toHaveLength(0);
   });
 
   it('should return isValid false and list discrepancies if there is a discrepancy', () => {
     const invalidTransactions = [
-      ...MOCK_TRANSACTIONS,
+      ...normalizedTransactions,
       {
-        id: 'tx-extra',
-        type: 'BUY',
         symbol: 'BTC',
-        amount: 10,
-        totalEur: 100,
-        priceEur: 10,
-        feeEur: 0,
-        timestamp: '2025-01-01T00:00:00Z',
-        exchange: 'Kraken'
+        type: 'BUY',
+        amount: 10
       }
     ];
     

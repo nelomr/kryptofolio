@@ -39,3 +39,10 @@ propuestas/
 
 # OpenSpec — only track live specs and config, not change history
 openspec/changes/archive/
+
+# Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite

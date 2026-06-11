@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { app } from '../index';
+import { app } from '../index.ts';
 
 describe('BFF Proxy Middleware', () => {
   it('passes through to mock routes when MODE=mock', async () => {

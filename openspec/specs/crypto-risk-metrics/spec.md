@@ -1,5 +1,8 @@
-## ADDED Requirements
+# crypto-risk-metrics Specification
 
+## Purpose
+TBD - created by archiving change crypto-sharpe-ratio. Update Purpose after archive.
+## Requirements
 ### Requirement: Display Risk Metrics Summary
 The system SHALL present Sharpe Ratio, Sortino Ratio, Beta vs BTC, and Alpha as a summary.
 
@@ -29,3 +32,4 @@ The system SHALL fetch metrics via the `ICryptoMetricsPort` and validate externa
 #### Scenario: Failed data validation
 - **WHEN** the payload format from the backend is invalid
 - **THEN** the Zod schema parsing fails and emits a controlled error, preventing UI crashes.
+

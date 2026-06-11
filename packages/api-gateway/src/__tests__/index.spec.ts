@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { app } from '../index';
-import type { AppType } from '../index';
+import { app } from '../index.ts';
+import type { AppType } from '../index.ts';
 import { hc } from 'hono/client';
 
 describe('Scaffold Hono BFF', () => {

@@ -12,16 +12,19 @@ import { PiniaColada } from '@pinia/colada'
 import { usePortfolioData } from '@/views/Portfolio/composables/usePortfolioData'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'
 import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
-import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
+import type { PortfolioSummaryEntity, PortfolioMetricsEntity } from '@/core/domain/models/PortfolioEntities'
 import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const mockSummary: PortfolioSummaryEntity = {
   metrics: {
-    totalEquityEur: 62_000,
-    totalCostBasisEur: 50_000,
-    totalRealizedPnlEur: 0,
-    totalUnrealizedPnlEur: 12_000,
-    totalPnlEur: 12_000,
+    totalEquityEur: 100000,
+    totalCostBasisEur: 90000,
+    totalRealizedPnlEur: 5000,
+    totalUnrealizedPnlEur: 5000,
+    totalPnlEur: 10000,
+    roiPercentage: 11.1,
+    isBullish: true,
+    realizedIsPositive: true,
   },
   holdings: [
     {

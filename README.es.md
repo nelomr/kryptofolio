@@ -16,6 +16,7 @@
 - **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para auditar operaciones, detectar anomalías de integridad (ej. bases de coste faltantes o saldos negativos), y proporcionar datos estructurados listos para informes AEAT.
 - **🤖 Preparado para Agentes de IA:** Los modelos de datos del frontend están desacoplados y diseñados específicamente para ser consultados por una futura integración de Agentes de IA (usando Vercel AI SDK y Mastra). Podrás hacer preguntas en lenguaje natural sobre tu portafolio en tiempo real.
 - **🛡️ Privacidad Primero:** Totalmente self-hosted. El backend utiliza una base de datos SQLite local (`fiscal.db`), asegurando que tus claves y tu historial de transacciones nunca salgan de tu máquina.
+- **🔐 Bóveda de Secretos Local:** Bóveda encriptada con AES-256-GCM para almacenar de forma segura credenciales de terceros (ej. Kraken API) sin exponerlas a la nube. El "memory scrubbing" asegura que las claves se borran de la memoria RAM tras su uso. Incluye un registro dinámico de proveedores y activación/desactivación en caliente de integraciones bajo arquitectura Hexagonal.
 - **🏗️ Arquitectura Hexagonal:** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI está completamente desacoplada de la obtención de datos, permitiendo una alta testabilidad y validación robusta en tiempo de ejecución mediante Zod.
 
 ## 🛠️ Stack Tecnológico y Monorepo

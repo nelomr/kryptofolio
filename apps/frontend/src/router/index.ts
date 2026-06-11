@@ -13,6 +13,11 @@ const router = createRouter({
       name: 'taxReport',
       component: () => import('@/views/TaxReport/TaxReportView.vue'),
     },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/Settings/SettingsView.vue'),
+    },
   ],
 })
 

@@ -116,6 +116,9 @@ describe('PortfolioSummaryEntity — domain shape', () => {
         totalRealizedPnlEur: 5000,
         totalUnrealizedPnlEur: 5000,
         totalPnlEur: 10000,
+        roiPercentage: 11.1,
+        isBullish: true,
+        realizedIsPositive: true,
       },
       holdings: [],
     }

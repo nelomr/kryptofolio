@@ -5,7 +5,7 @@
 
 import { useI18n } from "@/composables/useI18n";
 import CryptoIcon from "@/components/common/CryptoIcon/CryptoIcon.vue";
-import { PieChart, Landmark } from "lucide-vue-next";
+import { PieChart, Landmark, Settings } from "lucide-vue-next";
 
 const { t } = useI18n();
 const title = t("dashboard.title");
@@ -45,6 +45,14 @@ const title = t("dashboard.title");
           >
             <Landmark class="h-4 w-4" />
             {{ t("tax.title") }}
+          </RouterLink>
+          <RouterLink
+            to="/settings"
+            class="flex items-center gap-2 rounded-full px-5 py-2 text-sm font-medium transition-all duration-300 text-muted-foreground hover:text-accent-foreground hover:bg-accent cursor-pointer"
+            active-class="!text-primary bg-background shadow-sm ring-1 ring-primary/20"
+            title="Settings"
+          >
+            <Settings class="h-4 w-4" />
           </RouterLink>
         </nav>
       </div>

@@ -16,6 +16,7 @@
 - **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to audit operations, detect integrity issues (e.g., missing cost bases or negative balances), and provide structured data for AEAT-compliant reporting.
 - **🤖 AI Agent Ready:** The frontend data models are decoupled and specifically designed to be queried by a future AI Agent integration (using Vercel AI SDK and Mastra). You will be able to ask natural language questions about your portfolio in real-time.
 - **🛡️ Privacy First:** Fully self-hosted. The backend utilizes a local SQLite database (`fiscal.db`), ensuring your keys and transaction history never leave your machine.
+- **🔐 Local Secrets Vault:** AES-256-GCM encrypted local vault for securely storing third-party credentials (e.g. Kraken API) without exposing them to the cloud. Memory scrubbing ensures keys are wiped from RAM after use. Features a dynamic provider registry and on-the-fly toggling of integrations via strict Hexagonal architecture.
 - **🏗️ Hexagonal Architecture:** Strict separation of concerns (Ports & Adapters). The UI layer is completely decoupled from data fetching, enabling high testability and robust runtime validation via Zod.
 
 ## 🛠️ Tech Stack & Monorepo

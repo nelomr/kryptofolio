@@ -41,6 +41,7 @@ function createMockTaxRepo(): ITaxPort {
     getFuturesDerivatives: vi.fn().mockResolvedValue([]),
     getInvalidTransactions: vi.fn().mockResolvedValue([]),
     getReport: vi.fn().mockResolvedValue(mockReport),
+    getAvailableYears: vi.fn().mockResolvedValue([2026]),
     downloadReport: vi.fn().mockResolvedValue(new Blob()),
     deleteTransaction: vi.fn().mockResolvedValue(undefined),
     updateTransaction: vi.fn().mockResolvedValue(undefined),
