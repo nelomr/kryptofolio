@@ -349,12 +349,15 @@ export const es: I18nDictionary = {
 
   // Vault Dynamic Providers
   "vault.provider.generic.description":
-    "Sincroniza tu API KEY {providerName} de forma segura.",
+    "Sincroniza el API KEY de {providerName} de forma segura.",
+  "vault.provider.generic.fields.format_title": "Solo se permiten caracteres alfanuméricos y símbolos básicos (-_+=/.)",
   "vault.provider.generic.fields.apiKey.label": "API Key",
   "vault.provider.generic.fields.apiSecret.label": "API Secret",
 
   "vault.errors.invalid_format":
     "Formato inválido: Caracteres no permitidos detectados",
+  "vault.errors.invalid_password": "La contraseña proporcionada es incorrecta",
+  "vault.errors.unknown_provider": "El proveedor especificado no es válido",
   "vault.errors.unlock_failed": "Fallo al desbloquear la bóveda",
   "vault.errors.save_failed": "Error al guardar credenciales",
   "vault.errors.toggle_failed": "Error al cambiar el estado del proveedor",

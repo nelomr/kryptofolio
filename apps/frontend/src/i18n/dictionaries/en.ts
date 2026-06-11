@@ -344,12 +344,14 @@ export const en: I18nDictionary = {
     "Your vault is unlocked. You can securely manage your integration keys below.",
 
   // Vault Dynamic Providers
-  "vault.provider.generic.description":
-    "Sync your {providerName} API KEY securely.",
+  "vault.provider.generic.description": "Configure the credentials for {providerName}.",
+  "vault.provider.generic.fields.format_title": "Only alphanumeric characters and basic symbols (-_+=/.) are allowed",
   "vault.provider.generic.fields.apiKey.label": "API Key",
   "vault.provider.generic.fields.apiSecret.label": "API Secret",
   
   "vault.errors.invalid_format": "Invalid format: Unallowed characters detected",
+  "vault.errors.invalid_password": "The provided password is incorrect",
+  "vault.errors.unknown_provider": "The specified provider is not valid",
   "vault.errors.unlock_failed": "Failed to unlock vault",
   "vault.errors.save_failed": "Failed to save credentials",
   "vault.errors.toggle_failed": "Failed to change provider status",

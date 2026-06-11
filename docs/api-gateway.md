@@ -99,6 +99,28 @@ Retrieves historical performance points for charting.
 
 ## Referential Integrity & Mocks
 
+### Vault Secrets Management (`/vault`)
+
+The API Gateway also exposes a secure, encrypted local vault used to store third-party credentials (like API keys) securely using AES-256-GCM. 
+
+#### Semantic Error Codes
+The Vault API endpoints strictly follow the Anti-Corruption Layer pattern by returning semantic string codes in the `error` or `message` fields. This keeps the backend decoupled from frontend UI translations:
+- `VAULT_UNLOCKED`: Vault was successfully unlocked.
+- `CREDENTIALS_SECURED`: Credentials were successfully saved.
+- `INVALID_PASSWORD`: The provided master password was incorrect.
+- `VAULT_LOCKED`: The vault is locked and must be unlocked before proceeding.
+- `UNKNOWN_PROVIDER`: The requested integration provider does not exist.
+- `INVALID_CREDENTIAL_FORMAT`: The payload format is invalid.
+
+#### Vault Endpoints
+- **`GET /vault/status`**: Returns whether the vault is currently unlocked and the lists of configured/enabled providers.
+- **`POST /vault/unlock`**: Unlocks or initializes the vault. Accepts `{ password: string }`. Includes a persistent verification payload (`kryptofolio_vault_ok`) to cryptographically verify if the password matches previous sessions.
+- **`GET /vault/providers`**: Lists available third-party integrations.
+- **`POST /vault/:service`**: Stores credentials securely for a specific service.
+- **`PATCH /vault/:service/status`**: Enables or disables a specific service integration.
+
+## Referential Integrity & Mocks
+
 To ensure the frontend functions exactly as it would in production, the mock data within the API Gateway is strictly validated for **referential integrity**.
 
 > [!IMPORTANT]

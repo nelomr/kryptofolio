@@ -13,7 +13,10 @@ export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort {
     let dbUrl = ':memory:';
 
     if (!isMockMode) {
-      dbUrl = process.env.DB_PATH || path.join(process.cwd(), 'kryptofolio.db');
+      if (!process.env.DB_PATH) {
+        throw new Error('[SqliteVaultRepositoryAdapter] CRITICAL: DB_PATH environment variable is not defined. Please set it in your .env file or environment.');
+      }
+      dbUrl = process.env.DB_PATH;
     }
 
     this.db = new DatabaseSync(dbUrl);

@@ -27,16 +27,46 @@ describe("Vault API Endpoints", () => {
     spy.mockRestore();
   });
 
-  it("POST /vault/unlock should unlock vault", async () => {
+  it("POST /vault/unlock should initialize vault on first run", async () => {
     const res = await credentialsApi.request("/vault/unlock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: "test-password" }),
+      body: JSON.stringify({ password: "first-password" }),
     });
 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.message).toBe('VAULT_UNLOCKED');
+    expect(container.cryptographyPort.isUnlocked()).toBe(true);
+  });
+
+  it("POST /vault/unlock should fail with incorrect password on subsequent runs", async () => {
+    // Lock it first to ensure clean state
+    (container.cryptographyPort as any).key = null;
+    
+    const res = await credentialsApi.request("/vault/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "wrong-password" }),
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe('INVALID_PASSWORD');
+    expect(container.cryptographyPort.isUnlocked()).toBe(false);
+  });
+
+  it("POST /vault/unlock should succeed with correct password", async () => {
+    const res = await credentialsApi.request("/vault/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: "first-password" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.message).toBe('VAULT_UNLOCKED');
     expect(container.cryptographyPort.isUnlocked()).toBe(true);
   });
 
@@ -53,7 +83,7 @@ describe("Vault API Endpoints", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ success: true, message: 'Credentials secured in vault.' });
+    expect(body).toEqual({ success: true, message: 'CREDENTIALS_SECURED' });
   });
 
   it('PATCH /vault/:service/status should toggle the provider status', async () => {

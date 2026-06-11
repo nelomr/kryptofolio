@@ -8,6 +8,9 @@ import {
 import { useToggleVaultProviderMutation } from "@/composables/queries/useVaultMutations";
 import { useVaultForm } from "./composables/useVaultForm";
 
+import VaultLockedState from "./VaultLockedState.vue";
+import VaultProviderCard from "./VaultProviderCard.vue";
+
 // UI Components
 import {
   Card,
@@ -16,10 +19,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import Input from "@/components/ui/input/Input.vue";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { LockIcon, UnlockIcon } from "lucide-vue-next";
 
 const { t } = useI18n();
@@ -41,7 +41,8 @@ const {
   handleSaveProvider,
 } = useVaultForm(providers);
 
-const { mutate: toggleProvider, isLoading: isToggling } = useToggleVaultProviderMutation();
+const { mutate: toggleProvider, isLoading: isToggling } =
+  useToggleVaultProviderMutation();
 
 const handleToggle = (providerId: string, enabled?: boolean) => {
   toggleProvider({ service: providerId, enabled: enabled ?? false });
@@ -55,12 +56,6 @@ const isProviderEnabled = (providerId: string): boolean => {
   return status.value?.enabledServices?.includes(providerId) ?? false;
 };
 
-// UI Helpers
-const getFieldLabel = (fieldKey: string, fallback: string) => {
-  const tKey = `vault.provider.generic.fields.${fieldKey}.label`;
-  const translation = t(tKey);
-  return translation === tKey ? fallback : translation;
-};
 </script>
 
 <template>
@@ -76,9 +71,12 @@ const getFieldLabel = (fieldKey: string, fallback: string) => {
             </CardTitle>
             <CardDescription>{{ t("vault.subtitle") }}</CardDescription>
           </div>
-          <Badge 
+          <Badge
             :variant="isUnlocked ? 'default' : 'destructive'"
-            :class="{ 'bg-emerald-500 hover:bg-emerald-500 text-white': isUnlocked, 'hover:bg-destructive': !isUnlocked }"
+            :class="{
+              'bg-emerald-500 hover:bg-emerald-500 text-white': isUnlocked,
+              'hover:bg-destructive': !isUnlocked,
+            }"
           >
             {{
               isUnlocked ? t("vault.unlocked.title") : t("vault.locked.title")
@@ -89,22 +87,12 @@ const getFieldLabel = (fieldKey: string, fallback: string) => {
 
       <CardContent>
         <!-- Locked State -->
-        <div v-if="!isUnlocked" class="space-y-4">
-          <p class="text-sm text-muted-foreground">
-            {{ t("vault.locked.desc") }}
-          </p>
-          <div class="flex gap-2 max-w-sm">
-            <Input
-              v-model="password"
-              type="password"
-              :placeholder="t('vault.locked.password_placeholder')"
-              @keyup.enter="handleUnlock"
-            />
-            <Button :disabled="isUnlocking || !password" @click="handleUnlock">
-              {{ t("vault.locked.unlock_btn") }}
-            </Button>
-          </div>
-        </div>
+        <VaultLockedState 
+          v-if="!isUnlocked" 
+          v-model="password"
+          :is-unlocking="isUnlocking"
+          @unlock="handleUnlock"
+        />
 
         <!-- Unlocked State -->
         <div v-else class="space-y-6">
@@ -114,83 +102,21 @@ const getFieldLabel = (fieldKey: string, fallback: string) => {
 
           <div class="grid gap-4 md:grid-cols-2">
             <!-- Dynamic Services -->
-            <Card
+            <VaultProviderCard
               v-for="provider in providers"
               :key="provider.id"
-              class="border-muted bg-card/50"
-            >
-              <CardHeader class="pb-3">
-                <div class="flex justify-between items-start">
-                  <div>
-                    <CardTitle class="text-base">{{ provider.name }}</CardTitle>
-                    <CardDescription class="text-xs">
-                      {{
-                        t("vault.provider.generic.description", {
-                          providerName: provider.name,
-                        })
-                      }}
-                    </CardDescription>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <Switch
-                      :model-value="isProviderEnabled(provider.id)"
-                      @update:model-value="handleToggle(provider.id, $event)"
-                      :disabled="isToggling || !isProviderConfigured(provider.id)"
-                      class="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-input shadow-none"
-                    />
-                    <Badge
-                      :variant="isProviderConfigured(provider.id) ? 'default' : 'destructive'"
-                      :class="{ 'bg-emerald-500 hover:bg-emerald-500 text-white': isProviderConfigured(provider.id), 'hover:bg-destructive': !isProviderConfigured(provider.id) }"
-                    >
-                      {{
-                        isProviderConfigured(provider.id)
-                          ? t("vault.provider.status.configured")
-                          : t("vault.provider.status.not_configured")
-                      }}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent class="space-y-2">
-                <div
-                  v-for="field in provider.fields"
-                  :key="field.key"
-                  class="flex flex-col gap-1.5"
-                >
-                  <Input
-                    v-model="formData[provider.id][field.key]"
-                    :type="field.type"
-                    :placeholder="getFieldLabel(field.key, field.label)"
-                    title="Only alphanumeric characters and basic symbols (-_+=/.) are allowed"
-                    :class="{
-                      'border-destructive focus-visible:ring-destructive':
-                        errors[provider.id]?.[field.key],
-                    }"
-                    @input="sanitizeInput(provider.id, field.key)"
-                  />
-                  <span
-                    v-if="errors[provider.id]?.[field.key]"
-                    class="text-xs text-destructive"
-                  >
-                    {{ t(errors[provider.id][field.key]) }}
-                  </span>
-                </div>
-                <div class="flex justify-end pt-2">
-                  <Button
-                    variant="default"
-                    :disabled="
-                      isSaving ||
-                      Object.values(formData[provider.id] || {}).every(
-                        (v) => !v,
-                      )
-                    "
-                    @click="handleSaveProvider(provider.id)"
-                  >
-                    {{ t('vault.actions.save') }}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              :provider="provider"
+              :is-configured="isProviderConfigured(provider.id)"
+              :is-enabled="isProviderEnabled(provider.id)"
+              :is-toggling="isToggling"
+              :is-saving="isSaving"
+              :form-data="formData[provider.id] || {}"
+              :errors="errors[provider.id] || {}"
+              @toggle="handleToggle(provider.id, $event)"
+              @sanitize="sanitizeInput(provider.id, $event)"
+              @save="handleSaveProvider(provider.id)"
+              @update:form-field="(key, value) => formData[provider.id][key] = value"
+            />
           </div>
         </div>
       </CardContent>

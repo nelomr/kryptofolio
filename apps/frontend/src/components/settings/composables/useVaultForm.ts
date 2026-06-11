@@ -4,6 +4,24 @@ import { useI18n } from '@/composables/useI18n';
 import { useSaveVaultKeyMutation, useUnlockVaultMutation } from '@/composables/queries/useVaultMutations';
 import type { VaultProvider } from '@/core/domain/models/VaultEntities';
 
+const SEMANTIC_ERROR_MAP: Record<string, string> = {
+  "INVALID_PASSWORD": "vault.errors.invalid_password",
+  "VAULT_UNLOCK_FAILED": "vault.errors.unlock_failed",
+  "VAULT_LOCKED": "vault.errors.unlock_failed",
+  "UNKNOWN_PROVIDER": "vault.errors.unknown_provider",
+  "INVALID_CREDENTIAL_FORMAT": "vault.errors.invalid_format",
+  "VAULT_OPERATION_FAILED": "vault.errors.save_failed",
+  "FAILED_TO_TOGGLE_PROVIDER": "vault.errors.toggle_failed"
+};
+
+const getTranslatedError = (error: unknown, fallbackKey: string, t: (key: string) => string) => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message) return t(fallbackKey);
+  if (SEMANTIC_ERROR_MAP[message]) return t(SEMANTIC_ERROR_MAP[message]);
+  if (message.startsWith("vault.errors.")) return t(message);
+  return message || t(fallbackKey);
+};
+
 export function useVaultForm(providers: Ref<VaultProvider[] | undefined>) {
   const { t } = useI18n();
   const { mutateAsync: saveKey, isLoading: isSaving } = useSaveVaultKeyMutation();
@@ -66,13 +84,7 @@ export function useVaultForm(providers: Ref<VaultProvider[] | undefined>) {
       password.value = "";
       toast.success(t("vault.success.unlocked"));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '';
-      const msg = message === "VAULT_LOCKED" || message === "vault.errors.unlock_failed"
-        ? t("vault.errors.unlock_failed")
-        : message.startsWith("vault.errors.") 
-          ? t(message) 
-          : (message || t("vault.errors.unlock_failed"));
-      toast.error(msg);
+      toast.error(getTranslatedError(error, "vault.errors.unlock_failed", t));
     }
   };
 
@@ -96,13 +108,7 @@ export function useVaultForm(providers: Ref<VaultProvider[] | undefined>) {
       clearProviderForm(providerId);
       toast.success(t("vault.success.saved"));
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '';
-      const msg = message === "VAULT_LOCKED"
-        ? t("vault.errors.unlock_failed")
-        : message === "vault.errors.save_failed" || message.startsWith("vault.errors.")
-          ? t(message)
-          : (message || t("vault.errors.save_failed"));
-      toast.error(msg);
+      toast.error(getTranslatedError(error, "vault.errors.save_failed", t));
     }
   };
 

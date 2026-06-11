@@ -9,7 +9,7 @@
     "node": ">=24.12.0"
   },
   "scripts": {
-    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "dev": "node --watch --env-file=.env --experimental-strip-types src/index.ts",
     "build": "tsc",
     "test": "vitest run"
   },
