@@ -2,6 +2,7 @@ import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter
 import { SqliteVaultRepositoryAdapter } from '../database/sqlite.ts';
 import type { ICryptographyPort } from '../../domain/ports/ICryptographyPort.ts';
 import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentialsPort.ts';
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.ts';
 import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.ts';
 import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.ts';
 import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.ts';
@@ -11,6 +12,7 @@ import { ToggleVaultProviderUseCase } from '../../application/use-cases/vault/To
 class DIContainer {
   public cryptographyPort: ICryptographyPort;
   public vaultCredentialsPort: IVaultCredentialsPort;
+  public userSettingsPort: IUserSettingsPort;
   public unlockVaultUseCase: UnlockVaultUseCase;
   public storeServiceCredentialUseCase: StoreServiceCredentialUseCase;
   public getVaultStatusUseCase: GetVaultStatusUseCase;
@@ -19,7 +21,9 @@ class DIContainer {
 
   constructor() {
     this.cryptographyPort = new AesGcmCryptographyAdapter();
-    this.vaultCredentialsPort = new SqliteVaultRepositoryAdapter();
+    const sqliteAdapter = new SqliteVaultRepositoryAdapter();
+    this.vaultCredentialsPort = sqliteAdapter;
+    this.userSettingsPort = sqliteAdapter;
     this.unlockVaultUseCase = new UnlockVaultUseCase(this.cryptographyPort, this.vaultCredentialsPort);
     this.storeServiceCredentialUseCase = new StoreServiceCredentialUseCase(this.cryptographyPort, this.vaultCredentialsPort);
     this.getVaultStatusUseCase = new GetVaultStatusUseCase(this.cryptographyPort, this.vaultCredentialsPort);

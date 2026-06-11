@@ -10,6 +10,7 @@ import { errorBus } from "@/core/infrastructure/errors/errorBus";
 import type { ValidationErrorPayload } from "@/core/infrastructure/errors/errorBus";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import { useI18n } from "@/composables/useI18n";
+import { useInitializeLanguageQuery } from "@/composables/queries/useSettingsQueries";
 // ---------------------------------------------------------------------------
 // Global error handling — listens to the errorBus and shows Sonner toasts
 // when Zod safeParse fails in any adapter.
@@ -17,6 +18,9 @@ import { useI18n } from "@/composables/useI18n";
 // ---------------------------------------------------------------------------
 
 const { t } = useI18n();
+
+// Initialize language from backend
+useInitializeLanguageQuery();
 
 function handleValidationError(payload: ValidationErrorPayload) {
   const stringParams = payload.params

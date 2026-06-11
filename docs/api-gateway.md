@@ -113,11 +113,18 @@ The Vault API endpoints strictly follow the Anti-Corruption Layer pattern by ret
 - `INVALID_CREDENTIAL_FORMAT`: The payload format is invalid.
 
 #### Vault Endpoints
-- **`GET /vault/status`**: Returns whether the vault is currently unlocked and the lists of configured/enabled providers.
-- **`POST /vault/unlock`**: Unlocks or initializes the vault. Accepts `{ password: string }`. Includes a persistent verification payload (`kryptofolio_vault_ok`) to cryptographically verify if the password matches previous sessions.
-- **`GET /vault/providers`**: Lists available third-party integrations.
-- **`POST /vault/:service`**: Stores credentials securely for a specific service.
-- **`PATCH /vault/:service/status`**: Enables or disables a specific service integration.
+- **`GET /api/credentials/vault/status`**: Returns whether the vault is currently unlocked and the lists of configured/enabled providers.
+- **`POST /api/credentials/vault/unlock`**: Unlocks or initializes the vault. Accepts `{ password: string }`. Includes a persistent verification payload (`kryptofolio_vault_ok`) to cryptographically verify if the password matches previous sessions.
+- **`GET /api/credentials/vault/providers`**: Lists available third-party integrations.
+- **`POST /api/credentials/vault/:service`**: Stores credentials securely for a specific service.
+- **`PATCH /api/credentials/vault/:service/status`**: Enables or disables a specific service integration.
+
+### User Settings (`/settings`)
+
+Manages the application-wide configuration.
+
+- **`GET /api/settings/language`**: Returns the currently active language preference (`{ language: "en" | "es" }`).
+- **`PUT /api/settings/language`**: Updates the language preference. Validates with `zod` ensuring exactly a valid locale length.
 
 ## Referential Integrity & Mocks
 

@@ -24,6 +24,10 @@ export const TAX_REPO_KEY: InjectionKey<ITaxPort> = Symbol('ITaxPort')
 import type { I18nPort } from './domain/ports/I18nPort'
 export const I18N_PORT_KEY: InjectionKey<I18nPort> = Symbol('I18nPort')
 
+/** Injection key for the vault port (Ports) */
+import type { IVaultPort } from './domain/ports/IVaultPort'
+export const VAULT_PORT_KEY: InjectionKey<IVaultPort> = Symbol('IVaultPort')
+
 /** Injection key for the wallet repository (Ports) */
 import type { IWalletPort } from './domain/ports/IWalletPort'
 export const WALLET_REPO_KEY: InjectionKey<IWalletPort> = Symbol('IWalletPort')
@@ -33,3 +37,8 @@ import type { ICryptoMetricsPort } from './domain/ports/ICryptoMetricsPort'
 export const CRYPTO_METRICS_REPO_KEY: InjectionKey<ICryptoMetricsPort> = Symbol(
   'ICryptoMetricsPort',
 )
+
+/** Injection key for the settings port (Ports) */
+import type { ISettingsPort } from './domain/ports/ISettingsPort'
+export const SETTINGS_PORT_KEY: InjectionKey<ISettingsPort> = Symbol('ISettingsPort')
+

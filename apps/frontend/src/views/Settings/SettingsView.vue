@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import VaultSettings from "@/components/settings/VaultSettings.vue";
+import LanguageSettings from "@/components/settings/LanguageSettings.vue";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();
@@ -13,7 +14,9 @@ const { t } = useI18n();
         {{ t('settings.description') }}
       </p>
     </div>
-    
+
+    <LanguageSettings />
     <VaultSettings />
   </div>
 </template>
+

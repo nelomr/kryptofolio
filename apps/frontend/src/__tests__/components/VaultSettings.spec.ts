@@ -22,15 +22,15 @@ vi.mock('@/composables/queries/useVaultQueries', () => ({
 vi.mock('@/composables/queries/useVaultMutations', () => ({
   useUnlockVaultMutation: () => ({
     mutateAsync: vi.fn(),
-    isLoading: { value: false }
+    isLoading: ref(false)
   }),
   useSaveVaultKeyMutation: () => ({
     mutateAsync: vi.fn(),
-    isLoading: { value: false }
+    isLoading: ref(false)
   }),
   useToggleVaultProviderMutation: () => ({
     mutate: vi.fn(),
-    isPending: { value: false }
+    isPending: ref(false)
   })
 }));
 

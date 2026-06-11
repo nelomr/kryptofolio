@@ -1,11 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
-import fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentialsPort.ts';
 import type { EncryptedArtifact } from '../../domain/ports/ICryptographyPort.ts';
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.ts';
 
-export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort {
+export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort, IUserSettingsPort {
+
   private db: DatabaseSync;
 
   constructor() {
@@ -39,10 +39,29 @@ export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort {
             key TEXT PRIMARY KEY,
             value BLOB NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS user_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
       `);
     } catch (err) {
       throw new Error(`[Database] Critical failure initializing vault tables: ${err}`);
     }
+  }
+
+  public async getSetting(key: string): Promise<string | null> {
+    const stmt = this.db.prepare('SELECT value FROM user_settings WHERE key = ?');
+    const row = stmt.get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  public async setSetting(key: string, value: string): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT INTO user_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(key, value);
   }
 
   public async getConfiguredServices(): Promise<string[]> {

@@ -118,17 +118,17 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
    - **Ports (`ports/`)**: Interfaces defining the contract for data operations. The domain dictates *what* it needs, not *how* to get it. Note: There is NO `repositories` folder; repository interfaces are outgoing ports.
 
 2. **Application Layer (`src/core/application/`)**
-   - **Use Cases (`use-cases/`)**: Pure TypeScript classes that coordinate the Domain Ports. They contain the business orchestration logic without any Vue reactivity or framework imports.
+   - **Use Cases (`use-cases/`)**: Pure TypeScript classes that coordinate the Domain Ports. They contain the business orchestration logic (e.g. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`) without any Vue reactivity or framework imports. All state mutations MUST pass through a Use Case.
 
 3. **Infrastructure Layer (`src/core/infrastructure/`)**
    The outer edge that communicates with the real world and protects the domain.
    - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Must be suffixed with `Adapter`. Note: Mocks are now managed exclusively at the BFF layer.
-   - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data (e.g. snake_case or timestamps) to pure Entities and validate payload integrity *before* it ever touches the domain.
-   - **Dependency Injection (`di/`)**: The "Composition Root". It instantiates the REST adapters and wires them into Vue (via provide/inject) and Pinia (via a store plugin).
+   - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data to pure Entities and validate payload integrity *before* it ever touches the domain.
+   - **Dependency Injection (`di/`)**: The "Composition Root". It instantiates the REST adapters and wires them into Vue (via provide/inject using strict symbols like `VAULT_PORT_KEY`).
 
-3. **Application & UI Layer (`src/composables/` & `src/views/`)**
-   - We utilize `@pinia/colada` to declaratively manage asynchronous server state fetching.
-   - **Structural Note**: In this project, **there is no global `src/stores/` or `src/types/` folder**. Types belong to their respective domains, and application state is delegated entirely to Pinia Colada (Server State) and local Composables (UI State). Main views orchestrate using pure injected dependencies.
+4. **Application & UI Layer (`src/composables/` & `src/views/`)**
+   - We utilize `@pinia/colada` inside specific `composables/queries` to declaratively manage asynchronous server state fetching.
+   - **Structural Note**: In this project, **there is no global `src/stores/` folder and Vue components NEVER import `bffClient`**. Components consume `use*Queries` (which delegate to injected Ports) and `use*Mutations` (which delegate to Use Cases).
 
 ### 🛡️ Absolute Type Safety & Strict Policies
 - **No `any` Policy**: The production source code is 100% statically typed, with no exceptions. It is rigorously compiled using `vue-tsc --noEmit`.

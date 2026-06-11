@@ -15,6 +15,16 @@ export const en: I18nDictionary = {
   "settings.title": "Settings",
   "settings.description":
     "Manage your local preferences, API keys, and security settings.",
+  "settings.language.title": "Interface Language",
+  "settings.language.description":
+    "Select the language in which the application will be displayed.",
+  "settings.language.select_placeholder": "Select a language",
+  "settings.language.option_es": "Spanish",
+  "settings.language.option_en": "English",
+  "settings.language.save_btn": "Save",
+  "settings.language.saving_btn": "Saving...",
+  "settings.language.success": "Language updated successfully",
+  "settings.language.error": "Failed to save language",
 
   // Errors
   "errors.validation.title": "Data Validation Error",
@@ -344,12 +354,15 @@ export const en: I18nDictionary = {
     "Your vault is unlocked. You can securely manage your integration keys below.",
 
   // Vault Dynamic Providers
-  "vault.provider.generic.description": "Configure the credentials for {providerName}.",
-  "vault.provider.generic.fields.format_title": "Only alphanumeric characters and basic symbols (-_+=/.) are allowed",
+  "vault.provider.generic.description":
+    "Configure the credentials for {providerName}.",
+  "vault.provider.generic.fields.format_title":
+    "Only alphanumeric characters and basic symbols (-_+=/.) are allowed",
   "vault.provider.generic.fields.apiKey.label": "API Key",
   "vault.provider.generic.fields.apiSecret.label": "API Secret",
-  
-  "vault.errors.invalid_format": "Invalid format: Unallowed characters detected",
+
+  "vault.errors.invalid_format":
+    "Invalid format: Unallowed characters detected",
   "vault.errors.invalid_password": "The provided password is incorrect",
   "vault.errors.unknown_provider": "The specified provider is not valid",
   "vault.errors.unlock_failed": "Failed to unlock vault",

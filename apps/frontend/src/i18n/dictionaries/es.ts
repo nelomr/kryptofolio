@@ -17,6 +17,16 @@ export const es: I18nDictionary = {
   "settings.title": "Ajustes",
   "settings.description":
     "Gestiona tus preferencias locales, claves de API y opciones de seguridad.",
+  "settings.language.title": "Idioma de la Interfaz",
+  "settings.language.description":
+    "Selecciona el idioma en el que se mostrará la aplicación.",
+  "settings.language.select_placeholder": "Selecciona un idioma",
+  "settings.language.option_es": "Español",
+  "settings.language.option_en": "Inglés",
+  "settings.language.save_btn": "Guardar",
+  "settings.language.saving_btn": "Guardando...",
+  "settings.language.success": "Idioma actualizado correctamente",
+  "settings.language.error": "Error al guardar el idioma",
 
   // Errors
   "errors.validation.title": "Error de Validación de Datos",
@@ -102,7 +112,7 @@ export const es: I18nDictionary = {
   "metrics.best_worst_label": "Mejor / Peor",
   "metrics.dispersion_label": "Dispersión",
   "metrics.portfolio": "del Portfolio",
-  "metrics.asset_allocation": "Asset Allocation",
+  "metrics.asset_allocation": "Dstribución de Assets",
   "metrics.distribution": "Distribución",
   "metrics.assets_kicker_upper": "ACTIVOS",
   "metrics.assets_kicker": "Activos",
@@ -350,7 +360,8 @@ export const es: I18nDictionary = {
   // Vault Dynamic Providers
   "vault.provider.generic.description":
     "Sincroniza el API KEY de {providerName} de forma segura.",
-  "vault.provider.generic.fields.format_title": "Solo se permiten caracteres alfanuméricos y símbolos básicos (-_+=/.)",
+  "vault.provider.generic.fields.format_title":
+    "Solo se permiten caracteres alfanuméricos y símbolos básicos (-_+=/.)",
   "vault.provider.generic.fields.apiKey.label": "API Key",
   "vault.provider.generic.fields.apiSecret.label": "API Secret",
 

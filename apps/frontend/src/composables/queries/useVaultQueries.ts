@@ -1,29 +1,32 @@
 import { useQuery } from "@pinia/colada";
-import { bffClient } from "@/core/infrastructure/http/BffClient";
-import type { VaultProvider } from "@/core/domain/models/VaultEntities";
+import { inject } from "vue";
+import { VAULT_PORT_KEY } from "@/core/injectionKeys";
+import { GetVaultStatusUseCase } from "@/core/application/use-cases/vault/GetVaultStatusUseCase";
+import { GetVaultProvidersUseCase } from "@/core/application/use-cases/vault/GetVaultProvidersUseCase";
 
 export const VAULT_STATUS_KEY = ["vault-status"];
 export const VAULT_PROVIDERS_KEY = ["vault-providers"];
 
 export function useVaultStatusQuery() {
+  const vaultPort = inject(VAULT_PORT_KEY);
+  if (!vaultPort) throw new Error("VAULT_PORT_KEY not provided");
+
+  const useCase = new GetVaultStatusUseCase(vaultPort);
+
   return useQuery({
     key: VAULT_STATUS_KEY,
-    query: async () => {
-      const res = await bffClient.api.credentials.vault.status.$get();
-      if (!res.ok) throw new Error("Failed to fetch status");
-      const data = await res.json() as { isUnlocked: boolean; configuredServices: string[]; enabledServices: string[] };
-      return data;
-    },
+    query: async () => useCase.execute(),
   });
 }
 
 export function useVaultProvidersQuery() {
+  const vaultPort = inject(VAULT_PORT_KEY);
+  if (!vaultPort) throw new Error("VAULT_PORT_KEY not provided");
+
+  const useCase = new GetVaultProvidersUseCase(vaultPort);
+
   return useQuery({
     key: VAULT_PROVIDERS_KEY,
-    query: async () => {
-      const res = await bffClient.api.credentials.vault.providers.$get();
-      if (!res.ok) throw new Error("Failed to fetch providers");
-      return (await res.json()) as VaultProvider[];
-    },
+    query: async () => useCase.execute(),
   });
 }

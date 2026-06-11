@@ -18,6 +18,7 @@ import {
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import credentialsApi from "./routes/credentials.ts";
+import settingsApi from "./routes/settings.ts";
 import { container } from "./core/infrastructure/di/container.ts";
 import { bffLogger } from "./utils/logger.ts";
 
@@ -161,7 +162,9 @@ const routes = app
     ),
   )
   // Credentials Vault
-  .route("/credentials", credentialsApi);
+  .route("/credentials", credentialsApi)
+  // User Settings
+  .route("/settings", settingsApi);
 
 export type AppType = typeof routes;
 

@@ -160,17 +160,17 @@ graph TD
    - **Puertos (`ports/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita, no *cómo* obtenerlo. Nota: NO existe la carpeta `repositories`; las interfaces de repositorios son puertos de salida.
 
 2. **Capa de Aplicación (`src/core/application/`)**
-   - **Casos de Uso (`use-cases/`)**: Clases TypeScript puras que coordinan los Puertos del Dominio. Contienen la lógica de orquestación de negocio sin reactividad de Vue ni dependencias de frameworks.
+   - **Casos de Uso (`use-cases/`)**: Clases TypeScript puras que coordinan los Puertos del Dominio. Contienen la lógica de orquestación de negocio (ej. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`) sin reactividad de Vue ni dependencias de frameworks. Toda mutación de estado DEBE pasar por un Caso de Uso.
 
 3. **Capa de Infraestructura (`src/core/infrastructure/`)**
    El borde exterior que se comunica con el mundo real y protege al dominio.
-   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`). Deben tener el sufijo `Adapter`.
-   - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API (ej. snake_case o timestamps) a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
-   - **Inyección de Dependencias (`di/`)**: El "Composition Root". Evalúa las variables de entorno e instancia el adaptador correcto. Aquí se aloja `pinia.d.ts` para tipar estrictamente los repositorios inyectados de forma global.
+   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`). Deben tener el sufijo `Adapter`. Nota: Los Mocks se manejan exclusivamente en el BFF.
+   - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
+   - **Inyección de Dependencias (`di/`)**: El "Composition Root". Instancia los adaptadores REST y los conecta con Vue (vía provide/inject usando símbolos estrictos como `VAULT_PORT_KEY`).
 
-3. **Capa de Aplicación y Presentación (`src/composables/` & `src/views/`)**
-   - Utilizamos `@pinia/colada` para gestionar de forma declarativa la obtención asíncrona de datos del servidor.
-   - **Nota Estructural**: En este proyecto **no existe la típica carpeta global `src/stores/` ni `src/types/`**. Los tipos pertenecen a sus dominios respectivos, y el estado de la aplicación se delega a Pinia Colada (Server State) y Composables (Local UI State). Las vistas principales orquestan mediante dependencias inyectadas puras.
+4. **Capa de Aplicación y Presentación (`src/composables/` & `src/views/`)**
+   - Utilizamos `@pinia/colada` dentro de `composables/queries` para gestionar de forma declarativa la obtención asíncrona de datos del servidor.
+   - **Nota Estructural**: En este proyecto **no existe la típica carpeta global `src/stores/` y los componentes de Vue NUNCA importan `bffClient`**. Los componentes consumen `use*Queries` (que delegan a Puertos inyectados) y `use*Mutations` (que delegan a Casos de Uso).
 
 ### 🛡️ Type Safety Absoluto y Políticas Estrictas
 - **No `any` Policy**: El código fuente en producción está 100% tipado estáticamente, sin excepciones. Compilado rigurosamente mediante `vue-tsc --noEmit`.
