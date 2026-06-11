@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.7](https://github.com/nelomr/kryptofolio/compare/v1.15.6...v1.15.7) (2026-06-11)
+
+### ✨ Features
+
+* implement cryptographic vault verification and modularize settings UI ([5a733ee](https://github.com/nelomr/kryptofolio/commit/5a733ee06be99a4aa3424e326627608ccad05ac6))
+
 ## [1.15.6](https://github.com/nelomr/kryptofolio/compare/v1.15.5...v1.15.6) (2026-06-11)
 
 ### ✨ Features
