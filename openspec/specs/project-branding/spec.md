@@ -8,11 +8,15 @@ The repository and application SHALL use "Kryptofolio" (display) and "kryptofoli
 - **THEN** the browser tab title MUST display "Kryptofolio"
 
 ### Requirement: Thematic Copyright-Free Assets
-The application SHALL include a custom SVG favicon inspired by a "kryptonian" or crystalline aesthetic that is strictly copyright-free and does not infringe on DC Comics intellectual property.
+The application SHALL include a custom favicon and application logo based on the provided `favicon.png` and `screen-tp.png` assets.
 
 #### Scenario: Tab Favicon
 - **WHEN** user loads the application in a browser
-- **THEN** they MUST see the new thematic favicon in the browser tab
+- **THEN** they MUST see the new `favicon.png` in the browser tab
+
+#### Scenario: Application Logo
+- **WHEN** user views the application UI
+- **THEN** they MUST see the `screen-tp.png` logo displayed in the header/branding areas
 
 ### Requirement: Multi-language Documentation
 The repository SHALL provide documentation in both English and Spanish, with English as the primary default.
