@@ -5,8 +5,8 @@
 
 import { usePortfolioData } from "./composables/usePortfolioData";
 import { useI18n } from "@/composables/useI18n";
+import { RefreshCw } from "lucide-vue-next";
 
-import PortfolioHeader from "@/components/portfolio/PortfolioHeader.vue";
 import MetricsDashboard from "./components/metrics/MetricsDashboard.vue";
 import PerformanceHistory from "./components/metrics/PerformanceHistory.vue";
 import VolatilityHeatmap from "./components/metrics/VolatilityHeatmap.vue";
@@ -40,13 +40,6 @@ const {
 
 <template>
   <div class="h-full flex flex-col overflow-hidden bg-transparent">
-    <!-- Header -->
-    <PortfolioHeader
-      :isFetching="isFetching"
-      :isRebuilding="isRebuilding"
-      @rebuild="handleRebuild"
-    />
-
     <!-- Content Grid -->
     <Tabs defaultValue="holdings" class="flex-1 min-h-0 flex flex-col">
       <div class="flex items-center justify-between mb-6">
@@ -58,6 +51,17 @@ const {
             t("portfolio.metrics")
           }}</TabsTrigger>
         </TabsList>
+        <button
+          @click="handleRebuild"
+          :disabled="isRebuilding"
+          class="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-border/40 text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <RefreshCw
+            class="w-3.5 h-3.5"
+            :class="{ 'animate-spin': isRebuilding }"
+          />
+          {{ isRebuilding ? t("portfolio.syncing") : t("portfolio.sync_btn") }}
+        </button>
       </div>
 
       <TabsContent

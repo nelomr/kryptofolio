@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
-import LanguageSettings from '@/components/settings/LanguageSettings.vue';
+import LanguageSettings from '@/views/Settings/components/LanguageSettings.vue';
 import { I18N_PORT_KEY } from '@/core/injectionKeys';
 import type { I18nPort } from '@/core/domain/ports/I18nPort';
 

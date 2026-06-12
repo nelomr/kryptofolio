@@ -168,9 +168,10 @@ graph TD
    - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
    - **Inyección de Dependencias (`di/`)**: El "Composition Root". Instancia los adaptadores REST y los conecta con Vue (vía provide/inject usando símbolos estrictos como `VAULT_PORT_KEY`).
 
-4. **Capa de Aplicación y Presentación (`src/composables/` & `src/views/`)**
-   - Utilizamos `@pinia/colada` dentro de `composables/queries` para gestionar de forma declarativa la obtención asíncrona de datos del servidor.
-   - **Nota Estructural**: En este proyecto **no existe la típica carpeta global `src/stores/` y los componentes de Vue NUNCA importan `bffClient`**. Los componentes consumen `use*Queries` (que delegan a Puertos inyectados) y `use*Mutations` (que delegan a Casos de Uso).
+4. **Capa de Aplicación y UI (`src/composables/` & `src/views/`)**
+   - Utilizamos `@pinia/colada` dentro de `composables/queries` específicos para manejar de forma declarativa el fetching asíncrono del estado del servidor.
+   - **Nota Estructural**: En este proyecto, **no hay una carpeta global `src/stores/` y los componentes Vue NUNCA importan `bffClient`**. Los componentes consumen `use*Queries` (que delegan a Puertos inyectados) y `use*Mutations` (que delegan a Casos de Uso).
+   - **Diseño Orientado a Features (Colocation)**: Los componentes específicos de una vista o feature (ej. `MetricsRow`) deben vivir dentro del directorio `components/` dedicado de su vista (ej. `src/views/Portfolio/components/`). Solo las primitivas de UI estrictamente genéricas y reutilizables (como botones o modales) se ubican en la carpeta global `src/components/`.
 
 ### 🛡️ Type Safety Absoluto y Políticas Estrictas
 - **No `any` Policy**: El código fuente en producción está 100% tipado estáticamente, sin excepciones. Compilado rigurosamente mediante `vue-tsc --noEmit`.

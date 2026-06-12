@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { ref } from 'vue';
-import VaultSettings from '@/components/settings/VaultSettings.vue';
+import VaultSettings from '@/views/Settings/components/VaultSettings.vue';
 import { en } from '@/i18n/dictionaries/en';
 
 vi.mock('@/composables/useI18n', () => ({

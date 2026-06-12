@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import VaultSettings from "@/components/settings/VaultSettings.vue";
-import LanguageSettings from "@/components/settings/LanguageSettings.vue";
+import VaultSettings from "./components/VaultSettings.vue";
+import LanguageSettings from "./components/LanguageSettings.vue";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();

@@ -12,7 +12,7 @@ import { PiniaColada } from '@pinia/colada'
 import { usePortfolioData } from '@/views/Portfolio/composables/usePortfolioData'
 import { PORTFOLIO_REPO_KEY } from '@/core/injectionKeys'
 import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
-import type { PortfolioSummaryEntity, PortfolioMetricsEntity } from '@/core/domain/models/PortfolioEntities'
+import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
 import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
 const mockSummary: PortfolioSummaryEntity = {

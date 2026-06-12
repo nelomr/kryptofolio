@@ -14,8 +14,7 @@ import { useTaxLedgers } from "./composables/useTaxLedgers";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();
-const { metrics, syncWeb3, uploadCsv, clearData } =
-  useTaxReportPort();
+const { metrics, syncWeb3, uploadCsv } = useTaxReportPort();
 
 const {
   spotLoading,
@@ -30,12 +29,11 @@ const {
   handleDelete,
 } = useTaxLedgers();
 
-const activeMarket = ref<'spot' | 'futures'>('spot');
+const activeMarket = ref<"spot" | "futures">("spot");
 </script>
 
 <template>
   <div class="space-y-6 relative w-full">
-    <!-- Background Decoration -->
     <div class="absolute -z-10 inset-0 overflow-hidden pointer-events-none">
       <div
         class="absolute -top-1/2 -right-1/2 w-[1000px] h-[1000px] rounded-full bg-primary/5 blur-[120px]"
@@ -80,16 +78,10 @@ const activeMarket = ref<'spot' | 'futures'>('spot');
         <!-- Operations Ledgers Sub-Tabs -->
         <Tabs v-model="activeMarket" class="space-y-4 mt-4">
           <TabsList>
-            <TabsTrigger
-              value="spot"
-              class="cursor-pointer"
-            >
+            <TabsTrigger value="spot" class="cursor-pointer">
               {{ t("tax.tabs.spot") }}
             </TabsTrigger>
-            <TabsTrigger
-              value="futures"
-              class="cursor-pointer"
-            >
+            <TabsTrigger value="futures" class="cursor-pointer">
               {{ t("tax.tabs.futures") }}
             </TabsTrigger>
           </TabsList>

@@ -1,6 +1,5 @@
 import { computed, type Ref } from "vue";
 import type { ChartData, ChartOptions, Plugin } from "chart.js";
-import { useI18n } from "@/composables/useI18n";
 
 // Helper to get CSS variables
 const getCSSVar = (name: string) => {
@@ -106,7 +105,6 @@ export const riskZonesPlugin: Plugin<"line"> = {
 };
 
 export function useRiskChart(historyRef: Ref<number[] | undefined>) {
-  const { t } = useI18n();
 
   const chartData = computed<ChartData<"line">>(() => {
     const data = historyRef.value || [];

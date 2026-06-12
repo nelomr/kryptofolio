@@ -129,6 +129,7 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
 4. **Application & UI Layer (`src/composables/` & `src/views/`)**
    - We utilize `@pinia/colada` inside specific `composables/queries` to declaratively manage asynchronous server state fetching.
    - **Structural Note**: In this project, **there is no global `src/stores/` folder and Vue components NEVER import `bffClient`**. Components consume `use*Queries` (which delegate to injected Ports) and `use*Mutations` (which delegate to Use Cases).
+   - **Feature-Sliced Design (Colocation)**: Components specific to a single view/feature (e.g., `MetricsRow`) must live inside the view's dedicated `components/` directory (e.g., `src/views/Portfolio/components/`). Only strictly generic, reusable UI primitives (like buttons or modals) are placed in the global `src/components/` folder.
 
 ### 🛡️ Absolute Type Safety & Strict Policies
 - **No `any` Policy**: The production source code is 100% statically typed, with no exceptions. It is rigorously compiled using `vue-tsc --noEmit`.

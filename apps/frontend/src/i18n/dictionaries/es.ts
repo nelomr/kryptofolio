@@ -88,7 +88,7 @@ export const es: I18nDictionary = {
 
   "portfolio.syncing": "(Sincronizando...)",
   "portfolio.no_assets": "No se han encontrado activos en la cartera.",
-  "portfolio.subtitle": "Motor FIFO Institucional • Año Fiscal 2026",
+  "portfolio.subtitle": "Analisis portfolio",
   "portfolio.sync_btn": "Sincronizar Portfolio",
 
   // Metrics

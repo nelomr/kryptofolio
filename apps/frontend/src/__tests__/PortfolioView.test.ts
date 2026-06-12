@@ -113,8 +113,8 @@ function mountView(
 ) {
   vi.spyOn(portfolioData, 'usePortfolioData').mockReturnValue({
     metrics: ref(mockMetrics),
-    isFetching: ref(false),
-    isRebuilding: ref(false),
+    isFetching: ref(false) as any,
+    isRebuilding: ref(false) as any,
     handleRebuild: vi.fn(),
     store: {} as any,
     filteredHoldings: ref([]),
@@ -170,32 +170,20 @@ describe('PortfolioView', () => {
     expect(wrapper.classes()).toContain('flex-col')
   })
 
-  it('renders the header landmark', () => {
-    const wrapper = mountView()
-    expect(wrapper.find('header').exists()).toBe(true)
-  })
-
-  it('shows green status dot when not fetching', () => {
-    const wrapper = mountView({ isFetching: ref(false) })
-    // Status dot uses bg-profit class when idle
-    const dot = wrapper.find('.bg-profit')
-    expect(dot.exists()).toBe(true)
-  })
-
-  it('shows amber pulse when isFetching is true', () => {
-    const wrapper = mountView({ isFetching: ref(true) })
-    expect(wrapper.find('.animate-pulse').exists()).toBe(true)
-  })
-
-  it('shows "(Sincronizando...)" text when fetching', () => {
-    const wrapper = mountView({ isFetching: ref(true) })
+  it('shows sync text when rebuilding', () => {
+    const wrapper = mountView({ isRebuilding: ref(true) as any })
     expect(wrapper.text()).toContain('portfolio.syncing')
   })
 
   it('calls handleRebuild on button click', async () => {
     const mockRebuild = vi.fn()
     const wrapper = mountView({ handleRebuild: mockRebuild })
-    await wrapper.find('button').trigger('click')
+    
+    // The tabs triggers are also buttons in the mock, so we find the one with the sync text
+    const buttons = wrapper.findAll('button')
+    const syncBtn = buttons.find(b => b.text().includes('portfolio.sync'))
+    
+    await syncBtn!.trigger('click')
     expect(mockRebuild).toHaveBeenCalledOnce()
   })
 

@@ -20,10 +20,7 @@ export function useTaxLedgers() {
     useFuturesDerivativesQuery();
 
   // 2. Global available years computation (from spot + legacy futures)
-  const allTransactions = computed(() => [
-    ...(spotData.value ?? []),
-    ...(futuresData.value ?? []),
-  ]);
+
   const availableYears = useAvailableYears();
 
   // 3. Local Filters State — each table has independent year filter

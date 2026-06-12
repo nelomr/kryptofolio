@@ -270,7 +270,7 @@ const {
                       { '--badge-hue': getDeterministicHue(tx.exchange) } as any
                     "
                   >
-                    <CryptoIcon :symbol="tx.exchange" :size="10" colored />
+                    <CryptoIcon :symbol="tx.exchange" :size="14" colored />
                     {{ tx.exchange }}
                   </Badge>
                 </div>

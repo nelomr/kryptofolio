@@ -8,23 +8,31 @@ import CryptoIcon from "@/components/common/CryptoIcon/CryptoIcon.vue";
 import { PieChart, Landmark, Settings } from "lucide-vue-next";
 
 const { t } = useI18n();
-const title = t("dashboard.title");
 </script>
 
 <template>
   <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
     <div class="mx-auto max-w-[1600px] px-4 md:px-6">
-      <div class="flex h-16 items-center justify-between">
+      <div class="flex h-22 items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="h-8 w-8 flex items-center justify-center">
+          <div class="h-12 w-12 flex items-center justify-center">
             <CryptoIcon
               symbol="kryptofolio"
-              :size="28"
+              :size="100"
               :colored="true"
               class="drop-shadow-md"
             />
           </div>
-          <h1 class="text-xl font-semibold tracking-tight">{{ title }}</h1>
+          <div class="flex flex-col justify-center">
+            <h1 class="text-3xl font-mono font-medium text-muted tracking">
+              Kryptofolio
+            </h1>
+            <span
+              class="text-[10px] font-mono uppercase tracking-[0.2em] text-muted font-bold mt-1.5 ml-0.5"
+            >
+              {{ t("portfolio.subtitle") }}
+            </span>
+          </div>
         </div>
 
         <nav
