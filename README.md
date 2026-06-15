@@ -8,16 +8,18 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). Designed as a pure visualization platform utilizing a strict FIFO system for data presentation, and technically primed for seamless integration with AI Agents (Vercel AI SDK + Mastra).
+> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). It serves as a visual presentation layer that displays transaction and tax information computed by the backend, utilizing a Backend-for-Frontend (BFF) proxy to bridge the UI with the data sources.
 
 ## ✨ Key Features
 
-- **📊 FIFO-Based Data Presentation:** Accurate and reliable transaction and balance reporting using a First-In-First-Out (FIFO) methodology to structure the display logic.
-- **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to audit operations, detect integrity issues (e.g., missing cost bases or negative balances), and provide structured data for AEAT-compliant reporting.
-- **🤖 AI Agent Ready:** The frontend data models are decoupled and specifically designed to be queried by a future AI Agent integration (using Vercel AI SDK and Mastra). You will be able to ask natural language questions about your portfolio in real-time.
-- **🛡️ Privacy First:** Fully self-hosted. The backend utilizes a local SQLite database (`fiscal.db`), ensuring your keys and transaction history never leave your machine.
-- **🔐 Local Secrets Vault:** AES-256-GCM encrypted local vault for securely storing third-party credentials (e.g. Kraken API) without exposing them to the cloud. Memory scrubbing ensures keys are wiped from RAM after use. Features a dynamic provider registry and on-the-fly toggling of integrations via strict Hexagonal architecture.
-- **🏗️ Hexagonal Architecture:** Strict separation of concerns (Ports & Adapters). The UI layer is completely decoupled from data fetching, enabling high testability and robust runtime validation via Zod.
+- **📊 FIFO-Based Data Presentation:** Displays structured holdings and tax data calculated via a First-In-First-Out (FIFO) methodology by the backend, ensuring a clear and standardized visual summary.
+- **🧹 Data Ingestion Wizard:** A multi-step interface to upload CSV/XLSX files, automatically map headers for popular exchanges (Binance, Kraken, Coinbase, KuCoin, Bitunix), perform manual adjustments with alphabetically sorted options, validate Spot vs. Futures constraints, and gracefully push valid data to the backend.
+- **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to inspect transaction logs, identify gaps (missing cost bases or negative balances), and present clean data for AEAT-compliant reporting.
+- **🤖 AI Agent Ready (Future Feature):** The frontend is technically prepared for future AI Agent integration (e.g., Vercel AI SDK or Mastra). Since Use Cases and DTOs are isolated and validated, they can be directly exposed as LLM Tools (function calling) for natural language querying without rewriting validations.
+- **🛡️ Privacy First:** Fully self-hosted. The system operates locally, ensuring API credentials and transactions are kept secure. The BFF can be integrated with any custom local or remote backend.
+- **🔐 Local Secrets Vault:** AES-256-GCM encrypted local vault for securely storing API keys. RAM memory scrubbing ensures keys are erased after use. Integrations can be dynamically enabled or disabled.
+- **🏗️ Hexagonal Architecture (Frontend Separation):** Strict separation of concerns (Ports & Adapters). The frontend UI layer is decoupled from network protocols and local storage mechanisms, enabling absolute testability and contract safety via Zod validation schemas.
+
 
 ## 🛠️ Tech Stack & Monorepo
 
@@ -108,17 +110,19 @@ pnpm run dev:mock
 
 ## 🏗️ Architecture: Hexagonal (Ports & Adapters)
 
-This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters) to ensure the UI is completely decoupled from data fetching, API contracts, and external dependencies.
+This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters) in the frontend. It is important to note that **the frontend does not execute core financial business logic** (such as FIFO cost-basis allocation or realized/unrealized PnL calculation). Instead:
+- **Calculation Engine:** The heavy lifting is delegated to the Backend/BFF layer.
+- **Frontend Ports & Adapters:** Designed purely to decouple the UI components and presentation states from network protocols, API contracts, local storage vaults, i18n configurations, and validation formats.
 
 ### 🏛️ Architectural Layers
 
 1. **Domain Layer (`src/core/domain/`)**
-   The heart of the application. **Total Isolation**: It has absolutely zero external framework dependencies (no Vue, Axios, or Zod imports).
+   The heart of the application's client-side logic. **Total Isolation**: It has absolutely zero external framework dependencies (no Vue, Axios, or Zod imports).
    - **Entities & Value Objects (`models/`)**: Defined using pure TypeScript interfaces. We heavily utilize **Branded Types** (e.g. `AssetId` or `LotId`) to avoid primitive obsession and guarantee type-safety across identifiers.
-   - **Ports (`ports/`)**: Interfaces defining the contract for data operations. The domain dictates *what* it needs, not *how* to get it. Note: There is NO `repositories` folder; repository interfaces are outgoing ports.
+   - **Ports (`ports/`)**: Interfaces defining the contract for data operations. The domain dictates *what* the client needs, not *how* to get it. Note: There is NO `repositories` folder; repository interfaces are outgoing ports.
 
 2. **Application Layer (`src/core/application/`)**
-   - **Use Cases (`use-cases/`)**: Pure TypeScript classes that coordinate the Domain Ports. They contain the business orchestration logic (e.g. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`) without any Vue reactivity or framework imports. All state mutations MUST pass through a Use Case.
+   - **Use Cases (`use-cases/`)**: Pure TypeScript classes that coordinate the Domain Ports. They contain frontend-specific orchestration logic (e.g. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`, `ImportTransactionsUseCase`) without any Vue reactivity or framework imports. All state mutations MUST pass through a Use Case.
 
 3. **Infrastructure Layer (`src/core/infrastructure/`)**
    The outer edge that communicates with the real world and protects the domain.

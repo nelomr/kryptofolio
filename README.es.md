@@ -8,16 +8,17 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Diseñado como una plataforma de visualización pura que utiliza un sistema estricto FIFO para la presentación de datos, y técnicamente preparado para una integración fluida con Agentes de IA (Vercel AI SDK + Mastra).
+> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Funciona como una capa de presentación visual que muestra información fiscal y de transacciones calculada por el backend, utilizando un proxy Backend-for-Frontend (BFF) para conectar la interfaz con las fuentes de datos.
 
 ## ✨ Características Principales
 
-- **📊 Presentación de Datos basada en FIFO:** Informes de saldos y transacciones precisos y fiables utilizando una metodología First-In-First-Out (FIFO) para estructurar la lógica de visualización.
-- **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para auditar operaciones, detectar anomalías de integridad (ej. bases de coste faltantes o saldos negativos), y proporcionar datos estructurados listos para informes AEAT.
-- **🤖 Preparado para Agentes de IA:** Los modelos de datos del frontend están desacoplados y diseñados específicamente para ser consultados por una futura integración de Agentes de IA (usando Vercel AI SDK y Mastra). Podrás hacer preguntas en lenguaje natural sobre tu portafolio en tiempo real.
-- **🛡️ Privacidad Primero:** Totalmente self-hosted. El backend utiliza una base de datos SQLite local (`fiscal.db`), asegurando que tus claves y tu historial de transacciones nunca salgan de tu máquina.
-- **🔐 Bóveda de Secretos Local:** Bóveda encriptada con AES-256-GCM para almacenar de forma segura credenciales de terceros (ej. Kraken API) sin exponerlas a la nube. El "memory scrubbing" asegura que las claves se borran de la memoria RAM tras su uso. Incluye un registro dinámico de proveedores y activación/desactivación en caliente de integraciones bajo arquitectura Hexagonal.
-- **🏗️ Arquitectura Hexagonal:** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI está completamente desacoplada de la obtención de datos, permitiendo una alta testabilidad y validación robusta en tiempo de ejecución mediante Zod.
+- **📊 Presentación de Datos basada en FIFO:** Muestra saldos y datos fiscales estructurados según el método FIFO (First-In-First-Out) calculados previamente por el backend, ofreciendo un resumen visual claro y estandarizado.
+- **🧹 Asistente de Ingesta de Datos (Wizard):** Una interfaz en varios pasos que permite subir archivos CSV/XLSX, mapear automáticamente cabeceras de exchanges populares (Binance, Kraken, Coinbase, KuCoin, Bitunix), realizar ajustes manuales con opciones ordenadas alfabéticamente, validar restricciones de Spot vs. Futuros y enviar de forma segura los datos limpios al backend.
+- **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para inspeccionar el historial de transacciones, identificar inconsistencias (ej. bases de coste faltantes o saldos negativos) y presentar datos estructurados listos para informes AEAT.
+- **🤖 Preparado para Agentes de IA (Futura Feature):** El frontend está técnicamente diseñado para una futura integración de Agentes de IA (usando Vercel AI SDK o Mastra). Dado que los Casos de Uso y los DTOs están aislados y validados, pueden exponerse directamente como herramientas (Tools / Function Calling) a un LLM en el futuro para consultas en lenguaje natural sin reescribir validaciones.
+- **🛡️ Privacidad Primero:** Totalmente self-hosted. El sistema funciona localmente, asegurando que las credenciales de API y las transacciones permanezcan seguras. El BFF puede integrarse con cualquier backend local o remoto personalizado.
+- **🔐 Bóveda de Secretos Local:** Bóveda encriptada con AES-256-GCM para almacenar de forma segura credenciales de APIs. El borrado de memoria RAM ("scrubbing") asegura que las claves se destruyen tras su uso. Permite habilitar o deshabilitar integraciones en caliente.
+- **🏗️ Arquitectura Hexagonal (Separación en Frontend):** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI del frontend está desacoplada de los protocolos de red y mecanismos de almacenamiento local, garantizando alta testabilidad y seguridad de contratos mediante esquemas de validación Zod.
 
 ## 🛠️ Stack Tecnológico y Monorepo
 
@@ -123,7 +124,9 @@ Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta es
 
 ## 📦 Arquitectura: Hexagonal (Puertos y Adaptadores)
 
-Este proyecto se adhiere estrictamente a la **Arquitectura Hexagonal** (Puertos y Adaptadores) para asegurar que la interfaz de usuario esté completamente desacoplada de la obtención de datos, contratos de API y dependencias externas.
+Este proyecto se adhiere estrictamente a la **Arquitectura Hexagonal** (Puertos y Adaptadores) en el frontend. Es importante recalcar que **el frontend no ejecuta lógica de negocio de cálculo financiero** (como la asignación de bases de coste por FIFO o el cálculo de pérdidas y ganancias - PnL realizadas o no realizadas). En su lugar:
+- **Motor de Cálculo:** El cálculo pesado se delega completamente al Backend/BFF.
+- **Puertos y Adaptadores del Frontend:** Están diseñados puramente para desacoplar los componentes de la interfaz de usuario y los estados de presentación de los detalles de infraestructura (protocolos de red, contratos de API, bóveda de almacenamiento local, configuraciones de i18n y esquemas de validación).
 
 ```mermaid
 graph TD
@@ -155,12 +158,12 @@ graph TD
 ### 🏛️ Capas Arquitectónicas
 
 1. **Capa de Dominio (`src/core/domain/`)**
-   El corazón de la aplicación. **Aislamiento total**: No tiene dependencias externas de frameworks (sin imports de Vue, Axios, ni Zod).
+   El corazón de la lógica de cliente de la aplicación. **Aislamiento total**: No tiene dependencias externas de frameworks (sin imports de Vue, Axios, ni Zod).
    - **Entidades y Objetos de Valor (`models/`)**: Definidos usando interfaces TypeScript puras. Utilizamos **Branded Types** (tipos marca como `AssetId` o `LotId`) para evitar la "primitive obsession" y garantizar type-safety en identificadores.
-   - **Puertos (`ports/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita, no *cómo* obtenerlo. Nota: NO existe la carpeta `repositories`; las interfaces de repositorios son puertos de salida.
+   - **Puertos (`ports/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita el cliente, no *cómo* obtenerlo. Nota: NO existe la carpeta `repositories`; las interfaces de repositorios son puertos de salida.
 
 2. **Capa de Aplicación (`src/core/application/`)**
-   - **Casos de Uso (`use-cases/`)**: Clases TypeScript puras que coordinan los Puertos del Dominio. Contienen la lógica de orquestación de negocio (ej. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`) sin reactividad de Vue ni dependencias de frameworks. Toda mutación de estado DEBE pasar por un Caso de Uso.
+   - **Casos de Uso (`use-cases/`)**: Clases TypeScript puras que coordinan los Puertos del Dominio. Contienen la lógica de orquestación específica del frontend (ej. `SaveVaultKeyUseCase`, `UpdateLanguageUseCase`, `ImportTransactionsUseCase`) sin reactividad de Vue ni dependencias de frameworks. Toda mutación de estado DEBE pasar por un Caso de Uso.
 
 3. **Capa de Infraestructura (`src/core/infrastructure/`)**
    El borde exterior que se comunica con el mundo real y protege al dominio.

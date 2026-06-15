@@ -4,7 +4,10 @@ This document covers the high-level architecture of the application, detailing t
 
 ## Overview
 
-Kryptofolio leverages a strict **Hexagonal Architecture** within a Turborepo monorepo setup. The core principle is that the Domain layer is completely isolated from external concerns, meaning no framework imports, no database logic, and no external UI dependencies are allowed inside `src/core/domain/`.
+Kryptofolio leverages a strict **Hexagonal Architecture** within a Turborepo monorepo setup on the frontend. The core principle is that the Domain layer is completely isolated from external concerns, meaning no framework imports, no database logic, and no external UI dependencies are allowed inside `src/core/domain/`.
+
+> [!NOTE]
+> **Client-Side Domain Boundaries:** The frontend's domain does *not* compute core financial records like FIFO cost-basis matching or realized/unrealized PnL. The frontend acts as a structured presentation client. Its Domain and Application layers are dedicated to UI state orchestration, local storage settings, credential vault encryption, error handling, and translation state management. The calculations are delegated to the Backend/BFF.
 
 All external data enters the system through the **Anti-Corruption Layer (ACL)**, primarily using Zod schemas for Data Transfer Objects (DTOs), before being mapped to internal Branded Types and strict Domain Entities.
 
@@ -68,3 +71,38 @@ flowchart TD
     C -->|Fail| E[Global Error Bus]
     D --> F[Pinia Store / UI]
 ```
+
+---
+
+## 🧹 Data Ingestion Wizard Architecture
+
+The **Data Ingestion Wizard** (`apps/frontend/src/modules/data-ingestion/`) is a key component structured using a decoupled, multi-step pipeline pattern:
+
+```mermaid
+flowchart LR
+    Step1[1. Dropzone & Parse] -->|PapaParse / CSV Raw| Step2[2. Column Auto-Mapping]
+    Step2 -->|Exchanges Aliases / Manual sorting| Step3[3. Spot vs Futures Validation]
+    Step3 -->|Errors found / Metadata fallback| Step4[4. Aggregation & Hash]
+    Step4 -->|POST /api/tax/import| Step5[5. Backend Submit]
+```
+
+### Steps Breakdown:
+1. **File Parsing & Upload:** CSV/XLSX files are parsed in-browser using `PapaParse` or equivalent utilities.
+2. **Column Auto-Mapping:** Mappings are matched automatically against aliases for Binance, Kraken, Coinbase, KuCoin, and Bitunix. If headers are unknown, they default to a `metadata` pass-through object rather than breaking the parser.
+3. **Manual Adjustments:** The user can manually map unassigned headers using a dropdown where options are sorted alphabetically based on their translated labels (ensuring quick scanning).
+4. **Validation:** Checks are run based on `marketType`:
+   - **Spot:** Requires `date` and `tx_type`.
+   - **Futures:** Requires `date`, `tx_type` and trade variables like `amount`, `symbol`, `price_fiat`, `asset`. For settlement rows (PnL), if `pnl_currency` is missing, it falls back to the quote currency or asset.
+5. **Aggregation & Normalization:** Rows are aggregated and normalized (e.g., timezone to UTC ISO, transaction direction), and a SHA-256 ID hash is generated to avoid duplicate imports.
+6. **Submission & Invalidation:** Submitting via `useSubmitIngestionMutation` makes an RPC call to `/api/tax/import`. Upon success, the transactions query caches are invalidated, automatically refetching the tables in the UI.
+
+---
+
+## 🤖 AI Agent Ready (Future Feature)
+
+Although the AI Agent integration (using Vercel AI SDK and Mastra) is a future capability, the application has been designed from the ground up to support it:
+
+- **Isolated Use Cases:** Use cases in `src/core/application/use-cases/` are completely isolated from Vue/UI, expecting pure DTOs.
+- **Function Calling Compatibility:** These Use Cases and their Zod schemas are structured so they can be exposed directly as **LLM Tools** (Function Calling) for an AI Agent.
+- **Natural Language Execution:** A future LLM agent will be able to invoke operations (e.g., query the vault, request a tax report summary, import a new CSV) by matching user natural language prompts directly to the Use Cases' inputs, without bypassing validation rules or rewriting data models.
+
