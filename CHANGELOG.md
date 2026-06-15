@@ -22,6 +22,21 @@ Format follows [Conventional Commits](https://www.conventionalcommits.org) and [
 
 ### ✨ Features
 
+* **data-ingestion:** implement ingestion wizard and improve csv header mapping ([03e91a4](https://github.com/nelomr/kryptofolio/commit/03e91a479eee1ae94d26df3a5d43f191b7d41b5b))
+
+### ♻️  Refactors
+
+* colocate ui components and optimize assets ([07b09c2](https://github.com/nelomr/kryptofolio/commit/07b09c21180981d8d18aad43b7fc496cfe290abe))
+
+### 📝 Documentation
+
+* improve architecture and api integration documentation ([baa015d](https://github.com/nelomr/kryptofolio/commit/baa015d9fedea952424e2af68e79e5f0d9fcb0db))
+* **openspec:** archive update-logos-and-favicon change and sync project-branding spec ([acc504e](https://github.com/nelomr/kryptofolio/commit/acc504e67db2d85fab31008aba06652137ea2d72))
+
+## [1.15.9](https://github.com/nelomr/kryptofolio/compare/v1.15.8...v1.15.9) (2026-06-15)
+
+### ✨ Features
+
 * **data-ingestion:** implement ingestion wizard and improve csv header mapping ([f5ae0ea](https://github.com/nelomr/kryptofolio/commit/f5ae0eaa81e47647b676e31fec9f450600da1087))
 
 ### ♻️  Refactors
