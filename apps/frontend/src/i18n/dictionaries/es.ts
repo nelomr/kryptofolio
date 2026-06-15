@@ -261,6 +261,7 @@ export const es: I18nDictionary = {
   "tax.upload.uploading": "Subiendo...",
   "tax.upload.select": "Selecciona un archivo CSV o XLSX",
   "tax.import.title": "Importación Blockchain",
+  "ingestion.wizard.label": "Asistente de Importación",
   "tax.import.subtitle":
     "Importa transacciones directamente desde el ledger público.",
   "tax.import.btn": "Importar",
@@ -379,4 +380,102 @@ export const es: I18nDictionary = {
   "vault.provider.status.configured": "Vinculado",
   "vault.provider.status.not_configured": "No vinculado",
   "vault.actions.save": "Guardar",
+
+  // Data Ingestion Wizard
+  "ingestion.wizard.title": "Asistente de Importación",
+  "ingestion.wizard.subtitle":
+    "Sube un archivo para validar y mapear tus datos antes de insertarlos en el sistema.",
+  "ingestion.wizard.step_upload": "Subir Archivo",
+  "ingestion.wizard.step_review": "Revisión",
+  "ingestion.wizard.step_success": "¡Validación Correcta!",
+  "ingestion.wizard.market_type_label": "Tipo de mercado",
+  "ingestion.wizard.timezone_label": "Zona Horaria",
+  "ingestion.wizard.market_spot": "Mercado Spot",
+  "ingestion.wizard.market_futures": "Futuros / Derivados",
+
+  // Dropzone Area
+  "ingestion.dropzone.drag_drop":
+    "Arrastra y suelta tu archivo CSV o XLSX aquí",
+  "ingestion.dropzone.or_click": "o haz clic para seleccionar un archivo",
+  "ingestion.dropzone.format_help":
+    "Soporta CSV y XLSX de Kraken, Bitvavo, Bit2Me y otros",
+
+  // Data Grid Validator
+  "ingestion.grid.parsing": "Procesando archivo, por favor espera...",
+  "ingestion.grid.unsupported": "Esperando archivo...",
+  "ingestion.grid.ready_to_import":
+    "Todos los registros son válidos. Listo para importar.",
+  "ingestion.grid.fix_errors":
+    "Por favor, corrige {count} filas con errores antes de continuar.",
+  "ingestion.grid.imported_success":
+    "Archivo importado con éxito. Las transacciones han sido registradas.",
+  "ingestion.grid.col_status": "Estado",
+  "ingestion.grid.select_mapping": "Seleccionar campo...",
+  "ingestion.grid.mapping_unmapped": "Sin mapear",
+  "ingestion.grid.cell_error": "Requerido o formato inválido",
+
+  // Ingestion Columns
+  "ingestion.columns.date": "Fecha / Hora",
+  "ingestion.columns.timezone": "Zona Horaria",
+  "ingestion.columns.type": "Tipo (Compra, Venta, Retiro...)",
+  "ingestion.columns.ticker": "Moneda / Asset",
+  "ingestion.columns.amount": "Cantidad",
+  "ingestion.columns.price": "Precio",
+  "ingestion.columns.fee": "Comisión",
+  "ingestion.columns.feeAsset": "Moneda Comisión",
+  "ingestion.columns.txId": "ID Transacción (TxId)",
+  "ingestion.columns.orderId": "ID Pedido",
+  "ingestion.columns.network": "Red / Cadena",
+  "ingestion.columns.fiatValue": "Valor Fiat",
+  "ingestion.columns.fiatCurrency": "Moneda Fiat",
+  "ingestion.columns.sourceAddress": "Dirección Origen",
+  "ingestion.columns.destinationAddress": "Dirección Destino",
+  "ingestion.columns.balance": "Saldo / Balance",
+  "ingestion.columns.pnl": "Beneficio / Pérdida",
+  "ingestion.columns.exchange": "Exchange / Plataforma",
+  "ingestion.columns.description": "Descripción / Nota",
+  "ingestion.columns.time": "Hora",
+  "ingestion.columns.status": "Estado",
+  "ingestion.columns.source_address": "Dirección Origen",
+  "ingestion.columns.destination_address": "Dirección Destino",
+  "ingestion.columns.tx_id": "ID Transacción",
+  "ingestion.columns.group_id": "ID Grupo",
+  "ingestion.columns.tx_type": "Tipo de Transacción",
+  "ingestion.columns.asset": "Activo",
+  "ingestion.columns.amount_in": "Cantidad de Entrada",
+  "ingestion.columns.asset_in": "Activo de Entrada",
+  "ingestion.columns.amount_out": "Cantidad de Salida",
+  "ingestion.columns.asset_out": "Activo de Salida",
+  "ingestion.columns.total_fiat": "Total Fiat",
+  "ingestion.columns.price_fiat": "Precio Fiat",
+  "ingestion.columns.quote_currency": "Moneda de Cotización (Quote)",
+  "ingestion.columns.fiat_currency": "Moneda Total (Fiat/Valor)",
+  "ingestion.columns.fee_amount": "Comisión",
+  "ingestion.columns.fee_currency": "Moneda Comisión",
+  "ingestion.columns.symbol": "Símbolo / Contrato",
+  "ingestion.columns.realized_pnl": "PnL Realizado",
+  "ingestion.columns.pnl_currency": "Moneda PnL",
+  "ingestion.columns.funding_amount": "Funding / Financiación",
+  "ingestion.columns.funding_currency": "Moneda Funding",
+  "ingestion.columns.metadata": "Metadatos (Pasarela)",
+
+  // Ingestion Errors
+  "ingestion.errors.tx_type_required": "El tipo de transacción es requerido",
+  "ingestion.errors.amount_invalid": "La cantidad debe ser un número válido",
+  "ingestion.errors.financial_data_missing":
+    "Faltan datos financieros: Debes proporcionar Cantidad+Activo, Totales Fiat, o Campos de Dirección",
+  "ingestion.errors.time_data_missing":
+    "Faltan datos de tiempo: Debes proporcionar Fecha o Timestamp",
+  "ingestion.errors.unsupported_format":
+    "Formato no soportado. Por favor, sube un archivo CSV o Excel.",
+  "ingestion.errors.unknown_parsing_error":
+    "Error desconocido al procesar el archivo.",
+  "ingestion.errors.no_sheets": "No se encontraron hojas en el archivo Excel.",
+  "ingestion.errors.file_empty": "El archivo está vacío.",
+  "ingestion.errors.read_failed": "Error al leer el archivo.",
+  "ingestion.errors.no_valid_data": "No se encontraron datos válidos.",
+  "ingestion.errors.no_valid_rows_to_import":
+    "No hay filas válidas para importar.",
+  "ingestion.errors.unknown_submission_error":
+    "Error desconocido durante la importación.",
 };

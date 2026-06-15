@@ -12,6 +12,7 @@
  */
 
 import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
+import type { TransactionRow } from '@/modules/data-ingestion/types'
 
 export interface ITaxPort {
   /**
@@ -77,6 +78,14 @@ export interface ITaxPort {
    * @param market - Target market context ('spot' or 'futures')
    */
   uploadTaxFile(file: File, market: 'spot' | 'futures'): Promise<void>
+
+  /**
+   * Import an array of pre-parsed and validated transaction rows.
+   * Uses a deterministic `id_hash` for each row to guarantee idempotent UPSERT operations.
+   * @param rows - The array of validated TransactionRow objects.
+   * @param market - Target market context ('spot' | 'futures')
+   */
+  importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string): Promise<void>
 
   /**
    * Delete all transactions — bulk state reset.

@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import { useQuery } from '@pinia/colada'
-import { CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
+import { CRYPTO_METRICS_PORT_KEY } from '@/core/injectionKeys'
 import KpiCard from './KpiCard.vue'
 import { useI18n } from '@/composables/useI18n'
 
 const { t } = useI18n()
 
-// Inject repository
-const cryptoMetricsRepo = inject(CRYPTO_METRICS_REPO_KEY)
-if (!cryptoMetricsRepo) {
+// Inject port
+const cryptoMetricsPort = inject(CRYPTO_METRICS_PORT_KEY)
+if (!cryptoMetricsPort) {
   throw new Error('ICryptoMetricsPort not provided')
 }
 
 // Fetch data using Colada
 const { data, isLoading, error } = useQuery({
   key: ['crypto-metrics', 'kpis'],
-  query: () => cryptoMetricsRepo.getKpis(),
+  query: () => cryptoMetricsPort.getKpis(),
 })
 
 // Format helpers

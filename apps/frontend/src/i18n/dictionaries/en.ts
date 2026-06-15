@@ -375,4 +375,99 @@ export const en: I18nDictionary = {
   "vault.provider.status.configured": "Linked",
   "vault.provider.status.not_configured": "Unlinked",
   "vault.actions.save": "Save",
+
+  // Data Ingestion Wizard
+  "ingestion.wizard.label": "Import Wizard",
+  "ingestion.wizard.title": "Import Transactions",
+  "ingestion.wizard.subtitle":
+    "Upload your CSV or XLSX file to extract transactions.",
+  "ingestion.wizard.step_upload": "Upload File",
+  "ingestion.wizard.step_review": "Review Data",
+  "ingestion.wizard.step_success": "Success",
+  "ingestion.wizard.market_type_label": "Market Type",
+  "ingestion.wizard.timezone_label": "CSV Timezone",
+  "ingestion.wizard.market_spot": "Spot Market",
+  "ingestion.wizard.market_futures": "Futures / Derivatives",
+
+  // Dropzone Area
+  "ingestion.dropzone.drag_drop": "Drag & drop your CSV or XLSX file here",
+  "ingestion.dropzone.or_click": "or click to select a file",
+  "ingestion.dropzone.format_help":
+    "Supports CSV and XLSX from Kraken, Bitvavo, Bit2Me, and others",
+
+  // Data Grid Validator
+  "ingestion.grid.parsing": "Parsing file, please wait...",
+  "ingestion.grid.unsupported": "Waiting for file...",
+  "ingestion.grid.ready_to_import": "All records valid. Ready to import.",
+  "ingestion.grid.fix_errors":
+    "Please fix {count} rows with errors before continuing.",
+  "ingestion.grid.imported_success":
+    "File imported successfully. Transactions have been recorded.",
+  "ingestion.grid.col_status": "Status",
+  "ingestion.grid.select_mapping": "Select mapped field...",
+  "ingestion.grid.mapping_unmapped": "Unmapped",
+  "ingestion.grid.cell_error": "Required or invalid format",
+
+  // Ingestion Columns
+  "ingestion.columns.date": "Date / Time",
+  "ingestion.columns.timezone": "Timezone",
+  "ingestion.columns.type": "Type (Buy, Sell, Withdraw...)",
+  "ingestion.columns.ticker": "Coin / Asset",
+  "ingestion.columns.amount": "Amount",
+  "ingestion.columns.price": "Price",
+  "ingestion.columns.fee": "Fee",
+  "ingestion.columns.feeAsset": "Fee Asset",
+  "ingestion.columns.txId": "Transaction ID (TxId)",
+  "ingestion.columns.orderId": "Order ID",
+  "ingestion.columns.network": "Network / Chain",
+  "ingestion.columns.fiatValue": "Fiat Value",
+  "ingestion.columns.fiatCurrency": "Fiat Currency",
+  "ingestion.columns.sourceAddress": "Source Address",
+  "ingestion.columns.destinationAddress": "Destination Address",
+  "ingestion.columns.balance": "Account Balance",
+  "ingestion.columns.pnl": "Profit / Loss",
+  "ingestion.columns.exchange": "Exchange / Platform",
+  "ingestion.columns.description": "Description / Note",
+  "ingestion.columns.time": "Time",
+  "ingestion.columns.status": "Status",
+  "ingestion.columns.source_address": "Source Address",
+  "ingestion.columns.destination_address": "Destination Address",
+  "ingestion.columns.tx_id": "Transaction ID",
+  "ingestion.columns.group_id": "Group ID",
+  "ingestion.columns.tx_type": "Transaction Type",
+  "ingestion.columns.asset": "Asset",
+  "ingestion.columns.amount_in": "Amount In",
+  "ingestion.columns.asset_in": "Asset In",
+  "ingestion.columns.amount_out": "Amount Out",
+  "ingestion.columns.asset_out": "Asset Out",
+  "ingestion.columns.total_fiat": "Total Fiat",
+  "ingestion.columns.price_fiat": "Price Fiat",
+  "ingestion.columns.quote_currency": "Quote Currency",
+  "ingestion.columns.fiat_currency": "Total Currency (Fiat/Quote)",
+  "ingestion.columns.fee_amount": "Fee Amount",
+  "ingestion.columns.fee_currency": "Fee Currency",
+  "ingestion.columns.symbol": "Symbol / Contract",
+  "ingestion.columns.realized_pnl": "Realized PnL",
+  "ingestion.columns.pnl_currency": "PnL Currency",
+  "ingestion.columns.funding_amount": "Funding Amount",
+  "ingestion.columns.funding_currency": "Funding Currency",
+  "ingestion.columns.metadata": "Metadata (Pass-through)",
+
+  // Ingestion Errors
+  "ingestion.errors.tx_type_required": "Transaction type is required",
+  "ingestion.errors.amount_invalid": "Amount must be a valid number",
+  "ingestion.errors.financial_data_missing":
+    "Financial data missing: Must provide Amount+Asset, Fiat totals, or Directional fields",
+  "ingestion.errors.time_data_missing":
+    "Time data missing: Must provide a Date or Timestamp",
+  "ingestion.errors.unsupported_format":
+    "Unsupported file format. Please upload CSV or Excel.",
+  "ingestion.errors.unknown_parsing_error": "Unknown parsing error.",
+  "ingestion.errors.no_sheets": "No sheets found in Excel file.",
+  "ingestion.errors.file_empty": "File is empty.",
+  "ingestion.errors.read_failed": "Failed to read file.",
+  "ingestion.errors.no_valid_data": "No valid data found.",
+  "ingestion.errors.no_valid_rows_to_import": "No valid rows to import.",
+  "ingestion.errors.unknown_submission_error":
+    "Unknown error during submission.",
 };

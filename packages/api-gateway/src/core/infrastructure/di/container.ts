@@ -1,5 +1,5 @@
 import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.ts';
-import { SqliteVaultRepositoryAdapter } from '../database/sqlite.ts';
+import { SqliteVaultPortAdapter } from '../database/sqlite.ts';
 import type { ICryptographyPort } from '../../domain/ports/ICryptographyPort.ts';
 import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentialsPort.ts';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.ts';
@@ -21,7 +21,7 @@ class DIContainer {
 
   constructor() {
     this.cryptographyPort = new AesGcmCryptographyAdapter();
-    const sqliteAdapter = new SqliteVaultRepositoryAdapter();
+    const sqliteAdapter = new SqliteVaultPortAdapter();
     this.vaultCredentialsPort = sqliteAdapter;
     this.userSettingsPort = sqliteAdapter;
     this.unlockVaultUseCase = new UnlockVaultUseCase(this.cryptographyPort, this.vaultCredentialsPort);

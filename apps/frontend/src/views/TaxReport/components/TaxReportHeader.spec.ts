@@ -24,7 +24,7 @@ describe('TaxReportHeader.vue', () => {
 
 
 
-  it('has Sync Web3 and Subir CSV buttons disabled', () => {
+  it('has Sync Web3 button disabled and Upload CSV button enabled', () => {
     const wrapper = mount(TaxReportHeader)
     const buttons = wrapper.findAllComponents(Button)
     
@@ -32,7 +32,7 @@ describe('TaxReportHeader.vue', () => {
     const uploadButton = buttons.find(b => b.text().includes('tax.header.upload'))
     
     expect(syncButton?.attributes('disabled')).toBeDefined()
-    expect(uploadButton?.attributes('disabled')).toBeDefined()
+    expect(uploadButton?.attributes('disabled')).toBeUndefined()
   })
 
   it('renders Upload Wallets button and hidden input', () => {

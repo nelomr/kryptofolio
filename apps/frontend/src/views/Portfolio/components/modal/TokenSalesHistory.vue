@@ -41,7 +41,7 @@ defineProps<{
               <span v-if="disp.gainLossEur > 0">+</span>{{ formatCurrency(disp.gainLossEur) }}
             </td>
             <td class="px-4 py-3 text-center">
-                <Badge variant="outline" class="text-[9px] bg-accent/10 text-accent border-accent/20 uppercase tracking-widest border-none">{{ t('token.sales_history.sold') }}</Badge>
+                <Badge variant="outline" class="text-[9px] bg-destructive/10 text-destructive border-destructive/20 uppercase tracking-widest border-none">{{ t('token.sales_history.sold') }}</Badge>
             </td>
           </tr>
           <tr v-if="history.length === 0">

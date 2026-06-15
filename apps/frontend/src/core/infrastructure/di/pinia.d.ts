@@ -6,9 +6,9 @@ import type { ICryptoMetricsPort } from '@/core/domain/ports/ICryptoMetricsPort'
 
 declare module 'pinia' {
   export interface PiniaCustomProperties {
-    $portfolioRepo: ICryptoPortfolioPort
-    $taxRepo: ITaxPort
-    $walletRepo: IWalletPort
-    $cryptoMetricsRepo: ICryptoMetricsPort
+    $portfolioPort: ICryptoPortfolioPort
+    $taxPort: ITaxPort
+    $walletPort: IWalletPort
+    $cryptoMetricsPort: ICryptoMetricsPort
   }
 }

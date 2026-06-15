@@ -123,6 +123,18 @@ const routes = app
     (c) => c.json({ success: true }, 200),
   )
   .post("/tax/upload", (c) => c.json({ success: true }, 200))
+  .post(
+    "/tax/import",
+    zValidator(
+      "json",
+      z.object({
+        rows: z.array(z.record(z.unknown())),
+        market: z.enum(["spot", "futures"]),
+        timezone: z.string(),
+      }),
+    ),
+    (c) => c.json({ success: true }, 200),
+  )
   .delete("/tax/transactions/market/:market", (c) =>
     c.json({ success: true }, 200),
   )

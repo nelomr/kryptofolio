@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import credentialsApi from "../../routes/credentials.ts";
 import { container } from "../../core/infrastructure/di/container.ts";
-import { SqliteVaultRepositoryAdapter } from "../../core/infrastructure/database/sqlite.ts";
+import { SqliteVaultPortAdapter } from "../../core/infrastructure/database/sqlite.ts";
 
 describe("Vault API Endpoints", () => {
   beforeAll(async () => {
@@ -87,7 +87,7 @@ describe("Vault API Endpoints", () => {
   });
 
   it('PATCH /vault/:service/status should toggle the provider status', async () => {
-    const spy = vi.spyOn(SqliteVaultRepositoryAdapter.prototype, 'setServiceEnabled').mockResolvedValue();
+    const spy = vi.spyOn(SqliteVaultPortAdapter.prototype, 'setServiceEnabled').mockResolvedValue();
     
     // Test enable
     const resEnable = await credentialsApi.request("/vault/KRAKEN_API/status", {

@@ -66,7 +66,7 @@ export interface PortfolioMetricsEntity {
 }
 
 // ---------------------------------------------------------------------------
-// PortfolioSummaryEntity — root-level response from the portfolio repository
+// PortfolioSummaryEntity — root-level response from the portfolio port
 // ---------------------------------------------------------------------------
 
 export interface PortfolioSummaryEntity {

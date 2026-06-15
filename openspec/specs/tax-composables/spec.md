@@ -22,3 +22,11 @@ The system SHALL provide pure composables for pagination and smart year deductio
 #### Scenario: Smart year logic is derived from data
 - **WHEN** `useSmartYearLogic(transactions)` is used
 - **THEN** it SHALL return a computed property representing the deduced fiscal year based solely on the provided data array
+
+### Requirement: Upload Tax File Mutation
+The system SHALL provide a Pinia Colada mutation to upload tax transactions and automatically invalidate the `TAX_TRANSACTIONS_KEY` query cache upon success.
+
+#### Scenario: Submitting pre-parsed JSON rows via mutation
+- **WHEN** the application calls the new `useSubmitIngestionMutation` with a JSON payload of rows and market type
+- **THEN** the mutation executes the `ImportTransactionsUseCase`
+- **AND THEN** upon success, it invalidates the corresponding `TAX_TRANSACTIONS_KEY` cache for the specified market.

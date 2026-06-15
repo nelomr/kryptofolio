@@ -1,61 +1,64 @@
-import { inject } from 'vue'
-import { useQuery } from '@pinia/colada'
-import { CRYPTO_METRICS_REPO_KEY } from '@/core/injectionKeys'
-import type { ICryptoMetricsPort, TimeRange } from '@/core/domain/ports/ICryptoMetricsPort'
-import type { Ref } from 'vue'
+import { inject } from "vue";
+import { useQuery } from "@pinia/colada";
+import { CRYPTO_METRICS_PORT_KEY } from "@/core/injectionKeys";
+import type {
+  ICryptoMetricsPort,
+  TimeRange,
+} from "@/core/domain/ports/ICryptoMetricsPort";
+import type { Ref } from "vue";
 
-export function useCryptoMetricsRepo(): ICryptoMetricsPort {
-  const repo = inject(CRYPTO_METRICS_REPO_KEY)
-  if (!repo) {
+export function useCryptoMetricsPort(): ICryptoMetricsPort {
+  const port = inject(CRYPTO_METRICS_PORT_KEY);
+  if (!port) {
     throw new Error(
-      '[useCryptoMetricsQueries] ICryptoMetricsPort not provided. ' +
-      'Ensure main.ts calls pinia.use() to inject repositories.'
-    )
+      "[useCryptoMetricsPort] ICryptoMetricsPort not provided. " +
+        "Ensure main.ts calls pinia.use() to inject ports.",
+    );
   }
-  return repo
+  return port;
 }
 
 export function useCryptoKpisQuery() {
-  const repo = useCryptoMetricsRepo()
+  const port = useCryptoMetricsPort();
 
   return useQuery({
-    key: ['crypto-metrics-kpis'],
-    query: () => repo.getKpis(),
-  })
+    key: ["crypto-metrics-kpis"],
+    query: () => port.getKpis(),
+  });
 }
 
 export function usePerformanceHistoryQuery(range: Ref<TimeRange>) {
-  const repo = useCryptoMetricsRepo()
+  const port = useCryptoMetricsPort();
 
   return useQuery({
-    key: () => ['crypto-performance-history', range.value],
-    query: () => repo.getPerformanceHistory(range.value),
-  })
+    key: () => ["crypto-performance-history", range.value],
+    query: () => port.getPerformanceHistory(range.value),
+  });
 }
 
 export function useAssetAllocationQuery() {
-  const repo = useCryptoMetricsRepo()
+  const port = useCryptoMetricsPort();
 
   return useQuery({
-    key: ['crypto-asset-allocation'],
-    query: () => repo.getAssetAllocation(),
-  })
+    key: ["crypto-asset-allocation"],
+    query: () => port.getAssetAllocation(),
+  });
 }
 
 export function useVolatilityHeatmapQuery(year: Ref<number>) {
-  const repo = useCryptoMetricsRepo()
+  const port = useCryptoMetricsPort();
 
   return useQuery({
-    key: () => ['crypto-volatility-heatmap', year.value],
-    query: () => repo.getVolatilityHeatmap(year.value),
-  })
+    key: () => ["crypto-volatility-heatmap", year.value],
+    query: () => port.getVolatilityHeatmap(year.value),
+  });
 }
 
 export function useRiskMetricsQuery() {
-  const repo = useCryptoMetricsRepo()
+  const port = useCryptoMetricsPort();
 
   return useQuery({
-    key: ['crypto-risk-metrics'],
-    query: () => repo.getRiskMetrics(),
-  })
+    key: ["crypto-risk-metrics"],
+    query: () => port.getRiskMetrics(),
+  });
 }

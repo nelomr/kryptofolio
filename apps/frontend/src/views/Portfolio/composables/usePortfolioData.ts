@@ -3,14 +3,14 @@
  */
 
 import { computed, ref } from 'vue'
-import { usePortfolioSummaryQuery, useRebuildMutation, useTokenHistoryQuery, usePortfolioRepo } from '@/composables/queries/usePortfolioQueries'
+import { usePortfolioSummaryQuery, useRebuildMutation, useTokenHistoryQuery, usePortfolioPort } from '@/composables/queries/usePortfolioQueries'
 import type { TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 
 export function usePortfolioData() {
   // Use Pinia Colada queries instead of the old store
   const { data: summary, isLoading: isFetching } = usePortfolioSummaryQuery()
   const { mutateAsync: rebuild, isLoading: isRebuilding } = useRebuildMutation()
-  const repo = usePortfolioRepo()
+  const port = usePortfolioPort()
 
   // Modal and details state
   const selectedSymbol = ref('')
@@ -49,7 +49,7 @@ export function usePortfolioData() {
     expandedDetailsMap.value[symbol] = { lots: [], history: {}, isLoading: true }
     
     try {
-      const data = await repo.getTokenHistory(symbol)
+      const data = await port.getTokenHistory(symbol)
       expandedDetailsMap.value[symbol] = { lots: data.lots, history: data.history, isLoading: false }
     } catch (error) {
       expandedDetailsMap.value[symbol].isLoading = false

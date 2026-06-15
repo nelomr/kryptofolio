@@ -18,6 +18,7 @@ import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { bffClient } from '../http/BffClient'
+import type { TransactionRow } from '@/modules/data-ingestion/types'
 
 function parseOrFail<T>(
   schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -181,6 +182,14 @@ export class RestTaxAdapter implements ITaxPort {
       await bffClient.api.tax.upload.$post({ form: { file, market } })
     } catch (err) {
       throw new TaxOperationError('UPLOAD_FAILED', `File upload failed: ${(err as Error).message}`)
+    }
+  }
+
+  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string): Promise<void> {
+    try {
+      await bffClient.api.tax.import.$post({ json: { rows: rows as unknown as Record<string, unknown>[], market, timezone } })
+    } catch (err) {
+      throw new TaxOperationError('IMPORT_FAILED', `Transactions import failed: ${(err as Error).message}`)
     }
   }
 

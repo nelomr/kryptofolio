@@ -4,7 +4,7 @@ import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentials
 import type { EncryptedArtifact } from '../../domain/ports/ICryptographyPort.ts';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.ts';
 
-export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort, IUserSettingsPort {
+export class SqliteVaultPortAdapter implements IVaultCredentialsPort, IUserSettingsPort {
 
   private db: DatabaseSync;
 
@@ -14,7 +14,7 @@ export class SqliteVaultRepositoryAdapter implements IVaultCredentialsPort, IUse
 
     if (!isMockMode) {
       if (!process.env.DB_PATH) {
-        throw new Error('[SqliteVaultRepositoryAdapter] CRITICAL: DB_PATH environment variable is not defined. Please set it in your .env file or environment.');
+        throw new Error('[SqliteVaultPortAdapter] CRITICAL: DB_PATH environment variable is not defined. Please set it in your .env file or environment.');
       }
       dbUrl = process.env.DB_PATH;
     }

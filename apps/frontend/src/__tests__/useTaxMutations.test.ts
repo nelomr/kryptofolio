@@ -1,18 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setActivePinia, createPinia } from 'pinia'
-import { createApp } from 'vue'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
-import { 
-  useUploadTaxFileMutation, 
-  useImportWalletMutation, 
-  useSyncWeb3Mutation, 
-  useDeleteTransactionsMutation 
-} from '@/composables/queries/useTaxMutations'
-import { TAX_TRANSACTIONS_KEY } from '@/composables/queries/useTaxQueries'
-import { TAX_REPO_KEY } from '@/core/injectionKeys'
-import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { setActivePinia, createPinia } from "pinia";
+import { createApp } from "vue";
+import { PiniaColada, useQueryCache } from "@pinia/colada";
+import {
+  useUploadTaxFileMutation,
+  useImportWalletMutation,
+  useSyncWeb3Mutation,
+  useDeleteTransactionsMutation,
+} from "@/composables/queries/useTaxMutations";
+import { TAX_TRANSACTIONS_KEY } from "@/composables/queries/useTaxQueries";
+import { TAX_PORT_KEY } from "@/core/injectionKeys";
+import type { ITaxPort } from "@/core/domain/ports/ITaxPort";
 
-function createMockTaxRepo(): ITaxPort {
+function createMockTaxPort(): ITaxPort {
   return {
     getSpotTransactions: vi.fn(),
     getFuturesTransactions: vi.fn(),
@@ -28,98 +28,106 @@ function createMockTaxRepo(): ITaxPort {
     syncWeb3: vi.fn().mockResolvedValue(undefined),
     downloadReport: vi.fn().mockResolvedValue(new Blob()),
     getAvailableYears: vi.fn(),
-  }
+  };
 }
 
-describe('Tax Mutations Composables', () => {
+describe("Tax Mutations Composables", () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
-  })
+    setActivePinia(createPinia());
+  });
 
   function setupApp() {
-    const app = createApp({})
-    app.use(createPinia())
-    app.use(PiniaColada)
-    const repo = createMockTaxRepo()
-    app.provide(TAX_REPO_KEY, repo)
-    return { app, repo }
+    const app = createApp({});
+    app.use(createPinia());
+    app.use(PiniaColada);
+    const port = createMockTaxPort();
+    app.provide(TAX_PORT_KEY, port);
+    return { app, port };
   }
 
-  it('useUploadTaxFileMutation calls repo and invalidates transactions query', async () => {
-    const { app, repo } = setupApp()
-    
-    let composable: ReturnType<typeof useUploadTaxFileMutation>
-    let cache: ReturnType<typeof useQueryCache>
-    
+  it("useUploadTaxFileMutation calls port and invalidates transactions query", async () => {
+    const { app, port } = setupApp();
+
+    let composable: ReturnType<typeof useUploadTaxFileMutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
     app.runWithContext(() => {
-      composable = useUploadTaxFileMutation()
-      cache = useQueryCache()
-    })
+      composable = useUploadTaxFileMutation();
+      cache = useQueryCache();
+    });
 
-    const invalidateSpy = vi.spyOn(cache!, 'invalidateQueries')
-    const mockFile = new File([''], 'test.csv')
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
+    const mockFile = new File([""], "test.csv");
 
-    await app.runWithContext(() => composable.mutateAsync({ file: mockFile, market: 'spot' }))
+    await app.runWithContext(() =>
+      composable.mutateAsync({ file: mockFile, market: "spot" }),
+    );
 
-    expect(repo.uploadTaxFile).toHaveBeenCalledWith(mockFile, 'spot')
-    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY('spot') })
-  })
+    expect(port.uploadTaxFile).toHaveBeenCalledWith(mockFile, "spot");
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      key: TAX_TRANSACTIONS_KEY("spot"),
+    });
+  });
 
-  it('useImportWalletMutation calls repo and invalidates transactions query', async () => {
-    const { app, repo } = setupApp()
-    
-    let composable: ReturnType<typeof useImportWalletMutation>
-    let cache: ReturnType<typeof useQueryCache>
-    
+  it("useImportWalletMutation calls port and invalidates transactions query", async () => {
+    const { app, port } = setupApp();
+
+    let composable: ReturnType<typeof useImportWalletMutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
     app.runWithContext(() => {
-      composable = useImportWalletMutation()
-      cache = useQueryCache()
-    })
+      composable = useImportWalletMutation();
+      cache = useQueryCache();
+    });
 
-    const invalidateSpy = vi.spyOn(cache!, 'invalidateQueries')
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
 
-    await app.runWithContext(() => composable.mutateAsync({ chain: 'solana', address: '123' }))
+    await app.runWithContext(() =>
+      composable.mutateAsync({ chain: "solana", address: "123" }),
+    );
 
-    expect(repo.importWallet).toHaveBeenCalledWith('solana', '123')
-    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY() })
-  })
+    expect(port.importWallet).toHaveBeenCalledWith("solana", "123");
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY() });
+  });
 
-  it('useSyncWeb3Mutation calls repo and invalidates transactions query', async () => {
-    const { app, repo } = setupApp()
-    
-    let composable: ReturnType<typeof useSyncWeb3Mutation>
-    let cache: ReturnType<typeof useQueryCache>
-    
+  it("useSyncWeb3Mutation calls port and invalidates transactions query", async () => {
+    const { app, port } = setupApp();
+
+    let composable: ReturnType<typeof useSyncWeb3Mutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
     app.runWithContext(() => {
-      composable = useSyncWeb3Mutation()
-      cache = useQueryCache()
-    })
+      composable = useSyncWeb3Mutation();
+      cache = useQueryCache();
+    });
 
-    const invalidateSpy = vi.spyOn(cache!, 'invalidateQueries')
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
 
-    await app.runWithContext(() => composable.mutateAsync())
+    await app.runWithContext(() => composable.mutateAsync());
 
-    expect(repo.syncWeb3).toHaveBeenCalled()
-    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY() })
-  })
+    expect(port.syncWeb3).toHaveBeenCalled();
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY() });
+  });
 
-  it('useDeleteTransactionsMutation calls repo and invalidates BOTH transactions and tax reports queries', async () => {
-    const { app, repo } = setupApp()
-    
-    let composable: ReturnType<typeof useDeleteTransactionsMutation>
-    let cache: ReturnType<typeof useQueryCache>
-    
+  it("useDeleteTransactionsMutation calls port and invalidates BOTH transactions and tax reports queries", async () => {
+    const { app, port } = setupApp();
+
+    let composable: ReturnType<typeof useDeleteTransactionsMutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
     app.runWithContext(() => {
-      composable = useDeleteTransactionsMutation()
-      cache = useQueryCache()
-    })
+      composable = useDeleteTransactionsMutation();
+      cache = useQueryCache();
+    });
 
-    const invalidateSpy = vi.spyOn(cache!, 'invalidateQueries')
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
 
-    await app.runWithContext(() => composable.mutateAsync('spot'))
+    await app.runWithContext(() => composable.mutateAsync("spot"));
 
-    expect(repo.deleteAllTransactions).toHaveBeenCalledWith('spot')
-    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY('spot') })
-    expect(invalidateSpy).toHaveBeenCalledWith({ key: ['tax-report'] })
-  })
-})
+    expect(port.deleteAllTransactions).toHaveBeenCalledWith("spot");
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      key: TAX_TRANSACTIONS_KEY("spot"),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: ["tax-report"] });
+  });
+});

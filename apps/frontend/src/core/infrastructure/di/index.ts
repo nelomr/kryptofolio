@@ -1,16 +1,24 @@
-import type { App } from 'vue'
-import { inject } from 'vue'
-import type { Pinia } from 'pinia'
+import type { App } from "vue";
+import { inject } from "vue";
+import type { Pinia } from "pinia";
 
 // --- Hexagonal Architecture: Dependency Injection Setup ---
-import { PORTFOLIO_REPO_KEY, TAX_REPO_KEY, I18N_PORT_KEY, WALLET_REPO_KEY, CRYPTO_METRICS_REPO_KEY, SETTINGS_PORT_KEY, VAULT_PORT_KEY } from '@/core/injectionKeys'
-import { RestCryptoAdapter } from '@/core/infrastructure/adapters/RestCryptoAdapter'
-import { RestTaxAdapter } from '@/core/infrastructure/adapters/RestTaxAdapter'
-import { RestWalletAdapter } from '@/core/infrastructure/adapters/RestWalletAdapter'
-import { RestCryptoMetricsAdapter } from '@/core/infrastructure/adapters/RestCryptoMetricsAdapter'
-import { RestSettingsAdapter } from '@/core/infrastructure/adapters/RestSettingsAdapter'
-import { RestVaultAdapter } from '@/core/infrastructure/adapters/RestVaultAdapter'
-import { ReactiveI18nAdapter } from '@/core/infrastructure/i18n/ReactiveI18nAdapter'
+import {
+  PORTFOLIO_PORT_KEY,
+  TAX_PORT_KEY,
+  I18N_PORT_KEY,
+  WALLET_PORT_KEY,
+  CRYPTO_METRICS_PORT_KEY,
+  SETTINGS_PORT_KEY,
+  VAULT_PORT_KEY,
+} from "@/core/injectionKeys";
+import { RestCryptoAdapter } from "@/core/infrastructure/adapters/RestCryptoAdapter";
+import { RestTaxAdapter } from "@/core/infrastructure/adapters/RestTaxAdapter";
+import { RestWalletAdapter } from "@/core/infrastructure/adapters/RestWalletAdapter";
+import { RestCryptoMetricsAdapter } from "@/core/infrastructure/adapters/RestCryptoMetricsAdapter";
+import { RestSettingsAdapter } from "@/core/infrastructure/adapters/RestSettingsAdapter";
+import { RestVaultAdapter } from "@/core/infrastructure/adapters/RestVaultAdapter";
+import { ReactiveI18nAdapter } from "@/core/infrastructure/i18n/ReactiveI18nAdapter";
 
 /**
  * setupDependencyInjection
@@ -21,51 +29,60 @@ import { ReactiveI18nAdapter } from '@/core/infrastructure/i18n/ReactiveI18nAdap
  */
 export function setupDependencyInjection(app: App, pinia: Pinia) {
   // 1. Instantiate infrastructure
-  const portfolioRepo = new RestCryptoAdapter()
-  const taxRepo = new RestTaxAdapter()
-  const walletRepo = new RestWalletAdapter()
-  const cryptoMetricsRepo = new RestCryptoMetricsAdapter()
-  const settingsRepo = new RestSettingsAdapter()
-  const vaultRepo = new RestVaultAdapter()
+  const portfolioPort = new RestCryptoAdapter();
+  const taxPort = new RestTaxAdapter();
+  const walletPort = new RestWalletAdapter();
+  const cryptoMetricsPort = new RestCryptoMetricsAdapter();
+  const settingsPort = new RestSettingsAdapter();
+  const vaultPort = new RestVaultAdapter();
 
-  const lang = import.meta.env.VITE_APP_LANG || 'en'
-  const i18nAdapter = new ReactiveI18nAdapter(lang)
+  const lang = import.meta.env.VITE_APP_LANG || "en";
+  const i18nAdapter = new ReactiveI18nAdapter(lang);
 
-  // 2. Provide repositories globally to Vue components via Symbol keys
-  app.provide(PORTFOLIO_REPO_KEY, portfolioRepo)
-  app.provide(TAX_REPO_KEY, taxRepo)
-  app.provide(I18N_PORT_KEY, i18nAdapter)
-  app.provide(WALLET_REPO_KEY, walletRepo)
-  app.provide(CRYPTO_METRICS_REPO_KEY, cryptoMetricsRepo)
-  app.provide(SETTINGS_PORT_KEY, settingsRepo)
-  app.provide(VAULT_PORT_KEY, vaultRepo)
+  // 2. Provide ports globally to Vue components via Symbol keys
+  app.provide(PORTFOLIO_PORT_KEY, portfolioPort);
+  app.provide(TAX_PORT_KEY, taxPort);
+  app.provide(I18N_PORT_KEY, i18nAdapter);
+  app.provide(WALLET_PORT_KEY, walletPort);
+  app.provide(CRYPTO_METRICS_PORT_KEY, cryptoMetricsPort);
+  app.provide(SETTINGS_PORT_KEY, settingsPort);
+  app.provide(VAULT_PORT_KEY, vaultPort);
 
-  // 3. Inject repositories directly into Pinia stores
+  // 3. Inject ports directly into Pinia stores
   // This solves the "[Vue warn]: inject() can only be used inside setup()"
   // when stores need to fetch dependencies asynchronously.
   pinia.use(({ app: piniaApp }) => {
     return {
-      $portfolioRepo: piniaApp.runWithContext(() => {
-        const repo = inject(PORTFOLIO_REPO_KEY)
-        if (!repo) throw new Error('[DI] PORTFOLIO_REPO_KEY not provided to Vue app context')
-        return repo
+      $portfolioPort: piniaApp.runWithContext(() => {
+        const port = inject(PORTFOLIO_PORT_KEY);
+        if (!port)
+          throw new Error(
+            "[DI] PORTFOLIO_PORT_KEY not provided to Vue app context",
+          );
+        return port;
       }),
-      $taxRepo: piniaApp.runWithContext(() => {
-        const repo = inject(TAX_REPO_KEY)
-        if (!repo) throw new Error('[DI] TAX_REPO_KEY not provided to Vue app context')
-        return repo
+      $taxPort: piniaApp.runWithContext(() => {
+        const port = inject(TAX_PORT_KEY);
+        if (!port)
+          throw new Error("[DI] TAX_PORT_KEY not provided to Vue app context");
+        return port;
       }),
-      $walletRepo: piniaApp.runWithContext(() => {
-        const repo = inject(WALLET_REPO_KEY)
-        if (!repo) throw new Error('[DI] WALLET_REPO_KEY not provided to Vue app context')
-        return repo
+      $walletPort: piniaApp.runWithContext(() => {
+        const port = inject(WALLET_PORT_KEY);
+        if (!port)
+          throw new Error(
+            "[DI] WALLET_PORT_KEY not provided to Vue app context",
+          );
+        return port;
       }),
-      $cryptoMetricsRepo: piniaApp.runWithContext(() => {
-        const repo = inject(CRYPTO_METRICS_REPO_KEY)
-        if (!repo) throw new Error('[DI] CRYPTO_METRICS_REPO_KEY not provided to Vue app context')
-        return repo
+      $cryptoMetricsPort: piniaApp.runWithContext(() => {
+        const port = inject(CRYPTO_METRICS_PORT_KEY);
+        if (!port)
+          throw new Error(
+            "[DI] CRYPTO_METRICS_PORT_KEY not provided to Vue app context",
+          );
+        return port;
       }),
-    }
-  })
+    };
+  });
 }
-

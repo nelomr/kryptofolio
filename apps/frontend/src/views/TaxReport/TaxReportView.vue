@@ -8,13 +8,14 @@ import YearFilter from "./components/YearFilter.vue";
 import TaxTransactionsTable from "./components/TaxTransactionsTable.vue";
 import TaxDerivativesTable from "./components/TaxDerivativesTable.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataIngestionWizard } from "@/modules/data-ingestion";
 import { BookText, FileText, MessageSquare } from "lucide-vue-next";
 import { useTaxReportPort } from "./composables/useTaxReportPort";
 import { useTaxLedgers } from "./composables/useTaxLedgers";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();
-const { metrics, syncWeb3, uploadCsv } = useTaxReportPort();
+const { metrics, syncWeb3 } = useTaxReportPort();
 
 const {
   spotLoading,
@@ -30,6 +31,7 @@ const {
 } = useTaxLedgers();
 
 const activeMarket = ref<"spot" | "futures">("spot");
+const isUploadModalOpen = ref(false);
 </script>
 
 <template>
@@ -44,7 +46,31 @@ const activeMarket = ref<"spot" | "futures">("spot");
     </div>
 
     <!-- Adapter orchestrating Dumb components -->
-    <TaxReportHeader @sync="syncWeb3" @upload="uploadCsv" />
+    <TaxReportHeader @sync="syncWeb3" @upload="isUploadModalOpen = true" />
+
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="isUploadModalOpen"
+          id="tax-upload-modal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto"
+        >
+          <div
+            class="fixed inset-0 transition-opacity"
+            aria-hidden="true"
+            @click="isUploadModalOpen = false"
+          ></div>
+
+          <div
+            class="modal-panel relative z-10 flex flex-col bg-background rounded-2xl text-left shadow-2xl w-full max-w-5xl border border-border max-h-[90vh] overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+          >
+            <DataIngestionWizard @close="isUploadModalOpen = false" />
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <TaxReportSummaryCards :metrics="metrics" />
 
@@ -135,3 +161,38 @@ const activeMarket = ref<"spot" | "futures">("spot");
     </Tabs>
   </div>
 </template>
+
+<style scoped>
+/* Modern CSS way to lock scroll globally while modal is mounted */
+:global(body:has(#tax-upload-modal)) {
+  overflow: hidden;
+}
+
+/* Base transition for the container (opacity only) */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+/* Specific transition for the panel (smooth transform and scale) */
+.modal-enter-active .modal-panel {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-leave-active .modal-panel {
+  transition: transform 0.3s cubic-bezier(0.5, 0, 0, 1);
+}
+
+.modal-enter-from .modal-panel {
+  transform: scale(0.95) translateY(15px);
+}
+
+.modal-leave-to .modal-panel {
+  transform: scale(0.97) translateY(5px);
+}
+</style>
