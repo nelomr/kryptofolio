@@ -3,6 +3,20 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.9](https://github.com/nelomr/kryptofolio/compare/v1.15.8...v1.15.9) (2026-06-15)
+
+### ✨ Features
+
+* **data-ingestion:** implement ingestion wizard and improve csv header mapping ([f5ae0ea](https://github.com/nelomr/kryptofolio/commit/f5ae0eaa81e47647b676e31fec9f450600da1087))
+
+### ♻️  Refactors
+
+* colocate ui components and optimize assets ([07b09c2](https://github.com/nelomr/kryptofolio/commit/07b09c21180981d8d18aad43b7fc496cfe290abe))
+
+### 📝 Documentation
+
+* **openspec:** archive update-logos-and-favicon change and sync project-branding spec ([acc504e](https://github.com/nelomr/kryptofolio/commit/acc504e67db2d85fab31008aba06652137ea2d72))
+
 ## [1.15.8](https://github.com/nelomr/kryptofolio/compare/v1.15.7...v1.15.8) (2026-06-11)
 
 ### ✨ Features
