@@ -1,7 +1,10 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
     branches:
       - main
 
@@ -13,18 +16,17 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write # Needed to push version bump commits and tags
-      pull-requests: write # Not strictly needed if not creating PRs, but good practice
+      pull-requests: write # Not strictly needed if not creating PRs
       id-token: write # Needed for provenance if publishing to NPM
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history required
           fetch-depth: 0
-          # Use a PAT if available to bypass branch protection for pushing version bumps directly
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Git User
@@ -48,8 +50,8 @@ jobs:
 
       - name: Version and Publish
         run: |
-          # Run changeset version to consume changesets and bump package versions
-          pnpm changeset version
+          # Use npx to ensure the binary is resolved correctly
+          npx changeset version
           
           # Check if there are any changes (version bumps happened)
           if [[ -n $(git status --porcelain) ]]; then
@@ -58,11 +60,8 @@ jobs:
             git commit -m "chore(release): version packages [skip ci]"
             git push origin main
             
-            # Publish packages
-            # Note: We skip the NPM registry for now, or publish if needed.
-            # Usually, you'd do: pnpm changeset publish
-            # If packages are private/restricted, they might not publish to npm registry unless configured.
-            pnpm changeset publish
+            # Publish packages (skip registry if not configured)
+            npx changeset publish
           else
             echo "No changesets found, nothing to version or publish."
           fi
