@@ -98,6 +98,10 @@ export const es: I18nDictionary = {
 
   // KPI Metrics Dashboard
   "metrics.error_loading": "Error al cargar KPIs:",
+  "metrics.drawdown.kicker": "Riesgo de Caída Máxima",
+  "metrics.drawdown.title": "Curva de Drawdown Histórico",
+  "metrics.drawdown.desc": "Porcentaje de caída histórica de la cartera desde su punto máximo (ATH). El área roja muestra la caída.",
+  "metrics.drawdown.tooltip_label": "Drawdown:",
   "metrics.roi_total_label": "ROI Total",
   "metrics.roi_delta_desc": "en 24h",
   "metrics.invested_label": "Invertido",

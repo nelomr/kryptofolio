@@ -31,7 +31,7 @@ export interface CryptoKpis {
   portfolioDispersion: number; // Sigma (Volatility)
 }
 
-export type TimeRange = "1D" | "1W" | "1M" | "1Y" | "ALL";
+export type TimeRange = "1D" | "1W" | "1M" | "1Y" | "5Y" | "ALL";
 
 export interface PerformancePoint {
   timestamp: number; // Unix timestamp
@@ -73,6 +73,11 @@ export interface RiskMetrics {
   history: number[];
 }
 
+export interface DrawdownPoint {
+  timestamp: number;
+  drawdownPercent: number;
+}
+
 export interface ICryptoMetricsPort {
   getKpis(): Promise<CryptoKpis>;
   getPerformanceHistory(range: TimeRange): Promise<{
@@ -86,4 +91,5 @@ export interface ICryptoMetricsPort {
   }>;
   getVolatilityHeatmap(year: number): Promise<VolatilityHeatmapEntity>;
   getRiskMetrics(): Promise<RiskMetrics>;
+  getDrawdownCurve(range: TimeRange): Promise<DrawdownPoint[]>;
 }

@@ -15,6 +15,9 @@ vi.mock('../../http/BffClient', () => {
         metrics: {
           kpis: {
             $get: vi.fn()
+          },
+          drawdown: {
+            $get: vi.fn()
           }
         }
       }
@@ -89,4 +92,42 @@ describe('RestCryptoMetricsAdapter', () => {
       context: 'getKpis'
     }))
   })
+
+  it('getDrawdownCurve parses valid payload', async () => {
+    const validPayload = [
+      { ts: 1672531200, drawdown_percent: -5.4 },
+      { ts: 1672617600, drawdown_percent: 0.0 }
+    ]
+
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.metrics.drawdown.$get.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(validPayload)
+    })
+
+    const adapter = new RestCryptoMetricsAdapter()
+    const result = await adapter.getDrawdownCurve('1M')
+
+    expect(result).toHaveLength(2)
+    expect(result[0].timestamp).toBe(1672531200)
+    expect(result[0].drawdownPercent).toBe(-5.4)
+  })
+
+  it('getDrawdownCurve throws DomainValidationError on invalid payload', async () => {
+    const invalidPayload = [
+      { ts: 1672531200, drawdown_percent: 'not-a-number' }
+    ]
+
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.metrics.drawdown.$get.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(invalidPayload)
+    })
+
+    const adapter = new RestCryptoMetricsAdapter()
+    await expect(adapter.getDrawdownCurve('1M')).rejects.toThrow(DomainValidationError)
+  })
 })
+

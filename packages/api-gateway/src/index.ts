@@ -11,6 +11,7 @@ import {
 import {
   MOCK_KPIS,
   generatePerformanceHistory,
+  generateDrawdownCurve,
   MOCK_ASSET_ALLOCATION,
   generateVolatilityHeatmap,
   MOCK_RISK_METRICS,
@@ -157,6 +158,10 @@ const routes = app
   .get("/metrics/heatmap", (c) => {
     const year = Number(c.req.query("year") || new Date().getFullYear());
     return c.json(generateVolatilityHeatmap(year), 200);
+  })
+  .get("/metrics/drawdown", (c) => {
+    const days = Number(c.req.query("days") || "30");
+    return c.json(generateDrawdownCurve(days), 200);
   })
   .get("/metrics/risk", (c) => c.json(MOCK_RISK_METRICS, 200))
   .get("/metrics/token/:symbol", (c) => c.json({}, 200))

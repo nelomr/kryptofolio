@@ -97,6 +97,10 @@ export const en: I18nDictionary = {
 
   // KPI Metrics Dashboard
   "metrics.error_loading": "Error loading KPIs:",
+  "metrics.drawdown.kicker": "Peak-To-Trough Risk",
+  "metrics.drawdown.title": "Historical Drawdown Curve",
+  "metrics.drawdown.desc": "Historical drawdown percentage of the portfolio from the all-time high (ATH). Red area shows decline.",
+  "metrics.drawdown.tooltip_label": "Drawdown:",
   "metrics.roi_total_label": "Total ROI",
   "metrics.roi_delta_desc": "in 24h",
   "metrics.invested_label": "Invested",

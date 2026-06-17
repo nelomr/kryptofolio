@@ -1,5 +1,5 @@
-import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics, AssetAllocationItem, HeatmapDay, VolatilityHeatmapEntity, HeatmapStats, RiskMetrics } from '@/core/domain/ports/ICryptoMetricsPort'
-import { CryptoKpisSchema, PerformanceHistoryResponseSchema, AssetAllocationResponseSchema, VolatilityHeatmapResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
+import type { ICryptoMetricsPort, CryptoKpis, TimeRange, PerformancePoint, PerformanceMetrics, AssetAllocationItem, HeatmapDay, VolatilityHeatmapEntity, HeatmapStats, RiskMetrics, DrawdownPoint } from '@/core/domain/ports/ICryptoMetricsPort'
+import { CryptoKpisSchema, PerformanceHistoryResponseSchema, AssetAllocationResponseSchema, VolatilityHeatmapResponseSchema, DrawdownCurveResponseSchema } from '@/core/infrastructure/dtos/CryptoMetricsSchemas'
 import { RiskMetricsSchema } from '@/core/infrastructure/dtos/RiskMetricsSchema'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { bffClient } from '../http/BffClient'
@@ -31,6 +31,15 @@ function parseOrFail<T>(
   return result.data!
 }
 
+const RANGE_DAYS_MAP: Record<TimeRange, string> = {
+  '1D': '1',
+  '1W': '7',
+  '1M': '30',
+  '1Y': '365',
+  '5Y': '1825',
+  'ALL': '3650',
+}
+
 export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
   async getKpis(): Promise<CryptoKpis> {
     const res = await bffClient.api.metrics.kpis.$get()
@@ -39,7 +48,8 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
   }
 
   async getPerformanceHistory(range: TimeRange): Promise<{ history: PerformancePoint[]; metrics: PerformanceMetrics }> {
-    const res = await bffClient.api.metrics.performance.$get({ query: { days: range === '1M' ? '30' : '365' } })
+    const days = RANGE_DAYS_MAP[range] || '30'
+    const res = await bffClient.api.metrics.performance.$get({ query: { days } })
     const rawData = await res.json()
     return parseOrFail(PerformanceHistoryResponseSchema, rawData, 'getPerformanceHistory')
   }
@@ -132,6 +142,13 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
     const res = await bffClient.api.metrics.risk.$get()
     const rawData = await res.json()
     return parseOrFail(RiskMetricsSchema, rawData, 'getRiskMetrics')
+  }
+
+  async getDrawdownCurve(range: TimeRange): Promise<DrawdownPoint[]> {
+    const days = RANGE_DAYS_MAP[range] || '30'
+    const res = await bffClient.api.metrics.drawdown.$get({ query: { days } })
+    const rawData = await res.json()
+    return parseOrFail(DrawdownCurveResponseSchema, rawData, 'getDrawdownCurve')
   }
 }
 

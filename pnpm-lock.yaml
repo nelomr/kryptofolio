@@ -223,6 +223,9 @@ importers:
       hono:
         specifier: ^4.12.23
         version: 4.12.23
+      luxon:
+        specifier: ^3.7.2
+        version: 3.7.2
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -233,6 +236,9 @@ importers:
       '@types/big.js':
         specifier: ^7.0.0
         version: 7.0.0
+      '@types/luxon':
+        specifier: ^3.7.1
+        version: 3.7.1
       '@types/node':
         specifier: ^24.13.1
         version: 24.13.1

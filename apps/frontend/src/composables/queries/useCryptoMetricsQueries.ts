@@ -62,3 +62,13 @@ export function useRiskMetricsQuery() {
     query: () => port.getRiskMetrics(),
   });
 }
+
+export function useDrawdownCurveQuery(range: Ref<TimeRange>) {
+  const port = useCryptoMetricsPort();
+
+  return useQuery({
+    key: () => ["crypto-drawdown-curve", range.value],
+    query: () => port.getDrawdownCurve(range.value),
+  });
+}
+

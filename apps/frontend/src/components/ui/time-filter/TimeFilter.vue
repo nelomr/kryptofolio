@@ -2,7 +2,7 @@
 import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-export type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL'
+export type TimeRange = '1D' | '1W' | '1M' | '1Y' | '5Y' | 'ALL'
 
 const props = defineProps<{
   modelValue: TimeRange
@@ -13,7 +13,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: TimeRange): void
 }>()
 
-const defaultRanges: TimeRange[] = ['1D', '1W', '1M', '1Y', 'ALL']
+const defaultRanges: TimeRange[] = ['1D', '1W', '1M', '1Y', '5Y', 'ALL']
 const ranges = props.ranges ?? defaultRanges
 
 const filterVariants = cva(

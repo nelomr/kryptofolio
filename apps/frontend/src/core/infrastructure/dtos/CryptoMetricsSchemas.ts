@@ -112,3 +112,14 @@ export const HeatmapDaySchema = z.object({
 }));
 
 export const VolatilityHeatmapResponseSchema = z.array(HeatmapDaySchema);
+
+export const DrawdownPointSchema = z.object({
+  ts: z.number(),
+  drawdown_percent: z.number(),
+}).transform((val) => ({
+  timestamp: val.ts,
+  drawdownPercent: Math.min(val.drawdown_percent, 0),
+}));
+
+export const DrawdownCurveResponseSchema = z.array(DrawdownPointSchema);
+

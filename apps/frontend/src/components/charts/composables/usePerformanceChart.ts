@@ -1,8 +1,7 @@
 import { onMounted, onUnmounted, watch, type Ref } from 'vue'
-import { createChart, ColorType, LineStyle, AreaSeries, LineSeries } from 'lightweight-charts'
+import { createChart, ColorType, LineStyle, AreaSeries, LineSeries, BaselineSeries } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi, MouseEventParams, UTCTimestamp } from 'lightweight-charts'
 import { useResizeObserver } from '@vueuse/core'
-import type { PerformancePoint } from '@/core/domain/ports/ICryptoMetricsPort'
 import { formatCurrency, formatDate } from '@/composables/useFormatters'
 import { useI18n } from '@/composables/useI18n'
 
@@ -12,17 +11,31 @@ const getCSSVar = (name: string) => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-export function usePerformanceChart(
+export function usePerformanceChart<T extends { timestamp: number }>(
   chartContainer: Ref<HTMLElement | null>,
   wrapperContainer: Ref<HTMLElement | null>,
   tooltip: Ref<HTMLElement | null>,
-  data: Ref<PerformancePoint[]>
+  data: Ref<T[]>,
+  options?: {
+    isPercent?: boolean
+    hideCostBasis?: boolean
+    baselineValue?: number
+    lineColor?: string
+    topColor?: string
+    bottomColor?: string
+    tooltipLabel?: string
+  }
 ) {
   const { t } = useI18n()
   
   let chart: IChartApi | null = null
-  let areaSeries: ISeriesApi<"Area"> | null = null
+  let areaSeries: ISeriesApi<"Area"> | ISeriesApi<"Baseline"> | null = null
   let costBasisSeries: ISeriesApi<"Line"> | null = null
+
+  const isPercent = options?.isPercent ?? false
+  const hideCostBasis = options?.hideCostBasis ?? false
+  const baselineValue = options?.baselineValue
+  const tooltipLabel = options?.tooltipLabel
 
   const initChart = () => {
     if (!chartContainer.value) return
@@ -32,6 +45,20 @@ export function usePerformanceChart(
     const textColor = getCSSVar('--color-muted-foreground') || '#64748b'
     const gridColor = getCSSVar('--color-border') || '#e2e8f0'
     const costColor = getCSSVar('--color-muted-foreground') || '#94a3b8'
+
+    const resolveColor = (color: string | undefined, fallback: string) => {
+      if (!color) return fallback
+      if (color.startsWith('--')) return getCSSVar(color) || fallback
+      if (color.startsWith('var(')) {
+        const match = color.match(/var\(([^)]+)\)/)
+        if (match) return getCSSVar(match[1]) || fallback
+      }
+      return color
+    }
+
+    const resolvedLineColor = resolveColor(options?.lineColor, brandColor)
+    const resolvedTopColor = resolveColor(options?.topColor, brandSoftColor)
+    const resolvedBottomColor = resolveColor(options?.bottomColor, 'rgba(0, 0, 0, 0)')
 
     chart = createChart(chartContainer.value, {
       layout: {
@@ -68,28 +95,61 @@ export function usePerformanceChart(
       handleScale: false,
     })
 
-    areaSeries = chart.addSeries(AreaSeries, {
-      lineColor: brandColor,
-      topColor: brandSoftColor,
-      bottomColor: 'rgba(0, 0, 0, 0)',
-      lineWidth: 2,
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
-    })
+    if (baselineValue !== undefined) {
+      areaSeries = chart.addSeries(BaselineSeries, {
+        baseValue: { type: 'price', price: baselineValue },
+        topLineColor: resolvedLineColor,
+        bottomLineColor: resolvedLineColor,
+        topFillColor1: resolvedTopColor,
+        topFillColor2: resolvedTopColor,
+        bottomFillColor1: resolvedBottomColor,
+        bottomFillColor2: resolvedBottomColor,
+        lineWidth: 2,
+        priceFormat: isPercent
+          ? {
+              type: 'custom',
+              formatter: (price: number) => price.toFixed(2) + '%',
+              minMove: 0.01,
+            }
+          : {
+              type: 'price',
+              precision: 2,
+              minMove: 0.01,
+            },
+      })
+    } else {
+      areaSeries = chart.addSeries(AreaSeries, {
+        lineColor: resolvedLineColor,
+        topColor: resolvedTopColor,
+        bottomColor: resolvedBottomColor,
+        lineWidth: 2,
+        priceFormat: isPercent
+          ? {
+              type: 'custom',
+              formatter: (price: number) => price.toFixed(2) + '%',
+              minMove: 0.01,
+            }
+          : {
+              type: 'price',
+              precision: 2,
+              minMove: 0.01,
+            },
+      })
+    }
 
-    costBasisSeries = chart.addSeries(LineSeries, {
-      color: costColor,
-      lineWidth: 2,
-      lineStyle: LineStyle.Dashed,
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
-    })
+
+    if (!hideCostBasis) {
+      costBasisSeries = chart.addSeries(LineSeries, {
+        color: costColor,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceFormat: {
+          type: 'price',
+          precision: 2,
+          minMove: 0.01,
+        },
+      })
+    }
 
     // Setup Crosshair Tooltip
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -108,7 +168,7 @@ export function usePerformanceChart(
       }
 
       const value = param.seriesData.get(areaSeries!) as any
-      const costValue = param.seriesData.get(costBasisSeries!) as any
+      const costValue = costBasisSeries ? (param.seriesData.get(costBasisSeries) as any) : null
 
       if (!value) {
         tooltip.value.style.opacity = '0'
@@ -120,9 +180,11 @@ export function usePerformanceChart(
 
       // Format tooltip content
       let tooltipHtml = `<div class="text-muted-foreground font-medium mb-1 border-b border-border/50 pb-1">${formatDate(param.time as string)}</div>`
-      tooltipHtml += `<div class="flex justify-between gap-4 mb-0.5"><span class="text-foreground">${t('portfolio.metrics_tabs.performance.tooltip.equity')}</span> <span class="font-semibold tabular-nums">${formatCurrency(price)}</span></div>`
+      const formattedPrice = isPercent ? price.toFixed(2) + '%' : formatCurrency(price)
+      const label = tooltipLabel || t('portfolio.metrics_tabs.performance.tooltip.equity')
+      tooltipHtml += `<div class="flex justify-between gap-4 mb-0.5"><span class="text-foreground">${label}</span> <span class="font-semibold tabular-nums">${formattedPrice}</span></div>`
       
-      if (cost !== null) {
+      if (!hideCostBasis && cost !== null) {
         tooltipHtml += `<div class="flex justify-between gap-4"><span class="text-muted-foreground">${t('portfolio.metrics_tabs.performance.tooltip.cost')}</span> <span class="font-semibold tabular-nums text-muted-foreground">${formatCurrency(cost)}</span></div>`
       }
 
@@ -155,27 +217,29 @@ export function usePerformanceChart(
     updateData(data.value)
   }
 
-  const updateData = (newData: PerformancePoint[]) => {
-    if (!areaSeries || !costBasisSeries) return
+  const updateData = (newData: T[]) => {
+    if (!areaSeries) return
 
     // Remove duplicates by time to prevent lightweight-charts errors
-    const uniqueDataMap = new Map<number, PerformancePoint>()
+    const uniqueDataMap = new Map<number, T>()
     newData.forEach(p => uniqueDataMap.set(p.timestamp, p))
     
     const sortedData = Array.from(uniqueDataMap.values()).sort((a, b) => a.timestamp - b.timestamp)
 
     const areaData = sortedData.map(p => ({
       time: p.timestamp as UTCTimestamp,
-      value: p.valueFiat,
-    }))
-
-    const costData = sortedData.map(p => ({
-      time: p.timestamp as UTCTimestamp,
-      value: p.costBasisFiat,
+      value: isPercent ? (p as any).drawdownPercent : (p as any).valueFiat,
     }))
 
     areaSeries.setData(areaData)
-    costBasisSeries.setData(costData)
+
+    if (!hideCostBasis && costBasisSeries) {
+      const costData = sortedData.map(p => ({
+        time: p.timestamp as UTCTimestamp,
+        value: (p as any).costBasisFiat,
+      }))
+      costBasisSeries.setData(costData)
+    }
     
     if (chart && areaData.length > 0) {
       chart.timeScale().fitContent()
@@ -207,3 +271,4 @@ export function usePerformanceChart(
     updateData
   }
 }
+

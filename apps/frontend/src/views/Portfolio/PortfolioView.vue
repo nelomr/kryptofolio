@@ -12,6 +12,7 @@ import PerformanceHistory from "./components/metrics/PerformanceHistory.vue";
 import VolatilityHeatmap from "./components/metrics/VolatilityHeatmap.vue";
 import AssetAllocation from "./components/metrics/AssetAllocation.vue";
 import RiskMetricsCard from "./components/metrics/RiskMetricsCard.vue";
+import DrawdownCurve from "./components/metrics/DrawdownCurve.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import LotHierarchyTable from "./components/LotHierarchyTable.vue";
@@ -91,6 +92,9 @@ const {
         </div>
         <div class="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
           <AssetAllocation />
+          <DrawdownCurve />
+        </div>
+        <div class="grid lg:grid-cols-2 gap-6 lg:gap-8 items-start">
           <RiskMetricsCard />
         </div>
       </TabsContent>

@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 export const MOCK_KPIS = {
   total_roi_percent: 72.62, // 30500 / 42000
   total_roi_fiat: 30500.00,
@@ -26,9 +28,16 @@ export const MOCK_KPIS = {
   portfolio_dispersion: 41.2,
 };
 
-export function generatePerformanceHistory(days: number) {
-  const data = [];
-  const now = Math.floor(Date.now() / 1000);
+interface MockPerformancePoint {
+  ts: number;
+  value: number;
+  cost: number;
+}
+
+function createMasterPerformanceHistory(): MockPerformancePoint[] {
+  const data: MockPerformancePoint[] = [];
+  const now = DateTime.now().toUTC();
+  const maxDays = 3650; // 10 years maximum
 
   const targetCost = 42000.00;
   const targetEquity = 72500.00;
@@ -36,25 +45,41 @@ export function generatePerformanceHistory(days: number) {
   let currentCost = targetCost;
   let currentValue = targetEquity;
 
-  for (let i = 0; i <= days; i++) {
-    const ts = now - (i * 86400);
-    
+  for (let i = 0; i <= maxDays; i++) {
+    const dt = now.minus({ days: i });
+    const ts = Math.floor(dt.toSeconds());
+
     data.unshift({
       ts,
-      value: currentValue,
-      cost: currentCost
+      value: Number(currentValue.toFixed(2)),
+      cost: Number(currentCost.toFixed(2))
     });
 
     // Move backwards for the previous day
     currentCost -= (Math.random() - 0.4) * 200; 
     currentValue -= (Math.random() - 0.45) * 800;
+
+    // Guard against negative/zero value/cost
+    if (currentValue < 1000) currentValue = 1000 + Math.random() * 500;
+    if (currentCost < 1000) currentCost = 1000 + Math.random() * 500;
   }
+
+  return data;
+}
+
+const MASTER_PERFORMANCE_HISTORY = createMasterPerformanceHistory();
+
+export function generatePerformanceHistory(days: number) {
+  const count = Math.min(days, 3650);
+  const data = MASTER_PERFORMANCE_HISTORY.slice(MASTER_PERFORMANCE_HISTORY.length - (count + 1));
 
   const firstPoint = data[0];
   const lastPoint = data[data.length - 1];
-  
-  const return_fiat = lastPoint.value - firstPoint.value;
-  const return_percent = (return_fiat / firstPoint.value) * 100;
+
+  const return_fiat = Number((lastPoint.value - firstPoint.value).toFixed(2));
+  const return_percent = firstPoint.value > 0 
+    ? Number(((return_fiat / firstPoint.value) * 100).toFixed(2))
+    : 0;
 
   return {
     data,
@@ -66,6 +91,32 @@ export function generatePerformanceHistory(days: number) {
     }
   };
 }
+
+export function generateDrawdownCurve(days: number) {
+  const count = Math.min(days, 3650);
+  const data = MASTER_PERFORMANCE_HISTORY.slice(MASTER_PERFORMANCE_HISTORY.length - (count + 1));
+
+  let runningPeak = -Infinity;
+  const drawdownPoints = [];
+
+  for (const point of data) {
+    if (point.value > runningPeak) {
+      runningPeak = point.value;
+    }
+
+    const drawdownPercent = runningPeak > 0
+      ? ((point.value - runningPeak) / runningPeak) * 100
+      : 0;
+
+    drawdownPoints.push({
+      ts: point.ts,
+      drawdown_percent: Number(drawdownPercent.toFixed(2))
+    });
+  }
+
+  return drawdownPoints;
+}
+
 
 export const MOCK_ASSET_ALLOCATION = {
   assets: [

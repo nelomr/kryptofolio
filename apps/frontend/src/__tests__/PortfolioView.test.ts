@@ -84,11 +84,19 @@ vi.mock("vue-chartjs", () => ({
   Doughnut: { template: '<div class="mock-doughnut-chart"></div>' },
 }));
 
+vi.mock("@/views/Portfolio/components/metrics/DrawdownCurve.vue", () => ({
+  default: {
+    name: "DrawdownCurve",
+    template: '<div class="mock-drawdown-curve"></div>',
+  },
+}));
+
 vi.mock("lightweight-charts", () => ({
   ColorType: { Solid: "Solid" },
   LineStyle: { Dashed: 1, Solid: 0 },
   AreaSeries: {},
   LineSeries: {},
+  BaselineSeries: {},
   HistogramSeries: {},
   CrosshairMode: { Normal: 0, Magnet: 1 },
   PriceScaleMode: { Normal: 0 },

@@ -1,5 +1,4 @@
-import { describe, it, expect } from 'vitest'
-import { AssetAllocationItemSchema, AssetAllocationResponseSchema } from '../CryptoMetricsSchemas'
+import { AssetAllocationItemSchema, AssetAllocationResponseSchema, DrawdownPointSchema } from '../CryptoMetricsSchemas'
 
 describe('CryptoMetricsSchemas', () => {
   describe('AssetAllocationItemSchema', () => {
@@ -62,6 +61,29 @@ describe('CryptoMetricsSchemas', () => {
         totalAssets: 1,
         hhiScore: 3150
       })
+    })
+  })
+
+  describe('DrawdownPointSchema', () => {
+    it('should correctly parse and transform a valid drawdown point', () => {
+      const raw = {
+        ts: 1672531200,
+        drawdown_percent: -12.34
+      }
+      const result = DrawdownPointSchema.parse(raw)
+      expect(result).toEqual({
+        timestamp: 1672531200,
+        drawdownPercent: -12.34
+      })
+    })
+
+    it('should bound drawdownPercent to max 0', () => {
+      const raw = {
+        ts: 1672531200,
+        drawdown_percent: 0.5
+      }
+      const result = DrawdownPointSchema.parse(raw)
+      expect(result.drawdownPercent).toBe(0)
     })
   })
 })
