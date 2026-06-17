@@ -6,9 +6,13 @@ vi.mock('@/composables/queries/useTaxMutations', () => ({
   useSubmitIngestionMutation: vi.fn()
 }))
 
-vi.mock('../../utils/hash', () => ({
-  generateIdHash: vi.fn().mockResolvedValue('mocked-hash-123')
-}))
+vi.mock('@kryptofolio/core-domain', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@kryptofolio/core-domain')>()
+  return {
+    ...actual,
+    generateIdHash: vi.fn().mockResolvedValue('mocked-hash-123')
+  }
+})
 
 describe('useImportProcessor', () => {
   it('should process and submit rows correctly', async () => {

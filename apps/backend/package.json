@@ -1,0 +1,21 @@
+{
+  "name": "@kryptofolio/backend",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "hono": "catalog:",
+    "@kryptofolio/shared-types": "workspace:*",
+    "@kryptofolio/core-domain": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/node": "catalog:"
+  }
+}

@@ -1,4 +1,4 @@
-import type { ValidTransactionRow, TransactionMappedData } from "../../types";
+import type { ValidTransactionRow, TransactionMappedData } from "@kryptofolio/shared-types";
 
 /**
  * Aggregates multiple TransactionRows that share the same group_id.

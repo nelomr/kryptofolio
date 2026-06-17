@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateIdHash } from '../hash'
+import { generateIdHash } from '../domain/services/TransactionHashService'
 
 describe('generateIdHash', () => {
   it('should generate a deterministic hash for the same data', async () => {

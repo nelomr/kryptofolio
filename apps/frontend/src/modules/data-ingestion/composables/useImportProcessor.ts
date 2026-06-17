@@ -1,10 +1,8 @@
 import { ref } from "vue";
-import { generateIdHash } from "../utils/hash";
-import type { ValidTransactionRow } from "../types";
+import { generateIdHash, normalizeTransactionDirection, aggregateRows, normalizeToUtcIso } from "@kryptofolio/core-domain";
+import type { ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
-import { normalizeToUtcIso } from "../utils/dateNormalizer";
-import { normalizeTransactionDirection } from "../utils/transactionNormalizer";
-import { aggregateRows } from "../utils/normalizer/rowAggregator";
+
 
 export function useImportProcessor() {
   const isProcessing = ref(false);

@@ -1,6 +1,6 @@
 import { ref, computed, type Ref } from "vue";
-import { mapToEntity, validateRow } from "../utils/columnAutoMapper";
-import type { TransactionRow, ValidTransactionRow, InvalidTransactionRow } from "../types";
+import { mapToEntity, validateRow } from "@kryptofolio/core-domain";
+import type { TransactionRow, ValidTransactionRow, InvalidTransactionRow } from "@kryptofolio/shared-types";
 import type { MarketType } from "../utils/marketDetector";
 
 export function usePreviewTable(marketType: Ref<MarketType>) {

@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { getAvailableColumns, guessColumnMapping } from '../utils/columnAutoMapper'
+import { getAvailableColumns, guessColumnMapping } from '@kryptofolio/core-domain'
 
 export function useColumnMapper() {
   const mapping = ref<Record<string, string | null>>({})

@@ -1,0 +1,18 @@
+{
+  "name": "@kryptofolio/core-domain",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "type": "module",
+  "dependencies": {
+    "@kryptofolio/shared-types": "workspace:*",
+    "luxon": "catalog:"
+  },
+  "devDependencies": {
+    "@types/luxon": "catalog:",
+    "vitest": "catalog:"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

@@ -2,8 +2,8 @@
 import { ref, computed } from "vue";
 import { useCsvImportWizard } from "../composables/useCsvImportWizard";
 import { useI18n } from "@/composables/useI18n";
-import type { TransactionRow } from "../types";
-import { COLUMN_DICTIONARY } from "../utils/columnAutoMapper";
+import type { TransactionRow } from "@kryptofolio/shared-types";
+import { COLUMN_DICTIONARY } from "@kryptofolio/core-domain";
 import {
   FlexRender,
   getCoreRowModel,

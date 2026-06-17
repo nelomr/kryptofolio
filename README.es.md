@@ -29,11 +29,18 @@
 - **Testing**: Vitest
 - **Workspace**: pnpm workspaces (Monorepo)
 
-El repositorio está estructurado como un monorepo para soportar paquetes desacoplados:
-- `apps/frontend/`: La aplicación principal en Vue 3.
-- `packages/api-gateway/`: El Backend For Frontend (BFF) basado en Hono que provee seguridad de tipos E2E.
-- `packages/`: Lógica compartida, contratos y configuraciones (futuro).
+El repositorio está estructurado como un **Monorepo (PNPM Workspaces)** para desacoplar dominios y escalar eficientemente:
+- `apps/frontend/`: La aplicación principal en Vue 3 (UI, Pinia stores).
+- `apps/backend/`: El servicio core del backend (Hono + DuckDB), encargado de cálculos pesados, persistencia en base de datos y cruces FIFO.
+- `packages/api-gateway/`: El Backend-for-Frontend (BFF) construido con Hono. Proporciona seguridad de tipos E2E (Hono RPC), proxy y gestión local del vault de credenciales encriptado.
+- `packages/core-domain/`: Lógica de negocio pura (Servicios, Casos de Uso, Normalizadores). Totalmente agnóstico del framework.
+- `packages/shared-types/`: Esquemas de Zod, DTOs y definiciones de tipos compartidas por todo el monorepo.
 - `docs/`: Documentación técnica detallando la arquitectura, integración de APIs y extensibilidad.
+
+### Gestión de Dependencias (PNPM Catalogs)
+Usamos **PNPM Catalogs** para mantener una única fuente de la verdad en las dependencias comunes de todos los paquetes del monorepo (ej. TypeScript, Zod, Hono).
+- Para actualizar una dependencia compartida, modifica el bloque `catalog:` en `pnpm-workspace.yaml` en la raíz y ejecuta `pnpm install`.
+- Al añadir una dependencia compartida a un paquete, usa `"nombre-dependencia": "catalog:"` en su `package.json`.
 
 ## 🎨 Sistema de Diseño Institucional
 
@@ -187,24 +194,28 @@ Este proyecto utiliza un enfoque de equipo de agentes de IA vía `.agent/skills`
 - **Gestión de Estado**: Datos asíncronos vía `@pinia/colada`, estado síncrono vía Pinia.
 - **Vue Core**: Solo API de Composición (`<script setup>`) y priorizamos Composables.
 
-## 🔖 Versionado (Versioning)
+## 🔖 Versionado (Frontend is King)
 
-Este proyecto sigue el [Versionado Semántico](https://semver.org) (`MAJOR.MINOR.PATCH`) y usa [Conventional Commits](https://www.conventionalcommits.org) para automatizar las releases.
+Este monorepo utiliza [Changesets](https://github.com/changesets/changesets) para el versionado independiente de paquetes, asegurando que los cambios en un paquete no fuercen la subida de versión de paquetes no relacionados.
 
-| Tipo de Commit | Salto de Versión | Ejemplo |
-|-------------|-------------|---------|
-| `feat: ...` | **minor** `0.x.0` | Nueva característica |
-| `fix: ...` | **patch** `0.0.x` | Corrección de bug |
-| `feat!: ...` o `BREAKING CHANGE:` | **major** `x.0.0` | Cambio que rompe compatibilidad |
-| `docs: / test: / chore: / perf: / refactor:` | **ninguno** | Documentación, pruebas, refactor |
+Sin embargo, seguimos una filosofía de **"El Frontend es el Rey" (Frontend is King)**:
+- La versión de `@kryptofolio/frontend` actúa como la versión global de facto de la aplicación.
+- Durante el desarrollo inicial, los desarrolladores deben preferir estrictamente los incrementos de tipo `patch` sobre los de tipo `minor` para características no críticas, asegurando que los números de versión crezcan de forma lenta y deliberada.
 
-> ⚠️ **Ritmo de Versionado (Release Rules):** Para evitar un avance descontrolado de versiones por pequeños cambios técnicos, **solo los commits `feat` (minor) y `fix` (patch) generarán nuevas versiones**. Los commits de tipo `docs`, `refactor`, `test` y `perf` registrarán el cambio en git, pero *no* forzarán una subida de versión en `package.json` ni crearán una nueva release en GitHub.
+### Cómo lanzar una versión
 
-Cada push a `main` dispara la pipeline CI. Si se detectan commits válidos (`feat` o `fix`), `semantic-release` automáticamente:
-1. Actualiza la versión en `package.json` y hace commit.
-2. Actualiza el `CHANGELOG.md` (con el título principal "Kriptofolio").
-3. Crea una Release en GitHub con las notas generadas.
-4. Etiqueta el commit (`vX.Y.Z`).
+Las versiones están totalmente automatizadas a través de nuestra pipeline de Entrega Continua.
+Cuando una Pull Request con un changeset es fusionada (merged) a `main`:
+1. La GitHub Action `.github/workflows/release.yml` ejecuta automáticamente `pnpm changeset version`.
+2. Sube las versiones en los archivos `package.json` y crea un commit directo a `main`, sin necesidad de revisión de PR.
+3. Los paquetes se publican automáticamente.
+
+**Flujo de Trabajo del Desarrollador:**
+Antes de abrir una PR hacia `main` que modifique el código de los paquetes, **debes** ejecutar:
+```bash
+pnpm changeset
+```
+Sigue las instrucciones para declarar tu intención (patch/minor/major) y escribe una breve descripción. Se generará un archivo `.changeset/*.md` que deberás incluir en tus commits. Sin changeset, no hay nueva versión.
 
 ## 📄 Licencia
 

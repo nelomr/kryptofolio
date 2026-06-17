@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTransactionDirection } from "../transactionNormalizer";
-import type { TransactionMappedData } from "../../types";
+import { normalizeTransactionDirection } from "../domain/services/TransactionNormalizer";
+import type { TransactionMappedData } from "@kryptofolio/shared-types";
 
 describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
   describe("Buy Strategy", () => {
@@ -38,6 +38,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset_in: "ETH",
         total_fiat: "3000",
         fiat_currency: "EUR",
+        metadata: {},
       };
       const result = normalizeTransactionDirection(data);
       expect(result.amount_in).toBe("2");
@@ -53,6 +54,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "sell",
         amount: "0.5",
         asset: "BTC",
+        metadata: {},
       };
       const result = normalizeTransactionDirection(data);
       expect(result.tx_type).toBe("SELL");
@@ -70,6 +72,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "deposit",
         amount: "100",
         asset: "XRP",
+        metadata: {},
       };
       const result = normalizeTransactionDirection(data);
       expect(result.tx_type).toBe("DEPOSIT");
@@ -85,6 +88,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "withdrawal",
         amount: "50",
         asset: "ADA",
+        metadata: {},
       };
       const result = normalizeTransactionDirection(data);
       expect(result.tx_type).toBe("WITHDRAWAL");
@@ -100,6 +104,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "transfer",
         amount: "100",
         asset: "USDT",
+        metadata: {},
       };
       const resultIn = normalizeTransactionDirection(dataIn);
       expect(resultIn.tx_type).toBe("TRANSFER_IN");
@@ -111,6 +116,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "transfer",
         amount: "-100",
         asset: "USDT",
+        metadata: {},
       };
       const resultOut = normalizeTransactionDirection(dataOut);
       expect(resultOut.tx_type).toBe("TRANSFER_OUT");
@@ -126,6 +132,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "staking",
         amount: "5",
         asset: "SOL",
+        metadata: {},
       };
       const result = normalizeTransactionDirection(data);
       expect(result.amount_in).toBe("5");

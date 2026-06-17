@@ -1,4 +1,4 @@
-import type { TransactionMappedData } from "../types";
+import type { TransactionMappedData } from "@kryptofolio/shared-types";
 
 /**
  * Generates a deterministic SHA-256 hash for a mapped transaction row to prevent duplicates.

@@ -1,4 +1,5 @@
-import type { TransactionRow, InvalidTransactionRow, TransactionMappedData } from "../types";
+import type { TransactionRow, InvalidTransactionRow, TransactionMappedData } from "@kryptofolio/shared-types";
+import { getTransactionMappedDataSchema } from "@kryptofolio/shared-types";
 
 export const COLUMN_DICTIONARY: Record<string, string[]> = {
   // Identificadores y Agrupamiento
@@ -75,8 +76,6 @@ export function guessColumnMapping(headers: string[]): Record<string, string | n
     return mapping;
   }, {} as Record<string, string | null>);
 }
-
-import { getTransactionMappedDataSchema } from "../types";
 
 export function validateRow(row: TransactionRow, marketType: 'SPOT' | 'FUTURES' = 'SPOT'): TransactionRow {
   const schema = getTransactionMappedDataSchema(marketType);

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { aggregateRows } from "../normalizer/rowAggregator";
-import type { TransactionRow } from "../../types";
+import { aggregateRows } from "../domain/services/normalizer/rowAggregator";
+import type { ValidTransactionRow } from "@kryptofolio/shared-types";
 
 describe("Row Aggregator (Kraken Style)", () => {
   it("should pass through standalone rows", () => {
-    const rows: TransactionRow[] = [
+    const rows: ValidTransactionRow[] = [
       {
         id: "1",
         originalData: {},
@@ -33,7 +33,7 @@ describe("Row Aggregator (Kraken Style)", () => {
   it("should merge two rows belonging to the same group_id (Kraken spot trade)", () => {
     // Row 1: EUR negative (Spent)
     // Row 2: PUMP positive (Received)
-    const rows: TransactionRow[] = [
+    const rows: ValidTransactionRow[] = [
       {
         id: "1",
         originalData: { foo: "bar" },

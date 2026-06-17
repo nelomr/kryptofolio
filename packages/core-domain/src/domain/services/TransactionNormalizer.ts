@@ -1,4 +1,4 @@
-import type { TransactionMappedData } from "../types";
+import type { TransactionMappedData } from "@kryptofolio/shared-types";
 import { normalizeMetadataKeys } from "./normalizer/metadataNormalizer";
 import { transactionHandlers } from "./normalizer/handlers";
 

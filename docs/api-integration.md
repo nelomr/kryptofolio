@@ -34,9 +34,9 @@ sequenceDiagram
 
 ## Future Backend Stack
 
-The production backend is planned to be developed in **Node.js** (the specific framework is currently undecided, keeping it open to Axum/Rust or Axum/Node.js alternatives in the future). 
+The production backend (`apps/backend`) is being developed using **Hono + DuckDB** to handle heavy data calculations, FIFO queue matching, and persistence.
 
-As long as the target backend implements the REST endpoints specified below and matches the JSON contracts, any framework (Node.js, Rust, Go, Python) can be used.
+As long as any alternative target backend implements the REST endpoints specified below and matches the JSON contracts (using schemas from `@kryptofolio/shared-types`), any framework (Node.js, Rust, Go, Python) could theoretically be used.
 
 ---
 

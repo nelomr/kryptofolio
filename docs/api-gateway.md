@@ -4,12 +4,12 @@ This document outlines the architecture, routing, and data integrity logic of th
 
 ## High-Level Overview
 
-The API Gateway acts as a Backend-for-Frontend (BFF) built on **Hono**. It serves as the single entry point for the frontend, abstracting away internal data sources, mock logic, and legacy APIs. The gateway ensures that the frontend only interacts with a consistent set of interfaces via Hono RPC (`hc`).
+The API Gateway acts as a Backend-for-Frontend (BFF) built on **Hono**, located in `packages/api-gateway`. It serves as the single entry point for the frontend, abstracting away internal data sources, mock logic, and legacy APIs. The gateway ensures that the frontend only interacts with a consistent set of interfaces via Hono RPC (`hc`).
 
 > [!NOTE]
 > The BFF supports two operational modes (configured via the `MODE` environment variable):
 > - **`mock`**: Serves sophisticated static data subsets directly out of memory, eliminating the need for local JSON imports.
-> - **`prod`**: Acts as a secure reverse proxy, forwarding requests to the actual backend (`PROD_API_URL`) while injecting sensitive credentials like `SECRET_API_KEY`.
+> - **`prod`**: Acts as a secure reverse proxy, forwarding requests to the true core backend (`apps/backend` or `PROD_API_URL`) while injecting sensitive credentials like `SECRET_API_KEY`.
 
 ## Architecture & Data Flow
 
@@ -32,10 +32,10 @@ sequenceDiagram
 
 ## Strict Request Validation (`zValidator`)
 
-To ensure perfect End-to-End Type Safety, any endpoint that expects a JSON body (e.g. `POST`, `PUT`) MUST use `@hono/zod-validator`.
+To ensure perfect End-to-End Type Safety, any endpoint that expects a JSON body (e.g. `POST`, `PUT`) MUST use `@hono/zod-validator`, importing schemas directly from `@kryptofolio/shared-types`.
 
 > [!WARNING]
-> Do **not** use `z.any()` in validators. If the backend fails to specify a validator, the `hc` client will throw TypeScript errors when the frontend attempts to pass a `json` property. Use strict DTO schemas or at least `z.record(z.unknown())`.
+> Do **not** use `z.any()` in validators. If the backend fails to specify a validator, the `hc` client will throw TypeScript errors when the frontend attempts to pass a `json` property. Use strict DTO schemas imported from `@kryptofolio/shared-types`.
 
 ## API Contracts
 

@@ -3,9 +3,9 @@ import {
   guessColumnMapping,
   mapToEntity,
   validateRow,
-} from '../columnAutoMapper'
-import { normalizeToUtcIso } from '../dateNormalizer'
-import type { TransactionRow } from '../../types'
+} from '../application/use-cases/AutoMapColumnsUseCase'
+import { normalizeToUtcIso } from '../domain/services/normalizer/dateNormalizer'
+import type { TransactionRow } from '@kryptofolio/shared-types'
 
 describe('columnAutoMapper', () => {
   it('should correctly guess column mappings based on dictionary', () => {
@@ -61,7 +61,7 @@ describe('columnAutoMapper', () => {
     expect(row.mappedData.date).toBeUndefined()
     expect(row.hasError).toBe(true)
     // tx_type is missing, which causes a base validation error
-    expect(row.errors.some(e => e.toLowerCase().includes('tx_type') || e.toLowerCase().includes('type'))).toBe(true)
+    expect(row.errors.some((e: string) => e.toLowerCase().includes('tx_type') || e.toLowerCase().includes('type'))).toBe(true)
     
     // Test the time superRefine specifically by providing tx_type but no date/timestamp
     const rowMissingTime = mapToEntity({
@@ -75,7 +75,7 @@ describe('columnAutoMapper', () => {
     }, 2)
     
     expect(rowMissingTime.hasError).toBe(true)
-    expect(rowMissingTime.errors.some(e => e.toLowerCase().includes('time') || e.toLowerCase().includes('date'))).toBe(true)
+    expect(rowMissingTime.errors.some((e: string) => e.toLowerCase().includes('time') || e.toLowerCase().includes('date'))).toBe(true)
   })
 
   it('validateRow should flag missing financial fields', () => {
@@ -97,7 +97,7 @@ describe('columnAutoMapper', () => {
 
     const validated = validateRow(rowWithoutFinancials)
     expect(validated.hasError).toBe(true)
-    expect(validated.errors.some(e => e.includes('ingestion.errors.financial_data_missing'))).toBe(true)
+    expect(validated.errors.some((e: string) => e.includes('ingestion.errors.financial_data_missing'))).toBe(true)
     
     // With financials, it should pass
     const rowWithFinancials: TransactionRow = {
@@ -135,9 +135,6 @@ describe('columnAutoMapper', () => {
     }
 
     // FUTURES: Should fail if it's a Spot setup (amount_in + asset_in) in a Futures context,
-    // actually, wait: Spot validation is generic or directional.
-    // In Futures, it must be either Trade (amount + symbol + price_fiat + asset) OR PnL OR Funding.
-    // A directional spot transfer like `amount_in` + `asset_in` will FAIL in Futures.
     const spotRow = {
       ...baseRow,
       mappedData: { ...baseRow.mappedData, amount_in: '1', asset_in: 'BTC' }

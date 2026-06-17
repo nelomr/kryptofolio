@@ -4,7 +4,18 @@ This document covers the high-level architecture of the application, detailing t
 
 ## Overview
 
-Kryptofolio leverages a strict **Hexagonal Architecture** within a Turborepo monorepo setup on the frontend. The core principle is that the Domain layer is completely isolated from external concerns, meaning no framework imports, no database logic, and no external UI dependencies are allowed inside `src/core/domain/`.
+Kryptofolio leverages a strict **Hexagonal Architecture** within a PNPM Workspaces monorepo.
+
+### Monorepo Structure
+
+The project is divided into specialized decoupled packages:
+- **`apps/frontend/`**: The main Vue 3 user interface.
+- **`apps/backend/`**: The core production backend (Hono + DuckDB), handling heavy calculations and database persistence.
+- **`packages/api-gateway/`**: The Backend-for-Frontend (BFF) built with Hono, which provides end-to-end type safety, proxying, and local encrypted vault management.
+- **`packages/core-domain/`**: Pure business logic (e.g., Services, Normalizers). Completely framework-agnostic.
+- **`packages/shared-types/`**: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
+
+The core principle is that the Domain layer (now isolated in `@kryptofolio/core-domain` and `@kryptofolio/shared-types`) is completely isolated from external concerns, meaning no framework imports, no database logic, and no external UI dependencies.
 
 > [!NOTE]
 > **Client-Side Domain Boundaries:** The frontend's domain does *not* compute core financial records like FIFO cost-basis matching or realized/unrealized PnL. The frontend acts as a structured presentation client. Its Domain and Application layers are dedicated to UI state orchestration, local storage settings, credential vault encryption, error handling, and translation state management. The calculations are delegated to the Backend/BFF.
@@ -13,7 +24,7 @@ All external data enters the system through the **Anti-Corruption Layer (ACL)**,
 
 ## Backend-for-Frontend (BFF) Pattern
 
-Instead of the frontend making direct external calls or relying on hardcoded static data files, Kryptofolio implements a BFF using **Hono**. This API Gateway centralizes data fetching, caching, and mocking. 
+Instead of the frontend making direct external calls or relying on hardcoded static data files, Kryptofolio implements a BFF using **Hono** in `packages/api-gateway`. This API Gateway centralizes data fetching, caching, and mocking, acting as a bridge to the true core backend (`apps/backend`). 
 
 ### Data Flow & Dependency Injection
 

@@ -30,11 +30,18 @@
 - **Testing**: Vitest
 - **Workspace**: pnpm workspaces (Monorepo)
 
-The repository is structured as a monorepo to support decoupled packages:
-- `apps/frontend/`: The main Vue 3 application.
-- `packages/api-gateway/`: The Hono-based Backend For Frontend (BFF) providing E2E type safety.
-- `packages/`: Shared logic, contracts, and configurations (future).
+The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decouple domains and scale efficiently:
+- `apps/frontend/`: The main Vue 3 application (UI, Pinia stores).
+- `apps/backend/`: The core backend service (Hono + DuckDB), handling heavy calculations, database persistence, and FIFO matching.
+- `packages/api-gateway/`: The Backend-for-Frontend (BFF) built with Hono. Provides E2E type safety (Hono RPC), proxying, and local encrypted vault management.
+- `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
+- `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
 - `docs/`: Technical documentation covering Architecture, API Integrations, and Extensibility.
+
+### Dependency Management (PNPM Catalogs)
+We use **PNPM Catalogs** to maintain a single source of truth for common dependencies across all workspace packages (e.g., TypeScript, Zod, Hono).
+- To update a shared dependency, edit the `catalog:` block in `pnpm-workspace.yaml` at the root and run `pnpm install`.
+- When adding a shared dependency to a package, use `"dependency-name": "catalog:"` in its `package.json`.
 
 ## 🎨 Institutional Design System
 
@@ -139,27 +146,28 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
 - **No `any` Policy**: The production source code is 100% statically typed, with no exceptions. It is rigorously compiled using `vue-tsc --noEmit`.
 - **Global Error Bus**: If a Zod schema in the Anti-Corruption Layer fails, a controlled error is emitted to the `errorBus`, preventing silent runtime crashes and allowing the UI to react gracefully.
 
-## 🔖 Versioning
+## 🔖 Versioning (Frontend is King)
 
-This project follows [Semantic Versioning](https://semver.org) (`MAJOR.MINOR.PATCH`) and uses [Conventional Commits](https://www.conventionalcommits.org) to automate releases.
+This monorepo uses [Changesets](https://github.com/changesets/changesets) for independent package versioning, ensuring changes in one package do not artificially bump unrelated packages.
 
-| Commit type | Version bump | Example |
-|-------------|-------------|---------|
-| `feat: ...` | **minor** `0.x.0` | New feature added |
-| `fix: ...` | **patch** `0.0.x` | Bug fix |
-| `feat!: ...` or `BREAKING CHANGE:` | **major** `x.0.0` | Breaking change |
-| `docs: / test: / chore: / perf: / refactor:` | **none** | Docs, tests, maintenance, performance, code refactoring |
+However, we follow a **"Frontend is King"** philosophy:
+- The `@kryptofolio/frontend` version acts as the de facto global application version.
+- During early development, developers should strongly prefer `patch` bumps over `minor` bumps for non-critical features to ensure version numbers grow slowly and deliberately.
 
-> ⚠️ **Release Pacing Rule:** To avoid excessive version bumps for minor technical changes, **only `feat` (minor) and `fix` (patch) commits will trigger a new version release**. Commits of type `docs`, `refactor`, `test`, and `perf` will be tracked in git but will *not* force a version bump in `package.json` nor create a new GitHub release.
+### How to release
 
-Every push to `main` triggers the CI pipeline. If releasable commits (`feat` or `fix`) are detected, `semantic-release` automatically:
-1. Bumps the version in `package.json` and commits the file back to the repository.
-2. Updates `CHANGELOG.md` (using the title "Kriptofolio").
-3. Creates a GitHub Release with generated notes.
-4. Tags the commit (`vX.Y.Z`).
+Releases are fully automated via our Continuous Delivery pipeline. 
+When a pull request with a changeset is merged to `main`:
+1. The `.github/workflows/release.yml` GitHub Action automatically runs `pnpm changeset version`.
+2. It bumps the `package.json` files and creates a direct commit to `main` bypassing PR reviews.
+3. Packages are published automatically.
 
-See all releases → [GitHub Releases](https://github.com/nelomr/portfolio-dashboard/releases)
-See full history → [CHANGELOG.md](./CHANGELOG.md)
+**Developer Workflow:**
+Before opening a PR to `main` that modifies package code, you **must** run:
+```bash
+pnpm changeset
+```
+Follow the prompts to declare your intent (patch/minor/major) and write a brief description. A `.changeset/*.md` file will be generated which you must commit. No changeset, no release.
 
 ## 📄 License
 
