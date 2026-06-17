@@ -163,4 +163,4 @@ See full history → [CHANGELOG.md](./CHANGELOG.md)
 
 ## 📄 License
 
-This project is open-source under the [MIT License](LICENSE).
+This project is open-source under the [AGPL-3.0 License](LICENSE).

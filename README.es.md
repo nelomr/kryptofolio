@@ -208,4 +208,4 @@ Cada push a `main` dispara la pipeline CI. Si se detectan commits válidos (`fea
 
 ## 📄 Licencia
 
-Este proyecto es de código abierto bajo la [Licencia MIT](LICENSE).
+Este proyecto es de código abierto bajo la [Licencia AGPL-3.0](LICENSE).

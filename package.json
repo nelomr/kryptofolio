@@ -8,7 +8,7 @@
     "type": "git",
     "url": "git+https://github.com/nelomr/kryptofolio.git"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "pnpm -F @kryptofolio/frontend dev",
     "dev:mock": "pnpm --parallel -F @kryptofolio/frontend -F @dashboar-portfolio/api-gateway dev",
