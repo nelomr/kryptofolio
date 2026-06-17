@@ -3,6 +3,12 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.10](https://github.com/nelomr/kryptofolio/compare/v1.15.9...v1.15.10) (2026-06-17)
+
+### ✨ Features
+
+* add historical portfolio drawdown curve widget ([7b4170f](https://github.com/nelomr/kryptofolio/commit/7b4170fb02ec91b8ac4b67331fa40e3479ccab7a))
+
 ## [1.15.9](https://github.com/nelomr/kryptofolio/compare/v1.15.8...v1.15.9) (2026-06-15)
 
 ### ✨ Features
