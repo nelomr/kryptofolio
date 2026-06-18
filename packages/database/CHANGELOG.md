@@ -1,5 +1,11 @@
 # @kryptofolio/database
 
+## 0.0.4
+
+### Patch Changes
+
+- [`2775b42`](https://github.com/nelomr/kryptofolio/commit/2775b4230e3cd2ed64da627bf152617dcd7d428a) Thanks [@nelomr](https://github.com/nelomr)! - ci: unified vitest workspace to fix test report summary logs
+
 ## 0.0.3
 
 ### Patch Changes

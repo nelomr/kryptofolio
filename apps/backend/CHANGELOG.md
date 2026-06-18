@@ -1,5 +1,16 @@
 # @kryptofolio/backend
 
+## 0.0.4
+
+### Patch Changes
+
+- [`2775b42`](https://github.com/nelomr/kryptofolio/commit/2775b4230e3cd2ed64da627bf152617dcd7d428a) Thanks [@nelomr](https://github.com/nelomr)! - ci: unified vitest workspace to fix test report summary logs
+
+- Updated dependencies [[`2775b42`](https://github.com/nelomr/kryptofolio/commit/2775b4230e3cd2ed64da627bf152617dcd7d428a)]:
+  - @kryptofolio/database@0.0.4
+  - @kryptofolio/core-domain@1.0.3
+  - @kryptofolio/shared-types@1.0.3
+
 ## 0.0.3
 
 ### Patch Changes
