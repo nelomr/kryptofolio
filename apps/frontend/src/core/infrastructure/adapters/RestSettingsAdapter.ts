@@ -3,7 +3,7 @@ import { bffClient } from '@/core/infrastructure/http/BffClient';
 
 /**
  * RestSettingsAdapter — Infrastructure adapter implementing ISettingsPort.
- * Communicates with the api-gateway /api/settings/* endpoints.
+ * Communicates with the apps/backend /api/settings/* endpoints.
  */
 export class RestSettingsAdapter implements ISettingsPort {
   async getLanguage(): Promise<string> {

@@ -8,7 +8,7 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). It serves as a visual presentation layer that displays transaction and tax information computed by the backend, utilizing a Backend-for-Frontend (BFF) proxy to bridge the UI with the data sources.
+> **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). It serves as a visual presentation layer that displays transaction and tax information computed by the backend, utilizing a centralized backend (`apps/backend`) to bridge the UI with the data sources.
 
 ## ✨ Key Features
 
@@ -16,7 +16,7 @@
 - **🧹 Data Ingestion Wizard:** A multi-step interface to upload CSV/XLSX files, automatically map headers for popular exchanges (Binance, Kraken, Coinbase, KuCoin, Bitunix), perform manual adjustments with alphabetically sorted options, validate Spot vs. Futures constraints, and gracefully push valid data to the backend.
 - **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to inspect transaction logs, identify gaps (missing cost bases or negative balances), and present clean data for AEAT-compliant reporting.
 - **🤖 AI Agent Ready (Future Feature):** The frontend is technically prepared for future AI Agent integration (e.g., Vercel AI SDK or Mastra). Since Use Cases and DTOs are isolated and validated, they can be directly exposed as LLM Tools (function calling) for natural language querying without rewriting validations.
-- **🛡️ Privacy First:** Fully self-hosted. The system operates locally, ensuring API credentials and transactions are kept secure. The BFF can be integrated with any custom local or remote backend.
+- **🛡️ Privacy First:** Fully self-hosted. The system operates locally, ensuring API credentials and transactions are kept secure. The backend can integrate with any local database or external data source securely.
 - **🔐 Local Secrets Vault:** AES-256-GCM encrypted local vault for securely storing API keys. RAM memory scrubbing ensures keys are erased after use. Integrations can be dynamically enabled or disabled.
 - **🏗️ Hexagonal Architecture (Frontend Separation):** Strict separation of concerns (Ports & Adapters). The frontend UI layer is decoupled from network protocols and local storage mechanisms, enabling absolute testability and contract safety via Zod validation schemas.
 
@@ -32,16 +32,21 @@
 
 The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decouple domains and scale efficiently:
 - `apps/frontend/`: The main Vue 3 application (UI, Pinia stores).
-- `apps/backend/`: The core backend service (Hono + DuckDB), handling heavy calculations, database persistence, and FIFO matching.
-- `packages/api-gateway/`: The Backend-for-Frontend (BFF) built with Hono. Provides E2E type safety (Hono RPC), proxying, and local encrypted vault management.
+- `apps/backend/`: The Hono backend service — handles all API routes, mock data during development, encrypted secrets vault, and DuckDB persistence. Exposes an `AppType` for end-to-end Hono RPC type safety.
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
+- `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL migration files for SQLite (vault) and DuckDB (OLAP). Keeps the backend decoupled from any specific DB engine.
 - `docs/`: Technical documentation covering Architecture, API Integrations, and Extensibility.
 
-### Dependency Management (PNPM Catalogs)
+### Dependency Management (PNPM Catalogs + Turborepo)
 We use **PNPM Catalogs** to maintain a single source of truth for common dependencies across all workspace packages (e.g., TypeScript, Zod, Hono).
 - To update a shared dependency, edit the `catalog:` block in `pnpm-workspace.yaml` at the root and run `pnpm install`.
 - When adding a shared dependency to a package, use `"dependency-name": "catalog:"` in its `package.json`.
+
+**Turborepo** orchestrates all build, test, lint, and typecheck tasks across the monorepo with automatic caching.
+- `pnpm build` → `turbo run build` (respects `^build` dependency order)
+- `pnpm test` → `turbo run test` (cached, parallelized)
+- `pnpm typecheck` → `turbo run typecheck`
 
 ## 🎨 Institutional Design System
 
@@ -69,11 +74,11 @@ cp .env.production.example .env.production
 ```
 
 **Key Variables:**
-- `MODE`: (BFF Level) Set to `mock` to serve static JSON data, or `prod` to act as an RPC proxy.
-- `PROD_API_URL`: (BFF Level) The URL of the production backend the BFF proxies to in `prod` mode.
-- `SECRET_API_KEY`: (BFF Level) Token injected by the BFF when proxying requests in `prod` mode.
-- `VITE_API_BASE_URL`: The URL of the BFF from the frontend's perspective (e.g., `http://localhost:8787`).
+- `VITE_API_URL`: URL of `apps/backend` from the frontend's perspective (default: `http://localhost:3001`).
 - `VITE_APP_LANG`: The language for the interface. Valid options are currently `es` or `en`.
+- `VAULT_DB_PATH`: (Backend) Path to the SQLite database file for the encrypted credentials vault and settings (`kryptofolio.db`).
+- `DUCKDB_PATH`: (Backend) Path to the DuckDB database for OLAP, heavy calculations, and transaction records (`fiscal.duckdb`).
+- `MOCK_MODE`: (Backend) Set to `true` to use an in-memory SQLite DB (development). Default: `false`.
 
 ### 🌍 Internationalization (i18n)
 
@@ -99,26 +104,43 @@ Ensure you have [pnpm](https://pnpm.io/) installed.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/nelomr/portfolio-dashboard.git
-cd portfolio-dashboard
+git clone https://github.com/nelomr/kryptofolio.git
+cd kryptofolio
 
 # 2. Install dependencies at the workspace root
 pnpm install
 
 # 3. Start the development environment
-# To run the frontend with real APIs:
+
+# Frontend only (requires apps/backend running separately)
 pnpm dev
 
-# OR, to run the frontend along with the local Backend-for-Frontend (BFF) Mock server:
-pnpm run dev:mock
+# Backend only (serves mock data on :3001)
+pnpm dev:backend
+
+# Full stack: frontend + backend simultaneously
+pnpm dev:full
 ```
 
-> **Note:** The `dev:mock` command concurrently spins up the Vite frontend and the Hono API Gateway, allowing the frontend to consume strictly validated mock data via RPC.
+> **Note:** `dev:full` concurrently spins up the Vite frontend and the Hono backend (`apps/backend`), which serves type-safe mock data via Hono RPC. Set `VITE_API_URL` in `apps/frontend/.env` to point to your own backend if needed (BYOB).
+
+### 🧪 Testing and Validation
+
+We apply strict quality controls (Clean Architecture and TDD). Run these commands at the **project root** to validate your changes locally:
+
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Starts the local frontend development server (`-F @kryptofolio/frontend`). |
+| `pnpm dev:full` | Orchestrates simultaneous frontend and backend startup via Turborepo. |
+| `pnpm test` | Runs the complete unit test suite in parallel across the workspace using Turborepo. |
+| `pnpm typecheck` | Statically runs **Vue-TSC** and type checking across all packages. |
+| `pnpm lint` | Analyzes code with ESLint across the workspace. |
+| `pnpm build` | Compiles and bundles the project using Turborepo's caching. |
 
 ## 🏗️ Architecture: Hexagonal (Ports & Adapters)
 
 This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters) in the frontend. It is important to note that **the frontend does not execute core financial business logic** (such as FIFO cost-basis allocation or realized/unrealized PnL calculation). Instead:
-- **Calculation Engine:** The heavy lifting is delegated to the Backend/BFF layer.
+- **Calculation Engine:** The heavy lifting is delegated to the backend layer.
 - **Frontend Ports & Adapters:** Designed purely to decouple the UI components and presentation states from network protocols, API contracts, local storage vaults, i18n configurations, and validation formats.
 
 ### 🏛️ Architectural Layers
@@ -133,7 +155,7 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
 
 3. **Infrastructure Layer (`src/core/infrastructure/`)**
    The outer edge that communicates with the real world and protects the domain.
-   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Must be suffixed with `Adapter`. Note: Mocks are now managed exclusively at the BFF layer.
+   - **Adapters (`adapters/`)**: Concrete implementations of the Domain Ports (e.g. `RestCryptoAdapter`). Must be suffixed with `Adapter`. Note: Mocks and API routing are managed exclusively at the backend layer.
    - **DTOs & Anti-Corruption Layer (`dtos/`)**: Strict Zod validation schemas (`ExternalTaxSchemas.ts`). These map raw API data to pure Entities and validate payload integrity *before* it ever touches the domain.
    - **Dependency Injection (`di/`)**: The "Composition Root". It instantiates the REST adapters and wires them into Vue (via provide/inject using strict symbols like `VAULT_PORT_KEY`).
 

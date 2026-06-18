@@ -46,3 +46,6 @@ openspec/changes/archive/
 *.db-wal
 *.db-shm
 *.sqlite
+
+# Turborepo
+.turbo

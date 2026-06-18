@@ -1,3 +1,5 @@
+minimumReleaseAge: 7d
+
 packages:
   - "apps/*"
   - "packages/*"
@@ -11,3 +13,9 @@ catalog:
   "@hono/node-server": "^2.0.4"
   "luxon": "^3.7.2"
   "@types/luxon": "^3.7.1"
+
+allowBuilds:
+  '@fission-ai/openspec': true
+  esbuild: true
+  sharp: true
+  vue-demi: true

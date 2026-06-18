@@ -12,6 +12,8 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   # ─────────────────────────────────────────────
@@ -26,8 +28,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -38,10 +38,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
-        working-directory: apps/frontend
-        run: pnpm typecheck
+      - name: Restore Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ github.sha }}
+          restore-keys: |
+            turbo-
 
-      - name: Unit tests
-        working-directory: apps/frontend
-        run: pnpm test
+      - name: Type check (all packages)
+        run: pnpm exec turbo run typecheck
+
+      - name: Unit tests (all packages)
+        run: pnpm exec turbo run test

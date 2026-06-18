@@ -2,7 +2,8 @@
   "name": "kryptofolio-workspace",
   "private": true,
   "version": "1.15.10",
-  "description": "Kryptofolio - An open-source crypto portfolio tracker built with Vue 3.",
+  "packageManager": "pnpm@11.8.0",
+  "description": "Kryptofolio - A privacy-first, open-source crypto portfolio tracker and tax calculator powered by Vue 3, Hono, and DuckDB.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -11,17 +12,20 @@
   "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "pnpm -F @kryptofolio/frontend dev",
-    "dev:mock": "pnpm --parallel -F @kryptofolio/frontend -F @dashboar-portfolio/api-gateway dev",
-    "build": "pnpm -F @kryptofolio/frontend build",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r typecheck"
+    "dev:backend": "pnpm -F @kryptofolio/backend dev",
+    "dev:full": "pnpm exec turbo run dev",
+    "build": "pnpm exec turbo run build",
+    "test": "pnpm exec turbo run test",
+    "typecheck": "pnpm exec turbo run typecheck",
+    "lint": "pnpm exec turbo run lint"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@fission-ai/openspec": "^1.3.1",
     "@types/node": "catalog:",
     "@types/papaparse": "5.3.14",
+    "turbo": "^2.9.18",
     "typescript": "catalog:"
   },
   "dependencies": {

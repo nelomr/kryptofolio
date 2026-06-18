@@ -8,7 +8,7 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
-> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Funciona como una capa de presentación visual que muestra información fiscal y de transacciones calculada por el backend, utilizando un proxy Backend-for-Frontend (BFF) para conectar la interfaz con las fuentes de datos.
+> **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Funciona como una capa de presentación visual que muestra información fiscal y de transacciones calculada por el backend, utilizando un backend centralizado (`apps/backend`) para conectar la interfaz con las fuentes de datos.
 
 ## ✨ Características Principales
 
@@ -16,7 +16,7 @@
 - **🧹 Asistente de Ingesta de Datos (Wizard):** Una interfaz en varios pasos que permite subir archivos CSV/XLSX, mapear automáticamente cabeceras de exchanges populares (Binance, Kraken, Coinbase, KuCoin, Bitunix), realizar ajustes manuales con opciones ordenadas alfabéticamente, validar restricciones de Spot vs. Futuros y enviar de forma segura los datos limpios al backend.
 - **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para inspeccionar el historial de transacciones, identificar inconsistencias (ej. bases de coste faltantes o saldos negativos) y presentar datos estructurados listos para informes AEAT.
 - **🤖 Preparado para Agentes de IA (Futura Feature):** El frontend está técnicamente diseñado para una futura integración de Agentes de IA (usando Vercel AI SDK o Mastra). Dado que los Casos de Uso y los DTOs están aislados y validados, pueden exponerse directamente como herramientas (Tools / Function Calling) a un LLM en el futuro para consultas en lenguaje natural sin reescribir validaciones.
-- **🛡️ Privacidad Primero:** Totalmente self-hosted. El sistema funciona localmente, asegurando que las credenciales de API y las transacciones permanezcan seguras. El BFF puede integrarse con cualquier backend local o remoto personalizado.
+- **🛡️ Privacidad Primero:** Totalmente self-hosted. El sistema funciona localmente, asegurando que las credenciales de API y las transacciones permanezcan seguras. El backend puede integrarse con bases de datos locales o remotas de forma segura.
 - **🔐 Bóveda de Secretos Local:** Bóveda encriptada con AES-256-GCM para almacenar de forma segura credenciales de APIs. El borrado de memoria RAM ("scrubbing") asegura que las claves se destruyen tras su uso. Permite habilitar o deshabilitar integraciones en caliente.
 - **🏗️ Arquitectura Hexagonal (Separación en Frontend):** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI del frontend está desacoplada de los protocolos de red y mecanismos de almacenamiento local, garantizando alta testabilidad y seguridad de contratos mediante esquemas de validación Zod.
 
@@ -32,7 +32,7 @@
 El repositorio está estructurado como un **Monorepo (PNPM Workspaces)** para desacoplar dominios y escalar eficientemente:
 - `apps/frontend/`: La aplicación principal en Vue 3 (UI, Pinia stores).
 - `apps/backend/`: El servicio core del backend (Hono + DuckDB), encargado de cálculos pesados, persistencia en base de datos y cruces FIFO.
-- `packages/api-gateway/`: El Backend-for-Frontend (BFF) construido con Hono. Proporciona seguridad de tipos E2E (Hono RPC), proxy y gestión local del vault de credenciales encriptado.
+- `packages/database/`: Capa de abstracción de base de datos con migraciones y puertos genéricos de conexión para SQLite y DuckDB.
 - `packages/core-domain/`: Lógica de negocio pura (Servicios, Casos de Uso, Normalizadores). Totalmente agnóstico del framework.
 - `packages/shared-types/`: Esquemas de Zod, DTOs y definiciones de tipos compartidas por todo el monorepo.
 - `docs/`: Documentación técnica detallando la arquitectura, integración de APIs y extensibilidad.
@@ -70,10 +70,11 @@ cp .env.example .env
 cp .env.production.example .env.production
 ```
 
-**Variables Clave:**
-- `VITE_USE_MOCK`: Configúralo en `true` para usar los adaptadores mock locales (útil si no tienes el backend de Python ejecutándose localmente). Configúralo en `false` para usar los adaptadores reales de la API REST.
-- `VITE_API_BASE_URL`: La URL del backend de Python (ej. `http://localhost:8000`).
+- `VITE_API_URL`: URL de `apps/backend` desde la perspectiva del frontend (por defecto: `http://localhost:3001`).
 - `VITE_APP_LANG`: El idioma de la interfaz. Las opciones válidas actualmente son `es` o `en`.
+- `VAULT_DB_PATH`: (Backend) Ruta al archivo de base de datos SQLite para la bóveda de credenciales encriptadas y configuraciones (`kryptofolio.db`).
+- `DUCKDB_PATH`: (Backend) Ruta a la base de datos DuckDB para OLAP, cálculos pesados y registro de transacciones (`fiscal.duckdb`).
+- `MOCK_MODE`: (Backend) Configúralo en `true` para usar una base de datos SQLite en memoria (desarrollo). Por defecto: `false`.
 
 ### 🌍 Internacionalización (i18n)
 
@@ -101,8 +102,8 @@ Asegúrate de tener [pnpm](https://pnpm.io/) instalado.
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/nelomr/portfolio-dashboard.git
-cd portfolio-dashboard
+git clone https://github.com/nelomr/kryptofolio.git
+cd kryptofolio
 
 # 2. Instalar dependencias en la raíz del workspace
 pnpm install
@@ -111,11 +112,11 @@ pnpm install
 # Para ejecutar el frontend con APIs reales:
 pnpm dev
 
-# O BIEN, para ejecutar el frontend junto con el servidor Backend-for-Frontend (BFF) Mock local:
-pnpm run dev:mock
+# O BIEN, para ejecutar el frontend junto con el servidor Backend (Hono) local simultáneamente:
+pnpm run dev:full
 ```
 
-> **Nota:** El comando `dev:mock` levanta concurrentemente el frontend en Vite y el API Gateway en Hono, permitiendo que el frontend consuma datos de prueba estrictamente validados a través de RPC.
+> **Nota:** El comando `dev:full` levanta concurrentemente el frontend en Vite y el backend en Hono (`apps/backend`), permitiendo que el frontend consuma datos (o mocks) estrictamente validados a través de RPC.
 
 ### 🧪 Pruebas y Validación
 
@@ -124,15 +125,16 @@ Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta es
 | Comando | Descripción |
 |---------|-------------|
 | `pnpm dev` | Inicia el servidor de desarrollo local del frontend (`-F @kryptofolio/frontend`). |
-| `pnpm test` | Ejecuta de forma recursiva (`-r`) la suite completa de pruebas unitarias en todo el workspace. |
-| `pnpm test:ui` | Abre el dashboard de interfaz de Vitest en el frontend. |
-| `pnpm typecheck` | Ejecuta estáticamente **Vue-TSC** recursivamente en todos los paquetes del workspace. |
-| `pnpm build` | Compila y empaqueta el frontend para su despliegue en producción. |
+| `pnpm dev:full` | Orquesta con Turborepo el arranque simultáneo del frontend y backend. |
+| `pnpm test` | Ejecuta de forma paralela la suite completa de pruebas unitarias usando Turborepo. |
+| `pnpm typecheck` | Ejecuta estáticamente **Vue-TSC** y chequeo de tipos en todos los paquetes. |
+| `pnpm lint` | Analiza el código con ESLint en todo el workspace. |
+| `pnpm build` | Compila y empaqueta el proyecto usando la caché de Turborepo. |
 
 ## 📦 Arquitectura: Hexagonal (Puertos y Adaptadores)
 
 Este proyecto se adhiere estrictamente a la **Arquitectura Hexagonal** (Puertos y Adaptadores) en el frontend. Es importante recalcar que **el frontend no ejecuta lógica de negocio de cálculo financiero** (como la asignación de bases de coste por FIFO o el cálculo de pérdidas y ganancias - PnL realizadas o no realizadas). En su lugar:
-- **Motor de Cálculo:** El cálculo pesado se delega completamente al Backend/BFF.
+- **Motor de Cálculo:** El cálculo pesado se delega completamente a la capa del backend.
 - **Puertos y Adaptadores del Frontend:** Están diseñados puramente para desacoplar los componentes de la interfaz de usuario y los estados de presentación de los detalles de infraestructura (protocolos de red, contratos de API, bóveda de almacenamiento local, configuraciones de i18n y esquemas de validación).
 
 ```mermaid
@@ -174,7 +176,7 @@ graph TD
 
 3. **Capa de Infraestructura (`src/core/infrastructure/`)**
    El borde exterior que se comunica con el mundo real y protege al dominio.
-   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter` o `MockCryptoAdapter`). Deben tener el sufijo `Adapter`. Nota: Los Mocks se manejan exclusivamente en el BFF.
+   - **Adaptadores (`adapters/`)**: Implementaciones concretas de los puertos del dominio (ej. `RestCryptoAdapter`). Deben tener el sufijo `Adapter`. Nota: Los Mocks y enrutamiento se manejan exclusivamente en la capa del backend.
    - **DTOs y Capa Anticorrupción (`dtos/`)**: Esquemas de validación Zod (`ExternalTaxSchemas.ts`). Mapean los datos brutos de la API a Entidades puras y validan la integridad de la respuesta *antes* de que toque el dominio.
    - **Inyección de Dependencias (`di/`)**: El "Composition Root". Instancia los adaptadores REST y los conecta con Vue (vía provide/inject usando símbolos estrictos como `VAULT_PORT_KEY`).
 

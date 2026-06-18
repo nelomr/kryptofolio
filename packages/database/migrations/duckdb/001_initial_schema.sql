@@ -1,0 +1,14 @@
+-- DuckDB initial schema for Kryptofolio OLAP data.
+-- Engine: DuckDB (future: pluggable to PostgreSQL via IDatabasePort)
+--
+-- IMPORTANT: DuckDB uses columnar storage. Do NOT add row-by-row INSERTs here.
+-- Use the Appender API for bulk ingestion in adapter code.
+
+-- Placeholder: DuckDB tables will be defined here as OLAP features are added.
+-- Example:
+-- CREATE TABLE IF NOT EXISTS asset_prices (
+--   asset_id VARCHAR NOT NULL,
+--   timestamp TIMESTAMPTZ NOT NULL,
+--   price DECIMAL(18, 8) NOT NULL,
+--   PRIMARY KEY (asset_id, timestamp)
+-- );

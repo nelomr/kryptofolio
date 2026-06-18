@@ -2,39 +2,28 @@
 
 This document describes how to connect custom backend services to Kryptofolio.
 
-## Backend-for-Frontend (BFF) Proxy Architecture
+## Backend & RPC Integration
 
-The frontend is tightly coupled to the BFF (built with **Hono**) using Hono RPC (`hc`) to ensure E2E type safety. Rather than forcing the frontend to point directly to various backends, Kryptofolio uses a Backend-for-Frontend (BFF) proxy pattern. 
+The frontend is tightly coupled to the backend (built with **Hono**) using Hono RPC (`hc`) to ensure E2E type safety.
 
-### How it Works in Production (`MODE=prod`)
-1. The Vite frontend always sends requests to the local BFF instance (`VITE_API_BASE_URL`).
-2. When the BFF is started with `MODE=prod`, it acts as a **reverse proxy** for all `/api/*` endpoints, forwarding them to the external production API defined in `PROD_API_URL`.
-3. The BFF automatically injects the `SECRET_API_KEY` into the HTTP request headers as:
-   ```http
-   Authorization: Bearer <SECRET_API_KEY>
-   ```
-4. This ensures that:
-   - Your production API does not need to handle public CORS headers directly for the frontend (the BFF manages CORS).
-   - Sensitive backend tokens are never exposed to the frontend/browser.
+### How it Works
+1. The Vite frontend always sends requests to the `apps/backend` instance (`VITE_API_URL`).
+2. The backend orchestrates data fetching, mock serving, or database calls depending on its configuration.
+3. Sensitive tokens or database connections are managed exclusively by the backend and never exposed to the frontend/browser.
 
 ```mermaid
 sequenceDiagram
     participant Browser as Frontend (Vite)
-    participant BFF as BFF (Hono - Local)
-    participant Backend as Custom Backend (Node.js/Python/Go)
+    participant Backend as Backend (Hono - Local)
 
-    Browser->>BFF: GET /api/portfolio/summary
-    BFF->>BFF: Injects Authorization Header
-    BFF->>Backend: GET <PROD_API_URL>/api/portfolio/summary
-    Backend-->>BFF: JSON Response (Raw Data)
-    BFF-->>Browser: JSON Response (Type-safe RPC)
+    Browser->>Backend: GET /api/portfolio/summary
+    Backend->>Backend: Fetches data or mocks
+    Backend-->>Browser: JSON Response (Type-safe RPC)
 ```
 
 ---
 
-## Future Backend Stack
-
-The production backend (`apps/backend`) is being developed using **Hono + DuckDB** to handle heavy data calculations, FIFO queue matching, and persistence.
+The production backend (`apps/backend`) is being developed using **Hono + SQLite + DuckDB** to handle heavy data calculations, FIFO queue matching, and persistence.
 
 As long as any alternative target backend implements the REST endpoints specified below and matches the JSON contracts (using schemas from `@kryptofolio/shared-types`), any framework (Node.js, Rust, Go, Python) could theoretically be used.
 
@@ -301,7 +290,7 @@ Provides monthly/daily volatility heatmaps for advanced trading metrics.
 
 ### 🛡️ Local Vault & Settings (Reference)
 
-When running in `prod` mode, these calls are normally handled locally by the BFF if it manages its own DB. However, if your proxy delegates all paths, the backend must support:
+These endpoints are managed directly by `apps/backend` to interact with the local SQLite credentials database:
 
 - `POST /api/credentials/vault/unlock` (unlocks credentials DB)
 - `GET /api/credentials/vault/status` (locked/unlocked, integrations list)

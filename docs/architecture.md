@@ -10,28 +10,28 @@ Kryptofolio leverages a strict **Hexagonal Architecture** within a PNPM Workspac
 
 The project is divided into specialized decoupled packages:
 - **`apps/frontend/`**: The main Vue 3 user interface.
-- **`apps/backend/`**: The core production backend (Hono + DuckDB), handling heavy calculations and database persistence.
-- **`packages/api-gateway/`**: The Backend-for-Frontend (BFF) built with Hono, which provides end-to-end type safety, proxying, and local encrypted vault management.
+- **`apps/backend/`**: The core production backend (Hono + SQLite + DuckDB), handling API routes, encrypted vault, calculations, and database persistence.
+- **`packages/database/`**: Database abstraction layer with migrations and generic connection ports for SQLite and DuckDB.
 - **`packages/core-domain/`**: Pure business logic (e.g., Services, Normalizers). Completely framework-agnostic.
 - **`packages/shared-types/`**: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
 
 The core principle is that the Domain layer (now isolated in `@kryptofolio/core-domain` and `@kryptofolio/shared-types`) is completely isolated from external concerns, meaning no framework imports, no database logic, and no external UI dependencies.
 
 > [!NOTE]
-> **Client-Side Domain Boundaries:** The frontend's domain does *not* compute core financial records like FIFO cost-basis matching or realized/unrealized PnL. The frontend acts as a structured presentation client. Its Domain and Application layers are dedicated to UI state orchestration, local storage settings, credential vault encryption, error handling, and translation state management. The calculations are delegated to the Backend/BFF.
+> **Client-Side Domain Boundaries:** The frontend's domain does *not* compute core financial records like FIFO cost-basis matching or realized/unrealized PnL. The frontend acts as a structured presentation client. Its Domain and Application layers are dedicated to UI state orchestration, local storage settings, credential vault encryption, error handling, and translation state management. The calculations are delegated to the backend.
 
 All external data enters the system through the **Anti-Corruption Layer (ACL)**, primarily using Zod schemas for Data Transfer Objects (DTOs), before being mapped to internal Branded Types and strict Domain Entities.
 
-## Backend-for-Frontend (BFF) Pattern
+## Backend & Database Orchestration
 
-Instead of the frontend making direct external calls or relying on hardcoded static data files, Kryptofolio implements a BFF using **Hono** in `packages/api-gateway`. This API Gateway centralizes data fetching, caching, and mocking, acting as a bridge to the true core backend (`apps/backend`). 
+Instead of the frontend making direct external calls or relying on hardcoded static data files, Kryptofolio implements a centralized backend (`apps/backend`) using **Hono**. This backend acts as the single source of truth for data fetching, calculations, caching, and serving mock data during development.
 
 ### Data Flow & Dependency Injection
 
-The frontend communicates with the BFF entirely through `hono/client` (`hc<AppType>`). This guarantees end-to-end type safety. The data flow strictly adheres to Hexagonal Architecture, ensuring the UI components never directly call the network or the adapters.
+The frontend communicates with the backend entirely through `hono/client` (`hc<AppType>`). This guarantees end-to-end type safety. The data flow strictly adheres to Hexagonal Architecture, ensuring the UI components never directly call the network or the adapters.
 
 > [!TIP]
-> The `BffClient.ts` handles the environment variables cleanly. It securely routes to `VITE_API_BASE_URL` which points to our API Gateway.
+> `BffClient.ts` handles the connection securely routing to `VITE_API_URL` which points to our backend.
 
 ```mermaid
 sequenceDiagram
@@ -41,7 +41,7 @@ sequenceDiagram
     participant Port as Port (Domain)
     participant Adapter as Adapter (Infrastructure)
     participant hc as Hono RPC Client (hc)
-    participant BFF as API Gateway (BFF)
+    participant Backend as Backend
 
     UI->>Colada: useUploadTaxFileMutation()
     Colada->>UseCase: execute(file, market)
@@ -49,8 +49,8 @@ sequenceDiagram
     UseCase->>Port: uploadFile(payload)
     Port->>Adapter: Interface implementation
     Adapter->>hc: bffClient.api.tax.upload.$post()
-    hc->>BFF: HTTP POST /api/tax/upload
-    BFF-->>hc: JSON Response
+    hc->>Backend: HTTP POST /api/tax/upload
+    Backend-->>hc: JSON Response
     hc-->>Adapter: Typed Response
     Adapter-->>Port: Domain Entity / Promise
     Port-->>UseCase: Success / Failure
@@ -63,12 +63,12 @@ sequenceDiagram
 2. **Writes (Mutations):** All state-changing operations MUST be orchestrated through an explicit `UseCase` class in `src/core/application/use-cases/`.
 3. **Ports:** All dependencies are injected via Vue's `provide`/`inject` system using strictly typed `InjectionKey`s (e.g., `VAULT_PORT_KEY`).
 
-### Backend-for-Frontend as the Single Source of Truth
+### Backend as the Single Source of Truth
 
-The Hexagonal Architecture ensures the frontend is agnostic to the actual network implementation. Mocks and network logic are managed exclusively at the BFF layer.
+The Hexagonal Architecture ensures the frontend is agnostic to the actual network implementation. Mocks and network logic are managed exclusively at the backend layer.
 
-- **Frontend Consistency**: The frontend always injects and utilizes the `Rest*` adapters, which point to the BFF.
-- **BFF Modes**: The BFF itself dictates whether it serves static mock data (`MODE=mock`) or proxies requests to a live backend (`MODE=prod`). This ensures the frontend consistently experiences network latency, asynchronous loading states, and identical payloads regardless of the environment.
+- **Frontend Consistency**: The frontend always injects and utilizes the `Rest*` adapters, which point to the backend.
+- **Backend Responsibilities**: The backend dictates whether it serves static mock data (until DB integration is complete) or real database queries. This ensures the frontend consistently experiences network latency, asynchronous loading states, and identical payloads regardless of the environment.
 
 ## Anti-Corruption Layer (ACL)
 
@@ -76,7 +76,7 @@ To prevent external API changes from breaking the UI, all adapters must run data
 
 ```mermaid
 flowchart TD
-    A[External Source / BFF] -->|Raw JSON| B(Infrastructure Adapter)
+    A[External Source / Backend] -->|Raw JSON| B(Infrastructure Adapter)
     B -->|Zod safeParse| C{Validation}
     C -->|Success| D[Domain Entity Mapping]
     C -->|Fail| E[Global Error Bus]
