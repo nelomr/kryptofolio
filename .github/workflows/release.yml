@@ -65,15 +65,15 @@ jobs:
             
             # Create standard monorepo tags (e.g. @kryptofolio/frontend@1.15.11)
             npx changeset tag
-            # Also create the global legacy tag to maintain release continuity
-            git tag "$GLOBAL_TAG"
             
             # Push commits and all tags to main
             git push origin main --tags
             
             # Create a GitHub Release attached to the global tag
+            # We use --target main so GitHub automatically creates the tag if it's missing
             # We use --generate-notes to auto-populate the body with the commit history
             gh release create "$GLOBAL_TAG" \
+              --target main \
               --title "v$FRONTEND_VERSION" \
               --generate-notes \
               --latest
