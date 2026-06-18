@@ -69,7 +69,7 @@ jobs:
             git tag "$GLOBAL_TAG"
             
             # Push commits and all tags to main
-            git push origin main --follow-tags
+            git push origin main --tags
             
             # Create a GitHub Release attached to the global tag
             # We use --generate-notes to auto-populate the body with the commit history
