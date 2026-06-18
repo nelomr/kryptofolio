@@ -1,5 +1,11 @@
 # @kryptofolio/frontend
 
+## 1.15.11
+
+### Patch Changes
+
+- [`e53e978`](https://github.com/nelomr/kryptofolio/commit/e53e9783a8e9224dedd02654ae7ff80001bae348) Thanks [@nelomr](https://github.com/nelomr)! - chore: align frontend package version with historical global tag
+
 ## 1.14.4
 
 ### Patch Changes
