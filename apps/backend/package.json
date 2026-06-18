@@ -1,5 +1,6 @@
 {
   "name": "@kryptofolio/backend",
+  "private": true,
   "version": "0.0.2",
   "type": "module",
   "main": "src/index.ts",
