@@ -1,5 +1,20 @@
 # @kryptofolio/frontend
 
+## 1.14.3
+
+### Patch Changes
+
+- [`18e7028`](https://github.com/nelomr/kryptofolio/commit/18e70285a5b89a564ef31578a537f90afc6589aa) Thanks [@nelomr](https://github.com/nelomr)! - feat: implement real-time market data providers orchestration
+
+  - Added SSE and REST endpoints for live market data and historical prices
+  - Added CoinGecko, Kraken, Binance, Coinbase, and Bit2Me provider adapters
+  - Implemented DuckDB and InMemory price history caching
+  - Integrated Vue composables and UI elements to switch active market providers from the Vault
+
+- Updated dependencies [[`18e7028`](https://github.com/nelomr/kryptofolio/commit/18e70285a5b89a564ef31578a537f90afc6589aa)]:
+  - @kryptofolio/shared-types@1.0.2
+  - @kryptofolio/core-domain@1.0.2
+
 ## 1.14.2
 
 ### Patch Changes
