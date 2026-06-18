@@ -1,5 +1,11 @@
 # @kryptofolio/frontend
 
+## 1.15.12
+
+### Patch Changes
+
+- [`ca6ca05`](https://github.com/nelomr/kryptofolio/commit/ca6ca055b8feb1e848ebad1d2ee98b6e9d1342dd) Thanks [@nelomr](https://github.com/nelomr)! - chore: force pipeline to run release process with updated github action
+
 ## 1.15.11
 
 ### Patch Changes
