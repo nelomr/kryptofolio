@@ -1,4 +1,4 @@
-minimumReleaseAge: 7d
+minimumReleaseAge: 3d
 
 packages:
   - "apps/*"
@@ -15,7 +15,7 @@ catalog:
   "@types/luxon": "^3.7.1"
 
 allowBuilds:
-  '@fission-ai/openspec': true
+  "@fission-ai/openspec": true
   esbuild: true
   sharp: true
   vue-demi: true

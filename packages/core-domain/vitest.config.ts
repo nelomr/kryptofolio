@@ -2,9 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    name: '@kryptofolio/backend',
+    name: '@kryptofolio/core-domain',
     passWithNoTests: true,
     environment: 'node',
-    include: ['src/**/*.{test,spec}.ts'],
   },
 });

@@ -23,6 +23,7 @@ export default defineConfig({
     }),
   ],
   test: {
+    name: '@kryptofolio/frontend',
     environment: 'happy-dom',
     include: ['src/**/*.{test,spec}.ts'],
     globals: true,
