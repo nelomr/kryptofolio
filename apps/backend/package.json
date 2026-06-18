@@ -15,21 +15,23 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@hono/zod-validator": "^0.8.0",
+    "@kryptofolio/core-domain": "workspace:*",
+    "@kryptofolio/database": "workspace:*",
+    "@kryptofolio/shared-types": "workspace:*",
     "@napi-rs/keyring": "^1.3.0",
     "big.js": "^7.0.1",
     "hono": "catalog:",
     "luxon": "catalog:",
     "pino": "^10.3.1",
-    "zod": "catalog:",
-    "@kryptofolio/shared-types": "workspace:*",
-    "@kryptofolio/core-domain": "workspace:*",
-    "@kryptofolio/database": "workspace:*"
+    "ws": "^8.17.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
-    "@types/node": "catalog:",
     "@types/big.js": "^7.0.0",
     "@types/luxon": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

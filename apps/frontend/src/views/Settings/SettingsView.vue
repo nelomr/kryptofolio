@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import VaultSettings from "./components/VaultSettings.vue";
-import LanguageSettings from "./components/LanguageSettings.vue";
-import { useI18n } from "@/composables/useI18n";
+import { computed } from 'vue';
+import VaultSettings from './components/VaultSettings.vue';
+import LanguageSettings from './components/LanguageSettings.vue';
+import { useMarketDataFeed } from '@/composables/queries/useMarketDataFeed';
+import { useI18n } from '@/composables/useI18n';
 
 const { t } = useI18n();
+
+// Connect to the SSE stream to determine connection status for the UI
+const { latestPrices } = useMarketDataFeed();
+
+// SSE is considered connected if we have at least one price in the map
+const isSseConnected = computed(() => latestPrices.value.size > 0);
 </script>
 
 <template>
@@ -19,4 +27,3 @@ const { t } = useI18n();
     <VaultSettings />
   </div>
 </template>
-

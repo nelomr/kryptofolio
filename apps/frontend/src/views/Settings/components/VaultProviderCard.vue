@@ -23,12 +23,15 @@ const props = defineProps<{
   isEnabled: boolean;
   isToggling: boolean;
   isSaving: boolean;
+  isActiveMarketProvider?: boolean;
+  isSettingActiveProvider?: boolean;
   formData: Record<string, string>;
   errors: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
   (e: "toggle", enabled: boolean): void;
+  (e: "toggle-active-market-provider", enabled: boolean): void;
   (e: "sanitize", fieldKey: string): void;
   (e: "save"): void;
   (e: "update:form-field", fieldKey: string, value: string): void;
@@ -102,7 +105,19 @@ const getFieldLabel = (fieldKey: string, fallback: string) => {
           {{ t(errors[field.key]) }}
         </span>
       </div>
-      <div class="flex justify-end pt-2">
+      <div class="flex items-center justify-between pt-2 mt-2 border-t">
+        <div class="text-sm">
+          <p class="font-medium">{{ t('vault.provider.market_data.title') }}</p>
+          <p class="text-xs text-muted-foreground">{{ t('vault.provider.market_data.desc') }}</p>
+        </div>
+        <Switch
+          :model-value="isActiveMarketProvider"
+          @update:model-value="emit('toggle-active-market-provider', $event)"
+          :disabled="isSettingActiveProvider || isActiveMarketProvider"
+          class="data-[state=checked]:bg-emerald-500 shadow-none"
+        />
+      </div>
+      <div class="flex justify-end pt-2 mt-2 border-t">
         <Button
           variant="default"
           :disabled="

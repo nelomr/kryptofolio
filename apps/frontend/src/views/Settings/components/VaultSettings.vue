@@ -7,6 +7,8 @@ import {
 } from "@/composables/queries/useVaultQueries";
 import { useToggleVaultProviderMutation } from "@/composables/queries/useVaultMutations";
 import { useVaultForm } from "./composables/useVaultForm";
+import { useActiveMarketProviderQuery } from "@/composables/queries/useSettingsQueries";
+import { useToggleActiveMarketProviderMutation } from "@/composables/queries/useSettingsMutations";
 
 import VaultLockedState from "./VaultLockedState.vue";
 import VaultProviderCard from "./VaultProviderCard.vue";
@@ -54,6 +56,13 @@ const isProviderConfigured = (providerId: string): boolean => {
 
 const isProviderEnabled = (providerId: string): boolean => {
   return status.value?.enabledServices?.includes(providerId) ?? false;
+};
+
+const { data: activeMarketProvider } = useActiveMarketProviderQuery();
+const { mutate: setActiveMarketProvider, isLoading: isSettingActiveProvider } = useToggleActiveMarketProviderMutation();
+
+const handleToggleActiveProvider = (providerId: string, enabled: boolean) => {
+  if (enabled) setActiveMarketProvider(providerId);
 };
 
 </script>
@@ -112,7 +121,10 @@ const isProviderEnabled = (providerId: string): boolean => {
               :is-saving="isSaving"
               :form-data="formData[provider.id] || {}"
               :errors="errors[provider.id] || {}"
+              :is-active-market-provider="activeMarketProvider === provider.id"
+              :is-setting-active-provider="isSettingActiveProvider"
               @toggle="handleToggle(provider.id, $event)"
+              @toggle-active-market-provider="handleToggleActiveProvider(provider.id, $event)"
               @sanitize="sanitizeInput(provider.id, $event)"
               @save="handleSaveProvider(provider.id)"
               @update:form-field="(key, value) => formData[provider.id][key] = value"

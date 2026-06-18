@@ -34,6 +34,19 @@ vi.mock('@/composables/queries/useVaultMutations', () => ({
   })
 }));
 
+vi.mock('@/composables/queries/useSettingsQueries', () => ({
+  useActiveMarketProviderQuery: () => ({
+    data: ref('kraken')
+  })
+}));
+
+vi.mock('@/composables/queries/useSettingsMutations', () => ({
+  useToggleActiveMarketProviderMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: ref(false)
+  })
+}));
+
 describe('VaultSettings.vue', () => {
   it('renders locked state by default', () => {
     const wrapper = mount(VaultSettings);

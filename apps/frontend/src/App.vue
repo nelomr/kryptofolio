@@ -11,6 +11,8 @@ import type { ValidationErrorPayload } from "@/core/infrastructure/errors/errorB
 import AppHeader from "@/components/layout/AppHeader.vue";
 import { useI18n } from "@/composables/useI18n";
 import { useInitializeLanguageQuery } from "@/composables/queries/useSettingsQueries";
+import { useMarketDataFeed } from "@/composables/queries/useMarketDataFeed";
+
 // ---------------------------------------------------------------------------
 // Global error handling — listens to the errorBus and shows Sonner toasts
 // when Zod safeParse fails in any adapter.
@@ -21,6 +23,9 @@ const { t } = useI18n();
 
 // Initialize language from backend
 useInitializeLanguageQuery();
+
+// Initialize global market data SSE stream
+useMarketDataFeed();
 
 function handleValidationError(payload: ValidationErrorPayload) {
   const stringParams = payload.params

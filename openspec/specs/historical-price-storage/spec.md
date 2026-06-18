@@ -8,7 +8,8 @@ The system SHALL temporarily cache historical prices in memory, pending a robust
 - **THEN** it MUST return the prices cached in the `InMemoryPriceHistoryAdapter`.
 
 ### Requirement: DuckDB Preparedness
-The system SHALL include the skeleton implementations for a `DuckDbPriceHistoryAdapter` anticipating bulk ingestion via the Appender API.
+The system SHALL include the skeleton implementations for a `DuckDbPriceHistoryAdapter` anticipating bulk ingestion via the Appender API. This adapter MUST inject and use the generic `IDatabasePort` from `@kryptofolio/database` to remain decoupled from raw database drivers. 
+Crucially, the adapter MUST NOT contain DDL logic (e.g., `CREATE TABLE`). All schema definitions MUST reside exclusively in `packages/database/migrations` to respect the Single Responsibility Principle and maintain a centralized source of truth.
 
 #### Scenario: Calling the DuckDB skeleton methods
 - **WHEN** a method on the `DuckDbPriceHistoryAdapter` is called

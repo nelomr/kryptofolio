@@ -1,15 +1,25 @@
 import type { ICryptographyPort } from '../../domain/ports/ICryptographyPort.js';
 import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentialsPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js';
+import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 import type { IDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
 import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.js';
 import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
+import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
 import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.js';
 import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.js';
 import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.js';
 import { GetAvailableProvidersUseCase } from '../../application/use-cases/vault/GetAvailableProvidersUseCase.js';
 import { ToggleVaultProviderUseCase } from '../../application/use-cases/vault/ToggleVaultProviderUseCase.js';
+import { MarketDataOrchestrator } from '../../application/services/MarketDataOrchestrator.js';
+import { KrakenMarketDataAdapter } from '../adapters/KrakenMarketDataAdapter.js';
+import { CoinGeckoMarketDataAdapter } from '../adapters/CoinGeckoMarketDataAdapter.js';
+import { BinanceMarketDataAdapter } from '../adapters/BinanceMarketDataAdapter.js';
+import { CoinbaseMarketDataAdapter } from '../adapters/CoinbaseMarketDataAdapter.js';
+import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js';
+import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
 
 /**
  * DIContainer — Composes the application layer.
@@ -31,6 +41,17 @@ class DIContainer {
   public readonly getAvailableProvidersUseCase: GetAvailableProvidersUseCase;
   public readonly toggleVaultProviderUseCase: ToggleVaultProviderUseCase;
 
+  /** Market data */
+  public readonly priceHistoryPort: IPriceHistoryPort;
+  public readonly marketDataOrchestrator: MarketDataOrchestrator;
+  public readonly krakenMarketDataAdapter: KrakenMarketDataAdapter;
+  public readonly coinGeckoMarketDataAdapter: CoinGeckoMarketDataAdapter;
+  public readonly binanceMarketDataAdapter: BinanceMarketDataAdapter;
+  public readonly coinbaseMarketDataAdapter: CoinbaseMarketDataAdapter;
+  public readonly bit2meMarketDataAdapter: Bit2MeMarketDataAdapter;
+  public readonly marketProviders: Record<string, IMarketDataProvider>;
+  public readonly updateActiveMarketProviderUseCase: UpdateActiveMarketProviderUseCase;
+
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
     this.cryptographyPort = new AesGcmCryptographyAdapter();
@@ -42,6 +63,34 @@ class DIContainer {
     this.getVaultStatusUseCase = new GetVaultStatusUseCase(this.cryptographyPort, this.vaultCredentialsPort);
     this.getAvailableProvidersUseCase = new GetAvailableProvidersUseCase();
     this.toggleVaultProviderUseCase = new ToggleVaultProviderUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+
+    // Market data — wired lazily; broadcastPrice is injected from the route module
+    // to avoid circular imports. The orchestrator receives the callback on first use.
+    this.priceHistoryPort = new InMemoryPriceHistoryAdapter();
+    this.krakenMarketDataAdapter = new KrakenMarketDataAdapter();
+    this.coinGeckoMarketDataAdapter = new CoinGeckoMarketDataAdapter();
+    this.binanceMarketDataAdapter = new BinanceMarketDataAdapter();
+    this.coinbaseMarketDataAdapter = new CoinbaseMarketDataAdapter();
+    this.bit2meMarketDataAdapter = new Bit2MeMarketDataAdapter();
+    
+    this.marketProviders = {
+      [this.krakenMarketDataAdapter.id]: this.krakenMarketDataAdapter,
+      [this.coinGeckoMarketDataAdapter.id]: this.coinGeckoMarketDataAdapter,
+      [this.binanceMarketDataAdapter.id]: this.binanceMarketDataAdapter,
+      [this.coinbaseMarketDataAdapter.id]: this.coinbaseMarketDataAdapter,
+      [this.bit2meMarketDataAdapter.id]: this.bit2meMarketDataAdapter,
+    };
+    
+    // Broadcast callback will be set via setOrchestrator() after route initialisation
+    this.marketDataOrchestrator = new MarketDataOrchestrator((_price) => {
+      // Default no-op; overridden at startup by index.ts after routes are mounted
+    });
+
+    this.updateActiveMarketProviderUseCase = new UpdateActiveMarketProviderUseCase(
+      this.userSettingsPort,
+      this.marketDataOrchestrator,
+      this.marketProviders
+    );
   }
 }
 

@@ -48,6 +48,8 @@ export class NodeSqliteAdapter implements IDatabasePort {
             value TEXT NOT NULL,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+
+        INSERT OR IGNORE INTO user_settings (key, value) VALUES ('active_market_provider', 'kraken');
       `);
     } catch (err) {
       throw new Error(`[Database] Critical failure initializing SQLite tables: ${err}`);

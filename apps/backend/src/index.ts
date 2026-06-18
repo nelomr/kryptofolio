@@ -20,7 +20,9 @@ import {
 } from './data/mockMetrics.js';
 import credentialsApi from './core/infrastructure/routes/credentials.js';
 import settingsApi from './core/infrastructure/routes/settings.js';
+import marketApi, { broadcastPrice } from './core/infrastructure/routes/market.js';
 import { container } from './core/infrastructure/di/container.js';
+import { MarketDataOrchestrator } from './core/application/services/MarketDataOrchestrator.js';
 import { bffLogger } from './core/utils/logger.js';
 
 export const app = new Hono<{
@@ -118,7 +120,9 @@ const routes = app
   // Credentials Vault
   .route('/credentials', credentialsApi)
   // User Settings
-  .route('/settings', settingsApi);
+  .route('/settings', settingsApi)
+  // Market Data (SSE stream + REST)
+  .route('/market', marketApi);
 
 /**
  * AppType — The single source of truth for the Hono RPC client in apps/frontend.
@@ -134,6 +138,22 @@ if (process.env.NODE_ENV !== 'test') {
       bffLogger.info('Initializing Vault SQLite Database...');
       await container.sqlitePort.initialize();
       bffLogger.info('Vault Database initialized successfully.');
+
+      // Wire the SSE broadcast callback into the MarketDataOrchestrator.
+      // We do not recreate the orchestrator here to preserve DI reference equality.
+      container.marketDataOrchestrator.setBroadcastCallback(broadcastPrice);
+
+      // Automatically load the active market provider from the configuration DB
+      const activeProviderId = await container.userSettingsPort.getSetting('active_market_provider');
+      const providerToBoot = activeProviderId ? container.marketProviders[activeProviderId] : undefined;
+
+      if (providerToBoot) {
+        bffLogger.info(`Bootstrapping default market provider: ${activeProviderId}`);
+        await container.marketDataOrchestrator.activate(providerToBoot);
+      } else {
+        bffLogger.warn(`No valid market provider found for ID: ${activeProviderId}`);
+      }
+
       bffLogger.info(`Kryptofolio Backend running on port ${port}`);
       serve({ fetch: app.fetch, port });
     } catch (err) {

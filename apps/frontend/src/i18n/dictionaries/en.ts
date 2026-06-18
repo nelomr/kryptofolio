@@ -38,6 +38,8 @@ export const en: I18nDictionary = {
     "Portfolio API returned malformed data.",
   "errors.validation.csv_required":
     "Uploading a CSV requires selecting a file.",
+  "errors.market.invalid_price_event":
+    "Invalid price event received from the market stream.",
 
   "portfolio.roi": "Total ROI",
   "portfolio.invested": "Invested Capital",
@@ -474,4 +476,23 @@ export const en: I18nDictionary = {
   "ingestion.errors.no_valid_rows_to_import": "No valid rows to import.",
   "ingestion.errors.unknown_submission_error":
     "Unknown error during submission.",
+
+  // Market Data Provider Settings
+  "market.title": "Market Data",
+  "market.subtitle": "Configure real-time price providers for your vault",
+  "market.provider.kraken.name": "Kraken",
+  "market.provider.kraken.desc": "Real-time WebSocket price feed",
+  "market.provider.coingecko.name": "CoinGecko",
+  "market.provider.coingecko.desc": "REST polling every 60 s",
+  "market.provider.active": "Active",
+  "market.provider.inactive": "Inactive",
+  "market.provider.category.crypto": "Crypto",
+  "market.provider.category.general": "General",
+  "market.provider.exclusive_note": "Only one provider per category can be active at a time",
+  "market.provider.success": "Market provider updated successfully",
+  "market.provider.error": "Failed to update market provider",
+  "vault.provider.market_data.title": "Real-Time Price Provider",
+  "vault.provider.market_data.desc": "Use this provider to fetch global market data.",
+  "market.stream.connected": "Connected",
+  "market.stream.disconnected": "Disconnected",
 };

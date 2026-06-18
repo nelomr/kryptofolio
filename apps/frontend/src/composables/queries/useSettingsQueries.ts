@@ -28,3 +28,19 @@ export function useInitializeLanguageQuery() {
     staleTime: Infinity, // We only need to run this once on startup
   });
 }
+
+export function useActiveMarketProviderQuery() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useActiveMarketProviderQuery] Required port ISettingsPort is not provided.');
+  }
+
+  return useQuery({
+    key: ['settings', 'active_market_provider'],
+    query: async () => {
+      return await settingsPort.getActiveMarketProvider();
+    },
+    staleTime: 60 * 1000,
+  });
+}

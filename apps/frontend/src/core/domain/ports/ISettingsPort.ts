@@ -5,4 +5,6 @@
 export interface ISettingsPort {
   getLanguage(): Promise<string>;
   setLanguage(language: string): Promise<void>;
+  getActiveMarketProvider(): Promise<string | null>;
+  setActiveMarketProvider(providerId: string): Promise<void>;
 }
