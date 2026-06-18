@@ -70,6 +70,49 @@ The Hexagonal Architecture ensures the frontend is agnostic to the actual networ
 - **Frontend Consistency**: The frontend always injects and utilizes the `Rest*` adapters, which point to the backend.
 - **Backend Responsibilities**: The backend dictates whether it serves static mock data (until DB integration is complete) or real database queries. This ensures the frontend consistently experiences network latency, asynchronous loading states, and identical payloads regardless of the environment.
 
+### Real-Time Market Data Architecture
+
+To provide live ticker prices and global metrics without exhausting browser resources or hitting third-party rate limits from the client, Kryptofolio uses a **Server-Sent Events (SSE)** architecture orchestrated by the backend:
+
+```mermaid
+flowchart TD
+    subgraph Frontend
+      UI[Vue Components]
+      BffAdapter[BffMarketDataAdapter]
+    end
+
+    subgraph Backend
+      SSE[GET /api/market/stream]
+      Orchestrator[MarketDataOrchestrator]
+      History[IPriceHistoryPort]
+      
+      Provider1[Kraken Adapter]
+      Provider2[Binance Adapter]
+    end
+    
+    subgraph External Exchanges
+      API1[Kraken WS API]
+      API2[Binance WS API]
+    end
+
+    UI -->|Connects via EventSource| BffAdapter
+    BffAdapter -->|Single connection| SSE
+    SSE --> Orchestrator
+    
+    Orchestrator -->|Hot swaps active provider| Provider1
+    Orchestrator -.->|Disabled| Provider2
+    
+    API1 ==>|Websocket Tick| Provider1
+    Provider1 --> Orchestrator
+    
+    Orchestrator -->|1. Flush to Cache| History
+    Orchestrator -->|2. Broadcast| SSE
+```
+
+**Key benefits of this approach:**
+- **Hot-Swapping:** The user can change their active provider (e.g., from Kraken to Binance) in the Vault. The Orchestrator tears down the Kraken WebSocket and spins up Binance, pushing new data down the exact same SSE pipe. The frontend requires zero reconnection logic.
+- **Data Freshness & REST Synchronization:** Every tick is automatically saved to the `IPriceHistoryPort`. This guarantees that standard REST API calls (`/api/market/global`) are instantly synchronized with the live stream state.
+
 ## Anti-Corruption Layer (ACL)
 
 To prevent external API changes from breaking the UI, all adapters must run data through Zod DTOs before instantiating Domain Entities.

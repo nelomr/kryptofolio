@@ -117,6 +117,24 @@ Under `/api/settings/`:
 |---|---|---|
 | `GET` | `/language` | Get current language (`{ language: "en" }`) |
 | `PUT` | `/language` | Update language preference |
+| `PUT` | `/market-provider` | Update the active Real-Time Market Provider |
+
+## Market Data API Endpoints
+
+Under `/api/market/`:
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/stream` | **Server-Sent Events (SSE)** endpoint. Streams live `AssetPrice` and `GlobalMarketMetrics` updates. |
+| `GET` | `/global` | REST endpoint for static fetching of cached prices and global metrics. |
+
+### The MarketDataOrchestrator
+
+The backend serves as the single source of truth for all live market data, abstracting external limits and WebSocket complexities from the frontend:
+
+- **Hot-Swappable Providers:** The `MarketDataOrchestrator` manages `IMarketDataProvider` instances (e.g., `KrakenMarketDataAdapter`, `BinanceMarketDataAdapter`). Only one active provider handles real-time streams at any given time to prevent memory leaks and respect API rate limits.
+- **Unified SSE Feed:** The frontend connects once to `/api/market/stream`. If the user switches the active provider in the Vault, the backend gracefully disconnects the old provider, connects the new one, and pipes the data down the exact same SSE connection without requiring a browser refresh.
+- **Price History Caching:** Incoming SSE streams automatically flush their prices into `IPriceHistoryPort` (backed by DuckDB and Memory). This ensures that REST polls (`/api/market/global`) and new SSE connections immediately receive the freshest data rather than waiting for the next exchange tick.
 
 ## Adding a New Real Route (Replacing a Mock)
 
