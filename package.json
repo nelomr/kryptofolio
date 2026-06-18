@@ -15,7 +15,8 @@
     "dev:backend": "pnpm -F @kryptofolio/backend dev",
     "dev:full": "pnpm exec turbo run dev",
     "build": "pnpm exec turbo run build",
-    "test": "pnpm exec turbo run test",
+    "test": "vitest run",
+    "test:packages": "pnpm exec turbo run test",
     "typecheck": "pnpm exec turbo run typecheck",
     "lint": "pnpm exec turbo run lint",
     "prepare": "husky"
