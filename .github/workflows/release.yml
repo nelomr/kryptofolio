@@ -47,6 +47,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Version and Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Use npx to ensure the binary is resolved correctly
           npx changeset version
@@ -56,13 +58,27 @@ jobs:
             echo "Changes detected, committing version bumps..."
             git add .
             git commit -m "chore(release): version packages [skip ci]"
-            git push origin main
             
-            # Publish packages (skip registry if not configured)
-            npx changeset publish
+            # Since 'Frontend is King', we use its version as the global release tag
+            FRONTEND_VERSION=$(node -p "require('./apps/frontend/package.json').version")
+            GLOBAL_TAG="v$FRONTEND_VERSION"
+            
+            # Create standard monorepo tags (e.g. @kryptofolio/frontend@1.15.11)
+            npx changeset tag
+            # Also create the global legacy tag to maintain release continuity
+            git tag "$GLOBAL_TAG"
+            
+            # Push commits and all tags to main
+            git push origin main --follow-tags
+            
+            # Create a GitHub Release attached to the global tag
+            # We use --generate-notes to auto-populate the body with the commit history
+            gh release create "$GLOBAL_TAG" \
+              --title "v$FRONTEND_VERSION" \
+              --generate-notes \
+              --latest
+            
+            echo "✅ GitHub Release $GLOBAL_TAG successfully created!"
           else
             echo "No changesets found, nothing to version or publish."
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
