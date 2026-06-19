@@ -10,6 +10,12 @@ vi.mock('../../di/container', () => ({
       getSetting: vi.fn(),
       setSetting: vi.fn(),
     },
+    exchangeRatePort: {
+      getLatestRates: vi.fn().mockResolvedValue({
+        date: '2026-06-19',
+        rates: { USD: '1.05' }
+      }),
+    },
     updateActiveMarketProviderUseCase: {
       execute: vi.fn(),
     },
@@ -56,6 +62,37 @@ describe('Settings API', () => {
       });
 
       expect(res.status).toBe(500);
+    });
+  });
+
+  describe('POST /settings/exchange-rate/sync', () => {
+    it('should call FetchAndStoreExchangeRatesUC and return success', async () => {
+
+      const res = await app.request('/settings/exchange-rate/sync', { method: 'POST' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true });
+    });
+  });
+
+  describe('GET /settings/exchange-rate/:key', () => {
+    it('should return rate as string and date if found', async () => {
+      vi.mocked(container.userSettingsPort.getSetting).mockImplementation(async (k) => {
+        if (k === 'exchange_rate_usd_eur') return '0.9237';
+        if (k === 'exchange_rate_date') return '2026-06-19';
+        return null;
+      });
+
+      const res = await app.request('/settings/exchange-rate/usd_eur');
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ key: 'usd_eur', rate: '0.9237', date: '2026-06-19' });
+    });
+
+    it('should return null rate and date if not found', async () => {
+      vi.mocked(container.userSettingsPort.getSetting).mockResolvedValue(null);
+
+      const res = await app.request('/settings/exchange-rate/usd_eur');
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ key: 'usd_eur', rate: null, date: null });
     });
   });
 });

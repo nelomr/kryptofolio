@@ -7,6 +7,7 @@ import type {
 } from '@kryptofolio/shared-types';
 import { bffLogger } from '../../utils/logger.js';
 import { container } from '../di/container.js';
+import { StreamNormalizedMarketDataUC } from '../../application/use-cases/StreamNormalizedMarketDataUC.js';
 
 type Env = { Bindings: { MODE?: string; SECRET_API_KEY?: string } };
 
@@ -64,11 +65,25 @@ const marketApi = new Hono<Env>()
     return streamSSE(c, async (stream) => {
       bffLogger.info('SSE client connected');
 
-      const send = (event: SseMarketEvent) => {
-        void stream.writeSSE({
-          data: JSON.stringify(event),
-          event: event.type,
-        });
+      const useCase = new StreamNormalizedMarketDataUC(container.userSettingsPort);
+
+      const send = async (event: SseMarketEvent) => {
+        try {
+          if (event.type === 'price') {
+            const normalizedPrice = await useCase.execute(event.data as AssetPrice);
+            void stream.writeSSE({
+              data: JSON.stringify({ type: 'price', data: normalizedPrice }),
+              event: event.type,
+            });
+          } else {
+            void stream.writeSSE({
+              data: JSON.stringify(event),
+              event: event.type,
+            });
+          }
+        } catch (err) {
+          bffLogger.error({ err }, 'Failed to write SSE event');
+        }
       };
 
       sseClients.add(send);

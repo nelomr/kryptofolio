@@ -28,6 +28,21 @@ export const es: I18nDictionary = {
   "settings.language.success": "Idioma actualizado correctamente",
   "settings.language.error": "Error al guardar el idioma",
 
+  // Settings — Moneda Base
+  "settings.currency.title": "Moneda Base",
+  "settings.currency.description": "Selecciona la moneda fiat con la que se mostrarán todos los valores del portfolio.",
+  "settings.currency.select_placeholder": "Selecciona una moneda",
+  "settings.currency.option_usd": "USD — Dólar estadounidense",
+  "settings.currency.option_eur": "EUR — Euro",
+  "settings.currency.option_gbp": "GBP — Libra esterlina",
+  "settings.currency.save_btn": "Guardar",
+  "settings.currency.saving_btn": "Guardando...",
+  "settings.currency.success": "Moneda base actualizada correctamente",
+  "settings.currency.error": "Error al guardar la moneda base",
+  "settings.currency.sync_success": "Tipos de cambio sincronizados correctamente",
+  "settings.currency.sync_error": "Error al sincronizar los tipos de cambio",
+  "settings.currency.sync_tooltip": "Los nuevos datos salen a las 16:30",
+
   // Errors
   "errors.validation.title": "Error de Validación de Datos",
   "errors.validation.parser_skipped_rows":

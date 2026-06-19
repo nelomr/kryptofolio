@@ -9,8 +9,9 @@ Kryptofolio leverages a strict **Hexagonal Architecture** within a PNPM Workspac
 ### Monorepo Structure
 
 The project is divided into specialized decoupled packages:
-- **`apps/frontend/`**: The main Vue 3 user interface.
-- **`apps/backend/`**: The core production backend (Hono + SQLite + DuckDB), handling API routes, encrypted vault, calculations, and database persistence.
+- **`apps/backend/`**: The core production backend (Hono + SQLite + DuckDB). It is cleanly separated into two main entry points:
+  - `app.ts`: The pure Hono application definition, routing, and middlewares.
+  - `index.ts`: The server bootstrapper, database initializer, and job orchestrator.
 - **`packages/database/`**: Database abstraction layer with migrations and generic connection ports for SQLite and DuckDB.
 - **`packages/core-domain/`**: Pure business logic (e.g., Services, Normalizers). Completely framework-agnostic.
 - **`packages/shared-types/`**: Zod schemas, DTOs, and type definitions shared across the entire monorepo.

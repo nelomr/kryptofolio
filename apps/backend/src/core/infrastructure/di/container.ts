@@ -3,8 +3,10 @@ import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentials
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
+import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
 import type { IDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
+import { EcbExchangeRateAdapter } from '../adapters/EcbExchangeRateAdapter.js';
 import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.js';
 import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
 import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
@@ -41,6 +43,9 @@ class DIContainer {
   public readonly getAvailableProvidersUseCase: GetAvailableProvidersUseCase;
   public readonly toggleVaultProviderUseCase: ToggleVaultProviderUseCase;
 
+  /** Exchange Rates */
+  public readonly exchangeRatePort: IExchangeRatePort;
+
   /** Market data */
   public readonly priceHistoryPort: IPriceHistoryPort;
   public readonly marketDataOrchestrator: MarketDataOrchestrator;
@@ -63,6 +68,8 @@ class DIContainer {
     this.getVaultStatusUseCase = new GetVaultStatusUseCase(this.cryptographyPort, this.vaultCredentialsPort);
     this.getAvailableProvidersUseCase = new GetAvailableProvidersUseCase();
     this.toggleVaultProviderUseCase = new ToggleVaultProviderUseCase(this.cryptographyPort, this.vaultCredentialsPort);
+
+    this.exchangeRatePort = new EcbExchangeRateAdapter();
 
     // Market data — wired lazily; broadcastPrice is injected from the route module
     // to avoid circular imports. The orchestrator receives the callback on first use.

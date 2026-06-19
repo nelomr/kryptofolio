@@ -17,7 +17,8 @@
 
 ```
 apps/backend/src/
-├── index.ts                   # Hono app, route registration, server bootstrap
+├── app.ts                     # Hono app definition, middlewares, route registration
+├── index.ts                   # Server bootstrapper, jobs, and port binding
 ├── data/                      # Mock fixtures (mockPortfolio, mockTax, mockMetrics)
 └── core/
     ├── domain/
@@ -28,7 +29,8 @@ apps/backend/src/
     └── infrastructure/
         ├── adapters/          # AesGcmCryptographyAdapter, SqliteVaultPortAdapter
         ├── di/container.ts    # Composition Root — wires ports to use cases
-        └── routes/            # Hono route handlers: credentials.ts, settings.ts
+        ├── jobs/              # Background jobs: ExchangeRateSyncJob.ts
+        └── routes/            # Hono route handlers: credentials.ts, settings.ts, etc.
 ```
 
 **Dependency Rule**: Domain ports never import infrastructure. The DI container (`di/container.ts`) is the only place that knows about concrete implementations.
@@ -51,7 +53,7 @@ Migration files live in `packages/database/migrations/`:
 `apps/backend` exports `AppType` — the single source of truth for the RPC contract:
 
 ```ts
-// apps/backend/src/index.ts
+// apps/backend/src/app.ts
 export type AppType = typeof routes;
 ```
 
@@ -144,6 +146,6 @@ When implementing a real feature that currently returns mock data:
 2. Implement the **Use Case** in `src/core/application/use-cases/`
 3. Implement the **Adapter** in `src/core/infrastructure/adapters/`
 4. Wire it in `src/core/infrastructure/di/container.ts`
-5. Replace the mock handler in `src/index.ts` with a Use Case call
+5. Replace the mock handler in the corresponding router (`src/core/infrastructure/routes/*.ts`) with a Use Case call
 
 The frontend requires **zero changes** — `VITE_API_URL` and `AppType` remain stable.

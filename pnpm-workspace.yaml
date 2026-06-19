@@ -1,4 +1,4 @@
-minimumReleaseAge: 3d
+minimumReleaseAge: 2
 
 packages:
   - "apps/*"
@@ -13,6 +13,7 @@ catalog:
   "@hono/node-server": "^2.0.4"
   "luxon": "^3.7.2"
   "@types/luxon": "^3.7.1"
+  "decimal.js": "^10.5.0"
 
 allowBuilds:
   "@fission-ai/openspec": true

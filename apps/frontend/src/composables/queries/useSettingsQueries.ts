@@ -1,7 +1,8 @@
 import { useQuery } from '@pinia/colada';
-import { inject } from 'vue';
+import { inject, toValue, type MaybeRefOrGetter } from 'vue';
 import { I18N_PORT_KEY, SETTINGS_PORT_KEY } from '@/core/injectionKeys';
 import { InitializeLanguageUseCase } from '@/core/application/use-cases/InitializeLanguageUseCase';
+import type { FiatCurrency } from '@kryptofolio/shared-types';
 
 /**
  * useInitializeLanguageQuery
@@ -44,3 +45,52 @@ export function useActiveMarketProviderQuery() {
     staleTime: 60 * 1000,
   });
 }
+
+/**
+ * useBaseCurrencyQuery
+ *
+ * Fetches the user's saved base fiat currency from the backend.
+ * Defaults to 'USD' if not configured.
+ */
+export function useBaseCurrencyQuery() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useBaseCurrencyQuery] Required port ISettingsPort is not provided.');
+  }
+
+  return useQuery({
+    key: ['settings', 'base_currency'],
+    query: async (): Promise<FiatCurrency> => {
+      return await settingsPort.getBaseCurrency();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+
+/**
+ * useExchangeRateQuery
+ *
+ * Fetches the latest stored fiat exchange rate (e.g. USD→EUR) from the backend.
+ * Reactive: will re-fetch if 'from' or 'to' references change.
+ */
+export function useExchangeRateQuery(
+  from: MaybeRefOrGetter<FiatCurrency>, 
+  to: MaybeRefOrGetter<FiatCurrency>
+) {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useExchangeRateQuery] Required port ISettingsPort is not provided.');
+  }
+
+  return useQuery({
+    key: () => ['settings', 'exchange_rate', toValue(from), toValue(to)],
+    query: async (): Promise<{ rate: string | null; date: string | null }> => {
+      return await settingsPort.getExchangeRate(toValue(from), toValue(to));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+

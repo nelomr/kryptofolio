@@ -1,11 +1,11 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Real-time Price Streaming
-The system SHALL expose a Server-Sent Events (SSE) endpoint `/api/market/stream` to stream real-time asset prices to connected clients.
+The system SHALL expose a Server-Sent Events (SSE) endpoint `/api/market/stream` to stream real-time asset prices to connected clients, and the prices MUST be normalized to the user's base fiat currency.
 
 #### Scenario: Client connects to price stream
 - **WHEN** the frontend application connects to the SSE endpoint
-- **THEN** it MUST receive periodic or real-time `AssetPrice` updates from the currently active providers.
+- **THEN** it MUST receive periodic or real-time `AssetPrice` updates from the currently active providers, normalized to the configured `baseCurrency`.
 
 ### Requirement: Provider Data Sanitization
 The system SHALL sanitize all incoming data from external providers (e.g., Kraken WebSocket, CoinGecko REST) using Zod schemas before emitting them to the domain logic.

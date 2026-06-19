@@ -3,6 +3,9 @@ import { inject } from 'vue';
 import { toast } from 'vue-sonner';
 import { I18N_PORT_KEY, SETTINGS_PORT_KEY } from '@/core/injectionKeys';
 import { UpdateLanguageUseCase } from '@/core/application/use-cases/UpdateLanguageUseCase';
+import { UpdateBaseCurrencyUseCase } from '@/core/application/use-cases/UpdateBaseCurrencyUseCase';
+import { SyncExchangeRatesUseCase } from '@/core/application/use-cases/SyncExchangeRatesUseCase';
+import type { FiatCurrency } from '@kryptofolio/core-domain';
 
 /**
  * useUpdateLanguageMutation
@@ -71,3 +74,70 @@ export function useToggleActiveMarketProviderMutation() {
   });
 }
 
+/**
+ * useUpdateBaseCurrencyMutation
+ *
+ * Pinia Colada mutation to persist the user's preferred base fiat currency.
+ * On success, invalidates the base_currency and exchange_rate queries.
+ */
+export function useUpdateBaseCurrencyMutation() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+  const i18nPort = inject(I18N_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useUpdateBaseCurrencyMutation] Required port ISettingsPort is not provided.');
+  }
+
+  const queryCache = useQueryCache();
+  const useCase = new UpdateBaseCurrencyUseCase(settingsPort);
+
+  return useMutation({
+    mutation: async (currency: FiatCurrency) => {
+      await useCase.execute(currency);
+      return currency;
+    },
+    onSuccess: (currency) => {
+      queryCache.invalidateQueries({ key: ['settings', 'base_currency'] });
+      queryCache.invalidateQueries({ key: ['settings', 'exchange_rate'] });
+      const label = i18nPort?.translate('settings.currency.success') ?? `Base currency set to ${currency}`;
+      toast.success(label);
+    },
+    onError: () => {
+      const label = i18nPort?.translate('settings.currency.error') ?? 'Failed to save currency';
+      toast.error(label);
+    },
+  });
+}
+
+/**
+ * useSyncExchangeRatesMutation
+ *
+ * Triggers a manual sync of the fiat exchange rates from the ECB XML.
+ * Invalidates the exchange_rate queries upon success.
+ */
+export function useSyncExchangeRatesMutation() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+  const i18nPort = inject(I18N_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useSyncExchangeRatesMutation] Required port ISettingsPort is not provided.');
+  }
+
+  const queryCache = useQueryCache();
+  const useCase = new SyncExchangeRatesUseCase(settingsPort);
+
+  return useMutation({
+    mutation: async () => {
+      await useCase.execute();
+    },
+    onSuccess: () => {
+      queryCache.invalidateQueries({ key: ['settings', 'exchange_rate'] });
+      const label = i18nPort?.translate('settings.currency.sync_success') ?? 'Exchange rates synced successfully';
+      toast.success(label);
+    },
+    onError: () => {
+      const label = i18nPort?.translate('settings.currency.sync_error') ?? 'Failed to sync exchange rates';
+      toast.error(label);
+    },
+  });
+}

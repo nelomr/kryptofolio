@@ -3,3 +3,5 @@ export * from "./domain/services/TransactionNormalizer";
 export * from "./domain/services/normalizer/rowAggregator";
 export * from "./application/use-cases/AutoMapColumnsUseCase";
 export * from "./domain/services/normalizer/dateNormalizer";
+export * from "./application/CurrencyConverter";
+export * from "./domain/models/MoneyEntities";

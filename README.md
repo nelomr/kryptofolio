@@ -33,7 +33,7 @@
 
 The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decouple domains and scale efficiently:
 - `apps/frontend/`: The main Vue 3 application (UI, Pinia stores).
-- `apps/backend/`: The Hono backend service — handles all API routes, mock data during development, encrypted secrets vault, and DuckDB persistence. Exposes an `AppType` for end-to-end Hono RPC type safety.
+- `apps/backend/`: The Hono backend service — handles API routes, encrypted secrets vault, and DuckDB persistence. Cleanly separated into `app.ts` (routing) and `index.ts` (orchestration). Exposes an `AppType` for end-to-end Hono RPC type safety.
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
 - `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL migration files for SQLite (vault) and DuckDB (OLAP). Keeps the backend decoupled from any specific DB engine.

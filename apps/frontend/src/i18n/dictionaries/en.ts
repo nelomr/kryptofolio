@@ -26,6 +26,21 @@ export const en: I18nDictionary = {
   "settings.language.success": "Language updated successfully",
   "settings.language.error": "Failed to save language",
 
+  // Settings — Base Currency
+  "settings.currency.title": "Base Currency",
+  "settings.currency.description": "Select the fiat currency used to display all portfolio values.",
+  "settings.currency.select_placeholder": "Select a currency",
+  "settings.currency.option_usd": "USD — US Dollar",
+  "settings.currency.option_eur": "EUR — Euro",
+  "settings.currency.option_gbp": "GBP — British Pound",
+  "settings.currency.save_btn": "Save",
+  "settings.currency.saving_btn": "Saving...",
+  "settings.currency.success": "Base currency updated successfully",
+  "settings.currency.error": "Failed to save base currency",
+  "settings.currency.sync_success": "Exchange rates synced successfully",
+  "settings.currency.sync_error": "Failed to sync exchange rates",
+  "settings.currency.sync_tooltip": "New data is published at 16:30 CET",
+
   // Errors
   "errors.validation.title": "Data Validation Error",
   "errors.validation.parser_skipped_rows":

@@ -7,7 +7,8 @@
   "type": "module",
   "dependencies": {
     "@kryptofolio/shared-types": "workspace:*",
-    "luxon": "catalog:"
+    "luxon": "catalog:",
+    "decimal.js": "catalog:"
   },
   "devDependencies": {
     "@types/luxon": "catalog:",
