@@ -3,6 +3,22 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.15.12](https://github.com/nelomr/kryptofolio/releases/tag/v1.15.12) (2026-06-19)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.15.12)
+
+**Patch Changes**
+
+- [`ca6ca05`](https://github.com/nelomr/kryptofolio/commit/ca6ca055b8feb1e848ebad1d2ee98b6e9d1342dd) Thanks [@nelomr](https://github.com/nelomr)! - chore: force pipeline to run release process with updated github action
+
+## [1.15.11](https://github.com/nelomr/kryptofolio/releases/tag/v1.15.11) (2026-06-18)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.15.11)
+
+**Patch Changes**
+
+- [`e53e978`](https://github.com/nelomr/kryptofolio/commit/e53e9783a8e9224dedd02654ae7ff80001bae348) Thanks [@nelomr](https://github.com/nelomr)! - chore: align frontend package version with historical global tag
+
 ## [1.15.10](https://github.com/nelomr/kryptofolio/compare/v1.15.9...v1.15.10) (2026-06-17)
 
 ### ✨ Features

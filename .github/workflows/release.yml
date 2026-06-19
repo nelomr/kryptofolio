@@ -53,6 +53,9 @@ jobs:
           # Use npx to ensure the binary is resolved correctly
           npx changeset version
           
+          # Sync newly generated package changelogs into the root CHANGELOG.md
+          node scripts/sync-root-changelog.mjs
+          
           # Check if there are any changes (version bumps happened)
           if [[ -n $(git status --porcelain) ]]; then
             echo "Changes detected, committing version bumps..."
