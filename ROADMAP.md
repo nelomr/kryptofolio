@@ -50,8 +50,8 @@ We have successfully laid the groundwork for a robust, scalable application and 
 The focus now shifts to building out the centralized Hono.js backend to perform the heavy lifting of financial computations.
 
 - **⚙️ Backend Hono Setup & E2E Type Safety**
-  - [ ] Solidify the internal `apps/backend` API service.
-  - [ ] Export `AppType` to the frontend using Hono RPC to guarantee end-to-end type safety between client and server without regenerating clients.
+  - [x] Solidify the internal `apps/backend` API service.
+  - [x] Export `AppType` to the frontend using Hono RPC to guarantee end-to-end type safety between client and server without regenerating clients.
 
 - **🧮 Financial Engine (FIFO & PnL)**
   - [ ] Implement business logic required to correctly calculate portfolio values using strict First-In-First-Out (FIFO) methodologies.
