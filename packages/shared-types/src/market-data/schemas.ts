@@ -9,6 +9,7 @@
  */
 
 import { z } from 'zod';
+import { preciseAmountSchema } from '../schemas/transactions.js';
 import type { AssetPrice, GlobalMarketMetrics } from './models.js';
 
 // ---------------------------------------------------------------------------
@@ -18,8 +19,8 @@ import type { AssetPrice, GlobalMarketMetrics } from './models.js';
 export const AssetPriceSchema = z.object({
   symbol: z.string().min(1).toUpperCase(),
   currency: z.string().min(1).toUpperCase(),
-  price: z.number().nonnegative(),
-  change24hPercent: z.number(),
+  price: preciseAmountSchema.refine((val) => !val.startsWith('-'), "Price cannot be negative"),
+  change24hPercent: preciseAmountSchema,
   provider: z.string().min(1),
   timestamp: z.string().datetime({ offset: true }),
 }) satisfies z.ZodType<AssetPrice>;
@@ -29,8 +30,8 @@ export const AssetPriceSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const GlobalMarketMetricsSchema = z.object({
-  totalMarketCapUsd: z.number().nonnegative(),
-  marketCapChange24hPercent: z.number(),
+  totalMarketCapUsd: preciseAmountSchema,
+  marketCapChange24hPercent: preciseAmountSchema,
   fearGreedIndex: z.number().min(0).max(100).nullable(),
   fearGreedLabel: z.string().nullable(),
   topAssets: z.array(AssetPriceSchema),
@@ -44,11 +45,11 @@ export const GlobalMarketMetricsSchema = z.object({
 
 export const KrakenTickerPayloadSchema = z.object({
   /** Ask price info: [price, wholeLotVolume, lotVolume] */
-  a: z.tuple([z.string(), z.number(), z.string()]),
+  a: z.tuple([preciseAmountSchema, preciseAmountSchema, preciseAmountSchema]),
   /** Bid price info */
-  b: z.tuple([z.string(), z.number(), z.string()]),
+  b: z.tuple([preciseAmountSchema, preciseAmountSchema, preciseAmountSchema]),
   /** Last trade: [price, lotVolume] */
-  c: z.tuple([z.string(), z.string()]),
+  c: z.tuple([preciseAmountSchema, preciseAmountSchema]),
   /** 24-h opening price */
   o: z.tuple([z.string(), z.string()]),
 });
@@ -77,9 +78,9 @@ export const CoinGeckoMarketItemSchema = z.object({
   id: z.string(),
   symbol: z.string(),
   name: z.string(),
-  current_price: z.number().nullable(),
-  price_change_percentage_24h: z.number().nullable(),
-  market_cap: z.number().nullable(),
+  current_price: preciseAmountSchema.nullable(),
+  price_change_percentage_24h: preciseAmountSchema.nullable(),
+  market_cap: preciseAmountSchema.nullable(),
   last_updated: z.string(),
 });
 
@@ -89,8 +90,8 @@ export const CoinGeckoMarketsResponseSchema = z.array(CoinGeckoMarketItemSchema)
 
 export const CoinGeckoGlobalDataSchema = z.object({
   data: z.object({
-    total_market_cap: z.record(z.string(), z.number()),
-    market_cap_change_percentage_24h_usd: z.number(),
+    total_market_cap: z.record(z.string(), preciseAmountSchema),
+    market_cap_change_percentage_24h_usd: preciseAmountSchema,
     updated_at: z.number(),
   }),
 });

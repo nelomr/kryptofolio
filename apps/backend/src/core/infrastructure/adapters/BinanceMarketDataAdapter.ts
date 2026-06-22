@@ -101,8 +101,8 @@ export class BinanceMarketDataAdapter implements IMarketDataProvider {
     const price: AssetPrice = {
       symbol: base,
       currency: quote,
-      price: parseFloat(ticker.c),
-      change24hPercent: parseFloat(ticker.P),
+      price: String(ticker.c),
+      change24hPercent: String(ticker.P),
       provider: this.id,
       timestamp: new Date().toISOString(),
     };

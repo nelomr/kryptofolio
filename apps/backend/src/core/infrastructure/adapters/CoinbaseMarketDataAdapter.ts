@@ -103,8 +103,8 @@ export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
     const price: AssetPrice = {
       symbol: base,
       currency: quote,
-      price: currentPrice,
-      change24hPercent,
+      price: String(currentPrice),
+      change24hPercent: String(change24hPercent),
       provider: this.id,
       timestamp: new Date().toISOString(),
     };

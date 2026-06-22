@@ -1,16 +1,22 @@
-## ADDED Requirements
+# Domain Purity
 
+## Purpose
+Ensures the domain layer remains free of external dependencies and framework-specific concerns.
+## Requirements
 ### Requirement: Zero external imports in domain layer
-The `src/core/domain/` directory SHALL contain zero imports from external npm packages. Only TypeScript built-in types, other domain files, and ambient type declarations are permitted.
+
+The `src/core/domain/` directory SHALL contain zero imports from external npm packages, with the sole exception of a financial precision math library (`decimal.js`) which is mathematically required to encapsulate precision inside the `Money` Value Object. Only TypeScript built-in types, other domain files, ambient type declarations, and the chosen precision library are permitted.
 
 #### Scenario: BrandedTypes uses pure TypeScript
+
 - **WHEN** `src/core/domain/models/BrandedTypes.ts` is inspected
 - **THEN** it SHALL NOT import from `zod`, `lodash`, `date-fns`, `axios`, or any npm package
 - **AND** it SHALL define branded types using pure TypeScript phantom branding (e.g., `T & { readonly __brand: B }`)
 
 #### Scenario: Domain files pass import audit
+
 - **WHEN** running `grep -r "from '" src/core/domain/ | grep node_modules` or equivalent
-- **THEN** zero results SHALL be returned (no external package imports)
+- **THEN** the only permitted results SHALL be imports from `decimal.js`
 
 ### Requirement: IHttpClient located in ports directory
 The `IHttpClient` interface SHALL reside at `src/core/domain/ports/IHttpClient.ts`, not in the `repositories/` directory.
@@ -46,3 +52,18 @@ Zod validation schemas for branded types SHALL reside in `src/core/infrastructur
 #### Scenario: Existing DTO schemas import Zod schemas from infrastructure
 - **WHEN** `ExternalTaxSchemas.ts` or `ExternalPortfolioSchemas.ts` need branded ID validation
 - **THEN** they SHALL import schemas from `@/core/infrastructure/dtos/BrandedTypeSchemas` (not from domain)
+
+### Requirement: Strict Single-User Architecture (Eradicate Multi-Tenancy)
+
+The domain layer SHALL NOT contain any fields, types, or parameters referencing multiple users or tenants (e.g., `user_id`, `owner_id`, `account_owner`, `tenant_id`). The application operates strictly as a single-user local system.
+
+#### Scenario: Transaction Entity has no user_id
+
+- **WHEN** `Transaction` or `Account` entities are inspected
+- **THEN** they SHALL NOT contain properties like `user_id`, `owner_id`, or `tenant_id`
+
+#### Scenario: Use Cases have no user context
+
+- **WHEN** any Use Case signature is inspected
+- **THEN** it SHALL NOT accept a user authentication token or user context object
+

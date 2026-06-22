@@ -79,8 +79,8 @@ describe('MarketDataOrchestrator', () => {
     const price: AssetPrice = {
       symbol: 'BTC',
       currency: 'USD',
-      price: 65_000,
-      change24hPercent: 1.2,
+      price: "65000",
+      change24hPercent: "1.2",
       provider: 'kraken',
       timestamp: new Date().toISOString(),
     };

@@ -1,6 +1,5 @@
-import Decimal from 'decimal.js';
-import type { Money, ExchangeRate, FiatCurrency } from '../domain/models/MoneyEntities';
-import { createMoney } from '../domain/models/MoneyEntities';
+import type { FiatMoney, ExchangeRate, FiatCurrency } from '../domain/models/MoneyEntities';
+import { createFiatMoney } from '../domain/models/MoneyEntities';
 
 /**
  * CurrencyConverter — Application-layer currency conversion service.
@@ -12,31 +11,29 @@ import { createMoney } from '../domain/models/MoneyEntities';
  */
 export class CurrencyConverter {
   /**
-   * Convert a Money value object from one currency to another using an ExchangeRate.
+   * Convert a FiatMoney value object from one currency to another using an ExchangeRate.
    *
    * @param money     - The source monetary amount.
    * @param rate      - The exchange rate to apply.
-   * @returns         A new Money value object in the target currency.
+   * @returns         A new FiatMoney value object in the target currency.
    * @throws          If the rate's `from` currency doesn't match the money's currency.
    *
    * @example
-   *   const btcInUsd: Money = createMoney(42000, 'USD');
-   *   const usdEurRate: ExchangeRate = { from: 'USD', to: 'EUR', rate: 0.988, timestamp: '...' };
+   *   const btcInUsd: FiatMoney = createFiatMoney("42000", 'USD');
+   *   const usdEurRate: ExchangeRate = { from: 'USD', to: 'EUR', rate: new Money("0.988"), timestamp: '...' };
    *   const btcInEur = CurrencyConverter.convert(btcInUsd, usdEurRate);
-   *   // btcInEur => { amount: 41496, currency: 'EUR' }
+   *   // btcInEur => { amount: Money("41496"), currency: 'EUR' }
    */
-  static convert(money: Money, rate: ExchangeRate): Money {
+  static convert(money: FiatMoney, rate: ExchangeRate): FiatMoney {
     if (money.currency !== rate.from) {
       throw new Error(
         `[CurrencyConverter] Currency mismatch: money is in ${money.currency} but rate converts from ${rate.from}`
       );
     }
 
-    const converted = new Decimal(money.amount)
-      .mul(new Decimal(rate.rate))
-      .toDecimalPlaces(8);
+    const converted = money.amount.mul(rate.rate);
 
-    return createMoney(converted.toNumber(), rate.to as FiatCurrency);
+    return createFiatMoney(converted, rate.to as FiatCurrency);
   }
 
   /**
@@ -47,7 +44,7 @@ export class CurrencyConverter {
    *   // => 'USD/EUR = 0.9880'
    */
   static formatRateLabel(rate: ExchangeRate): string {
-    const formatted = new Decimal(rate.rate).toFixed(4);
+    const formatted = rate.rate.toString(); // Just use toString for now, or format it
     return `${rate.from}/${rate.to} = ${formatted}`;
   }
 }

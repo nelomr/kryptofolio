@@ -118,6 +118,9 @@ flowchart TD
 
 To prevent external API changes from breaking the UI, all adapters must run data through Zod DTOs before instantiating Domain Entities.
 
+**Financial Precision & Boundary Enforcement:** 
+To prevent IEEE-754 floating-point precision loss, all financial primitives (prices, amounts, fees) cross the system boundary strictly as strings. The ACL enforces this via `preciseAmountSchema` (Zod validation with regex constraints). Only after passing this strict validation are these strings instantiated into `Money` Value Objects inside the Domain Layer, where operations are safely handled by `decimal.js`.
+
 ```mermaid
 flowchart TD
     A[External Source / Backend] -->|Raw JSON| B(Infrastructure Adapter)

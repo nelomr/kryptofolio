@@ -91,8 +91,8 @@ export class DuckDbPriceHistoryAdapter implements IPriceHistoryPort {
     return {
       symbol: row.symbol,
       currency: row.currency,
-      price: row.price,
-      change24hPercent: row.change_24h,
+      price: String(row.price),
+      change24hPercent: String(row.change_24h),
       provider: row.provider,
       timestamp: row.captured_at,
     };
@@ -131,8 +131,8 @@ export class DuckDbPriceHistoryAdapter implements IPriceHistoryPort {
     return rows.map((r) => ({
       symbol: r.symbol,
       currency: r.currency,
-      price: r.price,
-      change24hPercent: r.change_24h,
+      price: String(r.price),
+      change24hPercent: String(r.change_24h),
       provider: r.provider,
       timestamp: r.captured_at,
     }));

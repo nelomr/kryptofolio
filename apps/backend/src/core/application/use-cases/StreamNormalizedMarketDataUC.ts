@@ -1,8 +1,8 @@
 import type { AssetPrice } from "@kryptofolio/shared-types";
 import type { IUserSettingsPort } from "../../domain/ports/IUserSettingsPort";
 import { CurrencyConverter } from "@kryptofolio/core-domain";
-import type { Money, ExchangeRate } from "@kryptofolio/core-domain";
-import Decimal from 'decimal.js';
+import type { FiatMoney, ExchangeRate } from "@kryptofolio/core-domain";
+import { Money } from "@kryptofolio/core-domain";
 
 /**
  * StreamNormalizedMarketDataUC
@@ -38,12 +38,12 @@ export class StreamNormalizedMarketDataUC {
     const rate: ExchangeRate = {
       from: rawPrice.currency as any,
       to: baseCurrency as any,
-      rate: new Decimal(rateStr).toNumber(),
+      rate: new Money(rateStr),
       timestamp: new Date().toISOString(),
     };
 
-    const money: Money = {
-      amount: rawPrice.price,
+    const money: FiatMoney = {
+      amount: new Money(rawPrice.price),
       currency: rawPrice.currency as any,
     };
 
@@ -51,7 +51,7 @@ export class StreamNormalizedMarketDataUC {
 
     return {
       ...rawPrice,
-      price: converted.amount,
+      price: converted.amount.toString(),
       currency: converted.currency,
     };
   }

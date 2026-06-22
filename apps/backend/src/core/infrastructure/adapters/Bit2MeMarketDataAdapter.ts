@@ -84,8 +84,8 @@ export class Bit2MeMarketDataAdapter implements IMarketDataProvider {
     const price: AssetPrice = {
       symbol: base,
       currency: quote,
-      price: parseFloat(data.price),
-      change24hPercent: parseFloat(data.change24h || 0),
+      price: String(data.price),
+      change24hPercent: String(data.change24h || 0),
       provider: this.id,
       timestamp: new Date().toISOString(),
     };

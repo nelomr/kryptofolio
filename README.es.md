@@ -170,7 +170,7 @@ graph TD
 
 1. **Capa de Dominio (`src/core/domain/`)**
    El corazón de la lógica de cliente de la aplicación. **Aislamiento total**: No tiene dependencias externas de frameworks (sin imports de Vue, Axios, ni Zod).
-   - **Entidades y Objetos de Valor (`models/`)**: Definidos usando interfaces TypeScript puras. Utilizamos **Branded Types** (tipos marca como `AssetId` o `LotId`) para evitar la "primitive obsession" y garantizar type-safety en identificadores.
+   - **Entidades y Objetos de Valor (`models/`)**: Definidos usando interfaces TypeScript puras. Utilizamos **Branded Types** (tipos marca como `AssetId` o `LotId`) para garantizar type-safety en identificadores. Las cifras financieras se encapsulan estrictamente en un Value Object `Money` usando `decimal.js`, erradicando por completo la "obsesión por los primitivos" y los errores de punto flotante de IEEE-754.
    - **Puertos (`ports/`)**: Interfaces que definen el contrato para las operaciones de datos. El dominio dicta *qué* necesita el cliente, no *cómo* obtenerlo. Nota: NO existe la carpeta `repositories`; las interfaces de repositorios son puertos de salida.
 
 2. **Capa de Aplicación (`src/core/application/`)**
@@ -190,6 +190,8 @@ graph TD
 ### 🛡️ Type Safety Absoluto y Políticas Estrictas
 - **No `any` Policy**: El código fuente en producción está 100% tipado estáticamente, sin excepciones. Compilado rigurosamente mediante `vue-tsc --noEmit`.
 - **Global Error Bus**: Si un esquema Zod de la Capa Anticorrupción falla, se emite un error controlado al `errorBus`, previniendo cuelgues silenciosos y permitiendo a la UI reaccionar.
+- **Single-User Local First**: El modelo de dominio ha erradicado estrictamente el multi-tenancy. No existen campos como `user_id` o `tenant_id`, garantizando una arquitectura localizada y pura para portafolios individuales.
+- **Financial Precision Boundaries**: Todos los datos financieros que cruzan la capa ACL DEBEN ser strings y ser parseados por estrictas reglas regex de Zod (ej. `preciseAmountSchema`) antes de entrar al Dominio, previniendo así la pérdida de precisión de punto flotante.
 
 ## 🤖 Guías para Agentes y Arquitectura UI
 

@@ -46,7 +46,7 @@ export const COLUMN_DICTIONARY: Record<string, string[]> = {
   funding_currency: ["funding asset", "funding currency"],
 
   // Metadata passthrough
-  metadata: ["user_id"],
+  metadata: [],
 };
 
 export function getAvailableColumns(): string[] {

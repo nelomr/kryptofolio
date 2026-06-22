@@ -108,8 +108,8 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
       const price: AssetPrice = {
         symbol: item.symbol.toUpperCase(),
         currency: vsCurrency.toUpperCase(),
-        price: item.current_price,
-        change24hPercent: item.price_change_percentage_24h ?? 0,
+        price: String(item.current_price),
+        change24hPercent: String(item.price_change_percentage_24h ?? 0),
         provider: this.id,
         timestamp,
       };

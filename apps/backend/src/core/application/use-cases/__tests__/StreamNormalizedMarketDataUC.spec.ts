@@ -20,8 +20,8 @@ describe('StreamNormalizedMarketDataUC', () => {
     const rawPrice: AssetPrice = {
       symbol: 'BTC',
       currency: 'USD',
-      price: 50000,
-      change24hPercent: 2.5,
+      price: "50000",
+      change24hPercent: "2.5",
       provider: 'kraken',
       timestamp: '2023-01-01T00:00:00Z',
     };
@@ -41,8 +41,8 @@ describe('StreamNormalizedMarketDataUC', () => {
     const rawPrice: AssetPrice = {
       symbol: 'BTC',
       currency: 'USD',
-      price: 50000,
-      change24hPercent: 2.5,
+      price: "50000",
+      change24hPercent: "2.5",
       provider: 'kraken',
       timestamp: '2023-01-01T00:00:00Z',
     };
@@ -51,9 +51,9 @@ describe('StreamNormalizedMarketDataUC', () => {
     
     // 50000 * 0.9 = 45000
     expect(result.currency).toBe('EUR');
-    expect(result.price).toBe(45000);
+    expect(result.price).toBe("45000");
     expect(result.symbol).toBe('BTC');
-    expect(result.change24hPercent).toBe(2.5);
+    expect(result.change24hPercent).toBe("2.5");
     expect(result.provider).toBe('kraken');
     expect(result.timestamp).toBe('2023-01-01T00:00:00Z');
   });
@@ -68,8 +68,8 @@ describe('StreamNormalizedMarketDataUC', () => {
     const rawPrice: AssetPrice = {
       symbol: 'BTC',
       currency: 'USD',
-      price: 50000,
-      change24hPercent: 2.5,
+      price: "50000",
+      change24hPercent: "2.5",
       provider: 'kraken',
       timestamp: '2023-01-01T00:00:00Z',
     };

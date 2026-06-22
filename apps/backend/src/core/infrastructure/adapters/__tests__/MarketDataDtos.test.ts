@@ -13,8 +13,8 @@ import {
 const VALID_KRAKEN_TICKER_MSG = [
   42,
   {
-    a: ['65000.00', 1, '1.000'],
-    b: ['64999.00', 1, '1.000'],
+    a: ['65000.00', '1', '1.000'],
+    b: ['64999.00', '1', '1.000'],
     c: ['65000.00', '0.001'],
     o: ['63000.00', '63500.00'],
   },
@@ -27,17 +27,17 @@ const VALID_COINGECKO_MARKETS = [
     id: 'bitcoin',
     symbol: 'btc',
     name: 'Bitcoin',
-    current_price: 65_000,
-    price_change_percentage_24h: 2.5,
-    market_cap: 1_280_000_000_000,
+    current_price: "65000",
+    price_change_percentage_24h: "2.5",
+    market_cap: "1280000000000",
     last_updated: '2024-01-15T12:00:00.000Z',
   },
 ];
 
 const VALID_COINGECKO_GLOBAL = {
   data: {
-    total_market_cap: { usd: 2_500_000_000_000 },
-    market_cap_change_percentage_24h_usd: 1.8,
+    total_market_cap: { usd: "2500000000000" },
+    market_cap_change_percentage_24h_usd: "1.8",
     updated_at: 1705320000,
   },
 };
@@ -49,8 +49,8 @@ describe('AssetPriceSchema', () => {
     const input = {
       symbol: 'btc',
       currency: 'usd',
-      price: 65_000,
-      change24hPercent: 2.5,
+      price: "65000",
+      change24hPercent: "2.5",
       provider: 'kraken',
       timestamp: '2024-01-15T12:00:00.000Z',
     };
@@ -59,15 +59,15 @@ describe('AssetPriceSchema', () => {
 
     expect(result.symbol).toBe('BTC'); // toUpperCase transform
     expect(result.currency).toBe('USD');
-    expect(result.price).toBe(65_000);
+    expect(result.price).toBe("65000");
   });
 
   it('rejects a negative price', () => {
     const input = {
       symbol: 'BTC',
       currency: 'USD',
-      price: -1,
-      change24hPercent: 0,
+      price: "-1",
+      change24hPercent: "0",
       provider: 'kraken',
       timestamp: '2024-01-15T12:00:00.000Z',
     };
@@ -78,8 +78,8 @@ describe('AssetPriceSchema', () => {
   it('rejects a missing symbol', () => {
     const input = {
       currency: 'USD',
-      price: 65_000,
-      change24hPercent: 0,
+      price: "65000",
+      change24hPercent: "0",
       provider: 'kraken',
       timestamp: '2024-01-15T12:00:00.000Z',
     };
@@ -91,8 +91,8 @@ describe('AssetPriceSchema', () => {
 describe('GlobalMarketMetricsSchema', () => {
   it('parses valid global metrics with null fearGreed fields', () => {
     const input = {
-      totalMarketCapUsd: 2_500_000_000_000,
-      marketCapChange24hPercent: 1.8,
+      totalMarketCapUsd: "2500000000000",
+      marketCapChange24hPercent: "1.8",
       fearGreedIndex: null,
       fearGreedLabel: null,
       topAssets: [],
@@ -105,8 +105,8 @@ describe('GlobalMarketMetricsSchema', () => {
 
   it('rejects fearGreedIndex outside 0-100 range', () => {
     const input = {
-      totalMarketCapUsd: 1_000,
-      marketCapChange24hPercent: 0,
+      totalMarketCapUsd: "1000",
+      marketCapChange24hPercent: "0",
       fearGreedIndex: 101,
       fearGreedLabel: 'Extreme',
       topAssets: [],
@@ -152,7 +152,7 @@ describe('CoinGeckoMarketsResponseSchema', () => {
   });
 
   it('rejects an item missing the id field', () => {
-    const input = [{ symbol: 'btc', name: 'Bitcoin', current_price: 65_000, last_updated: '' }];
+    const input = [{ symbol: 'btc', name: 'Bitcoin', current_price: "65000", last_updated: '' }];
     const result = CoinGeckoMarketsResponseSchema.safeParse(input);
     expect(result.success).toBe(false);
   });
@@ -172,8 +172,8 @@ describe('SseMarketEventSchema', () => {
       data: {
         symbol: 'BTC',
         currency: 'USD',
-        price: 65_000,
-        change24hPercent: 2.5,
+        price: "65000",
+        change24hPercent: "2.5",
         provider: 'kraken',
         timestamp: '2024-01-15T12:00:00.000Z',
       },
@@ -187,8 +187,8 @@ describe('SseMarketEventSchema', () => {
     const event = {
       type: 'global',
       data: {
-        totalMarketCapUsd: 2_500_000_000_000,
-        marketCapChange24hPercent: 1.5,
+        totalMarketCapUsd: "2500000000000",
+        marketCapChange24hPercent: "1.5",
         fearGreedIndex: 55,
         fearGreedLabel: 'Greed',
         topAssets: [],

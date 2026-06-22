@@ -150,7 +150,7 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
 
 1. **Domain Layer (`src/core/domain/`)**
    The heart of the application's client-side logic. **Total Isolation**: It has absolutely zero external framework dependencies (no Vue, Axios, or Zod imports).
-   - **Entities & Value Objects (`models/`)**: Defined using pure TypeScript interfaces. We heavily utilize **Branded Types** (e.g. `AssetId` or `LotId`) to avoid primitive obsession and guarantee type-safety across identifiers.
+   - **Entities & Value Objects (`models/`)**: Defined using pure TypeScript interfaces. We heavily utilize **Branded Types** (e.g. `AssetId` or `LotId`) to guarantee type-safety across identifiers. Financial figures are strictly encapsulated in a `Money` Value Object using `decimal.js`, entirely eradicating primitive obsession and IEEE-754 floating-point errors.
    - **Ports (`ports/`)**: Interfaces defining the contract for data operations. The domain dictates *what* the client needs, not *how* to get it. Note: There is NO `repositories` folder; repository interfaces are outgoing ports.
 
 2. **Application Layer (`src/core/application/`)**
@@ -170,6 +170,8 @@ This project strictly adheres to **Hexagonal Architecture** (Ports and Adapters)
 ### 🛡️ Absolute Type Safety & Strict Policies
 - **No `any` Policy**: The production source code is 100% statically typed, with no exceptions. It is rigorously compiled using `vue-tsc --noEmit`.
 - **Global Error Bus**: If a Zod schema in the Anti-Corruption Layer fails, a controlled error is emitted to the `errorBus`, preventing silent runtime crashes and allowing the UI to react gracefully.
+- **Single-User Local First**: The domain model has strictly eradicated multi-tenancy. There are no `user_id` or `tenant_id` fields, guaranteeing a localized and pure architecture for individual portfolios.
+- **Financial Precision Boundaries**: All financial data crossing the ACL MUST be strings and parsed by strict Zod regex rules (e.g., `preciseAmountSchema`) before entering the Domain to prevent floating-point precision loss.
 
 ## 🔖 Versioning (Frontend is King)
 

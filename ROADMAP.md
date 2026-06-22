@@ -68,8 +68,8 @@ The focus now shifts to building out the centralized Hono.js backend to perform 
 To support the robust Backend Financial Engine, we are implementing a dual-database pattern tailored for a local-first application. *See the full [Database Strategy Documentation](packages/database/docs/database-strategy.md) for deeper details.*
 
 - **Phase 3.0: Domain Conditioning**
-  - [ ] Eradicate multi-tenancy attributes (`user_id`).
-  - [ ] Enforce high-precision numerical libraries (`decimal.js`) across the domain.
+  - [x] Eradicate multi-tenancy attributes (`user_id`).
+  - [x] Enforce high-precision numerical libraries (`decimal.js`) across the domain.
 
 - **Phase 3.1: SQLite OLTP Deployment**
   - [ ] Implement strict ledger schema with `TEXT` columns for financial precision.

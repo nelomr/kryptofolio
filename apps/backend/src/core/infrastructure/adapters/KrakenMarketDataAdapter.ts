@@ -125,14 +125,17 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
     const symbol = rawSymbol === 'XBT' ? 'BTC' : rawSymbol ?? pair;
     const currency = quoteCurrency ?? 'USD';
 
+    const currentPriceStr = tickerData.c[0];
+    const openPriceStr = tickerData.o[0];
+
     const price: AssetPrice = {
       symbol,
       currency,
-      price: parseFloat(tickerData.c[0]),
-      change24hPercent: this.calc24hChange(
-        parseFloat(tickerData.c[0]),
-        parseFloat(tickerData.o[0]),
-      ),
+      price: currentPriceStr,
+      change24hPercent: String(this.calc24hChange(
+        parseFloat(currentPriceStr),
+        parseFloat(openPriceStr)
+      )),
       provider: this.id,
       timestamp: new Date().toISOString(),
     };

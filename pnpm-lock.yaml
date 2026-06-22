@@ -346,9 +346,16 @@ importers:
 
   packages/shared-types:
     dependencies:
+      decimal.js:
+        specifier: 'catalog:'
+        version: 10.5.0
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.8(@types/node@25.9.3)(happy-dom@20.10.2)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
 packages:
 

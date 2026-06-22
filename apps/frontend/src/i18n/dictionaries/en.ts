@@ -55,6 +55,8 @@ export const en: I18nDictionary = {
     "Uploading a CSV requires selecting a file.",
   "errors.market.invalid_price_event":
     "Invalid price event received from the market stream.",
+  "errors.market.invalid_global_metrics":
+    "Invalid global metrics received from the market stream.",
 
   "portfolio.roi": "Total ROI",
   "portfolio.invested": "Invested Capital",

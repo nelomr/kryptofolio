@@ -34,9 +34,9 @@ export interface AssetPrice {
   /** Quote currency (e.g. "USD", "EUR") */
   currency: string;
   /** Current spot price */
-  price: number;
+  price: string;
   /** 24-hour percentage change (e.g. 2.3 = +2.3%) */
-  change24hPercent: number;
+  change24hPercent: string;
   /** Provider that emitted this price (e.g. "kraken", "coingecko") */
   provider: string;
   /** ISO-8601 timestamp of when this price was captured */
@@ -53,9 +53,9 @@ export interface AssetPrice {
  */
 export interface GlobalMarketMetrics {
   /** Total crypto market cap in USD */
-  totalMarketCapUsd: number;
+  totalMarketCapUsd: string;
   /** 24h market cap change percentage */
-  marketCapChange24hPercent: number;
+  marketCapChange24hPercent: string;
   /** Fear & Greed index value (0–100) */
   fearGreedIndex: number | null;
   /** Fear & Greed label (e.g. "Extreme Fear", "Greed") */

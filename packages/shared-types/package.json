@@ -6,6 +6,13 @@
   "types": "src/index.ts",
   "type": "module",
   "dependencies": {
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "decimal.js": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
+  },
+  "scripts": {
+    "test": "vitest run"
   }
 }

@@ -57,6 +57,8 @@ export const es: I18nDictionary = {
     "La subida de CSV requiere seleccionar un archivo.",
   "errors.market.invalid_price_event":
     "Evento de precio inválido recibido del flujo de mercado.",
+  "errors.market.invalid_global_metrics":
+    "Métricas globales inválidas recibidas del flujo de mercado.",
 
   // Portfolio Header
   "portfolio.roi": "ROI Total",
