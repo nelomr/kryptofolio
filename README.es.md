@@ -9,6 +9,8 @@
 ![Kryptofolio Banner](docs/assets/banner.png)
 
 > **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Funciona como una capa de presentación visual que muestra información fiscal y de transacciones calculada por el backend, utilizando un backend centralizado (`apps/backend`) para conectar la interfaz con las fuentes de datos.
+>
+> ⚠️ **Nota:** Este proyecto nace como una iniciativa de aprendizaje y se encuentra en desarrollo continuo en sus primeras etapas.
 
 ## ✨ Características Principales
 
@@ -31,8 +33,8 @@
 
 El repositorio está estructurado como un **Monorepo (PNPM Workspaces)** para desacoplar dominios y escalar eficientemente:
 - `apps/frontend/`: La aplicación principal en Vue 3 (UI, Pinia stores).
-- `apps/backend/`: El servicio core del backend (Hono + SQLite + DuckDB), encargado de las rutas de la API, bóveda de secretos encriptada y persistencia en DuckDB. Separado de forma limpia en `app.ts` (enrutamiento puro) e `index.ts` (orquestador y bootstrapper). Expone un `AppType` para garantizar type-safety E2E mediante Hono RPC.
-- `packages/database/`: Capa de abstracción de base de datos con migraciones y puertos genéricos de conexión para SQLite y DuckDB.
+- `apps/backend/`: El servicio core del backend (Hono), encargado de las rutas de la API, bóveda de secretos encriptada y el motor analítico de base de datos dual. Separado de forma limpia en `app.ts` (enrutamiento puro) e `index.ts` (orquestador y bootstrapper). Expone un `AppType` para garantizar type-safety E2E mediante Hono RPC.
+- `packages/database/`: Capa de abstracción de base de datos que define la interfaz genérica `IDatabasePort` y los esquemas SQL. Encapsula la arquitectura core: un **SQLite Ledger** (`kryptofolio_ledger.db`) *local-first* para persistencia OLTP, y un **Motor DuckDB** efímero para consultas OLAP federadas de alto rendimiento.
 - `packages/core-domain/`: Lógica de negocio pura (Servicios, Casos de Uso, Normalizadores). Totalmente agnóstico del framework.
 - `packages/shared-types/`: Esquemas de Zod, DTOs y definiciones de tipos compartidas por todo el monorepo.
 - `docs/`: Documentación técnica detallando la arquitectura, integración de APIs y extensibilidad.
@@ -72,8 +74,8 @@ cp .env.production.example .env.production
 
 - `VITE_API_URL`: URL de `apps/backend` desde la perspectiva del frontend (por defecto: `http://localhost:3001`).
 - `VITE_APP_LANG`: El idioma de la interfaz. Las opciones válidas actualmente son `es` o `en`.
-- `VAULT_DB_PATH`: (Backend) Ruta al archivo de base de datos SQLite para la bóveda de credenciales encriptadas y configuraciones (`kryptofolio.db`).
-- `DUCKDB_PATH`: (Backend) Ruta a la base de datos DuckDB para OLAP, cálculos pesados y registro de transacciones (`fiscal.duckdb`).
+- `LEDGER_DB_PATH`: (Backend) Ruta al archivo principal de base de datos SQLite (Ledger) para transacciones, bóveda de credenciales encriptadas y configuraciones (`kryptofolio_ledger.db`).
+- `HISTORICAL_DATA_PATH`: (Backend) Ruta a la carpeta que contiene los archivos Parquet particionados mediante Hive para datos históricos de precios.
 - `MOCK_MODE`: (Backend) Configúralo en `true` para usar una base de datos SQLite en memoria (desarrollo). Por defecto: `false`.
 
 ### 🌍 Internacionalización (i18n)

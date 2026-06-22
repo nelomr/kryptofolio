@@ -9,6 +9,8 @@
 ![Kryptofolio Banner](docs/assets/banner.png)
 
 > **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). It serves as a visual presentation layer that displays transaction and tax information computed by the backend, utilizing a centralized backend (`apps/backend`) to bridge the UI with the data sources.
+>
+> ⚠️ **Note:** This project was born as a learning endeavor and is in continuous development in its early stages.
 
 ## ✨ Key Features
 
@@ -33,10 +35,10 @@
 
 The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decouple domains and scale efficiently:
 - `apps/frontend/`: The main Vue 3 application (UI, Pinia stores).
-- `apps/backend/`: The Hono backend service — handles API routes, encrypted secrets vault, and DuckDB persistence. Cleanly separated into `app.ts` (routing) and `index.ts` (orchestration). Exposes an `AppType` for end-to-end Hono RPC type safety.
+- `apps/backend/`: The Hono backend service — handles API routes, encrypted secrets vault, and the dual-database analytical engine. Cleanly separated into `app.ts` (routing) and `index.ts` (orchestration). Exposes an `AppType` for end-to-end Hono RPC type safety.
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
-- `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL migration files for SQLite (vault) and DuckDB (OLAP). Keeps the backend decoupled from any specific DB engine.
+- `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL schema files. It encapsulates the core architecture: a local-first **SQLite Ledger** (`kryptofolio_ledger.db`) for OLTP persistence, and an ephemeral **DuckDB Engine** for high-performance OLAP federated queries.
 - `docs/`: Technical documentation covering Architecture, API Integrations, and Extensibility.
 
 ### Dependency Management (PNPM Catalogs + Turborepo)
@@ -77,8 +79,8 @@ cp .env.production.example .env.production
 **Key Variables:**
 - `VITE_API_URL`: URL of `apps/backend` from the frontend's perspective (default: `http://localhost:3001`).
 - `VITE_APP_LANG`: The language for the interface. Valid options are currently `es` or `en`.
-- `VAULT_DB_PATH`: (Backend) Path to the SQLite database file for the encrypted credentials vault and settings (`kryptofolio.db`).
-- `DUCKDB_PATH`: (Backend) Path to the DuckDB database for OLAP, heavy calculations, and transaction records (`fiscal.duckdb`).
+- `LEDGER_DB_PATH`: (Backend) Path to the primary SQLite ledger database file for transactions, encrypted credentials vault, and settings (`kryptofolio_ledger.db`).
+- `HISTORICAL_DATA_PATH`: (Backend) Path to the folder containing Hive-partitioned Parquet files for historical pricing data.
 - `MOCK_MODE`: (Backend) Set to `true` to use an in-memory SQLite DB (development). Default: `false`.
 
 ### 🌍 Internationalization (i18n)

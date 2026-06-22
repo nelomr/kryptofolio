@@ -35,18 +35,19 @@ apps/backend/src/
 
 **Dependency Rule**: Domain ports never import infrastructure. The DI container (`di/container.ts`) is the only place that knows about concrete implementations.
 
-## Database Architecture
+## Database Architecture (Dual-Engine)
 
-Two separate engines, both abstracted behind `IDatabasePort` from `@kryptofolio/database`:
+The backend employs a sophisticated dual-database architecture, heavily optimized for local-first, single-user performance with extreme financial precision. All database logic is abstracted behind the `packages/database/` layer.
 
-| Engine | Purpose | When |
-|---|---|---|
-| Node.js `node:sqlite` (built-in) | Credentials vault + user settings | Now (implemented) |
-| DuckDB | OLAP — portfolio, tax, FIFO | Now (implemented) |
+| Component | Engine | Purpose | Architecture |
+|---|---|---|---|
+| **OLTP Ledger & Vault** | SQLite (`node:sqlite`) | Fast, ACID-compliant persistence for transactions, settings, and encrypted API credentials. | File-based (`kryptofolio_ledger.db`). Strict schema enforcing `TEXT` columns for financial amounts to guarantee `decimal.js` precision without float loss. Single-user (no `user_id` multi-tenancy). |
+| **OLAP Analytics** | DuckDB | Tax calculations, FIFO matching, complex SWAPs, and portfolio PnL. | Ephemeral in-memory instance. Attaches directly to the SQLite ledger using `ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE)`. Uses Window Functions for high-performance vectorized operations. |
+| **Historical Data** | Apache Parquet | Local, columnar storage of historical cryptocurrency and fiat exchange rates. | Hive-partitioned directories (`year=2026/month=01`). Federated dynamically into DuckDB via `LEFT JOIN` during analytics queries. |
 
-Migration files live in `packages/database/migrations/`:
-- `sqlite/001_vault_schema.sql` — Vault tables (credentials, metadata, settings)
-- `duckdb/001_initial_schema.sql` — OLAP schema (to be expanded)
+Migration files and schema definitions live in `packages/database/`:
+- **SQLite Migrations**: Manage table definitions for Vault, Assets, Accounts, and Transactions.
+- **DuckDB Views**: Define the analytical queries (e.g., Cumulative FIFO sums) executed on the fly against the attached SQLite and Parquet files.
 
 ## Hono RPC Type Safety
 
