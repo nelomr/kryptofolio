@@ -3,6 +3,42 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.1](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.1) (2026-06-22)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.1)
+
+**Patch Changes**
+
+- [`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c) Thanks [@nelomr](https://github.com/nelomr)! - feat(domain): phase 0 domain conditioning - implement Money VO, strict financial precision, and eradicate multi-tenancy
+
+- Updated dependencies [[`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c)]:
+  - @kryptofolio/core-domain@1.1.1
+  - @kryptofolio/shared-types@1.1.1
+
+### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.1)
+
+**Patch Changes**
+
+- Updated dependencies [[`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c)]:
+  - @kryptofolio/core-domain@1.1.1
+  - @kryptofolio/shared-types@1.1.1
+
+### 🧠 Core Domain (`@kryptofolio/core-domain` @ 1.1.1)
+
+**Patch Changes**
+
+- [`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c) Thanks [@nelomr](https://github.com/nelomr)! - feat(domain): phase 0 domain conditioning - implement Money VO, strict financial precision, and eradicate multi-tenancy
+
+- Updated dependencies [[`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c)]:
+  - @kryptofolio/shared-types@1.1.1
+
+### 📦 Shared Types (`@kryptofolio/shared-types` @ 1.1.1)
+
+**Patch Changes**
+
+- [`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c) Thanks [@nelomr](https://github.com/nelomr)! - feat(domain): phase 0 domain conditioning - implement Money VO, strict financial precision, and eradicate multi-tenancy
+
+
 ## [1.16.0](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.0) (2026-06-19)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.0)

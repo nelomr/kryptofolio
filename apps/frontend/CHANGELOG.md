@@ -1,5 +1,15 @@
 # @kryptofolio/frontend
 
+## 1.16.1
+
+### Patch Changes
+
+- [`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c) Thanks [@nelomr](https://github.com/nelomr)! - feat(domain): phase 0 domain conditioning - implement Money VO, strict financial precision, and eradicate multi-tenancy
+
+- Updated dependencies [[`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c)]:
+  - @kryptofolio/core-domain@1.1.1
+  - @kryptofolio/shared-types@1.1.1
+
 ## 1.16.0
 
 ### Minor Changes

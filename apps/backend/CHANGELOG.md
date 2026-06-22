@@ -1,5 +1,13 @@
 # @kryptofolio/backend
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`e56018d`](https://github.com/nelomr/kryptofolio/commit/e56018dfe7173ba24ad0af653ac6ebe5603c764c)]:
+  - @kryptofolio/core-domain@1.1.1
+  - @kryptofolio/shared-types@1.1.1
+
 ## 0.1.0
 
 ### Minor Changes
