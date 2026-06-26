@@ -1,15 +1,21 @@
 import Decimal from "decimal.js";
 
+import { preciseAmountSchema } from "@kryptofolio/shared-types";
+
 Decimal.set({ precision: 40 });
 
 export class Money {
   private readonly amount: Decimal;
 
   constructor(value: string | Decimal) {
-    if (typeof value !== "string" && !(value instanceof Decimal)) {
+    if (typeof value === "string") {
+      preciseAmountSchema.parse(value);
+      this.amount = new Decimal(value);
+    } else if (value instanceof Decimal) {
+      this.amount = value;
+    } else {
       throw new Error("Money must be initialized with a string or Decimal to prevent precision loss.");
     }
-    this.amount = new Decimal(value);
   }
   
   toString(): string {

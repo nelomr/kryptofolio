@@ -14,9 +14,15 @@ export function useImportProcessor() {
   const processAndSubmit = async (
     validRows: ValidTransactionRow[],
     marketType: "spot" | "futures",
+    accountId: string
   ) => {
     if (validRows.length === 0) {
       processingErrors.value = ["ingestion.errors.no_valid_rows_to_import"];
+      return false;
+    }
+
+    if (!accountId) {
+      processingErrors.value = ["ingestion.errors.account_required"];
       return false;
     }
 
@@ -43,6 +49,9 @@ export function useImportProcessor() {
       const rowsWithHash = await Promise.all(
         aggregatedRows.map(async (row) => {
           const normalizedMappedData = normalizeTransactionDirection(row.mappedData);
+
+          // Inject account ID before hash generation
+          normalizedMappedData.account_id = accountId;
 
           const id_hash = await generateIdHash(normalizedMappedData);
           return { ...row, mappedData: normalizedMappedData, id_hash };

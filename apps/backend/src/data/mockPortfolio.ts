@@ -3,6 +3,8 @@
  * This mock is mathematically correlated across holdings, lots, history, metrics, and tax.
  */
 
+import { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
+
 export interface PortfolioMetrics {
   total_equity_eur: number
   total_realized_pnl_eur: number
@@ -22,28 +24,9 @@ export interface HoldingItem {
   portfolio_locations: string[]
 }
 
-export interface TaxLot {
-  id: string
-  symbol: string
-  date: number
-  exchange: string
-  original_qty: number
-  remaining_qty: number
-  unit_cost: number
-  total_cost: number
-  status?: 'FULL' | 'PARTIAL' | 'EMPTY'
-}
-
-export interface LotHistoryEvent {
-  id: string
-  disposal_date: number
-  amount_from_lot: number
-  sale_price_eur: number
-  gain_loss_eur: number
-  is_taxable: boolean
-  flag?: 'WALLET_ACTIVATION' | null
-  notes?: string
-}
+// We use the exact types from shared-types to ensure correlation
+export type TaxLot = TaxLotType;
+export type LotHistoryEvent = TaxLotEventType;
 
 export interface PortfolioData {
   summary: {
@@ -116,53 +99,65 @@ const mockPortfolio = {
     BTC: [
       {
         id: 'lot_btc_1',
-        symbol: 'BTC',
-        date: 1_672_531_200, // 2023-01-01
-        exchange: 'Kraken',
-        original_qty: 0.5,
-        remaining_qty: 0.5,
-        unit_cost: 40_000.00,
-        total_cost: 20_000.00,
-        status: 'FULL',
+        asset_id: 'BTC',
+        acquisition_timestamp: "2023-01-01T00:00:00.000Z",
+        account_id: '10000000-0000-0000-0000-000000000002',
+        spot_transaction_id: 'tx_src_btc_1',
+        exchange_location: 'Kraken',
+        original_qty: "0.5",
+        remaining_qty: "0.5",
+        unit_cost_fiat: "40000.00",
+        total_cost_fiat: "20000.00",
+        fiat_currency: "EUR",
+        status: 'CLOSED',
       },
     ],
     ETH: [
       {
         id: 'lot_eth_1',
-        symbol: 'ETH',
-        date: 1_675_209_600, // 2023-02-01
-        exchange: 'Binance',
-        original_qty: 10,
-        remaining_qty: 10,
-        unit_cost: 1_500.00,
-        total_cost: 15_000.00,
-        status: 'FULL',
+        asset_id: 'ETH',
+        acquisition_timestamp: "2023-02-01T00:00:00.000Z",
+        account_id: '10000000-0000-0000-0000-000000000001',
+        spot_transaction_id: 'tx_src_eth_1',
+        exchange_location: 'Binance',
+        original_qty: "10",
+        remaining_qty: "10",
+        unit_cost_fiat: "1500.00",
+        total_cost_fiat: "15000.00",
+        fiat_currency: "EUR",
+        status: 'CLOSED',
       },
     ],
     SOL: [
       {
         id: 'lot_sol_1',
-        symbol: 'SOL',
-        date: 1_688_169_600, // 2023-07-01
-        exchange: 'Binance',
-        original_qty: 200,
-        remaining_qty: 100,
-        unit_cost: 20.00,
-        total_cost: 4_000.00,
+        asset_id: 'SOL',
+        acquisition_timestamp: "2023-07-01T00:00:00.000Z",
+        account_id: '10000000-0000-0000-0000-000000000001',
+        spot_transaction_id: 'tx_src_sol_1',
+        exchange_location: 'Binance',
+        original_qty: "200",
+        remaining_qty: "100",
+        unit_cost_fiat: "20.00",
+        total_cost_fiat: "4000.00",
+        fiat_currency: "EUR",
         status: 'PARTIAL',
       },
     ],
     ADA: [
       {
         id: 'lot_ada_1',
-        symbol: 'ADA',
-        date: 1_693_526_400, // 2023-09-01
-        exchange: 'Bit2Me',
-        original_qty: 5000,
-        remaining_qty: 5000,
-        unit_cost: 1.00,
-        total_cost: 5_000.00,
-        status: 'FULL',
+        asset_id: 'ADA',
+        acquisition_timestamp: "2023-09-01T00:00:00.000Z",
+        account_id: '10000000-0000-0000-0000-000000000003',
+        spot_transaction_id: 'tx_src_ada_1',
+        exchange_location: 'Bit2Me',
+        original_qty: "5000",
+        remaining_qty: "5000",
+        unit_cost_fiat: "1.00",
+        total_cost_fiat: "5000.00",
+        fiat_currency: "EUR",
+        status: 'CLOSED',
       },
     ],
   },
@@ -174,12 +169,15 @@ const mockPortfolio = {
       lot_sol_1: [
         {
           id: 'event_sol_1_1',
-          disposal_date: 1_702_339_200, // 2023-12-12
-          amount_from_lot: 100,
-          sale_price_eur: 50.00,
-          gain_loss_eur: 3_000.00, // (50 - 20) * 100
+          tax_lot_id: 'lot_sol_1',
+          spot_transaction_id: 'tx_dummy_sol_1',
+          account_id: '10000000-0000-0000-0000-000000000001',
+          disposal_date: "2023-12-12T00:00:00.000Z",
+          amount_from_lot: "100",
+          sale_price_fiat: "50.00",
+          gain_loss_fiat: "3000.00", // (50 - 20) * 100
           is_taxable: true,
-          notes: 'Partial profit taking',
+          fiat_currency: 'EUR',
         },
       ],
     },
@@ -190,22 +188,28 @@ export default mockPortfolio
 
 export const mockFullyConsumedLot: TaxLot = {
   id: 'lot_old_consumed',
-  symbol: 'BTC',
-  date: 1_640_995_200,
-  exchange: 'Kraken',
-  original_qty: 0.25,
-  remaining_qty: 0,
-  unit_cost: 38_000.00,
-  total_cost: 9_500.00,
+  asset_id: 'BTC',
+  acquisition_timestamp: "2021-12-31T00:00:00.000Z",
+  account_id: '10000000-0000-0000-0000-000000000002',
+  spot_transaction_id: 'tx_src_old_btc',
+  exchange_location: 'Kraken',
+  original_qty: "0.25",
+  remaining_qty: "0",
+  unit_cost_fiat: "38000.00",
+  total_cost_fiat: "9500.00",
+  fiat_currency: "EUR",
+  status: 'CLOSED',
 }
 
 export const mockNonTaxableEvent: LotHistoryEvent = {
   id: 'event_nontaxable_1',
-  disposal_date: 1_677_628_800,
-  amount_from_lot: 0.05,
-  sale_price_eur: 22_000.00,
-  gain_loss_eur: 0,
+  tax_lot_id: 'lot_btc_1',
+  spot_transaction_id: 'tx_dummy_btc_1',
+  account_id: '10000000-0000-0000-0000-000000000002',
+  disposal_date: "2023-03-01T00:00:00.000Z",
+  amount_from_lot: "0.05",
+  sale_price_fiat: "22000.00",
+  gain_loss_fiat: "0",
   is_taxable: false,
-  flag: 'WALLET_ACTIVATION',
-  notes: 'Transfer to cold wallet',
+  fiat_currency: 'EUR',
 }

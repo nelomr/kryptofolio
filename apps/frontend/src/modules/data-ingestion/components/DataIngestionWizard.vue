@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, computed } from "vue";
+import { onUnmounted, computed, ref } from "vue";
 import { useCsvImportWizardProvider } from "../composables/useCsvImportWizard";
 import DropzoneArea from "./DropzoneArea.vue";
 import DataGridValidator from "./DataGridValidator.vue";
@@ -7,6 +7,7 @@ import BaseSelect from "@/components/ui/select/BaseSelect.vue";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, FileUp, CheckCircle2, X, Loader2 } from "lucide-vue-next";
 import { useI18n } from "@/composables/useI18n";
+import { toast } from "vue-sonner";
 
 import {
   Card,
@@ -18,6 +19,10 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+
+import type { AccountId } from "@kryptofolio/shared-types";
+import { useSupportedAccountsQuery } from "@/composables/queries/useSettingsQueries";
+import { useUpdateSupportedAccountsMutation } from "@/composables/queries/useSettingsMutations";
 
 const TIMEZONES = [
   { value: "UTC", label: "UTC (Coordinated Universal Time)" },
@@ -32,6 +37,36 @@ const TIMEZONES = [
 // Initialize the wizard orchestrator (provides to children via Provide/Inject)
 const wizard = useCsvImportWizardProvider();
 const { t } = useI18n();
+
+const { data: supportedAccounts } = useSupportedAccountsQuery();
+const { mutateAsync: updateAccounts } = useUpdateSupportedAccountsMutation();
+
+const accountOptions = computed(() => {
+  return (supportedAccounts.value ?? []).map((acc) => ({
+    ...acc,
+    value: acc.value as AccountId,
+  }));
+});
+
+const showNewAccountInput = ref(false);
+const newAccountName = ref("");
+
+const handleAddAccount = async () => {
+  if (!newAccountName.value.trim()) return;
+  const val = crypto.randomUUID();
+  const label = newAccountName.value.trim();
+
+  const current = supportedAccounts.value ?? [];
+  if (current.some((a) => a.label.toLowerCase() === label.toLowerCase())) {
+    toast.error(t("ingestion.wizard.account_exists"));
+    return;
+  }
+
+  await updateAccounts([...current, { value: val, label }]);
+  newAccountName.value = "";
+  showNewAccountInput.value = false;
+  wizard.selectedAccountId.value = val as AccountId;
+};
 
 const emit = defineEmits<{
   (e: "close"): void;
@@ -70,7 +105,8 @@ const isReadyToSubmit = computed(
   () =>
     errorCount.value === 0 &&
     wizard.previewTable.rows.value.length > 0 &&
-    !isProcessing.value,
+    !isProcessing.value &&
+    wizard.selectedAccountId.value !== "",
 );
 </script>
 
@@ -156,6 +192,46 @@ const isReadyToSubmit = computed(
 
       <div v-else-if="wizard.step.value === 2" class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <!-- Account Selector -->
+          <div class="flex flex-col gap-1">
+            <BaseSelect
+              v-model="wizard.selectedAccountId.value"
+              :label="t('ingestion.wizard.account_label')"
+              :placeholder="t('ingestion.wizard.account_placeholder')"
+              :options="accountOptions"
+            />
+            <div v-if="!showNewAccountInput" class="flex justify-end mt-1">
+              <Button
+                variant="link"
+                size="sm"
+                class="h-auto p-0 text-xs text-brand"
+                @click="showNewAccountInput = true"
+              >
+                + {{ t("ingestion.wizard.add_account") }}
+              </Button>
+            </div>
+            <div v-else class="flex gap-2 items-center mt-2">
+              <input
+                v-model="newAccountName"
+                class="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+                :placeholder="t('ingestion.wizard.new_account_placeholder')"
+                @keyup.enter="handleAddAccount"
+              />
+              <Button
+                size="sm"
+                @click="handleAddAccount"
+                :disabled="!newAccountName.trim()"
+                >{{ t("ingestion.wizard.add_btn") }}</Button
+              >
+              <Button
+                variant="ghost"
+                size="sm"
+                @click="showNewAccountInput = false"
+                >{{ t("ingestion.wizard.cancel_btn") }}</Button
+              >
+            </div>
+          </div>
+
           <!-- Market Type Toggle -->
           <BaseSelect
             v-model="wizard.marketType.value"
@@ -264,10 +340,7 @@ const isReadyToSubmit = computed(
         :disabled="!isReadyToSubmit"
         class="bg-brand hover:bg-brand-hover text-white transition-colors flex items-center gap-2"
       >
-        <Loader2
-          v-if="isProcessing"
-          class="animate-spin h-4 w-4"
-        />
+        <Loader2 v-if="isProcessing" class="animate-spin h-4 w-4" />
         {{ t("tax.import.btn") }}
       </Button>
     </CardFooter>

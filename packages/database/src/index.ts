@@ -4,3 +4,4 @@
 export type { IDatabasePort } from "./ports/IDatabasePort.js";
 export { NodeSqliteAdapter } from "./adapters/NodeSqliteAdapter.js";
 export { DuckDbAdapter } from "./adapters/DuckDbAdapter.js";
+export { getLedgerDb, closeLedgerDb } from "./sqlite/connection.js";

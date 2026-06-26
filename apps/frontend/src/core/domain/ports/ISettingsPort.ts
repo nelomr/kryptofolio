@@ -19,5 +19,9 @@ export interface ISettingsPort {
   setExchangeRate(from: FiatCurrency, to: FiatCurrency, rate: string): Promise<void>;
   /** Manually trigger exchange rate synchronization */
   syncExchangeRates(): Promise<void>;
+  /** Gets supported accounts configuration */
+  getSupportedAccounts(): Promise<{ value: string; label: string }[]>;
+  /** Updates the supported accounts configuration */
+  setSupportedAccounts(accounts: { value: string; label: string }[]): Promise<void>;
 }
 

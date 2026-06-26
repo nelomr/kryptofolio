@@ -57,6 +57,7 @@ function createMockTaxPort(): ITaxPort {
     deleteAllTransactions: vi.fn().mockResolvedValue(undefined),
     importWallet: vi.fn().mockResolvedValue(undefined),
     syncWeb3: vi.fn().mockResolvedValue(undefined),
+    importTransactions: vi.fn().mockResolvedValue(undefined),
   };
 }
 

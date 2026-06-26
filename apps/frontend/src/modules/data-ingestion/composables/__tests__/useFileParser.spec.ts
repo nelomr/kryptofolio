@@ -22,7 +22,7 @@ describe('useFileParser', () => {
       headers: ['col1'],
       errors: []
     }
-    vi.mocked(parsers.parseCsv).mockResolvedValueOnce(mockResult)
+    vi.mocked(parsers.parseCsv).mockResolvedValueOnce(mockResult as any)
 
     const { parseFile, isParsing, rawHeaders, rawRows } = useFileParser()
     const file = new File([''], 'test.csv', { type: 'text/csv' })

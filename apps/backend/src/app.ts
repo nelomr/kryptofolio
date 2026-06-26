@@ -7,7 +7,8 @@ import portfolioApi from './core/infrastructure/routes/portfolio.js';
 import walletsApi from './core/infrastructure/routes/wallets.js';
 import taxApi from './core/infrastructure/routes/tax.js';
 import metricsApi from './core/infrastructure/routes/metrics.js';
-import ingestionApi from './core/infrastructure/routes/ingestion.js';
+import { createIngestionApi } from './core/infrastructure/routes/ingestion.js';
+import { container } from './core/infrastructure/di/container.js';
 
 export const app = new Hono<{
   Bindings: { MODE?: string; SECRET_API_KEY?: string };
@@ -22,7 +23,7 @@ const routes = app
   .route('/wallets', walletsApi)
   .route('/tax', taxApi)
   .route('/metrics', metricsApi)
-  .route('/ingestion', ingestionApi)
+  .route('/ingestion', createIngestionApi(container))
   .route('/credentials', credentialsApi)
   .route('/settings', settingsApi)
   .route('/market', marketApi);

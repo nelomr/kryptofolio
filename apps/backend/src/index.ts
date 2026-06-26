@@ -16,6 +16,10 @@ if (process.env.NODE_ENV !== 'test') {
       await container.sqlitePort.initialize();
       bffLogger.info('Vault Database initialized successfully.');
 
+      bffLogger.info('Initializing Ledger SQLite Database...');
+      await container.ledgerPort.initialize();
+      bffLogger.info('Ledger Database initialized successfully.');
+
       // Wire the SSE broadcast callback into the MarketDataOrchestrator.
       // We do not recreate the orchestrator here to preserve DI reference equality.
       container.marketDataOrchestrator.setBroadcastCallback(broadcastPrice);

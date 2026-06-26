@@ -141,3 +141,35 @@ export function useSyncExchangeRatesMutation() {
     },
   });
 }
+
+/**
+ * useUpdateSupportedAccountsMutation
+ *
+ * Mutation to update the supported accounts configuration.
+ */
+export function useUpdateSupportedAccountsMutation() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+  const i18nPort = inject(I18N_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useUpdateSupportedAccountsMutation] Required port ISettingsPort is not provided.');
+  }
+
+  const queryCache = useQueryCache();
+
+  return useMutation({
+    mutation: async (accounts: { value: string; label: string }[]) => {
+      await settingsPort.setSupportedAccounts(accounts);
+      return accounts;
+    },
+    onSuccess: () => {
+      queryCache.invalidateQueries({ key: ['settings', 'supported_accounts'] });
+      const label = i18nPort?.translate('settings.accounts.success') ?? 'Accounts updated successfully';
+      toast.success(label);
+    },
+    onError: () => {
+      const label = i18nPort?.translate('settings.accounts.error') ?? 'Failed to save accounts';
+      toast.error(label);
+    },
+  });
+}

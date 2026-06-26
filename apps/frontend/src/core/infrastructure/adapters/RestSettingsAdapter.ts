@@ -103,5 +103,25 @@ export class RestSettingsAdapter implements ISettingsPort {
       throw new Error('FAILED_TO_SYNC_RATES');
     }
   }
+
+  async getSupportedAccounts(): Promise<{ value: string; label: string }[]> {
+    try {
+      const res = await bffClient.api.settings.accounts.$get();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data as { accounts: { value: string; label: string }[] }).accounts ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  async setSupportedAccounts(accounts: { value: string; label: string }[]): Promise<void> {
+    const res = await bffClient.api.settings.accounts.$post({
+      json: { accounts },
+    });
+    if (!res.ok) {
+      throw new Error('FAILED_TO_SAVE_ACCOUNTS');
+    }
+  }
 }
 

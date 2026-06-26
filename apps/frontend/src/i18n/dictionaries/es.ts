@@ -415,6 +415,13 @@ export const es: I18nDictionary = {
   "ingestion.wizard.timezone_label": "Zona Horaria",
   "ingestion.wizard.market_spot": "Mercado Spot",
   "ingestion.wizard.market_futures": "Futuros / Derivados",
+  "ingestion.wizard.account_label": "Exchange / Cuenta",
+  "ingestion.wizard.account_placeholder": "Selecciona o añade cuenta...",
+  "ingestion.wizard.add_account": "Añadir Cuenta",
+  "ingestion.wizard.new_account_placeholder": "Nombre de la nueva cuenta",
+  "ingestion.wizard.add_btn": "Añadir",
+  "ingestion.wizard.cancel_btn": "Cancelar",
+  "ingestion.wizard.account_exists": "La cuenta ya existe",
 
   // Dropzone Area
   "ingestion.dropzone.drag_drop":
@@ -436,6 +443,12 @@ export const es: I18nDictionary = {
   "ingestion.grid.select_mapping": "Seleccionar campo...",
   "ingestion.grid.mapping_unmapped": "Sin mapear",
   "ingestion.grid.cell_error": "Requerido o formato inválido",
+
+  "ingestion.errors.time_data_missing": "Falta información de fecha/hora",
+  "ingestion.errors.tx_type_required": "El tipo de transacción es obligatorio",
+  "ingestion.errors.amount_invalid": "Formato de cantidad inválido",
+  "ingestion.errors.asset_required": "El identificador del activo/moneda es obligatorio",
+  "ingestion.errors.missing_both_assets": "Las transacciones direccionales requieren al menos un activo",
 
   // Ingestion Columns
   "ingestion.columns.date": "Fecha / Hora",

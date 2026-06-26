@@ -4,13 +4,14 @@ export const BaseTransactionMappedDataSchema = z.object({
   // Identifiers & Grouping
   tx_id: z.string().nullable().optional(),
   group_id: z.string().nullable().optional(),
+  account_id: z.string().nullable().optional(),
   
   // Base Fields
   date: z.string().nullable().optional(),
   time: z.string().nullable().optional(),
   timezone: z.string().nullable().optional(),
   timestamp: z.string().nullable().optional(),
-  tx_type: z.string().min(1, 'ingestion.errors.tx_type_required').nullable(),
+  tx_type: z.string({ required_error: 'ingestion.errors.tx_type_required' }).min(1, 'ingestion.errors.tx_type_required').nullable(),
   exchange: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   status: z.string().nullable().optional(),

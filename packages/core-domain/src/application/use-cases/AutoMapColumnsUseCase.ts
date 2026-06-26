@@ -7,8 +7,8 @@ export const COLUMN_DICTIONARY: Record<string, string[]> = {
   group_id: ["refid", "reference", "group", "grupo", "linked tx"],
   
   // Base
-  date: ["date", "fecha", "timestamp", "utc_time", "datetime", "date (utc)"], // Separated from time
-  time: ["time", "hora"],
+  date: ["date", "fecha", "timestamp", "utc_time", "datetime", "date (utc)", "time"], // Separated from time
+  time: ["hora"],
   timezone: ["timezone", "tz", "zona horaria", "time zone"],
   tx_type: ["type", "tipo", "tipo de operación", "action", "acción", "operation", "ordertype", "side"],
   exchange: ["exchange", "platform", "venue"],

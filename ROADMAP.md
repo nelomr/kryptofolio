@@ -72,8 +72,8 @@ To support the robust Backend Financial Engine, we are implementing a dual-datab
   - [x] Enforce high-precision numerical libraries (`decimal.js`) across the domain.
 
 - **Phase 3.1: SQLite OLTP Deployment**
-  - [ ] Implement strict ledger schema with `TEXT` columns for financial precision.
-  - [ ] Define database constraints and soft-delete mechanisms.
+  - [x] Implement strict ledger schema with `TEXT` columns for financial precision.
+  - [x] Define database constraints and soft-delete mechanisms.
 
 - **Phase 3.2: DuckDB OLAP Instantiation**
   - [ ] Establish zero-copy connection to SQLite.
@@ -85,7 +85,7 @@ To support the robust Backend Financial Engine, we are implementing a dual-datab
 
 - **Phase 3.4: Maintenance & Backups**
   - [ ] Implement backup mechanisms and database VACUUM scheduling.
-  - [ ] Ensure idempotency in CSV imports via TDD.
+  - [x] Ensure idempotency in CSV imports via TDD.
 
 - **Phase 3.5: AEAT Tax Reporting**
   - [ ] Automate threshold triggers for Wealth Tax (Modelo 714) and Foreign Assets (Modelo 721).

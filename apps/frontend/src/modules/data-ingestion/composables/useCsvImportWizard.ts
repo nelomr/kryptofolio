@@ -1,4 +1,5 @@
-import { ref, provide, inject, type InjectionKey } from "vue";
+import { ref, provide, inject, type InjectionKey, type Ref } from "vue";
+import type { AccountId } from "@kryptofolio/shared-types";
 import { useFileParser } from "./useFileParser";
 import { useColumnMapper } from "./useColumnMapper";
 import { usePreviewTable } from "./usePreviewTable";
@@ -11,8 +12,9 @@ import {
 export type WizardStep = 1 | 2 | 3;
 
 export interface CsvImportWizardContext {
-  step: ReturnType<typeof ref<WizardStep>>;
-  marketType: ReturnType<typeof ref<MarketType>>;
+  step: Ref<WizardStep>;
+  marketType: Ref<MarketType>;
+  selectedAccountId: Ref<AccountId | "">;
   fileParser: ReturnType<typeof useFileParser>;
   columnMapper: ReturnType<typeof useColumnMapper>;
   previewTable: ReturnType<typeof usePreviewTable>;
@@ -31,6 +33,7 @@ export const CsvImportWizardKey: InjectionKey<CsvImportWizardContext> =
 export function useCsvImportWizardProvider() {
   const step = ref<WizardStep>(1);
   const marketType = ref<MarketType>("SPOT");
+  const selectedAccountId = ref<AccountId | "">("");
 
   const fileParser = useFileParser();
   const columnMapper = useColumnMapper();
@@ -68,6 +71,7 @@ export function useCsvImportWizardProvider() {
     const success = await importProcessor.processAndSubmit(
       previewTable.validRows.value,
       marketType.value === "SPOT" ? "spot" : "futures",
+      selectedAccountId.value
     );
     if (success) {
       step.value = 3;
@@ -78,12 +82,14 @@ export function useCsvImportWizardProvider() {
   const resetWizard = () => {
     step.value = 1;
     marketType.value = "SPOT";
+    selectedAccountId.value = "";
     fileParser.resetParser();
   };
 
   const context: CsvImportWizardContext = {
     step,
     marketType,
+    selectedAccountId,
     fileParser,
     columnMapper,
     previewTable,

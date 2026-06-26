@@ -94,3 +94,24 @@ export function useExchangeRateQuery(
   });
 }
 
+/**
+ * useSupportedAccountsQuery
+ *
+ * Fetches the supported accounts configuration.
+ */
+export function useSupportedAccountsQuery() {
+  const settingsPort = inject(SETTINGS_PORT_KEY);
+
+  if (!settingsPort) {
+    throw new Error('[useSupportedAccountsQuery] Required port ISettingsPort is not provided.');
+  }
+
+  return useQuery({
+    key: ['settings', 'supported_accounts'],
+    query: async () => {
+      return await settingsPort.getSupportedAccounts();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+

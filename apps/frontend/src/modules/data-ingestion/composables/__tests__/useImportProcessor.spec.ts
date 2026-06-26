@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
 import { useImportProcessor } from '../useImportProcessor'
 import * as taxMutations from '@/composables/queries/useTaxMutations'
 
@@ -20,14 +21,13 @@ describe('useImportProcessor', () => {
     vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
       mutateAsync: mockMutateAsync
     } as any)
-
+    
     const { isProcessing, processingErrors, processAndSubmit } = useImportProcessor()
 
     const rows = [
       { id: '1', mappedData: { date: '2023-01-01', time: '00:00:00' } } as any
     ]
-
-    const result = await processAndSubmit(rows, 'spot')
+    const result = await processAndSubmit(rows, 'spot', '10000000-0000-0000-0000-000000000001')
 
     expect(result).toBe(true)
     expect(isProcessing.value).toBe(false)
@@ -36,7 +36,7 @@ describe('useImportProcessor', () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       market: 'spot',
       rows: [
-        { id: '1', mappedData: { timestamp: '2023-01-01T00:00:00Z', metadata: {} }, id_hash: 'mocked-hash-123' }
+        { id: '1', mappedData: { account_id: '10000000-0000-0000-0000-000000000001', timestamp: '2023-01-01T00:00:00Z', metadata: {} }, id_hash: 'mocked-hash-123' }
       ],
       timezone: 'UTC'
     })
@@ -44,8 +44,8 @@ describe('useImportProcessor', () => {
 
   it('should return error if no rows provided', async () => {
     const { processAndSubmit, processingErrors } = useImportProcessor()
-    
-    const result = await processAndSubmit([], 'spot')
+
+    const result = await processAndSubmit([], 'spot', '10000000-0000-0000-0000-000000000001')
     
     expect(result).toBe(false)
     expect(processingErrors.value).toContain('ingestion.errors.no_valid_rows_to_import')
@@ -57,9 +57,9 @@ describe('useImportProcessor', () => {
       mutateAsync: mockMutateAsync
     } as any)
 
-    const { processAndSubmit, processingErrors, isProcessing } = useImportProcessor()
+    const { isProcessing, processingErrors, processAndSubmit } = useImportProcessor()
 
-    const result = await processAndSubmit([{ id: '1', mappedData: {} } as any], 'spot')
+    const result = await processAndSubmit([{ id: '1', mappedData: {} } as any], 'spot', '10000000-0000-0000-0000-000000000001')
 
     expect(result).toBe(false)
     expect(isProcessing.value).toBe(false)

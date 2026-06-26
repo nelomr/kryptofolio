@@ -4,12 +4,15 @@ import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js'
 import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
+import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
 import type { IDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
+import { getLedgerDb } from '@kryptofolio/database';
 import { EcbExchangeRateAdapter } from '../adapters/EcbExchangeRateAdapter.js';
 import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.js';
 import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
 import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
+import { SQLiteLedgerAdapter } from '../adapters/SQLiteLedgerAdapter.js';
 import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.js';
 import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.js';
 import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.js';
@@ -22,6 +25,9 @@ import { BinanceMarketDataAdapter } from '../adapters/BinanceMarketDataAdapter.j
 import { CoinbaseMarketDataAdapter } from '../adapters/CoinbaseMarketDataAdapter.js';
 import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js';
 import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
+import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
+import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
+
 
 /**
  * DIContainer — Composes the application layer.
@@ -32,7 +38,7 @@ import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/U
  * To swap the database engine (e.g., to PostgreSQL), replace SqliteVaultPortAdapter
  * with a new PostgresVaultPortAdapter implementing the same interfaces.
  */
-class DIContainer {
+export class DIContainer {
   public readonly sqlitePort: IDatabasePort;
   public readonly cryptographyPort: ICryptographyPort;
   public readonly vaultCredentialsPort: IVaultCredentialsPort;
@@ -56,6 +62,10 @@ class DIContainer {
   public readonly bit2meMarketDataAdapter: Bit2MeMarketDataAdapter;
   public readonly marketProviders: Record<string, IMarketDataProvider>;
   public readonly updateActiveMarketProviderUseCase: UpdateActiveMarketProviderUseCase;
+
+  /** Ledger & Ingestion */
+  public readonly ledgerPort: ILedgerPort;
+  public readonly csvIngestionUseCase: CsvIngestionUseCase;
 
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
@@ -98,6 +108,14 @@ class DIContainer {
       this.marketDataOrchestrator,
       this.marketProviders
     );
+
+    // Ledger DB — separate SQLite instance for the financial ledger
+    const ledgerDb = getLedgerDb();
+    this.ledgerPort = new SQLiteLedgerAdapter(ledgerDb);
+
+    // CSV Ingestion — uses Kraken as the historical price provider
+    const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
+    this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider);
   }
 }
 

@@ -187,7 +187,13 @@ export class RestTaxAdapter implements ITaxPort {
 
   async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string): Promise<void> {
     try {
-      await bffClient.api.tax.import.$post({ json: { rows: rows as unknown as Record<string, unknown>[], market, timezone } })
+      const payload = rows.map((row) => ({
+        ...(row as { mappedData: Record<string, unknown>; id_hash?: string }).mappedData,
+        id_hash: (row as { id_hash?: string }).id_hash ?? '',
+      }));
+      await bffClient.api.ingestion.transactions.$post({
+        json: { rows: payload as never, market, timezone },
+      });
     } catch (err) {
       throw new TaxOperationError('IMPORT_FAILED', `Transactions import failed: ${(err as Error).message}`)
     }

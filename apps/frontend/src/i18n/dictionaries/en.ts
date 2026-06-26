@@ -411,6 +411,13 @@ export const en: I18nDictionary = {
   "ingestion.wizard.timezone_label": "CSV Timezone",
   "ingestion.wizard.market_spot": "Spot Market",
   "ingestion.wizard.market_futures": "Futures / Derivatives",
+  "ingestion.wizard.account_label": "Exchange / Account",
+  "ingestion.wizard.account_placeholder": "Select or add account...",
+  "ingestion.wizard.add_account": "Add Account",
+  "ingestion.wizard.new_account_placeholder": "New Account Name",
+  "ingestion.wizard.add_btn": "Add",
+  "ingestion.wizard.cancel_btn": "Cancel",
+  "ingestion.wizard.account_exists": "Account already exists",
 
   // Dropzone Area
   "ingestion.dropzone.drag_drop": "Drag & drop your CSV or XLSX file here",
@@ -430,6 +437,12 @@ export const en: I18nDictionary = {
   "ingestion.grid.select_mapping": "Select mapped field...",
   "ingestion.grid.mapping_unmapped": "Unmapped",
   "ingestion.grid.cell_error": "Required or invalid format",
+
+  "ingestion.errors.time_data_missing": "Missing date/time information",
+  "ingestion.errors.tx_type_required": "Transaction type is required",
+  "ingestion.errors.amount_invalid": "Invalid amount format",
+  "ingestion.errors.asset_required": "Asset / Coin identifier is required",
+  "ingestion.errors.missing_both_assets": "Directional transactions require at least one asset",
 
   // Ingestion Columns
   "ingestion.columns.date": "Date / Time",

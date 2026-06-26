@@ -37,6 +37,9 @@ apps/backend/src/
 
 ## Database Architecture (Dual-Engine)
 
+> [!NOTE]
+> For a detailed, table-by-table breakdown of the OLTP SQLite Ledger, please read [Database Architecture](database-architecture.md).
+
 The backend employs a sophisticated dual-database architecture, heavily optimized for local-first, single-user performance with extreme financial precision. All database logic is abstracted behind the `packages/database/` layer.
 
 | Component | Engine | Purpose | Architecture |

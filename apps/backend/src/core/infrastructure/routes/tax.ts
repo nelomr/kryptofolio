@@ -24,18 +24,6 @@ const taxApi = new Hono()
     (c) => c.json({ success: true }, 200),
   )
   .post('/upload', (c) => c.json({ success: true }, 200))
-  .post(
-    '/import',
-    zValidator(
-      'json',
-      z.object({
-        rows: z.array(z.record(z.unknown())),
-        market: z.enum(['spot', 'futures']),
-        timezone: z.string(),
-      }),
-    ),
-    (c) => c.json({ success: true }, 200),
-  )
   .delete('/transactions/market/:market', (c) => c.json({ success: true }, 200))
   .post(
     '/import-wallet',

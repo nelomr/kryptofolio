@@ -24,6 +24,11 @@ vi.mock('../../http/BffClient', () => {
               }
             }
           }
+        },
+        ingestion: {
+          transactions: {
+            $post: vi.fn()
+          }
         }
       }
     }
@@ -108,5 +113,78 @@ describe('RestTaxAdapter.deleteAllTransactions() — error path', () => {
 
     await expect(adapter.deleteAllTransactions('spot')).rejects.toThrow(TaxOperationError)
     await expect(adapter.deleteAllTransactions('spot')).rejects.toMatchObject({ code: 'DELETE_FAILED' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// importTransactions — regression guard for the /api/ingestion/transactions fix
+// These tests verify that the adapter calls the REAL ingestion endpoint
+// (api.ingestion.transactions), NOT the old tax stub (api.tax.import).
+// ---------------------------------------------------------------------------
+
+describe('RestTaxAdapter.importTransactions() — happy path', () => {
+  it('POSTs to bffClient.api.ingestion.transactions (not api.tax.import)', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+
+    const adapter = new RestTaxAdapter()
+    const rows = [
+      {
+        id_hash: 'hash-abc',
+        account_id: '00000000-0000-0000-0000-000000000001',
+        mappedData: { tx_type: 'BUY', asset_in: 'BTC', amount_in: '1' },
+      },
+    ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
+
+    await adapter.importTransactions(rows, 'spot', 'UTC')
+
+    // @ts-ignore
+    expect(bffClient.api.ingestion.transactions.$post).toHaveBeenCalledOnce()
+  })
+
+  it('sends rows with mappedData flattened + id_hash at top level', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+
+    const adapter = new RestTaxAdapter()
+    const rows = [
+      {
+        id_hash: 'hash-xyz',
+        account_id: '00000000-0000-0000-0000-000000000001',
+        mappedData: { tx_type: 'SELL', asset_out: 'ETH', amount_out: '2', account_id: '00000000-0000-0000-0000-000000000001' },
+      },
+    ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
+
+    await adapter.importTransactions(rows, 'spot', 'Europe/Madrid')
+
+    // @ts-ignore
+    const call = bffClient.api.ingestion.transactions.$post.mock.lastCall[0]
+    expect(call.json.rows[0]).toMatchObject({ id_hash: 'hash-xyz', tx_type: 'SELL' })
+    expect(call.json.market).toBe('spot')
+    expect(call.json.timezone).toBe('Europe/Madrid')
+  })
+
+  it('resolves void on success', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+
+    const adapter = new RestTaxAdapter()
+    await expect(adapter.importTransactions([], 'futures', 'UTC')).resolves.toBeUndefined()
+  })
+})
+
+describe('RestTaxAdapter.importTransactions() — error path', () => {
+  it('throws TaxOperationError with code IMPORT_FAILED on HTTP error', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockRejectedValue(new Error('503 Service Unavailable'))
+
+    const adapter = new RestTaxAdapter()
+
+    await expect(adapter.importTransactions([], 'spot', 'UTC')).rejects.toThrow(TaxOperationError)
+    await expect(adapter.importTransactions([], 'spot', 'UTC')).rejects.toMatchObject({ code: 'IMPORT_FAILED' })
   })
 })
