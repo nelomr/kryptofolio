@@ -1,5 +1,11 @@
 # @kryptofolio/shared-types
 
+## 1.1.2
+
+### Patch Changes
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
 ## 1.1.1
 
 ### Patch Changes

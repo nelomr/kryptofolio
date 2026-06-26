@@ -3,6 +3,51 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.2](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.2) (2026-06-26)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.2)
+
+**Patch Changes**
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
+- Updated dependencies [[`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0)]:
+  - @kryptofolio/core-domain@1.1.2
+  - @kryptofolio/shared-types@1.1.2
+
+### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.2)
+
+**Patch Changes**
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
+- Updated dependencies [[`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0)]:
+  - @kryptofolio/core-domain@1.1.2
+  - @kryptofolio/database@0.0.5
+  - @kryptofolio/shared-types@1.1.2
+
+### 🧠 Core Domain (`@kryptofolio/core-domain` @ 1.1.2)
+
+**Patch Changes**
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
+- Updated dependencies [[`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0)]:
+  - @kryptofolio/shared-types@1.1.2
+
+### 🗄️ Database (`@kryptofolio/database` @ 0.0.5)
+
+**Patch Changes**
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
+### 📦 Shared Types (`@kryptofolio/shared-types` @ 1.1.2)
+
+**Patch Changes**
+
+- [`0ed1e59`](https://github.com/nelomr/kryptofolio/commit/0ed1e59c96a7b676630212a60760ba4eb62e42f0) Thanks [@nelomr](https://github.com/nelomr)! - feat(phase1): implement SQLite OLTP ledger architecture, data ingestion pipelines, and deterministic UUID hashing
+
+
 ## [1.16.1](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.1) (2026-06-22)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.1)
