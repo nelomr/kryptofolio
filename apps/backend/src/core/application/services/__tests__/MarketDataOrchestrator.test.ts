@@ -12,6 +12,7 @@ function createMockProvider(id: string, category: 'crypto' | 'stocks' = 'crypto'
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     onPrice: vi.fn(),
+    onError: vi.fn(),
     isConnected: vi.fn().mockReturnValue(false),
   };
 }
@@ -103,5 +104,28 @@ describe('MarketDataOrchestrator', () => {
 
     expect(orchestrator.getActiveProvider('crypto')).toBe(cryptoProvider);
     expect(orchestrator.getActiveProvider('stocks')).toBe(stockProvider);
+  });
+
+  it('subscribes to the provider onError callback when activating', async () => {
+    const provider = createMockProvider('kraken');
+
+    await orchestrator.activate(provider);
+
+    // The orchestrator must subscribe to onError on activation
+    expect(provider.onError).toHaveBeenCalledOnce();
+  });
+
+  it('logs errors from the provider via the onError callback', async () => {
+    const provider = createMockProvider('kraken');
+    let capturedErrorCallback: ((error: Error) => void) | undefined;
+
+    (provider.onError as ReturnType<typeof vi.fn>).mockImplementation(
+      (cb: (error: Error) => void) => { capturedErrorCallback = cb; }
+    );
+
+    await orchestrator.activate(provider);
+
+    // When an error is emitted, it should not crash — orchestrator handles it
+    expect(() => capturedErrorCallback!(new Error('Zod validation failed'))).not.toThrow();
   });
 });

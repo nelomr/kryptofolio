@@ -34,6 +34,18 @@ export interface IMarketDataProvider {
    */
   onPrice(callback: (price: AssetPrice) => void): void;
 
+  /**
+   * Register a callback to receive errors from this provider.
+   * Adapters MUST invoke this callback instead of failing silently when:
+   *   - Zod schema validation fails on incoming payloads
+   *   - HTTP errors occur (e.g. 429 Rate Limit)
+   *   - WebSocket connection issues occur
+   *
+   * The MarketDataOrchestrator subscribes here to provide centralised
+   * observability for ANY active provider — current or future.
+   */
+  onError(callback: (error: Error) => void): void;
+
   /** Returns true if the provider is currently active (connected / polling). */
   isConnected(): boolean;
 }

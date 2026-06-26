@@ -4,16 +4,19 @@ import { KrakenWsTickerMessageSchema } from '@kryptofolio/shared-types';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 
 /**
- * KrakenMarketDataAdapter — Infrastructure Adapter (WebSocket).
+ * KrakenMarketDataAdapter — Infrastructure Adapter (WebSocket v2).
  *
- * Implements IMarketDataProvider by connecting to the Kraken public WS API
- * (wss://ws.kraken.com) and subscribing to the "ticker" channel.
+ * Implements IMarketDataProvider by connecting to the Kraken public WS v2 API
+ * (wss://ws.kraken.com/v2) and subscribing to the "ticker" channel.
  *
- * Kraken WS ticker message format (array envelope):
- *   [channelId, { a, b, c, o, ... }, "ticker", "XBT/USD"]
+ * Kraken WS v2 ticker message format (object envelope):
+ *   { "channel": "ticker", "type": "update", "data": [{ "symbol": "BTC/USD", "last": 65000.0, ... }] }
  *
  * Anti-Corruption: Raw WS payloads are validated through KrakenWsTickerMessageSchema
  * (from @kryptofolio/shared-types) before being transformed to AssetPrice.
+ *
+ * Errors (Zod failures, WS errors) are propagated via the onError callback,
+ * which the MarketDataOrchestrator subscribes to for centralised observability.
  */
 export class KrakenMarketDataAdapter implements IMarketDataProvider {
   readonly id = 'kraken';
@@ -21,14 +24,15 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
 
   private ws: WebSocket | null = null;
   private priceCallback: ((price: AssetPrice) => void) | null = null;
+  private errorCallback: ((error: Error) => void) | null = null;
   private connected = false;
   private readonly symbols: string[];
   private readonly wsUrl: string;
 
   constructor(
     symbols: string[] = [
-      'XBT/USD',
-      'XBT/EUR',
+      'BTC/USD',
+      'BTC/EUR',
       'ETH/USD',
       'ETH/EUR',
       'SOL/USD',
@@ -36,7 +40,7 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
       'ADA/USD',
       'ADA/EUR',
     ],
-    wsUrl = 'wss://ws.kraken.com',
+    wsUrl = 'wss://ws.kraken.com/v2',
   ) {
     this.symbols = symbols;
     this.wsUrl = wsUrl;
@@ -50,6 +54,14 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
     this.priceCallback = callback;
   }
 
+  /**
+   * Register an error callback. The orchestrator subscribes here to get
+   * centralised, provider-agnostic observability for this adapter.
+   */
+  onError(callback: (error: Error) => void): void {
+    this.errorCallback = callback;
+  }
+
   isConnected(): boolean {
     return this.connected;
   }
@@ -61,12 +73,14 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
 
         this.ws.on('open', () => {
           this.connected = true;
-          // Subscribe to ticker channel for configured symbols
+          // Subscribe to ticker channel using Kraken WS v2 format
           this.ws!.send(
             JSON.stringify({
-              event: 'subscribe',
-              pair: this.symbols,
-              subscription: { name: 'ticker' },
+              method: 'subscribe',
+              params: {
+                channel: 'ticker',
+                symbol: this.symbols,
+              },
             }),
           );
           resolve();
@@ -79,8 +93,10 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
         this.ws.on('error', (err) => {
           if (!this.connected) {
             reject(err);
+          } else {
+            // After connection, signal error to orchestrator instead of swallowing
+            this.errorCallback?.(err instanceof Error ? err : new Error(String(err)));
           }
-          // After connection is established we swallow errors gracefully
         });
 
         this.ws.on('close', () => {
@@ -112,40 +128,41 @@ export class KrakenMarketDataAdapter implements IMarketDataProvider {
       return; // Ignore malformed frames
     }
 
-    // Skip system messages (heartbeat, subscriptionStatus, etc.)
-    if (!Array.isArray(parsed)) return;
+    // Skip non-object messages (heartbeat channel messages are objects but not ticker)
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return;
+
+    // Skip non-ticker channel messages (e.g. "heartbeat", "status", "subscriptions")
+    const msg = parsed as Record<string, unknown>;
+    if (msg['channel'] !== 'ticker') return;
 
     const result = KrakenWsTickerMessageSchema.safeParse(parsed);
-    if (!result.success) return;
+    if (!result.success) {
+      // Signal to orchestrator via onError — no silent failures
+      this.errorCallback?.(
+        new Error(`[kraken] Ticker schema validation failed: ${result.error.message}`)
+      );
+      return;
+    }
 
-    const [, tickerData, , pair] = result.data;
+    const timestamp = new Date().toISOString();
 
-    // Kraken uses "XBT" for Bitcoin — normalise to "BTC"
-    const [rawSymbol, quoteCurrency] = pair.split('/');
-    const symbol = rawSymbol === 'XBT' ? 'BTC' : rawSymbol ?? pair;
-    const currency = quoteCurrency ?? 'USD';
+    for (const item of result.data.data) {
+      const [rawSymbol, quoteCurrency] = item.symbol.split('/');
+      // Kraken v2 uses "BTC" already (no more XBT normalisation needed for v2),
+      // but we keep the guard in case they ever emit XBT in a snapshot.
+      const symbol = rawSymbol === 'XBT' ? 'BTC' : (rawSymbol ?? item.symbol);
+      const currency = quoteCurrency ?? 'USD';
 
-    const currentPriceStr = tickerData.c[0];
-    const openPriceStr = tickerData.o[0];
+      const price: AssetPrice = {
+        symbol,
+        currency,
+        price: String(item.last),
+        change24hPercent: String(item.change_pct),
+        provider: this.id,
+        timestamp,
+      };
 
-    const price: AssetPrice = {
-      symbol,
-      currency,
-      price: currentPriceStr,
-      change24hPercent: String(this.calc24hChange(
-        parseFloat(currentPriceStr),
-        parseFloat(openPriceStr)
-      )),
-      provider: this.id,
-      timestamp: new Date().toISOString(),
-    };
-
-    this.priceCallback?.(price);
-
-  }
-
-  private calc24hChange(currentPrice: number, openPrice: number): number {
-    if (openPrice === 0) return 0;
-    return ((currentPrice - openPrice) / openPrice) * 100;
+      this.priceCallback?.(price);
+    }
   }
 }

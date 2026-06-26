@@ -16,6 +16,9 @@ import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider
  *
  * Anti-Corruption: Raw REST responses are validated through the Zod schemas
  * imported from @kryptofolio/shared-types before mapping to AssetPrice.
+ *
+ * Errors (HTTP 429, Zod failures) are propagated via the onError callback,
+ * which the MarketDataOrchestrator subscribes to for centralised observability.
  */
 export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
   readonly id = 'coingecko';
@@ -23,6 +26,7 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
 
   private priceCallback: ((price: AssetPrice) => void) | null = null;
   private globalCallback: ((metrics: GlobalMarketMetrics) => void) | null = null;
+  private errorCallback: ((error: Error) => void) | null = null;
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
   private connected = false;
 
@@ -54,6 +58,14 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
   /** Optional secondary callback for global market metrics. */
   onGlobalMetrics(callback: (metrics: GlobalMarketMetrics) => void): void {
     this.globalCallback = callback;
+  }
+
+  /**
+   * Register an error callback. The orchestrator subscribes here to get
+   * centralised, provider-agnostic observability for this adapter.
+   */
+  onError(callback: (error: Error) => void): void {
+    this.errorCallback = callback;
   }
 
   isConnected(): boolean {
@@ -97,9 +109,34 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
 
     const url = `${this.baseUrl}/coins/markets?vs_currency=${vsCurrency}&ids=${this.coinIds.join(',')}&order=market_cap_desc&price_change_percentage=24h`;
 
-    const raw = await fetch(url).then((r) => r.json());
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      // Network-level error (DNS failure, timeout, etc.)
+      this.errorCallback?.(
+        new Error(`[coingecko] Network error on fetchPrices: ${String(err)}`)
+      );
+      return;
+    }
+
+    // Explicit HTTP status check — CoinGecko returns 429 when rate-limited.
+    // Without this, the error body passes to Zod and fails silently.
+    if (!response.ok) {
+      const errorMsg = `[coingecko] HTTP ${response.status} on /coins/markets (${vsCurrency})`;
+      this.errorCallback?.(new Error(errorMsg));
+      return;
+    }
+
+    const raw = await response.json() as unknown;
     const result = CoinGeckoMarketsResponseSchema.safeParse(raw);
-    if (!result.success) return;
+    if (!result.success) {
+      // Signal schema validation failure via onError — no silent failures
+      this.errorCallback?.(
+        new Error(`[coingecko] Schema validation failed on /coins/markets: ${result.error.message}`)
+      );
+      return;
+    }
 
     const timestamp = new Date().toISOString();
     for (const item of result.data) {
@@ -122,9 +159,31 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
     if (!this.globalCallback) return;
 
     const url = `${this.baseUrl}/global`;
-    const raw = await fetch(url).then((r) => r.json());
+
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      this.errorCallback?.(
+        new Error(`[coingecko] Network error on fetchGlobalMetrics: ${String(err)}`)
+      );
+      return;
+    }
+
+    if (!response.ok) {
+      const errorMsg = `[coingecko] HTTP ${response.status} on /global`;
+      this.errorCallback?.(new Error(errorMsg));
+      return;
+    }
+
+    const raw = await response.json() as unknown;
     const result = CoinGeckoGlobalDataSchema.safeParse(raw);
-    if (!result.success) return;
+    if (!result.success) {
+      this.errorCallback?.(
+        new Error(`[coingecko] Schema validation failed on /global: ${result.error.message}`)
+      );
+      return;
+    }
 
     const { data } = result.data;
     const totalMarketCapUsd = data.total_market_cap['usd'] ?? 0;

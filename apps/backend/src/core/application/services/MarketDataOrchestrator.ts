@@ -1,5 +1,6 @@
 import type { AssetPrice, MarketCategory } from "@kryptofolio/shared-types";
 import type { IMarketDataProvider } from "../../domain/ports/IMarketDataProvider.js";
+import { bffLogger } from "../../utils/logger.js";
 
 /**
  * MarketDataOrchestrator — Application Service.
@@ -70,6 +71,13 @@ export class MarketDataOrchestrator {
         this.lastEmitTime.set(price.symbol, now);
         this.onPriceBroadcast(price);
       }
+    });
+
+    // 3b. Impure — subscribe to provider errors for centralised observability.
+    // Any active adapter signals errors here; the orchestrator handles logging
+    // so adapters stay decoupled from pino (or any future logger).
+    provider.onError((error: Error) => {
+      bffLogger.error({ providerId: provider.id, err: error }, `Market provider error: ${error.message}`);
     });
 
     // 4. Impure — establish the connection

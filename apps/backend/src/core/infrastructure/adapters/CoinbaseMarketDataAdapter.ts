@@ -1,13 +1,30 @@
 import { WebSocket } from 'ws';
 import type { AssetPrice, MarketCategory } from '@kryptofolio/shared-types';
+import { CoinbaseTickerMessageSchema } from '@kryptofolio/shared-types';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 
+/**
+ * CoinbaseMarketDataAdapter — Infrastructure Adapter (WebSocket).
+ *
+ * Connects to the Coinbase Advanced Trade WS feed and subscribes to the
+ * "ticker" channel for the configured product IDs.
+ *
+ * Payload format:
+ *   { "type": "ticker", "product_id": "BTC-USD", "price": "65000.00", "open_24h": "63000.00" }
+ *
+ * Anti-Corruption: Raw WS payloads are validated through CoinbaseTickerMessageSchema
+ * (from @kryptofolio/shared-types) before being transformed to AssetPrice.
+ *
+ * Errors (Zod failures, WS errors) are propagated via the onError callback,
+ * which the MarketDataOrchestrator subscribes to for centralised observability.
+ */
 export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
   readonly id = 'coinbase';
   readonly category: MarketCategory = 'crypto';
 
   private ws: WebSocket | null = null;
   private priceCallback: ((price: AssetPrice) => void) | null = null;
+  private errorCallback: ((error: Error) => void) | null = null;
   private connected = false;
   private readonly productIds: string[];
   private readonly wsUrl: string;
@@ -29,8 +46,20 @@ export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
     this.wsUrl = wsUrl;
   }
 
+  // ---------------------------------------------------------------------------
+  // IMarketDataProvider
+  // ---------------------------------------------------------------------------
+
   onPrice(callback: (price: AssetPrice) => void): void {
     this.priceCallback = callback;
+  }
+
+  /**
+   * Register an error callback. The orchestrator subscribes here to get
+   * centralised, provider-agnostic observability for this adapter.
+   */
+  onError(callback: (error: Error) => void): void {
+    this.errorCallback = callback;
   }
 
   isConnected(): boolean {
@@ -49,7 +78,7 @@ export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
               type: 'subscribe',
               product_ids: this.productIds,
               channels: ['ticker'],
-            })
+            }),
           );
           resolve();
         });
@@ -59,7 +88,11 @@ export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
         });
 
         this.ws.on('error', (err) => {
-          if (!this.connected) reject(err);
+          if (!this.connected) {
+            reject(err);
+          } else {
+            this.errorCallback?.(err instanceof Error ? err : new Error(String(err)));
+          }
         });
 
         this.ws.on('close', () => {
@@ -79,36 +112,50 @@ export class CoinbaseMarketDataAdapter implements IMarketDataProvider {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
   private handleMessage(raw: string): void {
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
+      return; // Ignore malformed JSON frames
+    }
+
+    // Skip non-ticker messages (subscriptions, heartbeats, etc.) without error
+    if (typeof parsed !== 'object' || parsed === null) return;
+    const msg = parsed as Record<string, unknown>;
+    if (msg['type'] !== 'ticker') return;
+
+    // Validate through Zod Anti-Corruption Layer
+    const result = CoinbaseTickerMessageSchema.safeParse(parsed);
+    if (!result.success) {
+      // Propagate to orchestrator — no silent failures
+      this.errorCallback?.(
+        new Error(`[coinbase] Ticker schema validation failed: ${result.error.message}`)
+      );
       return;
     }
 
-    if (parsed.type !== 'ticker') return;
-    if (!parsed.product_id || !parsed.price) return;
+    const { product_id, price, open_24h } = result.data;
+    const [base, quote] = product_id.split('-') as [string, string];
 
-    const [base, quote] = parsed.product_id.split('-');
-    if (!base || !quote) return;
+    const currentPrice = parseFloat(price);
+    const openPrice = parseFloat(open_24h ?? price);
+    const change24hPercent =
+      openPrice > 0 ? String(((currentPrice - openPrice) / openPrice) * 100) : '0';
 
-    const currentPrice = parseFloat(parsed.price);
-    const openPrice = parseFloat(parsed.open_24h || parsed.price);
-    let change24hPercent = 0;
-    if (openPrice > 0) {
-      change24hPercent = ((currentPrice - openPrice) / openPrice) * 100;
-    }
-
-    const price: AssetPrice = {
+    const assetPrice: AssetPrice = {
       symbol: base,
       currency: quote,
-      price: String(currentPrice),
-      change24hPercent: String(change24hPercent),
+      price,
+      change24hPercent,
       provider: this.id,
       timestamp: new Date().toISOString(),
     };
 
-    this.priceCallback?.(price);
+    this.priceCallback?.(assetPrice);
   }
 }

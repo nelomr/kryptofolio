@@ -10,17 +10,27 @@ import {
 
 // ── Mock payloads ──────────────────────────────────────────────────────────
 
-const VALID_KRAKEN_TICKER_MSG = [
-  42,
-  {
-    a: ['65000.00', '1', '1.000'],
-    b: ['64999.00', '1', '1.000'],
-    c: ['65000.00', '0.001'],
-    o: ['63000.00', '63500.00'],
-  },
-  'ticker',
-  'XBT/USD',
-] as const;
+// Kraken WS v2 format: a JSON object with channel, type, and data array
+const VALID_KRAKEN_V2_TICKER_MSG = {
+  channel: 'ticker',
+  type: 'update',
+  data: [
+    {
+      symbol: 'BTC/USD',
+      bid: 64999.0,
+      bid_qty: 1.5,
+      ask: 65001.0,
+      ask_qty: 0.5,
+      last: 65000.0,
+      volume: 1234.56,
+      vwap: 64800.0,
+      low: 63000.0,
+      high: 66000.0,
+      change: 2000.0,
+      change_pct: 3.17,
+    },
+  ],
+};
 
 const VALID_COINGECKO_MARKETS = [
   {
@@ -118,19 +128,36 @@ describe('GlobalMarketMetricsSchema', () => {
 });
 
 describe('KrakenWsTickerMessageSchema', () => {
-  it('parses a valid Kraken WS ticker message', () => {
-    const result = KrakenWsTickerMessageSchema.safeParse(VALID_KRAKEN_TICKER_MSG);
+  it('parses a valid Kraken WS v2 ticker update message', () => {
+    const result = KrakenWsTickerMessageSchema.safeParse(VALID_KRAKEN_V2_TICKER_MSG);
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.channel).toBe('ticker');
+      expect(result.data.data[0]?.symbol).toBe('BTC/USD');
+      expect(result.data.data[0]?.last).toBe(65000.0);
+    }
   });
 
-  it('rejects a system heartbeat message (not an array with ticker)', () => {
-    const heartbeat = { event: 'heartbeat' };
+  it('rejects a non-ticker channel message', () => {
+    const msg = { channel: 'book', type: 'update', data: [] };
+    const result = KrakenWsTickerMessageSchema.safeParse(msg);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects the old v1 array-based format', () => {
+    const v1Msg = [42, { a: ['65000', '1', '1'], b: ['64999', '1', '1'], c: ['65000', '0.001'], o: ['63000', '63500'] }, 'ticker', 'XBT/USD'];
+    const result = KrakenWsTickerMessageSchema.safeParse(v1Msg);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a heartbeat message', () => {
+    const heartbeat = { channel: 'heartbeat' };
     const result = KrakenWsTickerMessageSchema.safeParse(heartbeat);
     expect(result.success).toBe(false);
   });
 
-  it('rejects a message with wrong third element', () => {
-    const msg = [42, VALID_KRAKEN_TICKER_MSG[1], 'ohlc', 'XBT/USD'];
+  it('rejects a message with missing data array', () => {
+    const msg = { channel: 'ticker', type: 'update' };
     const result = KrakenWsTickerMessageSchema.safeParse(msg);
     expect(result.success).toBe(false);
   });

@@ -1,4 +1,8 @@
-## MODIFIED Requirements
+## Purpose
+
+Defines the requirements for real-time market data ingestion and streaming via Server-Sent Events (SSE) to connected clients, including the sanitization of incoming provider payloads.
+
+## Requirements
 
 ### Requirement: Real-time Price Streaming
 The system SHALL expose a Server-Sent Events (SSE) endpoint `/api/market/stream` to stream real-time asset prices to connected clients, and the prices MUST be normalized to the user's base fiat currency.

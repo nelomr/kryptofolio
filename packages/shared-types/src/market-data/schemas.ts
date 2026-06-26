@@ -39,35 +39,118 @@ export const GlobalMarketMetricsSchema = z.object({
 }) satisfies z.ZodType<GlobalMarketMetrics>;
 
 // ---------------------------------------------------------------------------
-// Raw Kraken WS payload schema (Anti-Corruption)
-// Kraken sends a ticker frame as an array: [channelId, {...}, "ticker", "XBT/USD"]
+// Raw Kraken WS v2 payload schema (Anti-Corruption)
+// Kraken WS v2 sends ticker frames as a JSON object:
+//   { "channel": "ticker", "type": "update", "data": [{ "symbol": "BTC/USD", "last": 65000.0, ... }] }
+// Reference: https://docs.kraken.com/api/docs/websocket-v2/ticker
 // ---------------------------------------------------------------------------
 
-export const KrakenTickerPayloadSchema = z.object({
-  /** Ask price info: [price, wholeLotVolume, lotVolume] */
-  a: z.tuple([preciseAmountSchema, preciseAmountSchema, preciseAmountSchema]),
-  /** Bid price info */
-  b: z.tuple([preciseAmountSchema, preciseAmountSchema, preciseAmountSchema]),
-  /** Last trade: [price, lotVolume] */
-  c: z.tuple([preciseAmountSchema, preciseAmountSchema]),
-  /** 24-h opening price */
-  o: z.tuple([z.string(), z.string()]),
+export const KrakenV2TickerItemSchema = z.object({
+  /** Trading pair symbol, e.g. "BTC/USD" */
+  symbol: z.string(),
+  /** Best bid price */
+  bid: z.number(),
+  /** Best bid quantity */
+  bid_qty: z.number(),
+  /** Best ask price */
+  ask: z.number(),
+  /** Best ask quantity */
+  ask_qty: z.number(),
+  /** Last trade price */
+  last: z.number(),
+  /** 24h volume */
+  volume: z.number(),
+  /** Volume-weighted average price over 24h */
+  vwap: z.number(),
+  /** 24h low price */
+  low: z.number(),
+  /** 24h high price */
+  high: z.number(),
+  /** Price change since open */
+  change: z.number(),
+  /** Percentage price change since open */
+  change_pct: z.number(),
 });
 
-export type KrakenTickerPayload = z.infer<typeof KrakenTickerPayloadSchema>;
+export type KrakenV2TickerItem = z.infer<typeof KrakenV2TickerItemSchema>;
 
 /**
- * Full Kraken WS message (the tuple-based envelope).
- * [channelId, tickerData, "ticker", "SYMBOL/QUOTE"]
+ * Full Kraken WS v2 ticker message (object envelope).
+ * { "channel": "ticker", "type": "update"|"snapshot", "data": [KrakenV2TickerItem] }
  */
-export const KrakenWsTickerMessageSchema = z.tuple([
-  z.number(),
-  KrakenTickerPayloadSchema,
-  z.literal('ticker'),
-  z.string(),
-]);
+export const KrakenWsTickerMessageSchema = z.object({
+  channel: z.literal('ticker'),
+  type: z.enum(['update', 'snapshot']),
+  data: z.array(KrakenV2TickerItemSchema).min(1),
+});
 
 export type KrakenWsTickerMessage = z.infer<typeof KrakenWsTickerMessageSchema>;
+
+// ---------------------------------------------------------------------------
+// Raw Binance WS payload schema (Anti-Corruption)
+// Binance combined stream wraps individual ticker frames:
+//   { "stream": "btcusdt@ticker", "data": { "e": "24hrTicker", "s": "BTCUSDT", "c": "65000.0", "P": "2.5" } }
+// Reference: https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#individual-symbol-ticker-streams
+// ---------------------------------------------------------------------------
+
+export const BinanceTickerDataSchema = z.object({
+  /** Event type */
+  e: z.literal('24hrTicker'),
+  /** Symbol, e.g. "BTCUSDT" */
+  s: z.string().min(1),
+  /** Last price (string) */
+  c: z.string(),
+  /** Price change percent (string) */
+  P: z.string(),
+});
+
+export const BinanceCombinedStreamMessageSchema = z.object({
+  stream: z.string(),
+  data: BinanceTickerDataSchema,
+});
+
+export type BinanceCombinedStreamMessage = z.infer<typeof BinanceCombinedStreamMessageSchema>;
+
+// ---------------------------------------------------------------------------
+// Raw Coinbase WS payload schema (Anti-Corruption)
+// Coinbase Advanced Trade WS sends ticker frames as:
+//   { "type": "ticker", "product_id": "BTC-USD", "price": "65000.00", "open_24h": "63000.00" }
+// Reference: https://docs.cdp.coinbase.com/exchange/docs/websocket-channels#ticker-channel
+// ---------------------------------------------------------------------------
+
+export const CoinbaseTickerMessageSchema = z.object({
+  type: z.literal('ticker'),
+  /** Product ID, e.g. "BTC-USD" */
+  product_id: z.string().regex(/^[A-Z]+-[A-Z]+$/, 'Expected format: BASE-QUOTE'),
+  /** Last trade price as string */
+  price: z.string(),
+  /** 24h open price as string (optional, used for change calculation) */
+  open_24h: z.string().optional(),
+});
+
+export type CoinbaseTickerMessage = z.infer<typeof CoinbaseTickerMessageSchema>;
+
+// ---------------------------------------------------------------------------
+// Raw Bit2Me WS payload schema (Anti-Corruption)
+// Bit2Me Trading WS sends ticker frames as:
+//   { "event": "ticker", "data": { "symbol": "BTC/EUR", "price": "65000.0", "change24h": "2.5" } }
+// ---------------------------------------------------------------------------
+
+export const Bit2MeTickerDataSchema = z.object({
+  /** Trading pair symbol, e.g. "BTC/EUR" */
+  symbol: z.string().regex(/^[A-Z]+\/[A-Z]+$/, 'Expected format: BASE/QUOTE'),
+  /** Last price */
+  price: z.coerce.string(),
+  /** 24h price change percent */
+  change24h: z.coerce.string().optional(),
+});
+
+export const Bit2MeTickerMessageSchema = z.object({
+  event: z.literal('ticker'),
+  data: Bit2MeTickerDataSchema,
+});
+
+export type Bit2MeTickerMessage = z.infer<typeof Bit2MeTickerMessageSchema>;
 
 // ---------------------------------------------------------------------------
 // Raw CoinGecko REST payload schema (Anti-Corruption)
@@ -78,9 +161,10 @@ export const CoinGeckoMarketItemSchema = z.object({
   id: z.string(),
   symbol: z.string(),
   name: z.string(),
-  current_price: preciseAmountSchema.nullable(),
-  price_change_percentage_24h: preciseAmountSchema.nullable(),
-  market_cap: preciseAmountSchema.nullable(),
+  // CoinGecko returns numbers; coerce to string for domain precision layer
+  current_price: z.coerce.string().nullable(),
+  price_change_percentage_24h: z.coerce.string().nullable(),
+  market_cap: z.coerce.string().nullable(),
   last_updated: z.string(),
 });
 
@@ -90,8 +174,9 @@ export const CoinGeckoMarketsResponseSchema = z.array(CoinGeckoMarketItemSchema)
 
 export const CoinGeckoGlobalDataSchema = z.object({
   data: z.object({
-    total_market_cap: z.record(z.string(), preciseAmountSchema),
-    market_cap_change_percentage_24h_usd: preciseAmountSchema,
+    // CoinGecko returns numbers; coerce to string for domain precision layer
+    total_market_cap: z.record(z.string(), z.coerce.string()),
+    market_cap_change_percentage_24h_usd: z.coerce.string(),
     updated_at: z.number(),
   }),
 });

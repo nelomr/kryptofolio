@@ -1,13 +1,30 @@
 import { WebSocket } from 'ws';
 import type { AssetPrice, MarketCategory } from '@kryptofolio/shared-types';
+import { BinanceCombinedStreamMessageSchema } from '@kryptofolio/shared-types';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 
+/**
+ * BinanceMarketDataAdapter — Infrastructure Adapter (WebSocket).
+ *
+ * Connects to the Binance combined stream endpoint and subscribes to
+ * individual symbol 24hrTicker streams.
+ *
+ * Payload format (combined stream):
+ *   { "stream": "btcusdt@ticker", "data": { "e": "24hrTicker", "s": "BTCUSDT", "c": "65000.0", "P": "2.5" } }
+ *
+ * Anti-Corruption: Raw WS payloads are validated through BinanceCombinedStreamMessageSchema
+ * (from @kryptofolio/shared-types) before being transformed to AssetPrice.
+ *
+ * Errors (Zod failures, WS errors) are propagated via the onError callback,
+ * which the MarketDataOrchestrator subscribes to for centralised observability.
+ */
 export class BinanceMarketDataAdapter implements IMarketDataProvider {
   readonly id = 'binance';
   readonly category: MarketCategory = 'crypto';
 
   private ws: WebSocket | null = null;
   private priceCallback: ((price: AssetPrice) => void) | null = null;
+  private errorCallback: ((error: Error) => void) | null = null;
   private connected = false;
   private readonly streams: string[];
   private readonly wsUrl: string;
@@ -29,8 +46,20 @@ export class BinanceMarketDataAdapter implements IMarketDataProvider {
     this.wsUrl = wsUrl;
   }
 
+  // ---------------------------------------------------------------------------
+  // IMarketDataProvider
+  // ---------------------------------------------------------------------------
+
   onPrice(callback: (price: AssetPrice) => void): void {
     this.priceCallback = callback;
+  }
+
+  /**
+   * Register an error callback. The orchestrator subscribes here to get
+   * centralised, provider-agnostic observability for this adapter.
+   */
+  onError(callback: (error: Error) => void): void {
+    this.errorCallback = callback;
   }
 
   isConnected(): boolean {
@@ -53,7 +82,11 @@ export class BinanceMarketDataAdapter implements IMarketDataProvider {
         });
 
         this.ws.on('error', (err) => {
-          if (!this.connected) reject(err);
+          if (!this.connected) {
+            reject(err);
+          } else {
+            this.errorCallback?.(err instanceof Error ? err : new Error(String(err)));
+          }
         });
 
         this.ws.on('close', () => {
@@ -73,20 +106,33 @@ export class BinanceMarketDataAdapter implements IMarketDataProvider {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
   private handleMessage(raw: string): void {
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
+      return; // Ignore malformed JSON frames
+    }
+
+    // Validate through Zod Anti-Corruption Layer
+    const result = BinanceCombinedStreamMessageSchema.safeParse(parsed);
+    if (!result.success) {
+      // Propagate to orchestrator — no silent failures
+      this.errorCallback?.(
+        new Error(`[binance] Ticker schema validation failed: ${result.error.message}`)
+      );
       return;
     }
 
-    if (!parsed.data || typeof parsed.data !== 'object') return;
-    const ticker = parsed.data;
-    if (!ticker.s || !ticker.c || !ticker.P) return;
+    const { s: symbol, c: lastPrice, P: changePct } = result.data.data;
 
-    let base = ticker.s;
-    let quote = 'USD'; // Binance uses USDT mostly, map to USD for generic compatibility
+    // Normalise symbol: BTCUSDT → base=BTC, quote=USD
+    let base = symbol;
+    let quote = 'USD';
     if (base.endsWith('USDT')) {
       base = base.slice(0, -4);
       quote = 'USD';
@@ -101,8 +147,8 @@ export class BinanceMarketDataAdapter implements IMarketDataProvider {
     const price: AssetPrice = {
       symbol: base,
       currency: quote,
-      price: String(ticker.c),
-      change24hPercent: String(ticker.P),
+      price: lastPrice,
+      change24hPercent: changePct,
       provider: this.id,
       timestamp: new Date().toISOString(),
     };
