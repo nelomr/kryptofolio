@@ -1,5 +1,16 @@
 # @kryptofolio/backend
 
+## 0.1.3
+
+### Patch Changes
+
+- [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
+
+  Update CI to V6
+
+- Updated dependencies [[`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55)]:
+  - @kryptofolio/database@0.0.6
+
 ## 0.1.2
 
 ### Patch Changes

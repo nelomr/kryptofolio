@@ -3,6 +3,36 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.3](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.3) (2026-06-30)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.3)
+
+**Patch Changes**
+
+- [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
+
+  Update CI to V6
+
+### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.3)
+
+**Patch Changes**
+
+- [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
+
+  Update CI to V6
+
+- Updated dependencies [[`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55)]:
+  - @kryptofolio/database@0.0.6
+
+### 🗄️ Database (`@kryptofolio/database` @ 0.0.6)
+
+**Patch Changes**
+
+- [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
+
+  Update CI to V6
+
+
 ## [1.16.2](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.2) (2026-06-26)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.2)
