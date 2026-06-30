@@ -2,7 +2,7 @@ name: Release
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ['CI']
     types:
       - completed
     branches:
@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -35,10 +35,10 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -52,10 +52,10 @@ jobs:
         run: |
           # Use npx to ensure the binary is resolved correctly
           npx changeset version
-          
+
           # Sync newly generated package changelogs into the root CHANGELOG.md
           node scripts/sync-root-changelog.mjs
-          
+
           # Check if there are any changes (version bumps happened)
           if [[ -n $(git status --porcelain) ]]; then
             echo "Changes detected, committing version bumps..."
