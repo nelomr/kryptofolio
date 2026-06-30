@@ -367,4 +367,88 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
     const rows = stmt.all() as { id: string; name: string; type: string }[];
     return rows;
   }
+
+  async upsertTaxLots(lots: LedgerTaxLot[]): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT INTO tax_lots (
+        id, spot_transaction_id, asset_id, account_id,
+        original_qty, remaining_qty, unit_cost_fiat, total_cost_fiat,
+        fiat_currency, acquisition_timestamp, exchange_location, source_tx_id,
+        status, updated_at
+      ) VALUES (
+        ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, datetime('now', 'utc')
+      ) ON CONFLICT(id) DO UPDATE SET
+        remaining_qty = excluded.remaining_qty,
+        status = excluded.status,
+        updated_at = datetime('now', 'utc')
+        WHERE remaining_qty != excluded.remaining_qty OR status != excluded.status;
+    `);
+
+    for (const lot of lots) {
+      stmt.run(
+        lot.id,
+        lot.spot_transaction_id,
+        lot.asset_id,
+        lot.account_id,
+        lot.original_qty.toString(),
+        lot.remaining_qty.toString(),
+        lot.unit_cost_fiat.toString(),
+        lot.total_cost_fiat.toString(),
+        lot.fiat_currency,
+        lot.acquisition_timestamp,
+        lot.exchange_location,
+        lot.source_tx_id ?? null,
+        lot.status
+      );
+    }
+  }
+
+  async upsertLotHistoryEvents(events: LedgerTaxLotEvent[]): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT INTO lot_history_events (
+        id, tax_lot_id, spot_transaction_id, account_id,
+        amount_from_lot, sale_price_fiat, gain_loss_fiat, fiat_currency,
+        is_taxable, flag, notes, disposal_date, updated_at
+      ) VALUES (
+        ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, datetime('now', 'utc')
+      ) ON CONFLICT(id) DO UPDATE SET
+        amount_from_lot = excluded.amount_from_lot,
+        sale_price_fiat = excluded.sale_price_fiat,
+        gain_loss_fiat = excluded.gain_loss_fiat,
+        is_taxable = excluded.is_taxable,
+        flag = excluded.flag,
+        notes = excluded.notes,
+        disposal_date = excluded.disposal_date,
+        updated_at = datetime('now', 'utc')
+        WHERE amount_from_lot != excluded.amount_from_lot
+           OR sale_price_fiat != excluded.sale_price_fiat
+           OR gain_loss_fiat != excluded.gain_loss_fiat
+           OR is_taxable != excluded.is_taxable
+           OR flag IS DISTINCT FROM excluded.flag
+           OR notes IS DISTINCT FROM excluded.notes
+           OR disposal_date != excluded.disposal_date;
+    `);
+
+    for (const event of events) {
+      stmt.run(
+        event.id,
+        event.tax_lot_id,
+        event.spot_transaction_id,
+        event.account_id,
+        event.amount_from_lot.toString(),
+        event.sale_price_fiat.toString(),
+        event.gain_loss_fiat.toString(),
+        event.fiat_currency,
+        event.is_taxable ? 1 : 0,
+        event.flag ?? null,
+        event.notes ?? null,
+        event.disposal_date
+      );
+    }
+  }
 }

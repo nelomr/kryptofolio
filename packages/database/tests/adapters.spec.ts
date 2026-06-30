@@ -1,6 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import { NodeSqliteAdapter } from '../src/adapters/NodeSqliteAdapter.js';
 import { DuckDbAdapter } from '../src/adapters/DuckDbAdapter.js';
+
+const MIGRATION_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../migrations/sqlite/002_ledger_schema.sql'),
+  'utf-8'
+);
 
 describe('Database Adapters', () => {
   describe('NodeSqliteAdapter (Vault DB)', () => {
@@ -40,12 +49,26 @@ describe('Database Adapters', () => {
 
   describe('DuckDbAdapter (Fiscal DB)', () => {
     let adapter: DuckDbAdapter;
+    let sqliteDb: DatabaseSync;
+    let sqliteDbPath: string;
 
     beforeEach(async () => {
+      sqliteDbPath = path.join(os.tmpdir(), `test_ledger_${Date.now()}_${Math.random().toString(36).substring(7)}.db`);
+      sqliteDb = new DatabaseSync(sqliteDbPath);
+      sqliteDb.exec('PRAGMA foreign_keys = ON;');
+      sqliteDb.exec(MIGRATION_SQL);
+
       process.env.MOCK_MODE = 'false';
       process.env.DUCKDB_PATH = ':memory:';
       adapter = new DuckDbAdapter();
-      await adapter.initialize();
+      await adapter.initialize(sqliteDbPath);
+    });
+
+    afterEach(() => {
+      sqliteDb.close();
+      if (fs.existsSync(sqliteDbPath)) {
+        fs.unlinkSync(sqliteDbPath);
+      }
     });
 
     it('should initialize and allow table creation', async () => {
@@ -59,6 +82,14 @@ describe('Database Adapters', () => {
       expect((rows[0] as any).value).toBe(100.5);
     });
 
+    it('should attach SQLite ledger database and allow querying its tables', async () => {
+      const rows = await adapter.queryMany("SELECT table_name AS name FROM information_schema.tables WHERE table_catalog = 'ledger'");
+      expect(rows.length).toBeGreaterThan(0);
+      const tableNames = rows.map((r: any) => r.name);
+      expect(tableNames).toContain('spot_transactions');
+      expect(tableNames).toContain('tax_lots');
+    });
+
     it('should support queryOne', async () => {
       await adapter.execute('CREATE TABLE sum_test (amount DOUBLE)');
       await adapter.execute('INSERT INTO sum_test VALUES (?)', [50]);
@@ -67,6 +98,22 @@ describe('Database Adapters', () => {
       const result = await adapter.queryOne<{ total: number }>('SELECT SUM(amount) AS total FROM sum_test');
       expect(result).toBeDefined();
       expect(result?.total).toBe(125);
+    });
+
+    it('should support bulkInsert using Appender API', async () => {
+      await adapter.execute('CREATE TABLE bulk_test (id INTEGER, name VARCHAR)');
+      const data = [
+        { id: 1, name: 'Alice' },
+        { id: 2, name: 'Bob' },
+        { id: 3, name: 'Charlie' }
+      ];
+      await adapter.bulkInsert('bulk_test', data);
+
+      const rows = await adapter.queryMany<{ id: number; name: string }>('SELECT * FROM bulk_test ORDER BY id');
+      expect(rows).toHaveLength(3);
+      expect(rows[0].name).toBe('Alice');
+      expect(rows[1].name).toBe('Bob');
+      expect(rows[2].name).toBe('Charlie');
     });
   });
 });

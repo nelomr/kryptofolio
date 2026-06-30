@@ -31,18 +31,16 @@ export class CoinGeckoMarketDataAdapter implements IMarketDataProvider {
   private connected = false;
 
   private readonly coinIds: string[];
-  private readonly vsCurrency: string;
   private readonly pollIntervalMs: number;
   private readonly baseUrl: string;
 
   constructor(
     coinIds: string[] = ['bitcoin', 'ethereum', 'solana', 'cardano'],
-    vsCurrency = 'usd',
+    _vsCurrency = 'usd',
     pollIntervalMs = 60_000,
     baseUrl = 'https://api.coingecko.com/api/v3',
   ) {
     this.coinIds = coinIds;
-    this.vsCurrency = vsCurrency;
     this.pollIntervalMs = pollIntervalMs;
     this.baseUrl = baseUrl;
   }

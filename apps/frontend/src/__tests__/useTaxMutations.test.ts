@@ -28,6 +28,7 @@ function createMockTaxPort(): ITaxPort {
     syncWeb3: vi.fn().mockResolvedValue(undefined),
     downloadReport: vi.fn().mockResolvedValue(new Blob()),
     getAvailableYears: vi.fn(),
+    importTransactions: vi.fn(),
   };
 }
 

@@ -109,10 +109,12 @@ export interface ILedgerPort {
   // Tax Lots
   getTaxLots(accountId: string): Promise<LedgerTaxLot[]>;
   createTaxLot(lot: LedgerTaxLot): Promise<void>;
+  upsertTaxLots(lots: LedgerTaxLot[]): Promise<void>;
 
   // Lot History Events (S-3: previously missing)
   getLotHistoryEvents(accountId: string): Promise<LedgerTaxLotEvent[]>;
   saveLotHistoryEvent(event: LedgerTaxLotEvent): Promise<void>;
+  upsertLotHistoryEvents(events: LedgerTaxLotEvent[]): Promise<void>;
 
   // FK pre-resolution
   getAccounts(): Promise<{ id: string; name: string; type: string }[]>;

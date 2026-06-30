@@ -21,7 +21,7 @@ const sseClients = new Set<(event: SseMarketEvent) => void>();
 export function broadcastPrice(price: AssetPrice): void {
   const event: SseMarketEvent = { type: 'price', data: price };
 
- //Save price to history so REST API (/global) and new SSE connections get the latest data
+  //Save price to history so REST API (/global) and new SSE connections get the latest data
   container.priceHistoryPort.save(price).catch((err) => {
     bffLogger.error({ err }, 'Failed to save price to history port');
   });
@@ -65,12 +65,16 @@ const marketApi = new Hono<Env>()
     return streamSSE(c, async (stream) => {
       bffLogger.info('SSE client connected');
 
-      const useCase = new StreamNormalizedMarketDataUC(container.userSettingsPort);
+      const useCase = new StreamNormalizedMarketDataUC(
+        container.userSettingsPort,
+      );
 
       const send = async (event: SseMarketEvent) => {
         try {
           if (event.type === 'price') {
-            const normalizedPrice = await useCase.execute(event.data as AssetPrice);
+            const normalizedPrice = await useCase.execute(
+              event.data as AssetPrice,
+            );
             void stream.writeSSE({
               data: JSON.stringify({ type: 'price', data: normalizedPrice }),
               event: event.type,
@@ -131,8 +135,8 @@ const marketApi = new Hono<Env>()
     ).filter((p): p is AssetPrice => p !== null);
 
     return c.json({
-      totalMarketCapUsd: 0, // Populated by CoinGecko adapter on next poll
-      marketCapChange24hPercent: 0,
+      totalMarketCapUsd: '0',
+      marketCapChange24hPercent: '0',
       fearGreedIndex: null,
       fearGreedLabel: null,
       topAssets,

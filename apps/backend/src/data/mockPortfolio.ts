@@ -3,7 +3,7 @@
  * This mock is mathematically correlated across holdings, lots, history, metrics, and tax.
  */
 
-import { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
+import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
 
 export interface PortfolioMetrics {
   total_equity_eur: number

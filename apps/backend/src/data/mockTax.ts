@@ -1,4 +1,4 @@
-import { SpotTransactionType, FuturesTransactionType } from '@kryptofolio/shared-types';
+import type { SpotTransactionType, FuturesTransactionType } from '@kryptofolio/shared-types';
 
 export const MOCK_TRANSACTIONS: SpotTransactionType[] = [
   {

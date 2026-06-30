@@ -125,6 +125,21 @@ CREATE VIEW IF NOT EXISTS v_active_tax_lots AS
     SELECT *, acquisition_timestamp AS date FROM tax_lots WHERE deleted_at IS NULL;
 ```
 
+These raw views are the foundation for the advanced analytical pipeline executed within **DuckDB**:
+
+### 5.1. Vectorized Spot FIFO Engine
+DuckDB takes the raw transactions and passes them through a sophisticated flattening process:
+- **`v_flattened_fifo_events`**: Splits single Swap transactions into completely independent Acquisition and Disposal legs, converting fees into independent crypto disposals. It strictly ignores transfers between own wallets (`TRANSFER_IN`, `TRANSFER_OUT`) as taxable events, except for their gas fees.
+- **Window Functions**: We rely on DuckDB's native window functions (`SUM() OVER (PARTITION BY asset_id ORDER BY timestamp)`) to align and consume lots chronologically without explicit `while` loops, boosting throughput immensely compared to Node.js loops.
+
+### 5.2. Real-Time PnL & ASOF Joins
+DuckDB evaluates the real-time unrealized PnL via `DuckDbPortfolioAnalyticsAdapter`. Using the real-time price feeds injected via the Appender API (`bulkInsert`), DuckDB executes `ASOF` (As-Of) style temporal and conditional joins, calculating the exact current fiat valuation of the entire portfolio with sub-millisecond latency.
+
+### 5.3. Spanish Tax (IRPF) Categorization
+The tax pipeline aggregates all realized gains into strictly defined tax bases:
+- **`savings_base_yields` (Base del Ahorro):** Standard capital gains from trades, sales, staking, and futures/derivatives realized PnL.
+- **`general_base_airdrops` (Base General):** Earned income via airdrops or promotional tokens.
+
 ---
 
 ## 6. Performance Indices

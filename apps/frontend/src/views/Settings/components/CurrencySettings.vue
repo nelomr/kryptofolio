@@ -4,7 +4,7 @@ import { useI18n } from '@/composables/useI18n';
 import { useBaseCurrencyQuery, useExchangeRateQuery } from '@/composables/queries/useSettingsQueries';
 import { useUpdateBaseCurrencyMutation, useSyncExchangeRatesMutation } from '@/composables/queries/useSettingsMutations';
 import type { FiatCurrency } from '@kryptofolio/core-domain';
-import { CurrencyConverter } from '@kryptofolio/core-domain';
+import { CurrencyConverter, Money } from '@kryptofolio/core-domain';
 import Decimal from 'decimal.js';
 
 // UI Components (same pattern as LanguageSettings.vue)
@@ -87,7 +87,7 @@ const exchangeRateLabel = computed<string>(() => {
   const formattedRate = CurrencyConverter.formatRateLabel({
     from: 'USD',
     to: toCurrency,
-    rate: new Decimal(exchangeData.rate).toNumber(),
+    rate: new Money(new Decimal(exchangeData.rate)),
     timestamp: new Date().toISOString(),
   });
   
@@ -151,6 +151,7 @@ const exchangeRateLabel = computed<string>(() => {
           <Tooltip>
             <TooltipTrigger as-child>
               <Button
+                id="currency-sync-btn"
                 variant="outline"
                 size="icon"
                 :disabled="isSyncing || isLoadingCurrency || selectedCurrency === 'USD'"

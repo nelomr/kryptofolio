@@ -19,7 +19,12 @@ describe('Constraint Repro', () => {
       getCurrentPrice: async () => new Decimal(1)
     };
     
-    uc = new CsvIngestionUseCase(adapter, mockPriceProvider as any);
+    const mockUserSettings = {
+      getSetting: async () => null,
+      setSetting: async () => {}
+    };
+    
+    uc = new CsvIngestionUseCase(adapter, mockPriceProvider as any, mockUserSettings as any);
   });
 
   it('Payload 1 - WITHDRAWAL', async () => {

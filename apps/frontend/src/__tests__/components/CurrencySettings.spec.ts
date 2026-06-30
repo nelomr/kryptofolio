@@ -80,7 +80,8 @@ describe('CurrencySettings.vue', () => {
     expect(wrapper.exists()).toBe(true);
     expect(wrapper.text()).toContain('settings.currency.title');
     // Ensure the Sync button exists
-    const syncBtn = wrapper.find('button[variant="outline"]');
+    const syncBtn = wrapper.find('#currency-sync-btn');
+    expect(syncBtn.exists()).toBe(true);
     // Since we're using a shadcn button, variant is a prop, we can find by class or just check buttons
     // The button has a RefreshCwIcon inside it
     expect(wrapper.html()).toContain('lucide-refresh-cw');

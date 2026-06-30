@@ -5,7 +5,10 @@ import type { AssetPrice } from '@kryptofolio/shared-types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function createMockProvider(id: string, category: 'crypto' | 'stocks' = 'crypto'): IMarketDataProvider {
+function createMockProvider(
+  id: string,
+  category: 'crypto' | 'stocks' = 'crypto',
+): IMarketDataProvider {
   return {
     id,
     category,
@@ -72,7 +75,9 @@ describe('MarketDataOrchestrator', () => {
     let capturedCallback: ((price: AssetPrice) => void) | undefined;
 
     (provider.onPrice as ReturnType<typeof vi.fn>).mockImplementation(
-      (cb: (price: AssetPrice) => void) => { capturedCallback = cb; }
+      (cb: (price: AssetPrice) => void) => {
+        capturedCallback = cb;
+      },
     );
 
     await orchestrator.activate(provider);
@@ -80,8 +85,8 @@ describe('MarketDataOrchestrator', () => {
     const price: AssetPrice = {
       symbol: 'BTC',
       currency: 'USD',
-      price: "65000",
-      change24hPercent: "1.2",
+      price: '65000',
+      change24hPercent: '1.2',
       provider: 'kraken',
       timestamp: new Date().toISOString(),
     };
@@ -120,12 +125,16 @@ describe('MarketDataOrchestrator', () => {
     let capturedErrorCallback: ((error: Error) => void) | undefined;
 
     (provider.onError as ReturnType<typeof vi.fn>).mockImplementation(
-      (cb: (error: Error) => void) => { capturedErrorCallback = cb; }
+      (cb: (error: Error) => void) => {
+        capturedErrorCallback = cb;
+      },
     );
 
     await orchestrator.activate(provider);
 
     // When an error is emitted, it should not crash — orchestrator handles it
-    expect(() => capturedErrorCallback!(new Error('Zod validation failed'))).not.toThrow();
+    expect(() =>
+      capturedErrorCallback!(new Error('Zod validation failed')),
+    ).not.toThrow();
   });
 });

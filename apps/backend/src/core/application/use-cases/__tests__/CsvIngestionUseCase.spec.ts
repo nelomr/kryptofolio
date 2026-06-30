@@ -14,6 +14,8 @@ const MIGRATION_SQL = readFileSync(
   'utf-8'
 );
 
+import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+
 function makeMockLedgerPort(): Mocked<ILedgerPort> {
   return {
     initialize: vi.fn().mockResolvedValue(undefined),
@@ -26,6 +28,8 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
     createTaxLot: vi.fn().mockResolvedValue(undefined),
     getLotHistoryEvents: vi.fn().mockResolvedValue([]),
     saveLotHistoryEvent: vi.fn().mockResolvedValue(undefined),
+    upsertTaxLots: vi.fn().mockResolvedValue(undefined),
+    upsertLotHistoryEvents: vi.fn().mockResolvedValue(undefined),
     ensureAssetExists: vi.fn().mockResolvedValue(undefined),
     ensureAccountExists: vi.fn().mockResolvedValue(undefined),
   } as Mocked<ILedgerPort>;
@@ -37,6 +41,13 @@ function makeMockPriceProvider(price = '1000'): Mocked<IPriceProviderPort> {
   } as Mocked<IPriceProviderPort>;
 }
 
+function makeMockUserSettingsPort(): Mocked<IUserSettingsPort> {
+  return {
+    getSetting: vi.fn().mockResolvedValue(null),
+    setSetting: vi.fn().mockResolvedValue(undefined),
+  } as unknown as Mocked<IUserSettingsPort>;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Tests — Mocked Port
 // ---------------------------------------------------------------------------
@@ -45,11 +56,32 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
   let useCase: CsvIngestionUseCase;
   let ledgerPort: Mocked<ILedgerPort>;
   let priceProvider: Mocked<IPriceProviderPort>;
+  let userSettingsPort: Mocked<IUserSettingsPort>;
 
   beforeEach(() => {
     ledgerPort = makeMockLedgerPort();
     priceProvider = makeMockPriceProvider();
-    useCase = new CsvIngestionUseCase(ledgerPort, priceProvider);
+    userSettingsPort = makeMockUserSettingsPort();
+    useCase = new CsvIngestionUseCase(ledgerPort, priceProvider, userSettingsPort);
+  });
+
+  it('flags needs_recalculation as true after successful ingestion', async () => {
+    const rows: IngestibleTransaction[] = [{
+      account_id: '10000000-0000-0000-0000-000000000001',
+      id_hash: 'hash-1',
+      tx_type: 'buy',
+      timestamp: '2023-01-01T00:00:00Z',
+      asset_in: 'BTC',
+      amount_in: '1.5',
+      asset_out: 'USDT',
+      amount_out: '30000',
+      total_fiat: '30000',
+      price_fiat: '20000',
+      metadata: {},
+    }];
+
+    await useCase.execute(rows, 'spot');
+    expect(userSettingsPort.setSetting).toHaveBeenCalledWith('needs_recalculation', 'true');
   });
 
   it('resolves FK dependencies before inserting (ensureAssetExists per asset)', async () => {
@@ -179,7 +211,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
     db.exec(MIGRATION_SQL); // Use REAL schema, not simplified inline schema
 
     adapter = new SQLiteLedgerAdapter(db);
-    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider());
+    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort());
   });
 
   afterEach(() => {

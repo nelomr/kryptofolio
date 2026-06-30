@@ -444,9 +444,6 @@ export const es: I18nDictionary = {
   "ingestion.grid.mapping_unmapped": "Sin mapear",
   "ingestion.grid.cell_error": "Requerido o formato inválido",
 
-  "ingestion.errors.time_data_missing": "Falta información de fecha/hora",
-  "ingestion.errors.tx_type_required": "El tipo de transacción es obligatorio",
-  "ingestion.errors.amount_invalid": "Formato de cantidad inválido",
   "ingestion.errors.asset_required": "El identificador del activo/moneda es obligatorio",
   "ingestion.errors.missing_both_assets": "Las transacciones direccionales requieren al menos un activo",
 

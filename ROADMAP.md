@@ -54,8 +54,8 @@ The focus now shifts to building out the centralized Hono.js backend to perform 
   - [x] Export `AppType` to the frontend using Hono RPC to guarantee end-to-end type safety between client and server without regenerating clients.
 
 - **🧮 Financial Engine (FIFO & PnL)**
-  - [ ] Implement business logic required to correctly calculate portfolio values using strict First-In-First-Out (FIFO) methodologies.
-  - [ ] Correctly attribute fees and manage the complexities of crypto Swaps, Staking rewards, and Airdrops according to AEAT (Spanish Tax Agency) criteria.
+  - [x] Implement business logic required to correctly calculate portfolio values using strict First-In-First-Out (FIFO) methodologies.
+  - [x] Correctly attribute fees and manage the complexities of crypto Swaps, Staking rewards, and Airdrops according to AEAT (Spanish Tax Agency) criteria.
 
 - **🔌 Real-Time Market Data**
   - [x] Server-Sent Events (SSE) setup for live price streaming between backend and frontend adapters.
@@ -76,8 +76,8 @@ To support the robust Backend Financial Engine, we are implementing a dual-datab
   - [x] Define database constraints and soft-delete mechanisms.
 
 - **Phase 3.2: DuckDB OLAP Instantiation**
-  - [ ] Establish zero-copy connection to SQLite.
-  - [ ] Develop analytical Window Function views for asynchronous FIFO calculations.
+  - [x] Establish zero-copy connection to SQLite.
+  - [x] Develop analytical Window Function views for asynchronous FIFO calculations.
 
 - **Phase 3.3: Parquet Series Integration**
   - [ ] Persist historical price data to Hive-partitioned `.parquet` files.

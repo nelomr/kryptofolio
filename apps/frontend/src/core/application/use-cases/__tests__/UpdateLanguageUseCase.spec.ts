@@ -12,7 +12,7 @@ describe('UpdateLanguageUseCase', () => {
     mockSettingsPort = {
       setLanguage: vi.fn().mockResolvedValue(undefined),
       getLanguage: vi.fn().mockResolvedValue('en'),
-    };
+    } as unknown as ISettingsPort;
 
     mockI18nPort = {
       getLocale: vi.fn().mockReturnValue('en'),

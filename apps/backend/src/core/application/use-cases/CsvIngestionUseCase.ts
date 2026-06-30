@@ -41,13 +41,21 @@ function toFuturesTxType(raw: string | null | undefined): FuturesTxType {
   return map[upper] ?? 'TRADE';
 }
 
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+
 export class CsvIngestionUseCase {
   private ledgerPort: ILedgerPort;
   private priceProvider: IPriceProviderPort;
+  private userSettingsPort: IUserSettingsPort;
 
-  constructor(ledgerPort: ILedgerPort, priceProvider: IPriceProviderPort) {
+  constructor(
+    ledgerPort: ILedgerPort,
+    priceProvider: IPriceProviderPort,
+    userSettingsPort: IUserSettingsPort
+  ) {
     this.ledgerPort = ledgerPort;
     this.priceProvider = priceProvider;
+    this.userSettingsPort = userSettingsPort;
   }
 
   async execute(rows: IngestibleTransaction[], market: 'spot' | 'futures'): Promise<void> {
@@ -123,6 +131,10 @@ export class CsvIngestionUseCase {
         };
         await this.ledgerPort.saveFuturesTransaction(tx);
       }
+    }
+
+    if (rows.length > 0) {
+      await this.userSettingsPort.setSetting('needs_recalculation', 'true');
     }
   }
 

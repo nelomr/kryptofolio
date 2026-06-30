@@ -48,9 +48,12 @@ The backend employs a sophisticated dual-database architecture, heavily optimize
 | **OLAP Analytics** | DuckDB | Tax calculations, FIFO matching, complex SWAPs, and portfolio PnL. | Ephemeral in-memory instance. Attaches directly to the SQLite ledger using `ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE)`. Uses Window Functions for high-performance vectorized operations. |
 | **Historical Data** | Apache Parquet | Local, columnar storage of historical cryptocurrency and fiat exchange rates. | Hive-partitioned directories (`year=2026/month=01`). Federated dynamically into DuckDB via `LEFT JOIN` during analytics queries. |
 
-Migration files and schema definitions live in `packages/database/`:
+Migration files, schema definitions, and analytical adapters live in `packages/database/`:
 - **SQLite Migrations**: Manage table definitions for Vault, Assets, Accounts, and Transactions.
-- **DuckDB Views**: Define the analytical queries (e.g., Cumulative FIFO sums) executed on the fly against the attached SQLite and Parquet files.
+- **DuckDB Views & Adapters**: Define the analytical queries (e.g., `v_flattened_fifo_events`, `v_futures_realized_pnl`) executed on the fly against the attached SQLite and Parquet files.
+  - `DuckDbTaxCalculatorAdapter`: Consumes the vectorized DuckDB views to generate accurate capital gains and tax base categorization (IRPF).
+  - `DuckDbPortfolioAnalyticsAdapter`: Responsible for ASOF joins and real-time market data projection.
+  - `FifoMaterializerService`: Orchestrates the complex lifecycle of extracting flattened events, calculating gains using FIFO matching, and persisting consumed lots back to the ledger securely.
 
 ## Hono RPC Type Safety
 

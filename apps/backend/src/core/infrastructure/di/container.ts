@@ -115,7 +115,7 @@ export class DIContainer {
 
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
-    this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider);
+    this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider, this.userSettingsPort);
   }
 }
 

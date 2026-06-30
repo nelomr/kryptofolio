@@ -438,9 +438,6 @@ export const en: I18nDictionary = {
   "ingestion.grid.mapping_unmapped": "Unmapped",
   "ingestion.grid.cell_error": "Required or invalid format",
 
-  "ingestion.errors.time_data_missing": "Missing date/time information",
-  "ingestion.errors.tx_type_required": "Transaction type is required",
-  "ingestion.errors.amount_invalid": "Invalid amount format",
   "ingestion.errors.asset_required": "Asset / Coin identifier is required",
   "ingestion.errors.missing_both_assets": "Directional transactions require at least one asset",
 
