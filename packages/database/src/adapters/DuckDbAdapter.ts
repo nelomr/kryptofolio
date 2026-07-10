@@ -382,6 +382,60 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         FROM v_fifo_matches m
         JOIN v_acquisitions a ON m.acquisition_tx_id = a.tx_id AND m.asset_id = a.asset_id;
       `);
+
+      // -----------------------------------------------------------------------
+      // Parquet Federation — historical_prices view
+      // -----------------------------------------------------------------------
+      // Resolve the Parquet storage directory relative to the process CWD or an
+      // explicit env override so both dev (monorepo root) and prod work correctly.
+      const parquetBase =
+        process.env.PARQUET_DATA_PATH ||
+        path.resolve(process.cwd(), 'data/historical/prices');
+
+      const sentinelDir = path.join(parquetBase, 'year=1970');
+      const sentinelFile = path.join(sentinelDir, 'prices.parquet');
+
+      // Ensure the base directory exists
+      if (!fs.existsSync(parquetBase)) {
+        fs.mkdirSync(parquetBase, { recursive: true });
+      }
+
+      // Create a schema-only sentinel file if no Parquet files exist yet.
+      // This prevents DuckDB from throwing "No files found" on a fresh install.
+      const hasParquetFiles = fs.existsSync(parquetBase) &&
+        fs.readdirSync(parquetBase).some((entry) => {
+          const entryPath = path.join(parquetBase, entry);
+          if (!fs.statSync(entryPath).isDirectory()) return false;
+          return fs.readdirSync(entryPath).some((f) => f.endsWith('.parquet'));
+        });
+
+      if (!hasParquetFiles) {
+        fs.mkdirSync(sentinelDir, { recursive: true });
+        // Use DuckDB COPY to write a schema-only Parquet file (zero rows)
+        await this.connection.run(`
+          COPY (
+            SELECT
+              CAST(NULL AS DATE)     AS date,
+              CAST(NULL AS VARCHAR)  AS asset_id,
+              CAST(NULL AS VARCHAR)  AS symbol,
+              CAST(NULL AS DECIMAL(38,18)) AS open,
+              CAST(NULL AS DECIMAL(38,18)) AS high,
+              CAST(NULL AS DECIMAL(38,18)) AS low,
+              CAST(NULL AS DECIMAL(38,18)) AS close,
+              CAST(NULL AS DECIMAL(38,18)) AS volume,
+              CAST(NULL AS VARCHAR)  AS currency,
+              CAST(NULL AS INTEGER)  AS year
+            LIMIT 0
+          ) TO '${sentinelFile}' (FORMAT PARQUET);
+        `);
+      }
+
+      // Mount the Parquet files as a federated view
+      await this.connection.run(`
+        CREATE OR REPLACE VIEW historical_prices AS
+        SELECT *
+        FROM read_parquet('${parquetBase}/*/*.parquet', hive_partitioning = true);
+      `);
     } catch (err) {
       throw new Error(
         `[Database] Critical failure initializing DuckDB: ${err}`,

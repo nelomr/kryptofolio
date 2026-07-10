@@ -120,4 +120,11 @@ export interface ILedgerPort {
   getAccounts(): Promise<{ id: string; name: string; type: string }[]>;
   ensureAssetExists(assetId: string, symbol?: string): Promise<void>;
   ensureAccountExists(accountId: string, name?: string): Promise<void>;
+
+  /**
+   * Returns all unique (assetId, symbol) pairs that are currently tracked
+   * in the ledger (i.e. appear in the assets table).
+   * Used by IngestDailyPricesUseCase to discover which assets need price ingestion.
+   */
+  getTrackedAssets(): Promise<{ assetId: string; symbol: string }[]>;
 }

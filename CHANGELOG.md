@@ -9,6 +9,10 @@ Format follows [Conventional Commits](https://www.conventionalcommits.org) and [
 
 **Patch Changes**
 
+- [`bc47988`](https://github.com/nelomr/kryptofolio/commit/bc479880ca1abad28a02533d5f1c181e7efb9c6f) Thanks [@nelomr](https://github.com/nelomr)! - feat: DuckDB Vectorized Spot FIFO Engine & Real-Time PnL Federation
+
+  Implemented the complete OLAP tax calculation engine using DuckDB. Features include vectorized FIFO lots consumption via Window Functions, proper routing of IRPF Tax Bases (Savings vs General), and asynchronous Unrealized PnL federation via the ASOF adapter.
+
 - [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
 
   Update CI to V6
@@ -16,6 +20,10 @@ Format follows [Conventional Commits](https://www.conventionalcommits.org) and [
 ### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.3)
 
 **Patch Changes**
+
+- [`bc47988`](https://github.com/nelomr/kryptofolio/commit/bc479880ca1abad28a02533d5f1c181e7efb9c6f) Thanks [@nelomr](https://github.com/nelomr)! - feat: DuckDB Vectorized Spot FIFO Engine & Real-Time PnL Federation
+
+  Implemented the complete OLAP tax calculation engine using DuckDB. Features include vectorized FIFO lots consumption via Window Functions, proper routing of IRPF Tax Bases (Savings vs General), and asynchronous Unrealized PnL federation via the ASOF adapter.
 
 - [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
 
@@ -27,6 +35,10 @@ Format follows [Conventional Commits](https://www.conventionalcommits.org) and [
 ### 🗄️ Database (`@kryptofolio/database` @ 0.0.6)
 
 **Patch Changes**
+
+- [`bc47988`](https://github.com/nelomr/kryptofolio/commit/bc479880ca1abad28a02533d5f1c181e7efb9c6f) Thanks [@nelomr](https://github.com/nelomr)! - feat: DuckDB Vectorized Spot FIFO Engine & Real-Time PnL Federation
+
+  Implemented the complete OLAP tax calculation engine using DuckDB. Features include vectorized FIFO lots consumption via Window Functions, proper routing of IRPF Tax Bases (Savings vs General), and asynchronous Unrealized PnL federation via the ASOF adapter.
 
 - [`87563e7`](https://github.com/nelomr/kryptofolio/commit/87563e73af84378293398ee1daef2d5564982b55) Thanks [@nelomr](https://github.com/nelomr)! - feat: Update CI to V6
 

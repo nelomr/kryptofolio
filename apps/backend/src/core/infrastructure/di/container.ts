@@ -5,7 +5,8 @@ import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js'
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
 import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
 import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
-import type { IDatabasePort } from '@kryptofolio/database';
+import type { IPriceIngestionPort } from '../../domain/ports/IPriceIngestionPort.js';
+import type { IDatabasePort, IAnalyticalDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
 import { getLedgerDb } from '@kryptofolio/database';
 import { EcbExchangeRateAdapter } from '../adapters/EcbExchangeRateAdapter.js';
@@ -13,6 +14,7 @@ import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter
 import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
 import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
 import { SQLiteLedgerAdapter } from '../adapters/SQLiteLedgerAdapter.js';
+import { DuckDbParquetPriceAdapter } from '../adapters/DuckDbParquetPriceAdapter.js';
 import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.js';
 import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.js';
 import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.js';
@@ -27,6 +29,7 @@ import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js'
 import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
 import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
 import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
+import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDailyPricesUseCase.js';
 
 
 /**
@@ -66,6 +69,10 @@ export class DIContainer {
   /** Ledger & Ingestion */
   public readonly ledgerPort: ILedgerPort;
   public readonly csvIngestionUseCase: CsvIngestionUseCase;
+
+  /** Price Ingestion (Parquet) */
+  public readonly priceIngestionPort: IPriceIngestionPort;
+  public readonly ingestDailyPricesUseCase: IngestDailyPricesUseCase;
 
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
@@ -116,6 +123,25 @@ export class DIContainer {
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
     this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider, this.userSettingsPort);
+
+    // Price Ingestion (Parquet) — DuckDbParquetPriceAdapter + IngestDailyPricesUseCase
+    // The DuckDbAdapter must be initialized (index.ts) before using the adapter.
+    // Call container.setDuckDbAdapter(duckDb) after duckDb.initialize() in index.ts.
+    this.priceIngestionPort = new DuckDbParquetPriceAdapter(null as unknown as IAnalyticalDatabasePort);
+    this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
+      this.ledgerPort,
+      this.priceIngestionPort,
+      this.krakenMarketDataAdapter,
+    );
+  }
+
+  /**
+   * Injects the initialized DuckDbAdapter into the Parquet price adapter.
+   * Must be called AFTER duckDb.initialize() in index.ts.
+   */
+  setDuckDbAdapter(duckDb: IAnalyticalDatabasePort): void {
+    // DuckDbParquetPriceAdapter.duckDb is not readonly — safe to reassign after init
+    (this.priceIngestionPort as unknown as { duckDb: IAnalyticalDatabasePort }).duckDb = duckDb;
   }
 }
 

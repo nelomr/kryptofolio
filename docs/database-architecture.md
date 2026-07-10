@@ -9,6 +9,9 @@ The ledger is designed to solve common crypto accounting problems:
 - **Idempotency:** Exchanges often export duplicate rows or allow overlapping CSV exports. We prevent duplication using a deterministic cryptographic hash (`id_hash`).
 - **Auditability:** Financial data must never be hard-deleted. A soft-delete policy (`deleted_at`) is enforced alongside an `audit_log` that tracks all changes via native SQLite triggers.
 
+> [!NOTE]
+> For information on how time-series data (like historical daily prices) is handled outside of SQLite to prevent database bloat, see the [DuckDB & Parquet Time-Series Architecture](file:///Users/nelo/proyectos/dashboar-portfolio/docs/architecture/duckdb-parquet-time-series.md).
+
 ---
 
 ## 2. Entity Relationship Diagram

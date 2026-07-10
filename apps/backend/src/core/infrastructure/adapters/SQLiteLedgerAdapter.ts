@@ -34,6 +34,16 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
     const sql = fs.readFileSync(schemaPath, 'utf-8');
     this.db.exec(sql);
 
+    // Apply 003_currency_schema.sql — exchange_rates table + index
+    const currencySchemaPath = path.resolve(
+      __dirname,
+      '../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql',
+    );
+    if (fs.existsSync(currencySchemaPath)) {
+      const currencySql = fs.readFileSync(currencySchemaPath, 'utf-8');
+      this.db.exec(currencySql);
+    }
+
     // Seed default accounts
     const insertAccount = this.db.prepare(`
       INSERT INTO accounts (id, name, type, created_at, updated_at)
@@ -451,4 +461,18 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       );
     }
   }
+
+  async getTrackedAssets(): Promise<{ assetId: string; symbol: string }[]> {
+    const stmt = this.db.prepare(`
+      SELECT id, symbol
+      FROM assets
+      WHERE deleted_at IS NULL
+        AND symbol IS NOT NULL
+      ORDER BY symbol ASC
+    `);
+
+    const rows = stmt.all() as { id: string; symbol: string }[];
+    return rows.map((row) => ({ assetId: row.id, symbol: row.symbol }));
+  }
 }
+

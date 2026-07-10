@@ -40,6 +40,16 @@ propuestas/
 # OpenSpec — only track live specs and config, not change history
 openspec/changes/archive/
 
+# Parquet data storage (populated locally via seed scripts)
+data/historical/
+*.parquet
+
+# DuckDB local instances
+*.duckdb*
+
+# Temporary/untracked folders
+prices_assets/
+
 # Databases
 *.db
 *.db-journal

@@ -37,8 +37,10 @@ El repositorio está estructurado como un **Monorepo (PNPM Workspaces)** para de
 - `packages/database/`: Capa de abstracción de base de datos que define la interfaz genérica `IDatabasePort` y los esquemas SQL. Encapsula la arquitectura core: un **SQLite Ledger** (`kryptofolio_ledger.db`) *local-first* para persistencia OLTP, y un **Motor DuckDB** efímero para consultas OLAP federadas de alto rendimiento.
 - `packages/core-domain/`: Lógica de negocio pura (Servicios, Casos de Uso, Normalizadores). Totalmente agnóstico del framework.
 - `packages/shared-types/`: Esquemas de Zod, DTOs y definiciones de tipos compartidas por todo el monorepo.
-- `docs/`: Documentación técnica detallando la arquitectura, integración de APIs y extensibilidad.
-
+- `docs/`: Documentación técnica cubriendo:
+  - [Arquitectura del Sistema](docs/architecture.md)
+  - [Arquitectura de Base de Datos (SQLite Ledger)](docs/database-architecture.md)
+  - [Arquitectura de Series Temporales (DuckDB & Parquet)](docs/architecture/duckdb-parquet-time-series.md)
 ### Gestión de Dependencias (PNPM Catalogs)
 Usamos **PNPM Catalogs** para mantener una única fuente de la verdad en las dependencias comunes de todos los paquetes del monorepo (ej. TypeScript, Zod, Hono).
 - Para actualizar una dependencia compartida, modifica el bloque `catalog:` en `pnpm-workspace.yaml` en la raíz y ejecuta `pnpm install`.

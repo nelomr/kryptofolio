@@ -3,7 +3,9 @@ import { app } from './app.js';
 import { container } from './core/infrastructure/di/container.js';
 import { broadcastPrice } from './core/infrastructure/routes/market.js';
 import { startExchangeRateBootSync } from './core/infrastructure/jobs/ExchangeRateSyncJob.js';
+import { startPriceIngestionJob } from './core/infrastructure/jobs/PriceIngestionJob.js';
 import { bffLogger } from './core/utils/logger.js';
+import { DuckDbAdapter } from '@kryptofolio/database';
 
 export type { AppType } from './app.js';
 
@@ -19,6 +21,13 @@ if (process.env.NODE_ENV !== 'test') {
       bffLogger.info('Initializing Ledger SQLite Database...');
       await container.ledgerPort.initialize();
       bffLogger.info('Ledger Database initialized successfully.');
+
+      // Initialize the DuckDB analytical engine (FIFO views + Parquet federation)
+      bffLogger.info('Initializing DuckDB Analytical Engine...');
+      const duckDb = new DuckDbAdapter();
+      await duckDb.initialize();
+      container.setDuckDbAdapter(duckDb);
+      bffLogger.info('DuckDB initialized successfully (Parquet federation active).');
 
       // Wire the SSE broadcast callback into the MarketDataOrchestrator.
       // We do not recreate the orchestrator here to preserve DI reference equality.
@@ -38,6 +47,9 @@ if (process.env.NODE_ENV !== 'test') {
       // Start the Exchange Rate Boot Sync
       startExchangeRateBootSync();
 
+      // Start the daily Price Ingestion Job (Parquet OHLCV)
+      await startPriceIngestionJob();
+
       bffLogger.info(`Kryptofolio Backend running on port ${port}`);
       serve({ fetch: app.fetch, port });
     } catch (err) {
@@ -46,3 +58,4 @@ if (process.env.NODE_ENV !== 'test') {
     }
   })();
 }
+

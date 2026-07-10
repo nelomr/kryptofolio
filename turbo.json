@@ -26,6 +26,12 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "seed:parquet": {
+      "cache": false
+    },
+    "seed:ecb-rates": {
+      "cache": false
     }
   }
 }

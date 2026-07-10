@@ -32,6 +32,7 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
     upsertLotHistoryEvents: vi.fn().mockResolvedValue(undefined),
     ensureAssetExists: vi.fn().mockResolvedValue(undefined),
     ensureAccountExists: vi.fn().mockResolvedValue(undefined),
+    getTrackedAssets: vi.fn().mockResolvedValue([]),
   } as Mocked<ILedgerPort>;
 }
 

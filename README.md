@@ -39,8 +39,10 @@ The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decoup
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
 - `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL schema files. It encapsulates the core architecture: a local-first **SQLite Ledger** (`kryptofolio_ledger.db`) for OLTP persistence, and an ephemeral **DuckDB Engine** for high-performance OLAP federated queries.
-- `docs/`: Technical documentation covering Architecture, API Integrations, and Extensibility.
-
+- `docs/`: Technical documentation covering:
+  - [System Architecture](docs/architecture.md)
+  - [SQLite Transactional Ledger](docs/database-architecture.md)
+  - [DuckDB & Parquet Time-Series Architecture](docs/architecture/duckdb-parquet-time-series.md)
 ### Dependency Management (PNPM Catalogs + Turborepo)
 We use **PNPM Catalogs** to maintain a single source of truth for common dependencies across all workspace packages (e.g., TypeScript, Zod, Hono).
 - To update a shared dependency, edit the `catalog:` block in `pnpm-workspace.yaml` at the root and run `pnpm install`.
