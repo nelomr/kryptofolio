@@ -72,16 +72,17 @@ jobs:
             # Push commits and all tags to main
             git push origin main --tags
             
-            # Create a GitHub Release attached to the global tag
-            # We use --target main so GitHub automatically creates the tag if it's missing
-            # We use --generate-notes to auto-populate the body with the commit history
-            gh release create "$GLOBAL_TAG" \
-              --target main \
-              --title "v$FRONTEND_VERSION" \
-              --generate-notes \
-              --latest
-            
-            echo "✅ GitHub Release $GLOBAL_TAG successfully created!"
+            # Create a GitHub Release attached to the global tag if it doesn't exist yet
+            if ! gh release view "$GLOBAL_TAG" >/dev/null 2>&1; then
+              gh release create "$GLOBAL_TAG" \
+                --target main \
+                --title "v$FRONTEND_VERSION" \
+                --generate-notes \
+                --latest
+              echo "✅ GitHub Release $GLOBAL_TAG successfully created!"
+            else
+              echo "⚠️ GitHub Release $GLOBAL_TAG already exists, skipping release creation."
+            fi
           else
             echo "No changesets found, nothing to version or publish."
           fi
