@@ -50,10 +50,28 @@ The backend employs a sophisticated dual-database architecture, heavily optimize
 
 Migration files, schema definitions, and analytical adapters live in `packages/database/`:
 - **SQLite Migrations**: Manage table definitions for Vault, Assets, Accounts, and Transactions.
-- **DuckDB Views & Adapters**: Define the analytical queries (e.g., `v_flattened_fifo_events`, `v_futures_realized_pnl`) executed on the fly against the attached SQLite and Parquet files.
+- **DuckDB Views & Adapters**: Define the analytical queries (e.g., `v_flattened_fifo_events`, `v_portfolio_daily_valuation`, `v_portfolio_returns_volatility`, `v_portfolio_ath_drawdown`, `v_portfolio_alpha_beta`) executed on the fly against the attached SQLite and Parquet files.
   - `DuckDbTaxCalculatorAdapter`: Consumes the vectorized DuckDB views to generate accurate capital gains and tax base categorization (IRPF).
   - `DuckDbPortfolioAnalyticsAdapter`: Responsible for ASOF joins and real-time market data projection.
+  - `DuckDbMetricsAdapter`: Generates institutional risk metrics (Sharpe Ratio, Volatility, Max Drawdown, Alpha, Beta, Win Rate) via DuckDB OLAP queries. *See full [DuckDB Metrics & Time-Series Architecture](architecture/duckdb-metrics-time-series.md).*
   - `FifoMaterializerService`: Orchestrates the complex lifecycle of extracting flattened events, calculating gains using FIFO matching, and persisting consumed lots back to the ledger securely.
+
+## Domain Layer Isolation (`PreciseAmount`)
+
+The core domain (`ILedgerPort`, `IPriceProviderPort`) is 100% decoupled from third-party libraries (including `decimal.js`). All exact financial amounts are represented using a TypeScript **Branded Value Object**:
+
+```typescript
+export type PreciseAmount = string & { readonly __brand: 'PreciseAmount' };
+```
+
+Arbitrary-precision arithmetic (`Decimal`) is strictly confined to Application and Infrastructure adapters.
+
+## Metrics & Performance Endpoints (`/api/metrics`)
+
+- `GET /api/metrics/kpis`: Portfolio KPI summary (equity, cost basis, realized/unrealized PnL, win rate, best/worst asset).
+- `GET /api/metrics/risk`: Portfolio risk metrics (Sharpe ratio, 30d annualized volatility, max drawdown, Alpha, Beta).
+- `GET /api/metrics/performance`: Daily valuation time-series.
+- `GET /api/metrics/drawdown`: Historical percentage drawdown curve.
 
 ## Hono RPC Type Safety
 

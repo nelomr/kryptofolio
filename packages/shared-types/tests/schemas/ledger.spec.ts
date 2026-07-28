@@ -18,6 +18,7 @@ describe("Ledger Schemas", () => {
         fee_asset_id: "BTC",
         total_fiat: "5000",
         price_fiat: "50",
+        fiat_currency: "USD",
         status: "COMPLETED",
       };
       const res = SpotTransactionSchema.safeParse(valid);
@@ -71,6 +72,7 @@ describe("Ledger Schemas", () => {
         funding_amount: "0",
         fee_amount: "1.2",
         fee_asset_id: "USDT",
+        fiat_currency: "USD",
         status: "COMPLETED",
       };
       const res = FuturesTransactionSchema.safeParse(valid);

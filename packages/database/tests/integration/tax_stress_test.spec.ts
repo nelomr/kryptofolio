@@ -6,8 +6,16 @@ import os from 'node:os';
 import { DuckDbAdapter } from '../../src/adapters/DuckDbAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../../apps/backend/src/core/infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 
+const MIGRATION_001_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../migrations/sqlite/001_vault_schema.sql'),
+  'utf-8'
+);
 const MIGRATION_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../migrations/sqlite/002_ledger_schema.sql'),
+  'utf-8'
+);
+const MIGRATION_003_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../migrations/sqlite/003_currency_schema.sql'),
   'utf-8'
 );
 
@@ -21,7 +29,9 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     sqlitePath = path.join(os.tmpdir(), `test_ledger_stress_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
+    sqliteDb.exec(MIGRATION_001_SQL);
     sqliteDb.exec(MIGRATION_SQL);
+    sqliteDb.exec(MIGRATION_003_SQL);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
@@ -107,8 +117,8 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
       VALUES ('tx-transfer-in', 'h-trans-in', 'acc-2', 'TRANSFER_IN', 'BNB', '4.0', '1200.00', '300.00', '2023-01-02T10:05:00Z', 'COMPLETED')
     `).run();
 
-    // Seed BNB price at transfer time in DuckDB's asset_prices table
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('BNB', 300.0, '2023-01-02 10:00:00')");
+    // Seed BNB price at transfer time in DuckDB's _price_seed table
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('BNB', 300.0, '2023-01-02', 'USD')");
 
     const { lots, events } = await adapter.calculateLotsAndEvents();
 
@@ -306,12 +316,12 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     `).run();
 
     // -- SEED PRICING ORACLE IN DUCKDB --
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.12, '2023-01-02 10:00:00')");
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.15, '2023-01-03 10:00:00')");
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.25, '2023-01-08 10:00:00')");
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.26, '2023-01-09 10:00:00')");
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.33, '2023-01-15 10:00:00')");
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('HBAR', 0.34, '2023-01-16 10:00:00')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.12, '2023-01-02', 'USD')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.15, '2023-01-03', 'USD')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.25, '2023-01-08', 'USD')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.26, '2023-01-09', 'USD')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.33, '2023-01-15', 'USD')");
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.34, '2023-01-16', 'USD')");
 
     // Calculate lots and events
     const { lots, events } = await adapter.calculateLotsAndEvents();

@@ -104,40 +104,61 @@ export const MockAssetSchema = z
     id: z.string().optional(), // mockPortfolio holdings do not have id!
     symbol: z.string(),
     amount: numericField,
+    avg_price_fiat: numericField.optional(),
     avg_price_eur: numericField.optional(),
-    current_value_eur: numericField,
-    cost_basis_eur: numericField,
-    unrealized_pnl_eur: numericField,
-    pnl_eur: numericField,
+    current_value_fiat: numericField.optional(),
+    current_value_eur: numericField.optional(),
+    cost_basis_fiat: numericField.optional(),
+    cost_basis_eur: numericField.optional(),
+    unrealized_pnl_fiat: numericField.optional(),
+    unrealized_pnl_eur: numericField.optional(),
+    pnl_fiat: numericField.optional(),
+    pnl_eur: numericField.optional(),
+    currency: z.string().default('USD'),
     portfolio_locations: z.array(z.string()).default([]),
   })
   .transform((raw) => ({
     id: AssetIdSchema.parse(`asset-${raw.symbol.toLowerCase()}-mock`),
     symbol: raw.symbol,
     amount: raw.amount,
-    avgPriceEur: raw.avg_price_eur ?? 0,
-    currentValueEur: raw.current_value_eur,
-    costBasisEur: raw.cost_basis_eur,
-    unrealizedPnlEur: raw.unrealized_pnl_eur,
-    pnlEur: raw.pnl_eur,
+    avgPriceFiat: raw.avg_price_fiat ?? raw.avg_price_eur ?? 0,
+    currentValueFiat: raw.current_value_fiat ?? raw.current_value_eur ?? 0,
+    costBasisFiat: raw.cost_basis_fiat ?? raw.cost_basis_eur ?? 0,
+    unrealizedPnlFiat: raw.unrealized_pnl_fiat ?? raw.unrealized_pnl_eur ?? 0,
+    pnlFiat: raw.pnl_fiat ?? raw.pnl_eur ?? 0,
+    currency: raw.currency,
     portfolioLocations: raw.portfolio_locations,
   }))
 
 export const MockPortfolioMetricsSchema = z
   .object({
-    total_equity_eur: numericField,
+    total_equity_fiat: numericField.optional(),
+    total_equity_eur: numericField.optional(),
+    total_cost_basis_fiat: numericField.optional(),
     total_cost_basis_eur: numericField.optional(),
-    total_realized_pnl_eur: numericField,
-    total_unrealized_pnl_eur: numericField,
+    total_realized_pnl_fiat: numericField.optional(),
+    total_realized_pnl_eur: numericField.optional(),
+    total_unrealized_pnl_fiat: numericField.optional(),
+    total_unrealized_pnl_eur: numericField.optional(),
+    total_pnl_fiat: numericField.optional(),
     total_pnl_eur: numericField.optional(),
+    currency: z.string().default('USD'),
   })
-  .transform((raw) => ({
-    totalEquityEur: raw.total_equity_eur,
-    totalCostBasisEur: raw.total_cost_basis_eur ?? 0,
-    totalRealizedPnlEur: raw.total_realized_pnl_eur,
-    totalUnrealizedPnlEur: raw.total_unrealized_pnl_eur,
-    totalPnlEur: raw.total_pnl_eur ?? (raw.total_unrealized_pnl_eur + raw.total_realized_pnl_eur),
-  }))
+  .transform((raw) => {
+    const totalEquityFiat = raw.total_equity_fiat ?? raw.total_equity_eur ?? 0
+    const totalCostBasisFiat = raw.total_cost_basis_fiat ?? raw.total_cost_basis_eur ?? 0
+    const totalRealizedPnlFiat = raw.total_realized_pnl_fiat ?? raw.total_realized_pnl_eur ?? 0
+    const totalUnrealizedPnlFiat = raw.total_unrealized_pnl_fiat ?? raw.total_unrealized_pnl_eur ?? 0
+    const totalPnlFiat = raw.total_pnl_fiat ?? raw.total_pnl_eur ?? (totalUnrealizedPnlFiat + totalRealizedPnlFiat)
+    return {
+      totalEquityFiat,
+      totalCostBasisFiat,
+      totalRealizedPnlFiat,
+      totalUnrealizedPnlFiat,
+      totalPnlFiat,
+      currency: raw.currency,
+    }
+  })
 
 export const MockPortfolioSummarySchema = z
   .object({

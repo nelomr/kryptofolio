@@ -10,6 +10,10 @@ const MIGRATION_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../migrations/sqlite/002_ledger_schema.sql'),
   'utf-8'
 );
+const MIGRATION_003_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../migrations/sqlite/003_currency_schema.sql'),
+  'utf-8'
+);
 
 describe('Spanish Tax Base Categorization (IRPF)', () => {
   let sqlitePath: string;
@@ -19,10 +23,11 @@ describe('Spanish Tax Base Categorization (IRPF)', () => {
 
   beforeEach(async () => {
     // 1. Create a temporary SQLite file
-    sqlitePath = path.join(os.tmpdir(), `test_ledger_tax_${Date.now()}.db`);
+    sqlitePath = path.join(os.tmpdir(), `test_ledger_tax_base_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
     sqliteDb.exec(MIGRATION_SQL);
+    sqliteDb.exec(MIGRATION_003_SQL);
 
     // 2. Initialize DuckDbAdapter with the temporary SQLite file attached
     process.env.MOCK_MODE = 'false';

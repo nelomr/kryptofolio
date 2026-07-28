@@ -14,7 +14,9 @@
 
 ## ✨ Key Features
 
-- **📊 FIFO-Based Data Presentation:** Displays structured holdings and tax data calculated via a First-In-First-Out (FIFO) methodology by the backend, ensuring a clear and standardized visual summary.
+- **📊 Institutional Analytics & Time Series Engine:** DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst performing asset).
+- **🏛️ Strict Domain Isolation & Precise Financial Precision:** Pure domain architecture using `PreciseAmount` branded string value objects (`string & { __brand: 'PreciseAmount' }`), isolating domain logic from external math libraries and guaranteeing zero decimal truncation.
+- **🔄 Synchronized Portfolio Materializer & Dynamic Base Currency:** Real-time FIFO recalculation and materialization across SQLite transaction ledgers and DuckDB analytical views, with dynamic base currency configuration from user settings.
 - **🧹 Data Ingestion Wizard:** A multi-step interface to upload CSV/XLSX files, automatically map headers for popular exchanges (Binance, Kraken, Coinbase, KuCoin, Bitunix), perform manual adjustments with alphabetically sorted options, validate Spot vs. Futures constraints, and gracefully push valid data to the backend.
 - **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to inspect transaction logs, identify gaps (missing cost bases or negative balances), and present clean data for AEAT-compliant reporting.
 - **📡 Real-Time Market Data Providers:** Seamlessly orchestrates live price streaming (Server-Sent Events) and REST endpoints using a hot-swappable provider architecture. Supports Kraken, Binance, Coinbase, Bit2Me, and CoinGecko with automated caching via DuckDB and InMemory layers.

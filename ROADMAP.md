@@ -5,7 +5,9 @@ This document outlines the vision, current achievements, and technical trajector
 ---
 
 ## 🎯 Vision & Architecture Philosophy
-Kryptofolio is built as a highly testable, offline-capable application designed with strict **Hexagonal Architecture**. 
+
+Kryptofolio is built as a highly testable, offline-capable application designed with strict **Hexagonal Architecture**.
+
 - **Privacy-First (Single-User)**: All APIs, credentials, and transactions remain strictly on the user's machine.
 - **Robust Persistence**: Embracing a dual OLTP/OLAP database pattern to efficiently manage transactions (SQLite) and intense financial calculations like FIFO / PnL (DuckDB).
 - **Separation of Concerns**: A monorepo structure separating frontend UI from pure backend calculation and database management layers.
@@ -65,23 +67,29 @@ The focus now shifts to building out the centralized Hono.js backend to perform 
 
 ## 🗄️ Phase 3: Professional Database Strategy (Next)
 
-To support the robust Backend Financial Engine, we are implementing a dual-database pattern tailored for a local-first application. *See the full [Database Strategy Documentation](packages/database/docs/database-strategy.md) for deeper details.*
+To support the robust Backend Financial Engine, we are implementing a dual-database pattern tailored for a local-first application. _See the full [Database Strategy Documentation](packages/database/docs/database-strategy.md) for deeper details._
 
-- **Phase 3.0: Domain Conditioning**
+- **Phase 3.0: Pure Domain Conditioning & Precise Amount Isolation**
   - [x] Eradicate multi-tenancy attributes (`user_id`).
-  - [x] Enforce high-precision numerical libraries (`decimal.js`) across the domain.
+  - [x] Decouple external libraries (`decimal.js`) from domain ports using `PreciseAmount` branded string value objects (`string & { __brand: 'PreciseAmount' }`).
+  - [x] Confine arbitrary-precision arithmetic (`Decimal`) to Application and Infrastructure adapters.
 
 - **Phase 3.1: SQLite OLTP Deployment**
   - [x] Implement strict ledger schema with `TEXT` columns for financial precision.
-  - [x] Define database constraints and soft-delete mechanisms.
+  - [x] Enforce strict ingestion constraints (`fee_amount IS NULL` iff `fee_asset_id IS NULL`).
+  - [x] Define database audit triggers and soft-delete mechanisms.
 
-- **Phase 3.2: DuckDB OLAP Instantiation**
-  - [x] Establish zero-copy connection to SQLite.
-  - [x] Develop analytical Window Function views for asynchronous FIFO calculations.
+- **Phase 3.2: DuckDB OLAP Instantiation & Time-Series Engine**
+  - [x] Establish zero-copy connection to SQLite via `ATTACH ... (TYPE SQLITE)`.
+  - [x] Develop analytical Window Function views (`v_portfolio_daily_valuation`, `v_portfolio_returns_volatility`, `v_portfolio_ath_drawdown`, `v_portfolio_alpha_beta`).
+  - [x] Implement `DuckDbMetricsAdapter` for institutional risk analytics (Sharpe Ratio, Alpha, Beta, Volatility, Max Drawdown).
+  - [x] Expose E2E Hono RPC routes (`/metrics/kpis`, `/metrics/risk`, `/metrics/performance`, `/metrics/drawdown`) connected to Vue 3 UI widgets.
 
-- **Phase 3.3: Parquet Series Integration**
-  - [ ] Persist historical price data to Hive-partitioned `.parquet` files.
-  - [ ] Execute federated fallback queries across SQLite and Parquet.
+- **Phase 3.3: Parquet Series Integration & Federated Queries**
+  - [x] `DuckDbParquetPriceAdapter` for persisting historical price data to Hive-partitioned `.parquet` files (`data/historical/prices/year=YYYY`).
+  - [x] Execute federated fallback queries joining SQLite `ledger.spot_transactions` with Parquet `historical_prices` via DuckDB ASOF views (`v_portfolio_daily_valuation`).
+  - [x] Materialized `FifoMaterializerService` real-time synchronization between SQLite ledger transactions and DuckDB analytical lot views.
+  - [x] Dynamic base currency resolution using `userSettingsPort` across all portfolio summary endpoints.
 
 - **Phase 3.4: Maintenance & Backups**
   - [ ] Implement backup mechanisms and database VACUUM scheduling.
@@ -98,7 +106,6 @@ To support the robust Backend Financial Engine, we are implementing a dual-datab
 - **🤖 AI Agent Integration**
   - [ ] Leverage Vercel AI SDK or Mastra.
   - [ ] Expose validated use-cases and endpoints as Tools (function calling) so users can query their portfolio via natural language.
-  
 - **📊 Advanced Analytics**
   - [ ] Impermanent loss calculators for Liquidity Pools.
   - [ ] Detailed risk exposure and Yield tracking dashboards.

@@ -6,8 +6,16 @@ import os from 'node:os';
 import { DuckDbAdapter } from '../../src/adapters/DuckDbAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../../apps/backend/src/core/infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 
+const MIGRATION_001_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../migrations/sqlite/001_vault_schema.sql'),
+  'utf-8'
+);
 const MIGRATION_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../migrations/sqlite/002_ledger_schema.sql'),
+  'utf-8'
+);
+const MIGRATION_003_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../migrations/sqlite/003_currency_schema.sql'),
   'utf-8'
 );
 
@@ -22,7 +30,9 @@ describe('Vectorized Spot FIFO Engine', () => {
     sqlitePath = path.join(os.tmpdir(), `test_ledger_fifo_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
+    sqliteDb.exec(MIGRATION_001_SQL);
     sqliteDb.exec(MIGRATION_SQL);
+    sqliteDb.exec(MIGRATION_003_SQL);
 
     // 2. Initialize DuckDbAdapter with the temporary SQLite file attached
     process.env.MOCK_MODE = 'false';
@@ -69,8 +79,8 @@ describe('Vectorized Spot FIFO Engine', () => {
       VALUES ('tx-swap', 'h-swap', 'acc-1', 'SWAP', 'USDT', '5000.0', 'BTC', '0.2', 'BNB', '0.1', '5000.00', '25000.00', '2023-01-03T10:00:00Z', 'COMPLETED')
     `).run();
 
-    // Seed BNB price at swap time in DuckDB's asset_prices table
-    await duckDb.execute("INSERT INTO asset_prices (symbol, price_fiat, timestamp) VALUES ('BNB', 300.0, '2023-01-03 10:00:00')");
+    // Seed BNB price at swap time in DuckDB's _price_seed table
+    await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('BNB', 300.0, '2023-01-03', 'USD')");
 
     // Calculate lots and events
     const { lots, events } = await adapter.calculateLotsAndEvents();

@@ -99,6 +99,13 @@ export function useUpdateBaseCurrencyMutation() {
     onSuccess: (currency) => {
       queryCache.invalidateQueries({ key: ['settings', 'base_currency'] });
       queryCache.invalidateQueries({ key: ['settings', 'exchange_rate'] });
+      queryCache.invalidateQueries({ key: ['portfolio-summary'] });
+      queryCache.invalidateQueries({ key: ['crypto-metrics-kpis'] });
+      queryCache.invalidateQueries({ key: ['crypto-performance-history'] });
+      queryCache.invalidateQueries({ key: ['crypto-asset-allocation'] });
+      queryCache.invalidateQueries({ key: ['crypto-volatility-heatmap'] });
+      queryCache.invalidateQueries({ key: ['crypto-risk-metrics'] });
+      queryCache.invalidateQueries({ key: ['crypto-drawdown-curve'] });
       const label = i18nPort?.translate('settings.currency.success') ?? `Base currency set to ${currency}`;
       toast.success(label);
     },

@@ -29,7 +29,7 @@ const { chartData, chartOptions, riskZonesPlugin, sharpeColor } = useRiskChart(h
       </div>
       <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
         <span class="num text-2xl font-mono font-bold leading-none" :style="{ color: sharpeColor }">
-          <template v-if="data">{{ data.sharpeRatio.toFixed(2) }}</template>
+          <template v-if="data">{{ (data.sharpeRatio ?? 0).toFixed(2) }}</template>
           <template v-else>-</template>
         </span>
         <span class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{{ t('portfolio.metrics_tabs.risk.current') }}</span>
@@ -59,7 +59,7 @@ const { chartData, chartOptions, riskZonesPlugin, sharpeColor } = useRiskChart(h
           <TooltipTrigger asChild>
             <div class="flex flex-col gap-1 cursor-help">
               <span class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-dashed border-muted-foreground/30 pb-0.5 inline-block w-fit">{{ t('portfolio.metrics_tabs.risk.stats.sharpe') }}</span>
-              <span class="num font-mono text-lg font-medium">{{ data.sharpeRatio.toFixed(2) }}</span>
+              <span class="num font-mono text-lg font-medium">{{ (data.sharpeRatio ?? 0).toFixed(2) }}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent>
@@ -72,7 +72,7 @@ const { chartData, chartOptions, riskZonesPlugin, sharpeColor } = useRiskChart(h
           <TooltipTrigger asChild>
             <div class="flex flex-col gap-1 cursor-help">
               <span class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-dashed border-muted-foreground/30 pb-0.5 inline-block w-fit">{{ t('portfolio.metrics_tabs.risk.stats.sortino') }}</span>
-              <span class="num font-mono text-lg font-medium">{{ data.sortinoRatio.toFixed(2) }}</span>
+              <span class="num font-mono text-lg font-medium">{{ (data.sortinoRatio ?? 0).toFixed(2) }}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent>
@@ -85,7 +85,7 @@ const { chartData, chartOptions, riskZonesPlugin, sharpeColor } = useRiskChart(h
           <TooltipTrigger asChild>
             <div class="flex flex-col gap-1 cursor-help">
               <span class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-dashed border-muted-foreground/30 pb-0.5 inline-block w-fit">{{ t('portfolio.metrics_tabs.risk.stats.calmar') }}</span>
-              <span class="num font-mono text-lg font-medium">{{ data.calmarRatio.toFixed(2) }}</span>
+              <span class="num font-mono text-lg font-medium">{{ (data.calmarRatio ?? 0).toFixed(2) }}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent>

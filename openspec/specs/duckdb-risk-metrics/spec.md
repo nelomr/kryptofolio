@@ -1,5 +1,8 @@
-## ADDED Requirements
+# duckdb-risk-metrics Specification
 
+## Purpose
+TBD - created by archiving change phase-2b-time-series. Update Purpose after archive.
+## Requirements
 ### Requirement: Compute Rolling All-Time High (ATH)
 The system SHALL compute the historical Rolling All-Time High of the portfolio's fiat value natively via DuckDB window functions over the joined timeline.
 
@@ -27,3 +30,4 @@ The system SHALL compute Beta vs BTC and Alpha against a Risk-Free Rate. This MA
 #### Scenario: Correlating portfolio against the market
 - **WHEN** the portfolio consists exclusively of altcoins (e.g. SOL, ADA)
 - **THEN** the system MUST still possess historical daily returns for `BTC` to compute the covariance and variance required for `Beta`.
+

@@ -1,6 +1,8 @@
 -- Migration: 003_currency_schema.sql
 -- Creates the exchange_rates immutable ledger for daily FX rates.
 -- Required as a hard prerequisite for Phase 2B ASOF JOIN multi-currency conversions.
+-- Also adds fiat_currency to spot_transactions and futures_transactions
+-- to enable multi-currency FIFO and tax calculations.
 
 -- 3.1 Exchange Rates Table
 CREATE TABLE IF NOT EXISTS exchange_rates (
@@ -13,3 +15,9 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
 
 -- 3.2 Index for optimal ASOF JOIN performance
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_date ON exchange_rates(date, pair);
+
+-- 3.3 Add fiat_currency to spot_transactions (preserves native transaction currency)
+ALTER TABLE spot_transactions ADD COLUMN fiat_currency TEXT NOT NULL DEFAULT 'USD';
+
+-- 3.4 Add fiat_currency to futures_transactions (preserves settlement currency)
+ALTER TABLE futures_transactions ADD COLUMN fiat_currency TEXT NOT NULL DEFAULT 'USD';

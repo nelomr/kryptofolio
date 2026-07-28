@@ -5,6 +5,8 @@ import { SPOT_TX_TYPES, FUTURES_TX_TYPES } from '@kryptofolio/shared-types';
 import Decimal from 'decimal.js';
 import crypto from 'node:crypto';
 import type { IPriceProviderPort } from '../../domain/ports/IPriceProviderPort.js';
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 export type IngestibleTransaction = TransactionMappedData & {
   account_id: string;
@@ -41,7 +43,14 @@ function toFuturesTxType(raw: string | null | undefined): FuturesTxType {
   return map[upper] ?? 'TRADE';
 }
 
-import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+function normalizeIsoTimestamp(raw?: string | null): string {
+  if (!raw) return new Date().toISOString();
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  } catch {}
+  return raw;
+}
 
 export class CsvIngestionUseCase {
   private ledgerPort: ILedgerPort;
@@ -59,6 +68,8 @@ export class CsvIngestionUseCase {
   }
 
   async execute(rows: IngestibleTransaction[], market: 'spot' | 'futures'): Promise<void> {
+    const baseCurrency = (await this.userSettingsPort.getSetting('base_currency')) || 'USD';
+
     for (const row of rows) {
       // 4.2 Orchestrate resolution of Asset and Account foreign keys.
       const accountId = row.account_id;
@@ -82,6 +93,7 @@ export class CsvIngestionUseCase {
 
       // 4.3 Map valid TransactionMappedData payloads to Domain command via Adapter
       const id = crypto.randomUUID();
+      const fiatCurrency = row.fiat_currency || baseCurrency;
 
       let total_fiat = new Decimal(row.total_fiat || '0');
       let price_fiat = new Decimal(row.price_fiat || '0');
@@ -90,43 +102,62 @@ export class CsvIngestionUseCase {
       if (total_fiat.isZero() || price_fiat.isZero()) {
         const primaryAsset = row.asset_in || row.asset_out;
         if (primaryAsset) {
-          price_fiat = await this.priceProvider.getHistoricalPrice(primaryAsset, 'EUR', row.timestamp!);
+          const historicalPrice = await this.priceProvider.getHistoricalPrice(primaryAsset, fiatCurrency, row.timestamp!);
+          price_fiat = new Decimal(historicalPrice);
           const primaryAmount = new Decimal(row.amount_in || row.amount_out || '0');
           total_fiat = price_fiat.mul(primaryAmount);
         }
       }
 
       if (market === 'spot') {
+        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount).abs() : new Decimal(0);
+        const hasFee = !feeAmountDec.isZero();
+        const feeAssetId = hasFee ? (row.fee_currency || row.asset_in || row.asset_out || undefined) : undefined;
+        
+        if (hasFee && !feeAssetId) {
+          throw new Error(`Transaction at ${row.timestamp} has a fee amount but no fee currency or asset could be determined.`);
+        }
+
         const tx: LedgerSpotTransaction = {
           id,
           id_hash: row.id_hash,
           account_id: accountId,
-          timestamp: row.timestamp!,
+          timestamp: normalizeIsoTimestamp(row.timestamp),
           tx_type: toSpotTxType(row.tx_type),
-          amount_in: row.amount_in ? new Decimal(row.amount_in).abs() : undefined,
+          amount_in: row.amount_in ? toPreciseAmount(new Decimal(row.amount_in).abs().toString()) : undefined,
           asset_in_id: row.asset_in || undefined,
-          amount_out: row.amount_out ? new Decimal(row.amount_out).abs() : undefined,
+          amount_out: row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
           asset_out_id: row.asset_out || undefined,
-          fee_amount: row.fee_amount && !new Decimal(row.fee_amount).isZero() ? new Decimal(row.fee_amount).abs() : undefined,
-          fee_asset_id: (row.fee_amount && !new Decimal(row.fee_amount).isZero()) ? (row.fee_currency || undefined) : undefined,
-          total_fiat,
-          price_fiat,
+          fee_amount: hasFee ? toPreciseAmount(feeAmountDec.toString()) : undefined,
+          fee_asset_id: feeAssetId,
+          total_fiat: toPreciseAmount(total_fiat.toString()),
+          price_fiat: toPreciseAmount(price_fiat.toString()),
+          fiat_currency: fiatCurrency,
           status: 'COMPLETED',
         };
         await this.ledgerPort.saveSpotTransaction(tx);
       } else {
+        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount).abs() : new Decimal(0);
+        const hasFee = !feeAmountDec.isZero();
+        const feeAssetId = hasFee ? (row.fee_currency || row.symbol || row.asset_in || row.asset_out || undefined) : undefined;
+
+        if (hasFee && !feeAssetId) {
+          throw new Error(`Transaction at ${row.timestamp} has a fee amount but no fee currency or asset could be determined.`);
+        }
+
         const tx: LedgerFuturesTransaction = {
           id,
           id_hash: row.id_hash,
           account_id: accountId,
-          timestamp: row.timestamp!,
+          timestamp: normalizeIsoTimestamp(row.timestamp),
           tx_type: toFuturesTxType(row.tx_type),
           symbol: row.symbol ?? row.asset_in ?? row.asset_out ?? 'UNKNOWN',
-          amount: row.amount_in ? new Decimal(row.amount_in).abs() : row.amount_out ? new Decimal(row.amount_out).abs() : undefined,
-          realized_pnl: row.realized_pnl ? new Decimal(row.realized_pnl) : undefined,
-          funding_amount: row.funding_amount ? new Decimal(row.funding_amount) : undefined,
-          fee_amount: row.fee_amount && !new Decimal(row.fee_amount).isZero() ? new Decimal(row.fee_amount).abs() : undefined,
-          fee_asset_id: (row.fee_amount && !new Decimal(row.fee_amount).isZero()) ? (row.fee_currency || undefined) : undefined,
+          amount: row.amount_in ? toPreciseAmount(new Decimal(row.amount_in).abs().toString()) : row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
+          realized_pnl: row.realized_pnl ? toPreciseAmount(row.realized_pnl) : undefined,
+          funding_amount: row.funding_amount ? toPreciseAmount(row.funding_amount) : undefined,
+          fee_amount: hasFee ? toPreciseAmount(feeAmountDec.toString()) : undefined,
+          fee_asset_id: feeAssetId,
+          fiat_currency: fiatCurrency,
           status: 'COMPLETED',
         };
         await this.ledgerPort.saveFuturesTransaction(tx);

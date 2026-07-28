@@ -29,8 +29,8 @@ const { t } = useI18n();
 
 const props = defineProps({
   assetSymbol: { type: String, required: true },
-  assetAmount: { type: Number, required: true },
-  assetCurrentValueEur: { type: Number, required: true },
+  assetAmount: { type: Number, default: 0 },
+  assetCurrentValueEur: { type: Number, default: 0 },
   lots: { type: Array as () => TaxLotEntity[], default: () => [] },
   tokenHistory: {
     type: Object as () => Record<string, TaxLotHistoryEvent[]>,

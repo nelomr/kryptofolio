@@ -23,16 +23,18 @@ export interface CryptoAssetEntity {
   symbol: string
   /** Total quantity held across all wallets */
   amount: number
-  /** Weighted average acquisition price in EUR */
-  avgPriceEur: number
-  /** Current market value in EUR */
-  currentValueEur: number
-  /** Total acquisition cost in EUR */
-  costBasisEur: number
-  /** Unrealized profit/loss in EUR */
-  unrealizedPnlEur: number
-  /** Combined PnL (unrealized) in EUR — UI-facing alias */
-  pnlEur: number
+  /** Weighted average acquisition price in fiat */
+  avgPriceFiat: number
+  /** Current market value in fiat */
+  currentValueFiat: number
+  /** Total acquisition cost in fiat */
+  costBasisFiat: number
+  /** Unrealized profit/loss in fiat */
+  unrealizedPnlFiat: number
+  /** Combined PnL (unrealized) in fiat — UI-facing alias */
+  pnlFiat: number
+  /** ISO 4217 currency code (e.g. 'USD', 'EUR') */
+  currency: string
   /** Percentage change in value over the last 24 hours */
   change24h?: number
   /** List of wallets/exchanges where the asset is held */
@@ -47,16 +49,18 @@ export type HoldingEntity = CryptoAssetEntity
 // ---------------------------------------------------------------------------
 
 export interface PortfolioMetricsEntity {
-  /** Total portfolio value at current market prices in EUR */
-  totalEquityEur: number
-  /** Sum of all acquisition costs in EUR */
-  totalCostBasisEur: number
-  /** Sum of all realized gains/losses in EUR */
-  totalRealizedPnlEur: number
-  /** Sum of all open unrealized gains/losses in EUR */
-  totalUnrealizedPnlEur: number
-  /** Total PnL (realized + unrealized) in EUR */
-  totalPnlEur: number
+  /** Total portfolio value at current market prices in fiat */
+  totalEquityFiat: number
+  /** Sum of all acquisition costs in fiat */
+  totalCostBasisFiat: number
+  /** Sum of all realized gains/losses in fiat */
+  totalRealizedPnlFiat: number
+  /** Sum of all open unrealized gains/losses in fiat */
+  totalUnrealizedPnlFiat: number
+  /** Total PnL (realized + unrealized) in fiat */
+  totalPnlFiat: number
+  /** ISO 4217 currency code (e.g. 'USD', 'EUR') */
+  currency: string
   /** ROI percentage based on cost basis */
   roiPercentage: number
   /** Indicates if unrealized PnL is positive or neutral */

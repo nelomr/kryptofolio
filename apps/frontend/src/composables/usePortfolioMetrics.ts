@@ -13,8 +13,8 @@ import type { PortfolioMetricsEntity } from '@/core/domain/models/PortfolioEntit
  * this file only maps to CSS classes and formatted strings.
  */
 export function usePortfolioMetrics(metrics: Ref<PortfolioMetricsEntity | null>) {
-  const pnlValue = computed(() => metrics.value?.totalUnrealizedPnlEur ?? 0)
-  const realizedPnlValue = computed(() => metrics.value?.totalRealizedPnlEur ?? 0)
+  const pnlValue = computed(() => metrics.value?.totalUnrealizedPnlFiat ?? 0)
+  const realizedPnlValue = computed(() => metrics.value?.totalRealizedPnlFiat ?? 0)
 
   const roiPercentage = computed(() => metrics.value?.roiPercentage ?? 0)
   const isBullish = computed(() => metrics.value?.isBullish ?? false)

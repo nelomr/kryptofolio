@@ -94,15 +94,17 @@ describe('CryptoAssetEntity — domain shape', () => {
       id: AssetIdSchema.parse('asset-btc-001'),
       symbol: 'BTC',
       amount: 0.5,
-      avgPriceEur: 62000,
-      currentValueEur: 31000,
-      costBasisEur: 30000,
-      unrealizedPnlEur: 1000,
-      pnlEur: 1000,
+      avgPriceFiat: 62000,
+      currentValueFiat: 31000,
+      costBasisFiat: 30000,
+      unrealizedPnlFiat: 1000,
+      pnlFiat: 1000,
+      currency: 'USD',
       portfolioLocations: ['Ledger'],
     }
     expect(entity.symbol).toBe('BTC')
     expect(entity.amount).toBe(0.5)
+    expect(entity.currency).toBe('USD')
     expect(typeof entity.id).toBe('string')
   })
 })
@@ -111,18 +113,20 @@ describe('PortfolioSummaryEntity — domain shape', () => {
   it('satisfies the PortfolioSummaryEntity interface shape', () => {
     const summary: PortfolioSummaryEntity = {
       metrics: {
-        totalEquityEur: 100000,
-        totalCostBasisEur: 90000,
-        totalRealizedPnlEur: 5000,
-        totalUnrealizedPnlEur: 5000,
-        totalPnlEur: 10000,
+        totalEquityFiat: 100000,
+        totalCostBasisFiat: 90000,
+        totalRealizedPnlFiat: 5000,
+        totalUnrealizedPnlFiat: 5000,
+        totalPnlFiat: 10000,
+        currency: 'USD',
         roiPercentage: 11.1,
         isBullish: true,
         realizedIsPositive: true,
       },
       holdings: [],
     }
-    expect(summary.metrics.totalEquityEur).toBe(100000)
+    expect(summary.metrics.totalEquityFiat).toBe(100000)
+    expect(summary.metrics.currency).toBe('USD')
     expect(Array.isArray(summary.holdings)).toBe(true)
   })
 })

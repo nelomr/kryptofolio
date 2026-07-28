@@ -71,7 +71,54 @@ describe('RestCryptoMetricsAdapter', () => {
     const result = await adapter.getKpis()
 
     expect(result.totalRoiPercent).toBe(15.5)
-    expect(result.bestAsset.symbol).toBe('BTC')
+    expect(result.bestAsset?.symbol).toBe('BTC')
+  })
+
+  it('getKpis parses a valid camelCase backend API payload from DuckDbMetricsAdapter', async () => {
+    const camelCasePayload = {
+      totalEquity: '10000.00',
+      totalCostBasis: '8000.00',
+      totalUnrealizedPnl: '2000.00',
+      totalRealizedPnl: '500.00',
+      allTimeHigh: '12000.00',
+      maxDrawdownPct: '-0.15',
+      annualizedVolatility: '0.25',
+      sharpeRatio: '1.50',
+      currency: 'USD',
+      delta24hFiat: '150.00',
+      maxDrawdownFiat: '-1500.00',
+      recoveredFiat: '500.00',
+      winRatePercent: 65,
+      totalTrades: 20,
+      winningTrades: 13,
+      losingTrades: 7,
+      averageR: 1.5,
+      bestAsset: { symbol: 'BTC', name: 'BTC', allocationPct: 50, roiPct: 25 },
+      worstAsset: { symbol: 'ETH', name: 'ETH', allocationPct: 30, roiPct: -10 },
+      totalRoiPercent: 31.25,
+      totalRoiFiat: '2500.00'
+    }
+
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.metrics.kpis.$get.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(camelCasePayload)
+    })
+
+    const adapter = new RestCryptoMetricsAdapter()
+    const result = await adapter.getKpis()
+
+    expect(result.totalEquityFiat).toBe(10000)
+    expect(result.totalCostBasisFiat).toBe(8000)
+    expect(result.totalUnrealizedPnlFiat).toBe(2000)
+    expect(result.totalRealizedPnlFiat).toBe(500)
+    expect(result.totalRoiFiat).toBe(2500)
+    expect(result.totalRoiPercent).toBe(31.25)
+    expect(result.delta24hFiat).toBe(150)
+    expect(result.winRatePercent).toBe(65)
+    expect(result.bestAsset?.symbol).toBe('BTC')
+    expect(result.worstAsset?.symbol).toBe('ETH')
   })
 
   it('emits to errorBus and throws DomainValidationError when API payload is invalid', async () => {

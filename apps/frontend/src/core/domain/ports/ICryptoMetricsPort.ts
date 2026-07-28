@@ -6,29 +6,40 @@ export interface AssetKpi {
 }
 
 export interface AssetAllocationItem {
+  assetId?: string;
   symbol: string;
   name: string;
   colorHex: string;
   allocationPercent: number;
   valueFiat: number;
+  currency?: string;
 }
 
 export interface CryptoKpis {
-  totalRoiPercent: number;
-  totalRoiFiat: number;
-  investedFiat: number;
-  delta24hFiat: number;
+  totalEquityFiat: number;
+  totalCostBasisFiat: number;
+  totalUnrealizedPnlFiat: number;
+  totalRealizedPnlFiat: number;
+  allTimeHighFiat: number;
   maxDrawdownPercent: number;
-  maxDrawdownFiat: number;
-  recoveredFiat: number;
-  winRatePercent: number;
-  totalTrades: number;
-  winningTrades: number;
-  losingTrades: number;
-  averageR: number; // Reward to risk ratio average
-  bestAsset: AssetKpi;
-  worstAsset: AssetKpi;
-  portfolioDispersion: number; // Sigma (Volatility)
+  annualizedVolatilityPercent: number;
+  sharpeRatio: number;
+  currency: string;
+  // Optional legacy properties for UI cards
+  totalRoiPercent?: number;
+  totalRoiFiat?: number;
+  investedFiat?: number;
+  delta24hFiat?: number;
+  maxDrawdownFiat?: number;
+  recoveredFiat?: number;
+  winRatePercent?: number;
+  totalTrades?: number;
+  winningTrades?: number;
+  losingTrades?: number;
+  averageR?: number;
+  bestAsset?: AssetKpi;
+  worstAsset?: AssetKpi;
+  portfolioDispersion?: number;
 }
 
 export type TimeRange = "1D" | "1W" | "1M" | "1Y" | "5Y" | "ALL";
@@ -37,6 +48,8 @@ export interface PerformancePoint {
   timestamp: number; // Unix timestamp
   valueFiat: number;
   costBasisFiat: number;
+  drawdownPercent?: number;
+  dateStr?: string;
 }
 
 export interface PerformanceMetrics {
@@ -65,17 +78,21 @@ export interface VolatilityHeatmapEntity {
 }
 
 export interface RiskMetrics {
+  maxDrawdownPct: number;
+  annualizedVolatility: number;
   sharpeRatio: number;
-  sortinoRatio: number;
-  betaVsBtc: number;
-  alphaPercent: number;
-  calmarRatio: number;
-  history: number[];
+  alpha: number;
+  beta: number;
+  currency: string;
+  sortinoRatio?: number;
+  calmarRatio?: number;
+  history?: number[];
 }
 
 export interface DrawdownPoint {
   timestamp: number;
   drawdownPercent: number;
+  dateStr?: string;
 }
 
 export interface ICryptoMetricsPort {

@@ -178,11 +178,11 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
                       "
                       :assetAmount="
                         table.getRowModel().rows[virtualRow.index].original
-                          .amount
+                          .amount ?? 0
                       "
                       :assetCurrentValueEur="
                         table.getRowModel().rows[virtualRow.index].original
-                          .currentValueEur
+                          .currentValueFiat ?? 0
                       "
                       :lots="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.lots"
                       :tokenHistory="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.history"

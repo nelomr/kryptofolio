@@ -12,21 +12,23 @@ vi.mock('../core/infrastructure/http/BffClient', () => {
               ok: true,
               json: vi.fn().mockResolvedValue({
                 metrics: { 
-                  totalEquityEur: 5000,
-                  totalRealizedPnlEur: 500,
-                  totalUnrealizedPnlEur: 500
+                  total_equity_fiat: 5000,
+                  total_realized_pnl_fiat: 500,
+                  total_unrealized_pnl_fiat: 500,
+                  currency: 'USD'
                 },
                 holdings: [
                   {
                     id: '1',
                     symbol: 'BTC',
                     amount: 1,
-                    avgPriceEur: 1000,
-                    currentValueEur: 2000,
-                    costBasisEur: 1000,
-                    unrealizedPnlEur: 1000,
-                    pnlEur: 1500,
-                    portfolioLocations: []
+                    avg_price_fiat: 1000,
+                    current_value_fiat: 2000,
+                    cost_basis_fiat: 1000,
+                    unrealized_pnl_fiat: 1000,
+                    pnl_fiat: 1500,
+                    currency: 'USD',
+                    portfolio_locations: []
                   }
                 ]
               })
@@ -37,9 +39,9 @@ vi.mock('../core/infrastructure/http/BffClient', () => {
               $get: vi.fn().mockResolvedValue({
                 ok: true,
                 json: vi.fn().mockResolvedValue({
-                  id: '1', symbol: 'BTC', amount: 1, avgPriceEur: 1000,
-                  currentValueEur: 2000, costBasisEur: 1000, unrealizedPnlEur: 1000,
-                  pnlEur: 1500, portfolioLocations: []
+                  id: '1', symbol: 'BTC', amount: 1, avg_price_fiat: 1000,
+                  current_value_fiat: 2000, cost_basis_fiat: 1000, unrealized_pnl_fiat: 1000,
+                  pnl_fiat: 1500, currency: 'USD', portfolio_locations: []
                 })
               }),
               history: {

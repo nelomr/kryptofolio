@@ -14,6 +14,11 @@ const MIGRATION_SQL = readFileSync(
   'utf-8'
 );
 
+const MIGRATION_003_SQL = readFileSync(
+  resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
+  'utf-8'
+);
+
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 
 function makeMockLedgerPort(): Mocked<ILedgerPort> {
@@ -36,9 +41,11 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
   } as Mocked<ILedgerPort>;
 }
 
+import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+
 function makeMockPriceProvider(price = '1000'): Mocked<IPriceProviderPort> {
   return {
-    getHistoricalPrice: vi.fn().mockResolvedValue(new Decimal(price)),
+    getHistoricalPrice: vi.fn().mockResolvedValue(toPreciseAmount(price)),
   } as Mocked<IPriceProviderPort>;
 }
 
@@ -210,6 +217,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
     db.exec(MIGRATION_SQL); // Use REAL schema, not simplified inline schema
+    db.exec(MIGRATION_003_SQL);
 
     adapter = new SQLiteLedgerAdapter(db);
     useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort());

@@ -2,24 +2,12 @@
  * ILedgerPort — Domain Port for the SQLite transactional ledger.
  *
  * DOMAIN ISOLATION RULE: No external library imports allowed here.
- * Decimal.js lives in Infrastructure. The domain uses `PreciseAmount`
- * as an opaque branded string type that Infrastructure adapters
- * convert to/from Decimal at the boundary.
- *
+ * PreciseAmount is a branded string defined in domain/value-objects.
+ * Infrastructure adapters convert TEXT ↔ PreciseAmount at the boundary.
  * Money arithmetic belongs in the Application / Infrastructure layers.
  */
 import type { SpotTxType, FuturesTxType, TaxLotStatus } from '@kryptofolio/shared-types';
-import Decimal from 'decimal.js';
-
-// ---------------------------------------------------------------------------
-// Domain value aliases
-// These are the only numeric representations visible to the Domain Port.
-// The Adapter converts TEXT from SQLite → Decimal before returning,
-// and Decimal → TEXT before writing.
-// ---------------------------------------------------------------------------
-
-/** Opaque alias: a Decimal.js instance holding a financial value with full precision. */
-export type PreciseAmount = Decimal;
+import type { PreciseAmount } from '../value-objects/PreciseAmount.js';
 
 // ---------------------------------------------------------------------------
 // Domain Entity Interfaces (what the Domain sees — never raw SQLite strings)
@@ -29,6 +17,7 @@ export interface LedgerSpotTransaction {
   id: string;
   id_hash: string;
   account_id: string;
+  exchange?: string;
   tx_type: SpotTxType;
   asset_in_id?: string;
   amount_in?: PreciseAmount;
@@ -38,6 +27,8 @@ export interface LedgerSpotTransaction {
   fee_amount?: PreciseAmount;
   total_fiat: PreciseAmount;
   price_fiat: PreciseAmount;
+  /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
+  fiat_currency: string;
   timestamp: string; // ISO-8601
   status: string;
 }
@@ -46,6 +37,7 @@ export interface LedgerFuturesTransaction {
   id: string;
   id_hash: string;
   account_id: string;
+  exchange?: string;
   tx_type: FuturesTxType;
   symbol: string;
   amount?: PreciseAmount;
@@ -55,6 +47,8 @@ export interface LedgerFuturesTransaction {
   funding_amount?: PreciseAmount;
   fee_asset_id?: string;
   fee_amount?: PreciseAmount;
+  /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
+  fiat_currency: string;
   timestamp: string; // ISO-8601
   status: string;
 }
@@ -99,11 +93,11 @@ export interface ILedgerPort {
   initialize(): Promise<void>;
 
   // Spot Transactions
-  getSpotTransactions(accountId: string): Promise<LedgerSpotTransaction[]>;
+  getSpotTransactions(accountId?: string): Promise<LedgerSpotTransaction[]>;
   saveSpotTransaction(tx: LedgerSpotTransaction): Promise<void>;
 
   // Futures Transactions
-  getFuturesTransactions(accountId: string): Promise<LedgerFuturesTransaction[]>;
+  getFuturesTransactions(accountId?: string): Promise<LedgerFuturesTransaction[]>;
   saveFuturesTransaction(tx: LedgerFuturesTransaction): Promise<void>;
 
   // Tax Lots

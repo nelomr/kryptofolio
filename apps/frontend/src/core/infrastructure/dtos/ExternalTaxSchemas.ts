@@ -1,11 +1,10 @@
 /**
  * External Tax Zod Schemas — Anti-Corruption Layer for tax/fiscal API responses.
  *
- * Handles the complex legacy API shape from the crypto backend:
+ * Handles the tax/fiscal API response shape:
  *   - Resolves BUY/SELL/DEPOSIT/etc. type-based symbol/amount mapping
  *     (the "asset_in vs asset_out" conditional logic is isolated here)
- *   - Coerces string numbers to native numbers
- *   - Parses "YYYY-MM-DD HH:MM:SS" strings and Unix timestamps to Date objects
+ *   - Uses CommonSchemaHelpers for numeric and timestamp coercion
  *   - Maps snake_case AEAT field names to camelCase domain entities
  *
  * This schema eliminates ALL conditional logic from Pinia stores and Vue components.
@@ -20,49 +19,7 @@ import type {
   TaxLotEntity,
 } from "@/core/domain/models/FiscalEntities";
 import { LotIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Coerces any numeric-like value to a number, with 0 as fallback */
-const numericField = z.preprocess((val) => {
-  if (val === null || val === undefined) return 0;
-  const n =
-    typeof val === "string"
-      ? parseFloat(val.replace(/[^0-9.-]/g, ""))
-      : Number(val);
-  return isNaN(n) ? 0 : n;
-}, z.number());
-
-/**
- * Normalizes various timestamp formats to a native Date object.
- * Handles:
- *   - "YYYY-MM-DD HH:MM:SS" (backend legacy format)
- *   - ISO 8601 strings
- *   - Unix timestamps in seconds (number)
- *   - Unix timestamps in milliseconds (number > 1e10)
- */
-const timestampToDate = z.preprocess((val) => {
-  if (val instanceof Date) return val;
-
-  if (typeof val === "number") {
-    // Heuristic: if the number is smaller than 1e10 it's in seconds
-    const ms = val < 1e10 ? val * 1000 : val;
-    return new Date(ms);
-  }
-
-  if (typeof val === "string") {
-    // Replace space separator with 'T' for ISO compatibility, assume UTC
-    let normalized = val.replace(" ", "T");
-    if (!normalized.endsWith("Z") && !normalized.includes("+")) {
-      normalized += "Z";
-    }
-    return new Date(normalized);
-  }
-
-  return new Date(0); // Safe fallback
-}, z.date());
+import { numericField, timestampToDate } from "./CommonSchemaHelpers";
 
 // ---------------------------------------------------------------------------
 // ExternalTaxTransactionSchema
@@ -95,13 +52,19 @@ export const ExternalTaxTransactionSchema = z
     type: z.string().optional(),
     tx_type: z.string().optional(),
     asset_in_id: z.string().optional(),
+    asset_in_symbol: z.string().optional(),
     asset_out_id: z.string().optional(),
+    asset_out_symbol: z.string().optional(),
     symbol: z.string().optional(),
     amount_in: numericField.optional(),
     amount_out: numericField.optional(),
+    price_fiat: numericField.optional(),
     price_eur: numericField.optional(),
+    fee_fiat: numericField.optional(),
     fee_eur: numericField.optional(),
+    total_fiat: numericField.optional(),
     total_eur: numericField.optional(),
+    fiat_currency: z.string().optional(),
     timestamp: timestampToDate,
     exchange: z.string().optional(),
     account_id: z.string().optional(),
@@ -118,30 +81,24 @@ export const ExternalTaxTransactionSchema = z
       ? (rawTypeStr as TaxTransactionType)
       : "UNKNOWN";
 
-    // -----------------------------------------------------------------------
-    // Symbol / Amount / TotalEur resolution — the "magic" mapping
-    // All the if/else from taxStore.js, now in one clean, tested place.
-    // -----------------------------------------------------------------------
-    const rawAssetIn = raw.asset_in_id;
-    const rawAssetOut = raw.asset_out_id;
+    const rawAssetIn = raw.asset_in_symbol || raw.asset_in_id;
+    const rawAssetOut = raw.asset_out_symbol || raw.asset_out_id;
 
     let symbol = raw.symbol ?? "";
     let amount = 0;
-    let totalEur = raw.total_eur ?? 0;
+    let totalEur = raw.total_fiat ?? raw.total_eur ?? 0;
 
     switch (type) {
       case "BUY":
-        // BUY BTC with EUR: asset_in=BTC, amount_in=qty, asset_out=EUR, amount_out=cost
         symbol = rawAssetIn ?? "";
         amount = raw.amount_in ?? 0;
-        totalEur = raw.amount_out ?? totalEur; // EUR cost (what we paid)
+        totalEur = raw.amount_out ?? totalEur;
         break;
 
       case "SELL":
-        // SELL BTC for EUR: asset_out=BTC, amount_out=qty, asset_in=EUR, amount_in=proceeds
         symbol = rawAssetOut ?? "";
         amount = raw.amount_out ?? 0;
-        totalEur = raw.amount_in ?? totalEur; // EUR received (proceeds)
+        totalEur = raw.amount_in ?? totalEur;
         break;
 
       case "DEPOSIT":
@@ -163,14 +120,12 @@ export const ExternalTaxTransactionSchema = z
 
       case "SWAP":
       case "MIGRATION_SWAP":
-        // Keep both sides for swap visibility; symbol is the outgoing asset
         symbol = rawAssetOut ?? rawAssetIn ?? "";
         amount = raw.amount_out ?? raw.amount_in ?? 0;
-        totalEur = raw.total_eur ?? 0;
+        totalEur = raw.total_fiat ?? raw.total_eur ?? 0;
         break;
 
       default:
-        // For futures and unknown types, prefer the explicit symbol if it exists
         symbol = raw.symbol ?? rawAssetIn ?? rawAssetOut ?? "";
         amount = raw.amount_in ?? raw.amount_out ?? 0;
     }
@@ -181,10 +136,9 @@ export const ExternalTaxTransactionSchema = z
       symbol,
       amount,
       totalEur,
-      priceEur: raw.price_eur ?? 0,
-      feeEur: raw.fee_eur ?? 0,
+      priceEur: raw.price_fiat ?? raw.price_eur ?? 0,
+      feeEur: raw.fee_fiat ?? raw.fee_eur ?? 0,
       timestamp: raw.timestamp,
-      // Preserve raw swap fields for full traceability
       assetIn: rawAssetIn,
       assetOut: rawAssetOut,
       amountIn: raw.amount_in,
@@ -204,28 +158,36 @@ export type ExternalTaxTransactionDTO = z.infer<
 
 const ExternalTaxReportSummarySchema = z
   .object({
+    capitalGainsFiat: numericField.optional(),
     capital_gains_eur: numericField.optional(),
+    spotCapitalGains: numericField.optional(),
+    spot_capital_gains: numericField.optional(),
+    capitalLossesFiat: numericField.optional(),
     capital_losses_eur: numericField.optional(),
+    savingsBaseYieldsFiat: numericField.optional(),
     savings_base_yields_eur: numericField.optional(),
+    savingsBaseYields: numericField.optional(),
+    savings_base_yields: numericField.optional(),
+    generalBaseAirdropsFiat: numericField.optional(),
     general_base_airdrops_eur: numericField.optional(),
+    generalBaseAirdrops: numericField.optional(),
+    general_base_airdrops: numericField.optional(),
+    netPatrimonialResultFiat: numericField.optional(),
     net_patrimonial_result_eur: numericField.optional(),
+    estimatedIrpfFiat: numericField.optional(),
     estimated_irpf_eur: numericField.optional(),
   })
   .transform((raw) => ({
-    capitalGainsEur: raw.capital_gains_eur ?? 0,
-    capitalLossesEur: raw.capital_losses_eur ?? 0,
-    savingsBaseYieldsEur: raw.savings_base_yields_eur ?? 0,
-    generalBaseAirdropsEur: raw.general_base_airdrops_eur ?? 0,
-    netPatrimonialResultEur: raw.net_patrimonial_result_eur ?? 0,
-    estimatedIrpfEur: raw.estimated_irpf_eur ?? 0,
+    capitalGainsEur: raw.capitalGainsFiat ?? raw.capital_gains_eur ?? raw.spotCapitalGains ?? raw.spot_capital_gains ?? 0,
+    capitalLossesEur: raw.capitalLossesFiat ?? raw.capital_losses_eur ?? 0,
+    savingsBaseYieldsEur: raw.savingsBaseYieldsFiat ?? raw.savings_base_yields_eur ?? raw.savingsBaseYields ?? raw.savings_base_yields ?? 0,
+    generalBaseAirdropsEur: raw.generalBaseAirdropsFiat ?? raw.general_base_airdrops_eur ?? raw.generalBaseAirdrops ?? raw.general_base_airdrops ?? 0,
+    netPatrimonialResultEur: raw.netPatrimonialResultFiat ?? raw.net_patrimonial_result_eur ?? 0,
+    estimatedIrpfEur: raw.estimatedIrpfFiat ?? raw.estimated_irpf_eur ?? 0,
   }));
 
 // ---------------------------------------------------------------------------
 // ExternalTaxLotHistorySchema — typed audit trail entry
-//
-// Maps the raw API audit trail shape (snake_case, UNIX timestamps) to
-// TaxLotHistoryEvent domain entities (camelCase, native Date objects).
-// Must be defined before ExternalTaxReportSchema which references it.
 // ---------------------------------------------------------------------------
 
 export const ExternalTaxLotHistorySchema = z
@@ -326,14 +288,31 @@ export const ExternalTaxReportSchema = z
   .object({
     year: z.number().int().min(2000).max(2100),
     method: z.string().default("FIFO"),
-    summary: ExternalTaxReportSummarySchema,
+    spotCapitalGains: numericField.optional(),
+    savingsBaseYields: numericField.optional(),
+    generalBaseAirdrops: numericField.optional(),
+    summary: ExternalTaxReportSummarySchema.optional(),
     audit_trail: z.array(ExternalTaxLotHistorySchema).optional().default([]),
   })
-  .transform((raw) => ({
-    year: raw.year,
-    method: raw.method,
-    summary: raw.summary,
-    auditTrail: raw.audit_trail,
-  }));
+  .transform((raw) => {
+    const spotGains = raw.spotCapitalGains ?? 0;
+    const gainsNum = Number(spotGains);
+
+    const summary = raw.summary ?? {
+      capitalGainsEur: gainsNum > 0 ? gainsNum : 0,
+      capitalLossesEur: gainsNum < 0 ? Math.abs(gainsNum) : 0,
+      savingsBaseYieldsEur: raw.savingsBaseYields ?? 0,
+      generalBaseAirdropsEur: raw.generalBaseAirdrops ?? 0,
+      netPatrimonialResultEur: gainsNum + (raw.savingsBaseYields ?? 0) + (raw.generalBaseAirdrops ?? 0),
+      estimatedIrpfEur: gainsNum > 0 ? gainsNum * 0.19 : 0,
+    };
+
+    return {
+      year: raw.year,
+      method: raw.method,
+      summary,
+      auditTrail: raw.audit_trail,
+    };
+  });
 
 export type ExternalTaxReportDTO = z.infer<typeof ExternalTaxReportSchema>;

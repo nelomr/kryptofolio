@@ -54,6 +54,8 @@ export const SpotTransactionSchema = z.object({
   fee_amount: preciseAmountSchema.optional(),
   total_fiat: preciseAmountSchema,
   price_fiat: preciseAmountSchema,
+  /** ISO-4217 currency code — required. Resolution: CSV field → base_currency setting → 'USD'. */
+  fiat_currency: z.string().min(3).max(3),
   exchange: z.string().optional(),
   status: z.string().default('COMPLETED'),
 }).refine(
@@ -80,6 +82,8 @@ export const FuturesTransactionSchema = z.object({
   funding_amount: preciseAmountSchema.optional(),
   fee_asset_id: z.string().optional(),
   fee_amount: preciseAmountSchema.optional(),
+  /** ISO-4217 currency code — required. Resolution: CSV field → base_currency setting → 'USD'. */
+  fiat_currency: z.string().min(3).max(3),
   exchange: z.string().optional(),
   status: z.string().default('COMPLETED'),
 });
@@ -88,12 +92,15 @@ export const TaxLotSchema = z.object({
   id: z.string().uuid().optional(),
   spot_transaction_id: z.string(),
   asset_id: z.string(),
+  /** Resolved asset symbol (e.g. 'BTC') — populated by v_calculated_tax_lots JOIN */
+  symbol: z.string().optional(),
   account_id: z.string(),
   original_qty: preciseAmountSchema,
   remaining_qty: preciseAmountSchema,
   unit_cost_fiat: preciseAmountSchema,
   total_cost_fiat: preciseAmountSchema,
-  fiat_currency: z.string().default('EUR'),
+  /** ISO-4217 currency code — required (no default). SQL DEFAULT 'USD' is a safety net only. */
+  fiat_currency: z.string(),
   acquisition_timestamp: z.string().datetime(),
   exchange_location: z.string(),
   source_tx_id: z.string().optional(),
@@ -109,10 +116,15 @@ export const TaxLotEventSchema = z.object({
   amount_from_lot: preciseAmountSchema,
   sale_price_fiat: preciseAmountSchema,
   gain_loss_fiat: preciseAmountSchema,
-  fiat_currency: z.string().default('EUR'),
+  /** ISO-4217 currency code — required (no default). SQL DEFAULT 'USD' is a safety net only. */
+  fiat_currency: z.string(),
   is_taxable: z.union([z.boolean(), z.number()]).transform(val => Boolean(val)),
   flag: z.string().nullable().optional(),
   notes: z.string().optional(),
+  /** Resolved asset ticker symbol (e.g. 'BTC') — populated by v_calculated_lot_history_events JOIN */
+  asset_symbol: z.string().optional(),
+  /** Resolved exchange/account name (e.g. 'Binance') — populated by v_calculated_lot_history_events JOIN */
+  exchange_name: z.string().optional(),
 });
 
 // TypeScript types inferred from schemas

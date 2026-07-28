@@ -11,7 +11,7 @@ export class NodeSqliteAdapter implements IDatabasePort {
   private db: DatabaseSync;
 
   constructor() {
-    const isMockMode = process.env.MOCK_MODE === 'true';
+    const isMockMode = process.env.MOCK_MODE === 'true' || process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
     let dbUrl = ':memory:';
 
     if (!isMockMode) {
@@ -20,6 +20,8 @@ export class NodeSqliteAdapter implements IDatabasePort {
           '[NodeSqliteAdapter] CRITICAL: VAULT_DB_PATH environment variable is not defined. Please set it in your .env file or environment.',
         );
       }
+      dbUrl = process.env.VAULT_DB_PATH;
+    } else if (process.env.VAULT_DB_PATH) {
       dbUrl = process.env.VAULT_DB_PATH;
     }
 

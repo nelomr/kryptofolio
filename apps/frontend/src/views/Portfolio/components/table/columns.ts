@@ -52,16 +52,16 @@ export const createColumns = (
     id: 'avg_cost',
     header: () => h('div', { class: "text-right" }, t('table.avg_cost')),
     cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => {
-       const cost = formatCurrency(row.original.avgPriceEur || row.original.costBasisEur || 0)
+       const cost = formatCurrency(row.original.avgPriceFiat || row.original.costBasisFiat || 0, row.original.currency)
        return h('div', { class: "text-right font-mono text-muted-foreground text-xs tabular-nums" }, cost)
     }
   },
   {
-    accessorKey: 'currentValueEur',
+    accessorKey: 'currentValueFiat',
     header: () => h('div', { class: "text-right" }, t('table.market_value')),
-    cell: ({ getValue }: CellContext<CryptoAssetEntity, unknown>) => {
+    cell: ({ getValue, row }: CellContext<CryptoAssetEntity, unknown>) => {
         const val = (getValue() as number) || 0
-        return h('div', { class: "text-right font-mono font-black text-sm tracking-tighter tabular-nums" }, formatCurrency(val))
+        return h('div', { class: "text-right font-mono font-black text-sm tracking-tighter tabular-nums" }, formatCurrency(val, row.original.currency))
     },
   },
   {

@@ -1,21 +1,64 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import mockPortfolio from '../../../data/mockPortfolio.js';
+import type { DIContainer } from '../di/container.js';
 
-const portfolioApi = new Hono()
-  .get('/summary', (c) => c.json(mockPortfolio.summary, 200))
-  .get('/token/:symbol', (c) => c.json({}, 200))
-  .get('/token/:symbol/history', (c) => {
-    const symbol = c.req.param('symbol').toUpperCase();
-    const lots = (mockPortfolio.lots as Record<string, unknown[]>)[symbol] || [];
-    const history = (mockPortfolio.history as Record<string, unknown>)[symbol] || {};
-    return c.json({ lots, history }, 200);
-  })
-  .post(
-    '/rebuild',
-    zValidator('json', z.object({}).optional()),
-    (c) => c.json({ success: true }, 200),
-  );
+export function createPortfolioApi(container: DIContainer) {
+  return new Hono()
+    .get('/summary', async (c) => {
+      const accountId = c.req.query('accountId');
+      const targetCurrency = c.req.query('currency');
 
-export default portfolioApi;
+      const summary = await container.getPortfolioSummaryUseCase.execute({
+        accountId,
+        targetCurrency,
+      });
+
+      return c.json(summary, 200);
+    })
+    .get('/holdings', async (c) => {
+      const accountId = c.req.query('accountId');
+      const targetCurrency = c.req.query('currency');
+
+      const summary = await container.getPortfolioSummaryUseCase.execute({
+        accountId,
+        targetCurrency,
+      });
+
+      return c.json(summary.holdings, 200);
+    })
+    .get('/derivatives/pnl', async (c) => {
+      const accountId = c.req.query('accountId');
+      const targetCurrency = c.req.query('currency');
+
+      const pnl = await container.portfolioAnalyticsPort.getDerivativesPnl(
+        accountId,
+        targetCurrency,
+      );
+
+      return c.json(pnl, 200);
+    })
+    .get('/token/:symbol', (c) => c.json({}, 200))
+    .get('/token/:symbol/history', async (c) => {
+      const symbol = c.req.param('symbol');
+      const accountId = c.req.query('accountId');
+      const history = await container.getTokenHistoryUseCase.execute({
+        symbol,
+        accountId,
+      });
+      return c.json(history, 200);
+    })
+    .post(
+      '/rebuild',
+      zValidator('json', z.object({}).optional()),
+      async (c) => {
+        try {
+          await container.fifoMaterializerService.recalculate(true);
+          return c.json({ success: true }, 200);
+        } catch (error) {
+          console.error('[PortfolioApi] Failed to rebuild metrics:', error);
+          return c.json({ success: false, error: 'Internal Server Error' }, 500);
+        }
+      },
+    );
+}

@@ -2,15 +2,16 @@
  * useFormatters — Composable description.
  */
 
-export function formatCurrency(value: number | string | undefined | null): string {
-  if (value === undefined || value === null) return '€0.00'
+export function formatCurrency(value: number | string | undefined | null, currency = 'EUR'): string {
+  const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$'
+  if (value === undefined || value === null) return `${symbol}0.00`
   const numValue = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(numValue)) return '€0.00'
+  if (isNaN(numValue)) return `${symbol}0.00`
   
   const locale = typeof navigator !== 'undefined' && navigator.language ? navigator.language : (import.meta.env.VITE_APP_LOCALE || 'en-US')
   return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'EUR',
+    currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(numValue)

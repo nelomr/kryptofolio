@@ -6,6 +6,9 @@ import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider
 import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
 import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
 import type { IPriceIngestionPort } from '../../domain/ports/IPriceIngestionPort.js';
+import type { IPortfolioAnalyticsPort } from '../../domain/ports/IPortfolioAnalyticsPort.js';
+import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
+import type { IMetricsPort } from '../../domain/ports/IMetricsPort.js';
 import type { IDatabasePort, IAnalyticalDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
 import { getLedgerDb } from '@kryptofolio/database';
@@ -15,6 +18,9 @@ import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
 import { InMemoryPriceHistoryAdapter } from '../adapters/InMemoryPriceHistoryAdapter.js';
 import { SQLiteLedgerAdapter } from '../adapters/SQLiteLedgerAdapter.js';
 import { DuckDbParquetPriceAdapter } from '../adapters/DuckDbParquetPriceAdapter.js';
+import { DuckDbPortfolioAnalyticsAdapter } from '../adapters/DuckDbPortfolioAnalyticsAdapter.js';
+import { DuckDbTaxCalculatorAdapter } from '../adapters/DuckDbTaxCalculatorAdapter.js';
+import { DuckDbMetricsAdapter } from '../adapters/DuckDbMetricsAdapter.js';
 import { UnlockVaultUseCase } from '../../application/use-cases/vault/UnlockVaultUseCase.js';
 import { StoreServiceCredentialUseCase } from '../../application/use-cases/vault/StoreServiceCredentialUseCase.js';
 import { GetVaultStatusUseCase } from '../../application/use-cases/vault/GetVaultStatusUseCase.js';
@@ -30,7 +36,30 @@ import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/U
 import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
 import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
 import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDailyPricesUseCase.js';
+import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortfolioSummaryUseCase.js';
+import { GetSpanishTaxReportUseCase } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
+import { GetTokenHistoryUseCase } from '../../application/use-cases/GetTokenHistoryUseCase.js';
+import { FifoMaterializerService } from '../../application/services/FifoMaterializerService.js';
 
+
+class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort {
+  async initialize(): Promise<void> {}
+  async queryOne<T = Record<string, unknown>>(): Promise<T | null> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async queryMany<T>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<T[]> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async execute(): Promise<void> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async bulkInsert<T extends Record<string, unknown>>(): Promise<void> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+}
 
 /**
  * DIContainer — Composes the application layer.
@@ -70,9 +99,18 @@ export class DIContainer {
   public readonly ledgerPort: ILedgerPort;
   public readonly csvIngestionUseCase: CsvIngestionUseCase;
 
-  /** Price Ingestion (Parquet) */
-  public readonly priceIngestionPort: IPriceIngestionPort;
-  public readonly ingestDailyPricesUseCase: IngestDailyPricesUseCase;
+  /** Analytical DuckDB Ports & Adapters */
+  public priceIngestionPort: IPriceIngestionPort;
+  public portfolioAnalyticsPort: IPortfolioAnalyticsPort;
+  public taxCalculatorPort: ITaxCalculatorPort;
+  public metricsPort: IMetricsPort;
+
+  /** Use Cases */
+  public ingestDailyPricesUseCase: IngestDailyPricesUseCase;
+  public getPortfolioSummaryUseCase: GetPortfolioSummaryUseCase;
+  public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
+  public getTokenHistoryUseCase: GetTokenHistoryUseCase;
+  public fifoMaterializerService: FifoMaterializerService;
 
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
@@ -117,32 +155,97 @@ export class DIContainer {
     );
 
     // Ledger DB — separate SQLite instance for the financial ledger
-    const ledgerDb = getLedgerDb();
+    const ledgerDb = getLedgerDb(process.env.LEDGER_DB_PATH);
     this.ledgerPort = new SQLiteLedgerAdapter(ledgerDb);
 
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
     this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider, this.userSettingsPort);
 
-    // Price Ingestion (Parquet) — DuckDbParquetPriceAdapter + IngestDailyPricesUseCase
-    // The DuckDbAdapter must be initialized (index.ts) before using the adapter.
-    // Call container.setDuckDbAdapter(duckDb) after duckDb.initialize() in index.ts.
-    this.priceIngestionPort = new DuckDbParquetPriceAdapter(null as unknown as IAnalyticalDatabasePort);
+    // Analytical DuckDB Adapters (initially bound to uninitialized guard)
+    const uninitializedDb = new UninitializedAnalyticalDatabaseAdapter();
+    this.priceIngestionPort = new DuckDbParquetPriceAdapter(uninitializedDb);
+    this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(uninitializedDb);
+    this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(uninitializedDb);
+    this.metricsPort = new DuckDbMetricsAdapter(uninitializedDb);
+
     this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
       this.ledgerPort,
       this.priceIngestionPort,
       this.krakenMarketDataAdapter,
     );
+
+    this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
+      this.portfolioAnalyticsPort,
+      this.userSettingsPort,
+      this.metricsPort,
+    );
+
+    this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
+      this.taxCalculatorPort,
+    );
+
+    this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
+      this.taxCalculatorPort,
+    );
+
+    this.fifoMaterializerService = new FifoMaterializerService(
+      this.ledgerPort,
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+    );
   }
 
   /**
-   * Injects the initialized DuckDbAdapter into the Parquet price adapter.
+   * Injects the initialized DuckDbAdapter into the analytical DuckDB adapters and use cases.
    * Must be called AFTER duckDb.initialize() in index.ts.
    */
   setDuckDbAdapter(duckDb: IAnalyticalDatabasePort): void {
-    // DuckDbParquetPriceAdapter.duckDb is not readonly — safe to reassign after init
-    (this.priceIngestionPort as unknown as { duckDb: IAnalyticalDatabasePort }).duckDb = duckDb;
+    this.priceIngestionPort = new DuckDbParquetPriceAdapter(duckDb);
+    this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(duckDb);
+    this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(duckDb);
+    this.metricsPort = new DuckDbMetricsAdapter(duckDb);
+
+    this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
+      this.ledgerPort,
+      this.priceIngestionPort,
+      this.krakenMarketDataAdapter,
+    );
+
+    this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
+      this.portfolioAnalyticsPort,
+      this.userSettingsPort,
+      this.metricsPort,
+    );
+
+    this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
+      this.taxCalculatorPort,
+    );
+
+    this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
+      this.taxCalculatorPort,
+    );
+
+    this.fifoMaterializerService = new FifoMaterializerService(
+      this.ledgerPort,
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+    );
   }
 }
 
-export const container = new DIContainer();
+let _container: DIContainer | null = null;
+export const getContainer = (): DIContainer => {
+  if (!_container) {
+    _container = new DIContainer();
+  }
+  return _container;
+};
+
+export const container = new Proxy({} as DIContainer, {
+  get: (_, prop) => {
+    const inst = getContainer();
+    const value = Reflect.get(inst, prop);
+    return typeof value === 'function' ? value.bind(inst) : value;
+  },
+});

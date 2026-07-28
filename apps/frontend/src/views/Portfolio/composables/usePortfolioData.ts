@@ -29,7 +29,7 @@ export function usePortfolioData() {
   const filteredHoldings = computed(() => {
     if (!summary.value) return []
     return [...summary.value.holdings].sort(
-      (a, b) => b.currentValueEur - a.currentValueEur
+      (a, b) => b.currentValueFiat - a.currentValueFiat
     )
   })
 

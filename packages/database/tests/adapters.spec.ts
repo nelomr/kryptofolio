@@ -10,6 +10,10 @@ const MIGRATION_SQL = fs.readFileSync(
   path.resolve(__dirname, '../migrations/sqlite/002_ledger_schema.sql'),
   'utf-8'
 );
+const MIGRATION_003_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../migrations/sqlite/003_currency_schema.sql'),
+  'utf-8'
+);
 
 describe('Database Adapters', () => {
   describe('NodeSqliteAdapter (Vault DB)', () => {
@@ -57,6 +61,7 @@ describe('Database Adapters', () => {
       sqliteDb = new DatabaseSync(sqliteDbPath);
       sqliteDb.exec('PRAGMA foreign_keys = ON;');
       sqliteDb.exec(MIGRATION_SQL);
+      sqliteDb.exec(MIGRATION_003_SQL);
 
       process.env.MOCK_MODE = 'false';
       process.env.DUCKDB_PATH = ':memory:';

@@ -14,7 +14,9 @@
 
 ## ✨ Características Principales
 
-- **📊 Presentación de Datos basada en FIFO:** Muestra saldos y datos fiscales estructurados según el método FIFO (First-In-First-Out) calculados previamente por el backend, ofreciendo un resumen visual claro y estandarizado.
+- **📊 Motor de Analítica Institucional y Series Temporales:** Consultas OLAP mediante DuckDB para valoración diaria del portafolio, volatilidad anualizada a 30 días, drawdowns desde máximos históricos (ATH) y métricas de riesgo (Ratio de Sharpe, Alfa, Beta, Tasa de Acierto, Mejor/Peor activo).
+- **🏛️ Aislamiento Estricto del Dominio y Precisión Financiera:** Arquitectura de dominio pura mediante Value Objects de cadena tipada `PreciseAmount` (`string & { __brand: 'PreciseAmount' }`), aislando la capa de dominio de librerías externas y garantizando cero truncamiento de decimales.
+- **🔄 Materializador de Portafolio Sincronizado y Divisa Dinámica:** Recálculo y materialización FIFO en tiempo real combinando el libro contable de SQLite con las vistas analíticas de DuckDB, adaptándose dinámicamente a la divisa base configurada por el usuario.
 - **🧹 Asistente de Ingesta de Datos (Wizard):** Una interfaz en varios pasos que permite subir archivos CSV/XLSX, mapear automáticamente cabeceras de exchanges populares (Binance, Kraken, Coinbase, KuCoin, Bitunix), realizar ajustes manuales con opciones ordenadas alfabéticamente, validar restricciones de Spot vs. Futuros y enviar de forma segura los datos limpios al backend.
 - **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para inspeccionar el historial de transacciones, identificar inconsistencias (ej. bases de coste faltantes o saldos negativos) y presentar datos estructurados listos para informes AEAT.
 - **🤖 Preparado para Agentes de IA (Futura Feature):** El frontend está técnicamente diseñado para una futura integración de Agentes de IA (usando Vercel AI SDK o Mastra). Dado que los Casos de Uso y los DTOs están aislados y validados, pueden exponerse directamente como herramientas (Tools / Function Calling) a un LLM en el futuro para consultas en lenguaje natural sin reescribir validaciones.

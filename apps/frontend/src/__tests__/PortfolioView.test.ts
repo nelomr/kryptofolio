@@ -125,9 +125,15 @@ vi.mock("lightweight-charts", () => ({
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const mockMetrics = {
-  totalEquityEur: 10000,
-  totalUnrealizedPnlEur: 500,
-  totalRealizedPnlEur: 100,
+  totalEquityFiat: 10000,
+  totalUnrealizedPnlFiat: 500,
+  totalRealizedPnlFiat: 100,
+  totalCostBasisFiat: 9400,
+  totalPnlFiat: 600,
+  currency: 'USD',
+  roiPercentage: 5,
+  isBullish: true,
+  realizedIsPositive: true,
 };
 
 import { I18N_PORT_KEY, CRYPTO_METRICS_PORT_KEY } from "@/core/injectionKeys";

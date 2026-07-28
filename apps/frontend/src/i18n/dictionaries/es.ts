@@ -8,6 +8,7 @@ export const es: I18nDictionary = {
   "navbar.logout": "Cerrar sesión",
 
   // Common
+  "common.not_available": "N/D",
   "common.edit_disabled":
     "La edición de la transacción {id} está deshabilitada actualmente.",
   "common.delete_disabled":

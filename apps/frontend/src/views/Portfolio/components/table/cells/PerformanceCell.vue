@@ -10,8 +10,8 @@ import type { CryptoAssetEntity } from '@/core/domain/models/PortfolioEntities'
 
 const props = defineProps<{ row: CryptoAssetEntity }>()
 
-const pnlRaw = computed(() => props.row.unrealizedPnlEur || props.row.pnlEur || 0)
-const basis = computed(() => props.row.costBasisEur || 0)
+const pnlRaw = computed(() => props.row.unrealizedPnlFiat || props.row.pnlFiat || 0)
+const basis = computed(() => props.row.costBasisFiat || 0)
 const pct = computed(() => basis.value > 0 ? (pnlRaw.value / basis.value) * 100 : 0)
 
 const tClass = computed(() => 
@@ -22,7 +22,7 @@ const tClass = computed(() =>
 <template>
   <div class="flex flex-col items-end gap-1">
     <span class="font-mono font-bold text-xs tabular-nums">
-      {{ formatCurrency(pnlRaw) }}
+      {{ formatCurrency(pnlRaw, props.row.currency) }}
     </span>
     <Badge 
       variant="secondary" 

@@ -58,12 +58,12 @@ export class RestCryptoAdapter implements ICryptoPortfolioPort {
     const rawData = await res.json()
     const dto = parseOrFail(ExternalPortfolioSummarySchema, rawData, 'getSummary')
 
-    const pnlValue = dto.metrics.totalUnrealizedPnlEur ?? 0
-    const realizedPnlValue = dto.metrics.totalRealizedPnlEur ?? 0
+    const pnlValue = dto.metrics.totalUnrealizedPnlFiat ?? 0
+    const realizedPnlValue = dto.metrics.totalRealizedPnlFiat ?? 0
     
     let roiPercentage = 0
-    if (dto.metrics.totalEquityEur > 0) {
-      const costBasis = dto.metrics.totalEquityEur - pnlValue
+    if (dto.metrics.totalEquityFiat > 0) {
+      const costBasis = dto.metrics.totalEquityFiat - pnlValue
       if (costBasis > 0) {
         roiPercentage = (pnlValue / costBasis) * 100
       }
@@ -80,11 +80,12 @@ export class RestCryptoAdapter implements ICryptoPortfolioPort {
         id: AssetIdSchema.parse(h.id),
         symbol: h.symbol,
         amount: h.amount,
-        avgPriceEur: h.avgPriceEur,
-        currentValueEur: h.currentValueEur,
-        costBasisEur: h.costBasisEur,
-        unrealizedPnlEur: h.unrealizedPnlEur,
-        pnlEur: h.pnlEur,
+        avgPriceFiat: h.avgPriceFiat,
+        currentValueFiat: h.currentValueFiat,
+        costBasisFiat: h.costBasisFiat,
+        unrealizedPnlFiat: h.unrealizedPnlFiat,
+        pnlFiat: h.pnlFiat,
+        currency: h.currency,
         portfolioLocations: h.portfolioLocations,
       })),
     }
@@ -99,11 +100,12 @@ export class RestCryptoAdapter implements ICryptoPortfolioPort {
       id: AssetIdSchema.parse(dto.id),
       symbol: dto.symbol,
       amount: dto.amount,
-      avgPriceEur: dto.avgPriceEur,
-      currentValueEur: dto.currentValueEur,
-      costBasisEur: dto.costBasisEur,
-      unrealizedPnlEur: dto.unrealizedPnlEur,
-      pnlEur: dto.pnlEur,
+      avgPriceFiat: dto.avgPriceFiat,
+      currentValueFiat: dto.currentValueFiat,
+      costBasisFiat: dto.costBasisFiat,
+      unrealizedPnlFiat: dto.unrealizedPnlFiat,
+      pnlFiat: dto.pnlFiat,
+      currency: dto.currency,
       portfolioLocations: dto.portfolioLocations,
     }
   }

@@ -32,7 +32,7 @@ defineProps<{
         <Coins class="w-4 h-4 text-muted-foreground" />
         <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{{ t('token.current_value') }}</span>
       </div>
-      <div class="text-2xl font-mono text-foreground">{{ formatCurrency(holding.currentValueEur) }}</div>
+      <div class="text-2xl font-mono text-foreground">{{ formatCurrency(holding.currentValueFiat, holding.currency) }}</div>
     </div>
 
     <!-- Coste de Adquisición -->
@@ -41,7 +41,7 @@ defineProps<{
         <TrendingDown class="w-4 h-4 text-muted-foreground" />
         <span class="text-xs font-semibold text-muted-foreground uppercase tracking-widest">{{ t('token.base_cost') }}</span>
       </div>
-      <div class="text-2xl font-mono text-foreground">{{ formatCurrency(holding.costBasisEur) }}</div>
+      <div class="text-2xl font-mono text-foreground">{{ formatCurrency(holding.costBasisFiat, holding.currency) }}</div>
     </div>
 
     <!-- PnL Latente -->
@@ -49,7 +49,7 @@ defineProps<{
       <!-- Glow effect -->
       <div 
         class="absolute inset-0 opacity-5 transition-opacity duration-500 group-hover:opacity-10"
-        :class="holding.unrealizedPnlEur >= 0 ? 'bg-profit' : 'bg-loss'"
+        :class="holding.unrealizedPnlFiat >= 0 ? 'bg-profit' : 'bg-loss'"
       ></div>
       
       <div class="relative z-10">
@@ -59,9 +59,9 @@ defineProps<{
         </div>
         <div 
           class="text-2xl font-mono font-bold"
-          :class="holding.unrealizedPnlEur >= 0 ? 'text-profit' : 'text-loss'"
+          :class="holding.unrealizedPnlFiat >= 0 ? 'text-profit' : 'text-loss'"
         >
-          {{ formatCurrency(holding.unrealizedPnlEur) }}
+          {{ formatCurrency(holding.unrealizedPnlFiat, holding.currency) }}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type Decimal from 'decimal.js';
+import type { PreciseAmount } from '../value-objects/PreciseAmount.js';
 
 /**
  * Port for retrieving historical price data from external oracles/markets.
@@ -12,5 +12,5 @@ export interface IPriceProviderPort {
    * @param fiatCurrency The fiat currency symbol (e.g., 'EUR')
    * @param timestamp ISO 8601 timestamp string
    */
-  getHistoricalPrice(asset: string, fiatCurrency: string, timestamp: string): Promise<Decimal>;
+  getHistoricalPrice(asset: string, fiatCurrency: string, timestamp: string): Promise<PreciseAmount>;
 }

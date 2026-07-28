@@ -16,10 +16,14 @@ export interface IntegrityWarning {
   severity: 'warning' | 'critical'
 }
 
+// Shared singleton state across all component invocations
+const selectedYear = ref<number | null>(null)
+const method = ref('FIFO')
+
 export function useTaxReportPort() {
   // Query spot transactions to determine smart year and available years
   const { data: spotData } = useSpotTransactionsQuery()
-  const { smartYear } = useSmartYearLogic(computed(() => spotData.value ?? []))
+  const { smartYear } = useSmartYearLogic(spotData)
   const { t } = useI18n()
 
   const availableYears = computed<number[]>(() => {
@@ -30,14 +34,15 @@ export function useTaxReportPort() {
     )
   })
 
-  // Global report year state
-  const selectedYear = ref<number>(new Date().getFullYear())
   const effectiveYear = computed(() => {
-    if (selectedYear.value !== new Date().getFullYear()) return selectedYear.value
-    return smartYear.value || selectedYear.value
+    if (selectedYear.value && selectedYear.value > 0) {
+      return selectedYear.value
+    }
+    if (spotData.value === undefined) {
+      return 0
+    }
+    return smartYear.value || availableYears.value[0] || new Date().getFullYear()
   })
-
-  const method = ref('FIFO')
   
   // Global report query
   const { data: report, isLoading, refresh: refetchReport } = useTaxReportQuery(effectiveYear, method)

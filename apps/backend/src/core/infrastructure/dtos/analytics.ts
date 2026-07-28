@@ -10,6 +10,8 @@ export const HoldingsSnapshotSchema = z.object({
   livePrice: z.string().optional(),
   currentValueFiat: z.string().optional(),
   unrealizedPnlFiat: z.string().optional(),
+  currency: z.string().min(3).max(3),
+  portfolioLocations: z.array(z.string()).optional().default([]),
 });
 
 export const DerivativesPnlSchema = z.object({
@@ -19,6 +21,7 @@ export const DerivativesPnlSchema = z.object({
   funding: z.string(),
   fees: z.string(),
   netPnl: z.string(),
+  currency: z.string().min(3).max(3),
 });
 
 export const SpotFifoResultSchema = z.object({

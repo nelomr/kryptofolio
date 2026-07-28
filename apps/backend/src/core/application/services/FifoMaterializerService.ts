@@ -1,7 +1,7 @@
 import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
 import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
-import Decimal from 'decimal.js';
+import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 /**
  * FifoMaterializerService — Application service that coordinates the recalculation
@@ -37,16 +37,16 @@ export class FifoMaterializerService {
     // 1. Compute Spot FIFO tax lots and events in DuckDB
     const { lots, events } = await this.taxCalculatorPort.calculateLotsAndEvents();
 
-    // 2. Map schema outputs to domain entity types (translating strings to Decimal instances)
+    // 2. Map schema outputs to domain entity types (translating strings to PreciseAmount)
     const domainLots = lots.map(lot => ({
       id: lot.id!,
       spot_transaction_id: lot.spot_transaction_id,
       asset_id: lot.asset_id,
       account_id: lot.account_id,
-      original_qty: new Decimal(lot.original_qty),
-      remaining_qty: new Decimal(lot.remaining_qty),
-      unit_cost_fiat: new Decimal(lot.unit_cost_fiat),
-      total_cost_fiat: new Decimal(lot.total_cost_fiat),
+      original_qty: toPreciseAmount(lot.original_qty),
+      remaining_qty: toPreciseAmount(lot.remaining_qty),
+      unit_cost_fiat: toPreciseAmount(lot.unit_cost_fiat),
+      total_cost_fiat: toPreciseAmount(lot.total_cost_fiat),
       fiat_currency: lot.fiat_currency,
       acquisition_timestamp: lot.acquisition_timestamp,
       exchange_location: lot.exchange_location,
@@ -60,9 +60,9 @@ export class FifoMaterializerService {
       spot_transaction_id: event.spot_transaction_id,
       account_id: event.account_id,
       disposal_date: event.disposal_date,
-      amount_from_lot: new Decimal(event.amount_from_lot),
-      sale_price_fiat: new Decimal(event.sale_price_fiat),
-      gain_loss_fiat: new Decimal(event.gain_loss_fiat),
+      amount_from_lot: toPreciseAmount(event.amount_from_lot),
+      sale_price_fiat: toPreciseAmount(event.sale_price_fiat),
+      gain_loss_fiat: toPreciseAmount(event.gain_loss_fiat),
       fiat_currency: event.fiat_currency,
       is_taxable: event.is_taxable,
       flag: event.flag,

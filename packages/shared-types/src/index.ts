@@ -4,3 +4,4 @@ export * from './market-data/schemas.js';
 export * from './money/models.js';
 export * from './schemas/ledger.js';
 export * from './schemas/transactions.js';
+export * from './utils/colors.js';

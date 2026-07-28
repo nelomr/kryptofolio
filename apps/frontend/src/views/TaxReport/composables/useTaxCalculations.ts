@@ -26,7 +26,10 @@ export function useSmartYearLogic(
 ) {
   const smartYear = computed<number>(() => {
     const txs = transactions.value
-    if (!txs || txs.length === 0) {
+    if (txs === undefined) {
+      return 0
+    }
+    if (txs.length === 0) {
       return new Date().getFullYear()
     }
 

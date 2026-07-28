@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import TaxReportHeader from "./components/TaxReportHeader.vue";
 import TaxReportSummaryCards from "./components/TaxReportSummaryCards.vue";
 
@@ -15,7 +15,7 @@ import { useTaxLedgers } from "./composables/useTaxLedgers";
 import { useI18n } from "@/composables/useI18n";
 
 const { t } = useI18n();
-const { metrics, syncWeb3 } = useTaxReportPort();
+const { metrics, syncWeb3, selectedYear, effectiveYear } = useTaxReportPort();
 
 const {
   spotLoading,
@@ -29,6 +29,26 @@ const {
   handleEditDerivative,
   handleDelete,
 } = useTaxLedgers();
+
+// Sync table year filter with global report year state
+watch(spotYearFilter, (newYear) => {
+  if (newYear) {
+    selectedYear.value = Number(newYear);
+  } else {
+    selectedYear.value = null;
+  }
+});
+
+// Also keep spotYearFilter synced if effectiveYear is determined automatically
+watch(
+  () => effectiveYear.value,
+  (newYear) => {
+    if (newYear && !spotYearFilter.value) {
+      spotYearFilter.value = String(newYear);
+    }
+  },
+  { immediate: true },
+);
 
 const activeMarket = ref<"spot" | "futures">("spot");
 const isUploadModalOpen = ref(false);

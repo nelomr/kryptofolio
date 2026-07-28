@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Decimal from 'decimal.js';
+import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 import type {
   ILedgerPort,
   LedgerSpotTransaction,
@@ -27,22 +27,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
   }
 
   async initialize(): Promise<void> {
-    const schemaPath = path.resolve(
-      __dirname,
-      '../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql',
-    );
-    const sql = fs.readFileSync(schemaPath, 'utf-8');
-    this.db.exec(sql);
-
-    // Apply 003_currency_schema.sql — exchange_rates table + index
-    const currencySchemaPath = path.resolve(
-      __dirname,
-      '../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql',
-    );
-    if (fs.existsSync(currencySchemaPath)) {
-      const currencySql = fs.readFileSync(currencySchemaPath, 'utf-8');
-      this.db.exec(currencySql);
-    }
+    this.applyMigrations();
 
     // Seed default accounts
     const insertAccount = this.db.prepare(`
@@ -71,25 +56,40 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
   // Spot Transactions
   // ---------------------------------------------------------------------------
 
-  async getSpotTransactions(accountId: string): Promise<LedgerSpotTransaction[]> {
-    const stmt = this.db.prepare(
-      'SELECT * FROM spot_transactions WHERE account_id = ? AND deleted_at IS NULL ORDER BY timestamp ASC'
-    );
-    const rows = stmt.all(accountId) as Record<string, unknown>[];
+  async getSpotTransactions(accountId?: string): Promise<LedgerSpotTransaction[]> {
+    const query = accountId
+      ? `SELECT t.*, acc.name AS exchange, COALESCE(ain.symbol, t.asset_in_id) AS asset_in_symbol, COALESCE(aout.symbol, t.asset_out_id) AS asset_out_symbol
+         FROM spot_transactions t
+         LEFT JOIN accounts acc ON t.account_id = acc.id
+         LEFT JOIN assets ain ON (t.asset_in_id = ain.id OR t.asset_in_id = ain.symbol)
+         LEFT JOIN assets aout ON (t.asset_out_id = aout.id OR t.asset_out_id = aout.symbol)
+         WHERE t.account_id = ? AND t.deleted_at IS NULL
+         ORDER BY t.timestamp ASC`
+      : `SELECT t.*, acc.name AS exchange, COALESCE(ain.symbol, t.asset_in_id) AS asset_in_symbol, COALESCE(aout.symbol, t.asset_out_id) AS asset_out_symbol
+         FROM spot_transactions t
+         LEFT JOIN accounts acc ON t.account_id = acc.id
+         LEFT JOIN assets ain ON (t.asset_in_id = ain.id OR t.asset_in_id = ain.symbol)
+         LEFT JOIN assets aout ON (t.asset_out_id = aout.id OR t.asset_out_id = aout.symbol)
+         WHERE t.deleted_at IS NULL
+         ORDER BY t.timestamp ASC`;
+    const stmt = this.db.prepare(query);
+    const rows = (accountId ? stmt.all(accountId) : stmt.all()) as Record<string, unknown>[];
 
     return rows.map(row => ({
       id: row.id as string,
       id_hash: row.id_hash as string,
       account_id: row.account_id as string,
+      exchange: (row.exchange as string) || (row.account_id as string),
       tx_type: row.tx_type as LedgerSpotTransaction['tx_type'],
-      asset_in_id: row.asset_in_id as string | undefined,
-      amount_in: row.amount_in ? new Decimal(row.amount_in as string) : undefined,
-      asset_out_id: row.asset_out_id as string | undefined,
-      amount_out: row.amount_out ? new Decimal(row.amount_out as string) : undefined,
+      asset_in_id: (row.asset_in_symbol as string) || (row.asset_in_id as string) || undefined,
+      amount_in: row.amount_in ? toPreciseAmount(row.amount_in as string) : undefined,
+      asset_out_id: (row.asset_out_symbol as string) || (row.asset_out_id as string) || undefined,
+      amount_out: row.amount_out ? toPreciseAmount(row.amount_out as string) : undefined,
       fee_asset_id: row.fee_asset_id as string | undefined,
-      fee_amount: row.fee_amount ? new Decimal(row.fee_amount as string) : undefined,
-      total_fiat: new Decimal(row.total_fiat as string),
-      price_fiat: new Decimal(row.price_fiat as string),
+      fee_amount: row.fee_amount ? toPreciseAmount(row.fee_amount as string) : undefined,
+      total_fiat: toPreciseAmount(row.total_fiat as string),
+      price_fiat: toPreciseAmount(row.price_fiat as string),
+      fiat_currency: (row.fiat_currency as string) ?? 'USD',
       timestamp: row.timestamp as string,
       status: row.status as string,
     }));
@@ -101,12 +101,12 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         id, id_hash, account_id, tx_type,
         asset_in_id, amount_in, asset_out_id, amount_out,
         fee_asset_id, fee_amount, total_fiat, price_fiat,
-        timestamp, status
+        fiat_currency, timestamp, status
       ) VALUES (
         ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
-        ?, ?
+        ?, ?, ?
       )
       ON CONFLICT(id_hash) DO UPDATE SET
         account_id = excluded.account_id,
@@ -119,6 +119,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         fee_amount = excluded.fee_amount,
         total_fiat = excluded.total_fiat,
         price_fiat = excluded.price_fiat,
+        fiat_currency = excluded.fiat_currency,
         timestamp = excluded.timestamp,
         status = excluded.status,
         updated_at = datetime('now', 'utc'),
@@ -131,13 +132,14 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       tx.account_id,
       tx.tx_type,
       tx.asset_in_id ?? null,
-      tx.amount_in?.toString() ?? null,
+      tx.amount_in ? tx.amount_in.toString() : null,
       tx.asset_out_id ?? null,
-      tx.amount_out?.toString() ?? null,
+      tx.amount_out ? tx.amount_out.toString() : null,
       tx.fee_asset_id ?? null,
-      tx.fee_amount?.toString() ?? null,
+      tx.fee_amount ? tx.fee_amount.toString() : null,
       tx.total_fiat.toString(),
       tx.price_fiat.toString(),
+      tx.fiat_currency,
       tx.timestamp,
       tx.status,
     );
@@ -147,25 +149,28 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
   // Futures Transactions
   // ---------------------------------------------------------------------------
 
-  async getFuturesTransactions(accountId: string): Promise<LedgerFuturesTransaction[]> {
-    const stmt = this.db.prepare(
-      'SELECT * FROM futures_transactions WHERE account_id = ? AND deleted_at IS NULL ORDER BY timestamp ASC'
-    );
-    const rows = stmt.all(accountId) as Record<string, unknown>[];
+  async getFuturesTransactions(accountId?: string): Promise<LedgerFuturesTransaction[]> {
+    const query = accountId
+      ? 'SELECT t.*, acc.name AS exchange FROM futures_transactions t LEFT JOIN accounts acc ON t.account_id = acc.id WHERE t.account_id = ? AND t.deleted_at IS NULL ORDER BY t.timestamp ASC'
+      : 'SELECT t.*, acc.name AS exchange FROM futures_transactions t LEFT JOIN accounts acc ON t.account_id = acc.id WHERE t.deleted_at IS NULL ORDER BY t.timestamp ASC';
+    const stmt = this.db.prepare(query);
+    const rows = (accountId ? stmt.all(accountId) : stmt.all()) as Record<string, unknown>[];
 
     return rows.map(row => ({
       id: row.id as string,
       id_hash: row.id_hash as string,
       account_id: row.account_id as string,
+      exchange: (row.exchange as string) || (row.account_id as string),
       tx_type: row.tx_type as LedgerFuturesTransaction['tx_type'],
       symbol: row.symbol as string,
-      amount: row.amount ? new Decimal(row.amount as string) : undefined,
-      trade_price: row.trade_price ? new Decimal(row.trade_price as string) : undefined,
-      realized_pnl: row.realized_pnl ? new Decimal(row.realized_pnl as string) : undefined,
+      amount: row.amount ? toPreciseAmount(row.amount as string) : undefined,
+      trade_price: row.trade_price ? toPreciseAmount(row.trade_price as string) : undefined,
+      realized_pnl: row.realized_pnl ? toPreciseAmount(row.realized_pnl as string) : undefined,
       settlement_asset_id: row.settlement_asset_id as string | undefined,
-      funding_amount: row.funding_amount ? new Decimal(row.funding_amount as string) : undefined,
+      funding_amount: row.funding_amount ? toPreciseAmount(row.funding_amount as string) : undefined,
       fee_asset_id: row.fee_asset_id as string | undefined,
-      fee_amount: row.fee_amount ? new Decimal(row.fee_amount as string) : undefined,
+      fee_amount: row.fee_amount ? toPreciseAmount(row.fee_amount as string) : undefined,
+      fiat_currency: (row.fiat_currency as string) ?? 'USD',
       timestamp: row.timestamp as string,
       status: row.status as string,
     }));
@@ -177,12 +182,12 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         id, id_hash, account_id, tx_type, symbol,
         amount, trade_price, realized_pnl, settlement_asset_id,
         funding_amount, fee_asset_id, fee_amount,
-        timestamp, status
+        fiat_currency, timestamp, status
       ) VALUES (
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?,
-        ?, ?
+        ?, ?, ?
       )
       ON CONFLICT(id_hash) DO UPDATE SET
         account_id = excluded.account_id,
@@ -195,6 +200,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         funding_amount = excluded.funding_amount,
         fee_asset_id = excluded.fee_asset_id,
         fee_amount = excluded.fee_amount,
+        fiat_currency = excluded.fiat_currency,
         timestamp = excluded.timestamp,
         status = excluded.status,
         updated_at = datetime('now', 'utc'),
@@ -214,6 +220,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       tx.funding_amount?.toString() ?? null,
       tx.fee_asset_id ?? null,
       tx.fee_amount?.toString() ?? null,
+      tx.fiat_currency,
       tx.timestamp,
       tx.status,
     );
@@ -235,10 +242,10 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       spot_transaction_id: row.spot_transaction_id as string,
       asset_id: row.asset_id as string,
       account_id: row.account_id as string,
-      original_qty: new Decimal(row.original_qty as string),
-      remaining_qty: new Decimal(row.remaining_qty as string),
-      unit_cost_fiat: new Decimal(row.unit_cost_fiat as string),
-      total_cost_fiat: new Decimal(row.total_cost_fiat as string),
+      original_qty: toPreciseAmount(row.original_qty as string),
+      remaining_qty: toPreciseAmount(row.remaining_qty as string),
+      unit_cost_fiat: toPreciseAmount(row.unit_cost_fiat as string),
+      total_cost_fiat: toPreciseAmount(row.total_cost_fiat as string),
       fiat_currency: row.fiat_currency as string,
       acquisition_timestamp: row.acquisition_timestamp as string,
       exchange_location: row.exchange_location as string,
@@ -302,9 +309,9 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       spot_transaction_id: row.spot_transaction_id as string,
       account_id: row.account_id as string,
       disposal_date: row.disposal_date as string,
-      amount_from_lot: new Decimal(row.amount_from_lot as string),
-      sale_price_fiat: new Decimal(row.sale_price_fiat as string),
-      gain_loss_fiat: new Decimal(row.gain_loss_fiat as string),
+      amount_from_lot: toPreciseAmount(row.amount_from_lot as string),
+      sale_price_fiat: toPreciseAmount(row.sale_price_fiat as string),
+      gain_loss_fiat: toPreciseAmount(row.gain_loss_fiat as string),
       fiat_currency: row.fiat_currency as string,
       is_taxable: Boolean(row.is_taxable),
       flag: row.flag as string | null | undefined,
@@ -473,6 +480,72 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
 
     const rows = stmt.all() as { id: string; symbol: string }[];
     return rows.map((row) => ({ assetId: row.id, symbol: row.symbol }));
+  }
+
+  private applyMigrations(): void {
+    // 1. Create schema tracking table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS _schema_migrations (
+          filename TEXT PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
+      );
+    `);
+
+    // 2. Discover all .sql files in packages/database/migrations/sqlite in sorted numeric order
+    const migrationsDir = path.resolve(
+      __dirname,
+      '../../../../../../packages/database/migrations/sqlite',
+    );
+
+    if (!fs.existsSync(migrationsDir)) {
+      return;
+    }
+
+    const files = fs
+      .readdirSync(migrationsDir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+
+    const applied = new Set(
+      (
+        this.db.prepare('SELECT filename FROM _schema_migrations').all() as {
+          filename: string;
+        }[]
+      ).map((r) => r.filename),
+    );
+
+    // Legacy database compatibility guard: if spot_transactions already has fiat_currency,
+    // mark 003_currency_schema.sql as applied to prevent duplicate column error on pre-existing DBs
+    const tables = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='spot_transactions'")
+      .all() as { name: string }[];
+    if (tables.length > 0) {
+      const spotColumns = (
+        this.db.prepare('PRAGMA table_info(spot_transactions)').all() as { name: string }[]
+      ).map((c) => c.name);
+      if (spotColumns.includes('fiat_currency') && !applied.has('003_currency_schema.sql')) {
+        this.db
+          .prepare('INSERT OR IGNORE INTO _schema_migrations (filename) VALUES (?)')
+          .run('003_currency_schema.sql');
+        applied.add('003_currency_schema.sql');
+      }
+    }
+
+    for (const file of files) {
+      if (applied.has(file)) {
+        continue;
+      }
+
+      const filePath = path.join(migrationsDir, file);
+      const sql = fs.readFileSync(filePath, 'utf-8');
+
+      this.db.exec(sql);
+
+      this.db
+        .prepare('INSERT INTO _schema_migrations (filename) VALUES (?)')
+        .run(file);
+      applied.add(file);
+    }
   }
 }
 

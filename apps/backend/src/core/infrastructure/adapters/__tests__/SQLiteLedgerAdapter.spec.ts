@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import Decimal from "decimal.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { SQLiteLedgerAdapter } from "../SQLiteLedgerAdapter";
@@ -9,6 +8,7 @@ import type {
   LedgerTaxLot,
   LedgerTaxLotEvent,
 } from "../../../domain/ports/ILedgerPort";
+import { toPreciseAmount } from "../../../domain/value-objects/PreciseAmount.js";
 
 // Load the REAL migration SQL — this is the source of truth for the schema.
 // Using the real schema (not a simplified inline schema) catches impedance mismatches.
@@ -16,6 +16,15 @@ const MIGRATION_SQL = readFileSync(
   resolve(
     __dirname,
     "../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql",
+  ),
+  "utf-8",
+);
+
+// Migration 003 adds fiat_currency to spot/futures_transactions + exchange_rates table.
+const MIGRATION_003_SQL = readFileSync(
+  resolve(
+    __dirname,
+    "../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql",
   ),
   "utf-8",
 );
@@ -30,14 +39,15 @@ function makeSpotTx(
     account_id: '10000000-0000-0000-0000-000000000001',
     timestamp: "2023-01-15T10:00:00Z",
     tx_type: "BUY",
-    amount_in: new Decimal("0.15"),
+    amount_in: toPreciseAmount("0.15"),
     asset_in_id: "asset-btc",
-    amount_out: new Decimal("4500.50"),
+    amount_out: toPreciseAmount("4500.50"),
     asset_out_id: "asset-eur",
-    fee_amount: new Decimal("4.50"),
+    fee_amount: toPreciseAmount("4.50"),
     fee_asset_id: "asset-eur",
-    total_fiat: new Decimal("4500.50"),
-    price_fiat: new Decimal("30003.33"),
+    total_fiat: toPreciseAmount("4500.50"),
+    price_fiat: toPreciseAmount("30003.33"),
+    fiat_currency: "EUR",
     status: "COMPLETED",
     ...overrides,
   };
@@ -50,10 +60,10 @@ function makeTaxLot(overrides: Partial<LedgerTaxLot> = {}): LedgerTaxLot {
     spot_transaction_id: "tx-001",
     asset_id: "asset-btc",
     account_id: '10000000-0000-0000-0000-000000000001',
-    original_qty: new Decimal("1.5"),
-    remaining_qty: new Decimal("0.5"),
-    unit_cost_fiat: new Decimal("30000"),
-    total_cost_fiat: new Decimal("45000"),
+    original_qty: toPreciseAmount("1.5"),
+    remaining_qty: toPreciseAmount("0.5"),
+    unit_cost_fiat: toPreciseAmount("30000"),
+    total_cost_fiat: toPreciseAmount("45000"),
     fiat_currency: "EUR",
     acquisition_timestamp: "2023-01-15T10:00:00Z",
     exchange_location: "Binance",
@@ -68,10 +78,10 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
   let adapter: SQLiteLedgerAdapter;
 
   beforeEach(() => {
-    // Use in-memory DB for isolation; apply the REAL migration schema
     db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON;");
     db.exec(MIGRATION_SQL);
+    db.exec(MIGRATION_003_SQL);
     adapter = new SQLiteLedgerAdapter(db);
   });
 
@@ -84,7 +94,7 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
   // -------------------------------------------------------------------------
 
   describe("Spot Transactions", () => {
-    it("saves and retrieves a spot transaction with correct Decimal parsing", async () => {
+    it("saves and retrieves a spot transaction with correct PreciseAmount parsing", async () => {
       await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
       await adapter.ensureAssetExists("asset-btc", "BTC");
       await adapter.ensureAssetExists("asset-eur", "EUR");
@@ -96,13 +106,13 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
       expect(results).toHaveLength(1);
       expect(results[0].id_hash).toBe("hash-abc123");
-      expect(results[0].amount_in).toBeInstanceOf(Decimal);
-      expect(results[0].amount_in?.toString()).toBe("0.15");
-      expect(results[0].amount_out?.toString()).toBe("4500.5");
-      expect(results[0].fee_amount?.toString()).toBe("4.5");
-      expect(results[0].total_fiat.toString()).toBe("4500.5");
-      expect(results[0].price_fiat.toString()).toBe("30003.33");
+      expect(results[0].amount_in).toBe("0.15");
+      expect(results[0].amount_out).toBe("4500.50");
+      expect(results[0].fee_amount).toBe("4.50");
+      expect(results[0].total_fiat).toBe("4500.50");
+      expect(results[0].price_fiat).toBe("30003.33");
       expect(results[0].tx_type).toBe("BUY");
+      expect(results[0].exchange).toBe("Binance");
     });
 
     it("only returns transactions for the requested account", async () => {
@@ -126,13 +136,62 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
         }),
       );
 
-      const acct1 = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
-      const acct2 = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000002');
+      const binanceTxs = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
+      const krakenTxs = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000002');
 
-      expect(acct1).toHaveLength(1);
-      expect(acct2).toHaveLength(1);
-      expect(acct1[0].id).toBe("tx-001");
-      expect(acct2[0].id).toBe("tx-002");
+      expect(binanceTxs).toHaveLength(1);
+      expect(krakenTxs).toHaveLength(1);
+      expect(binanceTxs[0].id).toBe("tx-001");
+      expect(krakenTxs[0].id).toBe("tx-002");
+    });
+
+    it("returns all transactions when account_id is undefined", async () => {
+      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
+      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000002', "Kraken");
+      await adapter.ensureAssetExists("asset-btc", "BTC");
+      await adapter.ensureAssetExists("asset-eur", "EUR");
+
+      await adapter.saveSpotTransaction(
+        makeSpotTx({
+          id: "tx-001",
+          id_hash: "hash-001",
+          account_id: '10000000-0000-0000-0000-000000000001',
+        }),
+      );
+      await adapter.saveSpotTransaction(
+        makeSpotTx({
+          id: "tx-002",
+          id_hash: "hash-002",
+          account_id: '10000000-0000-0000-0000-000000000002',
+        }),
+      );
+
+      const allTxs = await adapter.getSpotTransactions();
+      expect(allTxs).toHaveLength(2);
+    });
+
+    it("upserts transaction on id_hash collision (idempotent ingestion)", async () => {
+      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
+      await adapter.ensureAssetExists("asset-btc", "BTC");
+      await adapter.ensureAssetExists("asset-eur", "EUR");
+
+      const txInitial = makeSpotTx({
+        id: "tx-001",
+        id_hash: "same-hash",
+        total_fiat: toPreciseAmount("1000"),
+      });
+      await adapter.saveSpotTransaction(txInitial);
+
+      const txUpdated = makeSpotTx({
+        id: "tx-002",
+        id_hash: "same-hash",
+        total_fiat: toPreciseAmount("5000"),
+      });
+      await adapter.saveSpotTransaction(txUpdated);
+
+      const results = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
+      expect(results).toHaveLength(1);
+      expect(results[0].total_fiat).toBe("5000");
     });
 
     it("does NOT return soft-deleted transactions", async () => {
@@ -175,13 +234,13 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
       // 3. Re-insert with the same id_hash — should resurrect (deleted_at = NULL)
       await adapter.saveSpotTransaction({
         ...tx,
-        total_fiat: new Decimal("5000"),
+        total_fiat: toPreciseAmount("5000"),
       });
       const resurrectedResults = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
 
       expect(resurrectedResults).toHaveLength(1);
       expect(resurrectedResults[0].id_hash).toBe("hash-abc123");
-      expect(resurrectedResults[0].total_fiat.toString()).toBe("5000");
+      expect(resurrectedResults[0].total_fiat).toBe("5000");
     });
 
     it("does NOT create duplicate rows when the same id_hash is inserted twice", async () => {
@@ -247,11 +306,10 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe("lot-001");
-      expect(results[0].original_qty).toBeInstanceOf(Decimal);
-      expect(results[0].original_qty.toString()).toBe("1.5");
-      expect(results[0].remaining_qty.toString()).toBe("0.5");
-      expect(results[0].unit_cost_fiat.toString()).toBe("30000");
-      expect(results[0].total_cost_fiat.toString()).toBe("45000");
+      expect(results[0].original_qty).toBe("1.5");
+      expect(results[0].remaining_qty).toBe("0.5");
+      expect(results[0].unit_cost_fiat).toBe("30000");
+      expect(results[0].total_cost_fiat).toBe("45000");
       expect(results[0].fiat_currency).toBe("EUR");
       expect(results[0].acquisition_timestamp).toBe("2023-01-15T10:00:00Z");
       expect(results[0].exchange_location).toBe("Binance");
@@ -294,9 +352,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
         spot_transaction_id: "tx-001",
         account_id: '10000000-0000-0000-0000-000000000001',
         disposal_date: "2023-06-01T10:00:00Z",
-        amount_from_lot: new Decimal("0.5"),
-        sale_price_fiat: new Decimal("35000"),
-        gain_loss_fiat: new Decimal("2500"),
+        amount_from_lot: toPreciseAmount("0.5"),
+        sale_price_fiat: toPreciseAmount("35000"),
+        gain_loss_fiat: toPreciseAmount("2500"),
         fiat_currency: "EUR",
         is_taxable: true,
         flag: null,
@@ -308,10 +366,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe("evt-001");
-      expect(results[0].amount_from_lot).toBeInstanceOf(Decimal);
-      expect(results[0].amount_from_lot.toString()).toBe("0.5");
-      expect(results[0].sale_price_fiat.toString()).toBe("35000");
-      expect(results[0].gain_loss_fiat.toString()).toBe("2500");
+      expect(results[0].amount_from_lot).toBe("0.5");
+      expect(results[0].sale_price_fiat).toBe("35000");
+      expect(results[0].gain_loss_fiat).toBe("2500");
       expect(results[0].is_taxable).toBe(true);
       expect(results[0].disposal_date).toBe("2023-06-01T10:00:00Z");
     });
@@ -339,6 +396,47 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
       await expect(
         adapter.saveSpotTransaction(makeSpotTx()),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // fiat_currency propagation (tasks 1.3, 1.5)
+  // -------------------------------------------------------------------------
+
+  describe('fiat_currency propagation', () => {
+    it('[Task 1.3/1.5] saves fiat_currency on spot transaction and retrieves it correctly', async () => {
+      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', 'Binance');
+      await adapter.ensureAssetExists('asset-btc', 'BTC');
+      await adapter.ensureAssetExists('asset-usd', 'USD');
+
+      await adapter.saveSpotTransaction(
+        makeSpotTx({ fiat_currency: 'USD', fee_asset_id: 'asset-usd', asset_out_id: 'asset-usd' }),
+      );
+
+      const results = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
+      expect(results).toHaveLength(1);
+      expect(results[0].fiat_currency).toBe('USD');
+    });
+
+    it('[Task 1.3/1.5] saves fiat_currency on futures transaction and retrieves it correctly', async () => {
+      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', 'Binance');
+      await adapter.ensureAssetExists('USDT', 'USDT');
+
+      await adapter.saveFuturesTransaction({
+        id: 'f-001',
+        id_hash: 'fhash-001',
+        account_id: '10000000-0000-0000-0000-000000000001',
+        tx_type: 'TRADE',
+        symbol: 'BTCUSDT',
+        realized_pnl: toPreciseAmount('150.00'),
+        fiat_currency: 'USD',
+        timestamp: '2023-03-01T12:00:00Z',
+        status: 'COMPLETED',
+      });
+
+      const results = await adapter.getFuturesTransactions('10000000-0000-0000-0000-000000000001');
+      expect(results).toHaveLength(1);
+      expect(results[0].fiat_currency).toBe('USD');
     });
   });
 });
