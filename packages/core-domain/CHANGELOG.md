@@ -1,5 +1,12 @@
 # @kryptofolio/core-domain
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f)]:
+  - @kryptofolio/shared-types@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes
