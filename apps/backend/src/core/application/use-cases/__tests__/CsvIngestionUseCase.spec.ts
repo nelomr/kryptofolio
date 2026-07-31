@@ -5,21 +5,11 @@ import { CsvIngestionUseCase, type IngestibleTransaction } from '../CsvIngestion
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { ILedgerPort } from '../../../domain/ports/ILedgerPort';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedgerAdapter';
 
-const MIGRATION_SQL = readFileSync(
-  resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql'),
-  'utf-8'
-);
-
-const MIGRATION_003_SQL = readFileSync(
-  resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
-  'utf-8'
-);
-
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+
+const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
 
 function makeMockLedgerPort(): Mocked<ILedgerPort> {
   return {
@@ -33,10 +23,19 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
     createTaxLot: vi.fn().mockResolvedValue(undefined),
     getLotHistoryEvents: vi.fn().mockResolvedValue([]),
     saveLotHistoryEvent: vi.fn().mockResolvedValue(undefined),
-    upsertTaxLots: vi.fn().mockResolvedValue(undefined),
-    upsertLotHistoryEvents: vi.fn().mockResolvedValue(undefined),
+    runInTransaction: vi.fn(async (work: () => Promise<unknown>) => work()),
+    reconcileTaxLots: vi.fn().mockResolvedValue(NO_RECONCILIATION),
+    reconcileLotHistoryEvents: vi.fn().mockResolvedValue(NO_RECONCILIATION),
+    reconcileCustodyEntries: vi.fn().mockResolvedValue(NO_RECONCILIATION),
+    getCustodyEntries: vi.fn().mockResolvedValue([]),
+    getManualPriceOverrides: vi.fn().mockResolvedValue([]),
+    setManualPriceOverride: vi.fn().mockResolvedValue(undefined),
+    removeManualPriceOverride: vi.fn().mockResolvedValue(undefined),
+    getTransferDestinationOverrides: vi.fn().mockResolvedValue([]),
+    setTransferDestinationOverride: vi.fn().mockResolvedValue(undefined),
+    removeTransferDestinationOverride: vi.fn().mockResolvedValue(undefined),
     ensureAssetExists: vi.fn().mockResolvedValue(undefined),
-    ensureAccountExists: vi.fn().mockResolvedValue(undefined),
+    ensureAccountExists: vi.fn(async (input: { accountId: string }) => input.accountId),
     getTrackedAssets: vi.fn().mockResolvedValue([]),
   } as Mocked<ILedgerPort>;
 }
@@ -110,10 +109,10 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
 
     await useCase.execute(rows, 'spot');
 
-    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith('BTC');
-    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith('USDT');
-    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith('BNB');
-    expect(ledgerPort.ensureAccountExists).toHaveBeenCalledWith('10000000-0000-0000-0000-000000000001');
+    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith({ assetId: 'BTC', symbol: 'BTC' });
+    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith({ assetId: 'USDT', symbol: 'USDT' });
+    expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith({ assetId: 'BNB', symbol: 'BNB' });
+    expect(ledgerPort.ensureAccountExists).toHaveBeenCalledWith({ accountId: '10000000-0000-0000-0000-000000000001' });
     expect(ledgerPort.saveSpotTransaction).toHaveBeenCalled();
   });
 
@@ -213,13 +212,12 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
   let adapter: SQLiteLedgerAdapter;
   let useCase: CsvIngestionUseCase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON;');
-    db.exec(MIGRATION_SQL); // Use REAL schema, not simplified inline schema
-    db.exec(MIGRATION_003_SQL);
 
     adapter = new SQLiteLedgerAdapter(db);
+    await adapter.initialize();
     useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort());
   });
 

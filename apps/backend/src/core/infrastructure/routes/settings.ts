@@ -177,7 +177,7 @@ const settingsApi = new Hono()
       try {
         for (const acc of accounts) {
           // The frontend sends the UUID as "value" and the display name as "label"
-          await container.ledgerPort.ensureAccountExists(acc.value, acc.label);
+          await container.ledgerPort.ensureAccountExists({ accountId: acc.value, name: acc.label });
         }
         return c.json({ success: true });
       } catch (err) {

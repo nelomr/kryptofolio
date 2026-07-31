@@ -39,6 +39,14 @@ describe('ILedgerPort reconciliation surface', () => {
       .returns.resolves.toEqualTypeOf<ReconciliationSummary>();
   });
 
+  it('declares a unit of work so the three reconciliations can be one atomic block', () => {
+    expectTypeOf<ILedgerPort>().toHaveProperty('runInTransaction');
+    // The unit of work must hand back what the work produced, not swallow it into void: the
+    // materialisation summary is assembled inside the transaction.
+    const port = {} as ILedgerPort;
+    expectTypeOf(port.runInTransaction(async () => 42)).resolves.toEqualTypeOf<number>();
+  });
+
   it('declares CRUD for the user-authored override tables', () => {
     expectTypeOf<ILedgerPort>().toHaveProperty('getManualPriceOverrides');
     expectTypeOf<ILedgerPort>().toHaveProperty('setManualPriceOverride');

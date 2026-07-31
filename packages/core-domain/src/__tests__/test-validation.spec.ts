@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { TransactionRow } from "@kryptofolio/shared-types";
 import { validateRow } from "../application/use-cases/AutoMapColumnsUseCase";
 
 describe("Validation Test", () => {
@@ -16,8 +17,9 @@ describe("Validation Test", () => {
       hasError: false
     };
 
-    const result = validateRow(row as any, 'SPOT');
-    console.log("VALIDATION RESULT: ", JSON.stringify(result, null, 2));
+    // `TransactionRow`'s two arms are keyed on `hasError`, so neither can describe a row on its way
+    // *into* validation: the flag is what the call is about to decide.
+    const result = validateRow(row as unknown as TransactionRow, 'SPOT');
     expect(result.hasError).toBe(false);
   });
 });

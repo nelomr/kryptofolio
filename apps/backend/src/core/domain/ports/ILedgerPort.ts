@@ -193,13 +193,34 @@ export interface EnsureAssetInput {
   isFiat?: boolean;
 }
 
+/** What `initialize` changed, so the caller can react to a schema that moved under it. */
+export interface LedgerInitializationSummary {
+  /**
+   * Migrations applied by this call, empty when the schema was already current.
+   *
+   * Reported rather than acted upon: a migration invalidates the derived tables, but the flag that
+   * records that fact lives in the settings database, which this port cannot reach.
+   */
+  readonly appliedMigrations: readonly string[];
+}
+
 // ---------------------------------------------------------------------------
 // Port Interface
 // ---------------------------------------------------------------------------
 
 export interface ILedgerPort {
   /** Runs DDL migrations to ensure all tables exist. Call once at server startup. */
-  initialize(): Promise<void>;
+  initialize(): Promise<LedgerInitializationSummary>;
+
+  /**
+   * Runs `work` as one unit: either every write inside it lands or none does.
+   *
+   * Declared on the port because atomicity is a requirement the caller must be able to state, and
+   * the three reconciliation methods below are individually insufficient — a half-reconciled ledger
+   * presents events referencing lots that no longer exist. The caller never sees a transaction
+   * handle, so no SQL vocabulary leaks out of the adapter.
+   */
+  runInTransaction<T>(work: () => Promise<T>): Promise<T>;
 
   // Spot Transactions
   getSpotTransactions(accountId?: string): Promise<LedgerSpotTransaction[]>;

@@ -12,9 +12,12 @@
   },
   "devDependencies": {
     "@types/luxon": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
   },
   "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "vitest run"
   }
 }

@@ -9,7 +9,7 @@ describe('generateIdHash', () => {
       asset_in: 'ETH',
       tx_type: 'BUY',
       account_id: '10000000-0000-0000-0000-000000000001'
-    } as any
+    }
 
     const data2 = {
       timestamp: '2023-12-01',
@@ -17,7 +17,7 @@ describe('generateIdHash', () => {
       asset_in: 'ETH',
       tx_type: 'buy', // case difference
       account_id: '10000000-0000-0000-0000-000000000001'
-    } as any
+    }
 
     const hash1 = await generateIdHash(data1)
     const hash2 = await generateIdHash(data2)
@@ -34,7 +34,7 @@ describe('generateIdHash', () => {
       asset_in: 'ETH',
       tx_type: 'BUY',
       account_id: '10000000-0000-0000-0000-000000000001'
-    } as any
+    }
 
     const data2 = {
       timestamp: '2023-12-01',
@@ -42,7 +42,7 @@ describe('generateIdHash', () => {
       asset_in: 'ETH',
       tx_type: 'BUY',
       account_id: '10000000-0000-0000-0000-000000000002' // different account
-    } as any
+    }
 
     const hash1 = await generateIdHash(data1)
     const hash2 = await generateIdHash(data2)
@@ -57,7 +57,7 @@ describe('generateIdHash', () => {
       amount_in: '500',
       asset_in: 'ETH',
       tx_type: 'BUY'
-    } as any
+    }
 
     const data2 = {
       tx_id: 'native-blockchain-hash-123',
@@ -65,7 +65,7 @@ describe('generateIdHash', () => {
       amount_in: '100', // Different amount
       asset_in: 'BTC',
       tx_type: 'SELL'
-    } as any
+    }
 
     const hash1 = await generateIdHash(data1)
     const hash2 = await generateIdHash(data2)

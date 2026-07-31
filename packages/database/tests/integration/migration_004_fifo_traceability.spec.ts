@@ -364,12 +364,20 @@ describe('004_fifo_traceability migration', () => {
       expect(rowCount(db, '_schema_migrations')).toBeGreaterThanOrEqual(4);
     });
 
-    it('marks the ledger as pending recalculation', () => {
+    it('does not write the pending-recalculation flag into the ledger', () => {
+      // The flag belongs to the settings database. A copy here is unreachable by the code that
+      // reads it, so the application would boot believing its derived tables were current.
       applyMigrations(db);
       const row = db
         .prepare("SELECT value FROM user_settings WHERE key = 'needs_recalculation'")
         .get() as { value: string } | undefined;
-      expect(row?.value).toBe('true');
+      expect(row).toBeUndefined();
+    });
+
+    it('declares no user_settings table of its own', () => {
+      expect(readMigration('004_fifo_traceability.sql')).not.toMatch(
+        /CREATE\s+TABLE[^;]*\buser_settings\b/i
+      );
     });
 
     it('seeds is_fiat for recognised ISO-4217 symbols and leaves crypto alone', () => {

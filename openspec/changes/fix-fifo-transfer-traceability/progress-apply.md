@@ -3,16 +3,17 @@
 Session log for `/openspec-apply-change`. Updated as each task group closes so an interrupted
 session can be resumed from here.
 
-**Total:** 126 tasks in 14 groups. **Complete: 58.**
+**Total:** 126 tasks in 14 groups. **Complete: 66.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
 
 ## Session summary
 
-Seven groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
+Eight groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
 ports), **3** (pure classification), **4** (migration `004`), **5** (policy-driven flattening),
-**6** (double-entry custody). Groups 7–13 remain.
+**6** (double-entry custody), **7** (materialisation reconciliation, which also discharged group 6's
+deferred 6.3). Groups 8–13 remain.
 
 ### What was built
 
@@ -139,8 +140,8 @@ pnpm -F @kryptofolio/backend  exec vitest run --typecheck src/core/domain/ports/
 | 3 | Pure domain classification and naming | ✅ done (24/126) |
 | 4 | Migration `004_fifo_traceability.sql` | ✅ done (38/126) |
 | 5 | DuckDB policy-driven event flattening | ✅ done (49/126) |
-| 6 | DuckDB double-entry custody | ✅ done (58/126) — **6.3 deferred to group 7** |
-| 7 | Materialisation reconciliation | ⬜ pending |
+| 6 | DuckDB double-entry custody | ✅ done (58/126) — 6.3 discharged in group 7 |
+| 7 | Materialisation reconciliation | ✅ done (66/126) |
 | 8 | Ingestion integrity and sub-accounts | ⬜ pending |
 | 9 | Automatic rebuild and overrides | ⬜ pending |
 | 10 | Read path: status, provenance, custody | ⬜ pending |
@@ -852,6 +853,226 @@ Two findings from that exercise worth keeping:
   bound, and the latter exists because `lot_custody_entries.qty_delta` is persisted at 12 decimal
   places — a divergence below that is not representable in the stored figures.
 
+### Group 7 — Materialisation reconciliation ✅ 7/7 (+ 6.3, carried forward from group 6)
+
+| package | before | after |
+|---|---|---|
+| `packages/shared-types` | 38 passing, `tsc` clean | **38 passing**, `tsc` clean (untouched) |
+| `packages/core-domain` | 58 passing, `tsc` clean | **58 passing**, `tsc` clean (untouched) |
+| `packages/database` | 99 passing, `tsc` clean | **99 passing**, `tsc` clean (untouched) |
+| `apps/backend` tests | 143 passing / 2 failing | **157 passing / 2 failing**, identical across 3 consecutive full runs at load average 4.19 |
+| `apps/backend` ports contract | 15 type assertions | **16 type assertions**, `Type Errors: no errors` |
+| `apps/backend` typecheck | 28 errors | **6 errors** |
+
+The 2 remaining failures are still group 8's `repro.test.ts` (`CHECK constraint failed: total_fiat …`)
+— the same two, unchanged. The 6 remaining `tsc` errors are `GetSpanishTaxReportUseCase.ts` (2) plus
+its spec mock and `GetTokenHistoryUseCase`'s (2) for group 10, and `mockPortfolio.ts` (2) for
+group 11. **None is in a group-7 file.**
+
+#### What was built
+
+`SQLiteLedgerAdapter` now satisfies `ILedgerPort` in full. `upsertTaxLots` /
+`upsertLotHistoryEvents` are gone; one generic `reconcile<T>()` drives all three derived tables from
+a `DerivedTableSpec` (table, column list, id projection, value projection). The three public methods
+differ only in that spec — a per-table copy of the insert/update/retire/reactivate logic is exactly
+how the fee-disposal predicate drifted from the principal one in the first place.
+
+The algorithm: read every row of the table **including the soft-deleted ones**, fingerprint each
+one's values, then per recomputed row insert / reactivate / update / skip, and finally retire every
+live persisted id absent from the recomputed set. Reading the retired rows is load-bearing — without
+them a returning row would be inserted against a primary key that already holds it.
+
+`FifoMaterializerService.recalculate()` is now a Functional Sandwich with the boundary in the right
+place: **all four DuckDB reads happen before the SQLite transaction opens**
+(`calculateLotsAndEvents`, `calculateCustodyEntries`, `getDataQuality`), so no SQLite write lock is
+ever held across a query against the DuckDB engine that has that same file attached. It returns
+`MaterializationSummary` — three `ReconciliationSummary` objects plus `flagged` and `pendingReview`.
+
+Also implemented, because the port declared them in group 2b and nothing satisfied them:
+`getCustodyEntries`, the six override CRUD methods, `ensureAssetExists(EnsureAssetInput)`,
+`ensureAccountExists(EnsureAccountInput)` returning the resolved id, and `getAccounts()` carrying
+`parentAccountId` / `isSynthetic`.
+
+#### 6.3 discharged — the synthetic accounts now have a write path
+
+Before reconciling custody, the service takes the distinct `account_id` values of the recomputed
+custody set, filters them through `isSyntheticAccountName()` from `@kryptofolio/shared-types` (the
+name is never re-derived locally), and `ensureAccountExists`-es each with `isSynthetic: true` and no
+parent — inside the same transaction. Confirmed non-vacuous: with the loop emptied, **10 of 12 tests
+fail** on `FOREIGN KEY constraint failed`, which is precisely the failure group 6 predicted.
+
+`is_synthetic = 1` is separately pinned: flipping the flag to `false` fails exactly one test.
+
+`ensureAccountExists` uses `ON CONFLICT DO NOTHING`, so an account that already exists as a real
+venue is never demoted to synthetic, and reconciliation never rewrites user-visible account
+metadata. Synthetic accounts get `type = 'wallet'`, not `'exchange'`: nothing can be imported into
+them and they hold no credentials. `accounts.type` has no CHECK constraint, so this is a convention,
+not an enforced one — group 12 should keep it in mind when filtering selectors.
+
+#### A no-op update is skipped, and that is a correctness requirement rather than an optimisation
+
+The audit trigger is `AFTER UPDATE` with no `WHEN`, so it fires on every `UPDATE` regardless of
+whether anything changed. Writing identical content back would record a change that did not happen
+and make an idempotent rebuild indistinguishable from a real one. `reconcile` therefore compares a
+fingerprint of the persisted values against the recomputed ones and writes nothing when they match.
+
+The fingerprint renders both sides to strings because SQLite returns an INTEGER column as a number
+and a TEXT column as a string (`is_taxable` is the case that matters). Fields are joined with
+`U+001F` and a SQL `NULL` renders as `U+0000`, neither of which can occur in a decimal string, an
+ISO timestamp or an enum member — so no two distinct rows collide onto one fingerprint. **The first
+version of this used a plain `''` join and a space for null**, which would have made
+`('AB', null)` and `('A', 'B')` indistinguishable; caught before it shipped.
+
+#### ⚠️ The port could not express atomicity, so one method was added to it
+
+`ILedgerPort` gained `runInTransaction<T>(work: () => Promise<T>): Promise<T>`. Group 2b froze the
+port surface, and the three reconciliation methods are individually insufficient: the
+`Atomic Materialisation` requirement is a property of all three together, and D13 says one
+transaction. Expressing it any other way meant either a fourth method taking all three sets at once
+(which contradicts task 7.3, where the *service* drives the reconciliation) or an undeclared
+`BEGIN`/`COMMIT` side effect inside the adapter — the same class of error as the SQL predicate drift
+that started this investigation.
+
+The caller never sees a transaction handle, so no SQL vocabulary leaks out of infrastructure. The
+generic return type is asserted in `ledger-port-contract.spec-d.ts` and is not decorative: with the
+signature changed to `Promise<void>`, the contract test fails with
+`TypeCheckError: Type 'void' is not assignable to type 'MaterializationSummary'`.
+
+#### ⚠️ Spec defect — `needs_recalculation` cannot be cleared "within the same transaction"
+
+The `fifo-materialization-reconciliation` spec requires *"`needs_recalculation` MUST be set to
+`'false'` within the same transaction that wrote the derived rows"*. **That is not achievable as the
+application is wired.** `IUserSettingsPort` is implemented by `SqliteVaultPortAdapter` over
+`NodeSqliteAdapter` — the **vault** database — while the derived tables live in the **ledger**
+database opened by `getLedgerDb(process.env.LEDGER_DB_PATH)` (`container.ts:118` vs `:159`). Two
+SQLite connections to two files; one transaction cannot span them.
+
+Migration `004` §4.9 muddies this further by creating a **second** `user_settings` table in the
+*ledger* database and writing `needs_recalculation = 'true'` into it — a row the production
+`IUserSettingsPort` never reads.
+
+What was implemented instead: `setSetting('needs_recalculation', 'false')` is the **last statement
+inside the `runInTransaction` callback**, so it is unreachable if any reconciliation throws, and it
+does become genuinely transactional whenever the two ports share a connection. The two observable
+guarantees the spec is actually protecting are asserted and proven:
+
+- a mid-run failure leaves the flag `'true'` and `tax_lots` byte-identical to its pre-run contents
+  (`rolls back and leaves needs_recalculation true when a derived write fails`, driven by a recomputed
+  event carrying a dangling `tax_lot_id` so the FK rejects it *after* `tax_lots` has been written);
+- a successful run leaves it `'false'`.
+
+**For group 9 to decide:** either route the flag through `ILedgerPort` so it lives in the ledger
+database with the data it describes, or amend the spec scenario to "cleared only after the derived
+write commits". Do not leave two `user_settings` tables with one of them unread.
+
+#### ⚠️ My own 7.6 test was vacuous, and a deliberate break is what exposed it
+
+As first written, `rebuilds from empty derived tables to the same state as an incremental run` ran
+materialisation twice with the derived tables empty **both times** — so it compared a from-scratch
+rebuild against another from-scratch rebuild and proved only determinism. It stayed green against a
+break that made an inserted row's value depend on whether the table had been empty, which is exactly
+the defect the scenario exists to catch.
+
+Rewritten to build the incremental state honestly: soft-delete the SELL and the second BUY, run,
+restore them, run again (which must *amend* rows written by the first run — asserted:
+`inserted + updated > 0` and the snapshot must differ from the partial one), and only then empty the
+tables and compare. The same break now fails it.
+
+#### ⚠️ One test was flaky at ~3.5 s against the 5 s ceiling, and was fixed by moving work, not the limit
+
+The full backend suite ran green twice, then `reactivates the existing row when a retired transaction
+is restored` failed once on the third run. Measured per-test durations explained it: that test and
+`rebuilds from empty derived tables …` needed **3460 ms and 3564 ms** in their bodies, because each
+performs three full materialisations and one materialisation costs ~1700 ms (migrations, DuckDB
+`initialize()`, the custody-chain bind, then the FIFO + custody + data-quality passes). At the
+machine's habitual load average of 3–4 that clears 5000 ms.
+
+Fixed with group 6's remedy: the preparatory rebuilds moved into a `beforeEach` inside a nested
+`describe`, leaving one rebuild plus the assertions in the body. Vitest budgets `hookTimeout`
+(10 s) separately from `testTimeout` (5 s), so the work is now under two ceilings rather than one.
+Proven rather than assumed: the whole file passes with `--testTimeout=2500`, which the previous
+structure could not have done. Three consecutive full backend runs at load average 4.19 then gave
+`157 passed / 2 failed` every time.
+
+The two `expect`s that guard the incremental setup (`inserted + updated > 0`, and that the amended
+snapshot differs from the partial one) were carried into the hook as booleans and asserted in the
+body, so moving setup out of the test did not move an assertion out with it.
+
+#### Ten deliberate breaks, ten named failures
+
+Each break was applied to the shipped code, the suite run, then restored.
+
+| break | test that failed |
+|---|---|
+| retire arm short-circuited | `retires the lot of a soft-deleted transaction …`, `retires a phantom lot …`, `reactivates the existing row …` |
+| reactivation counted as an update | `reactivates the existing row when a retired transaction is restored` |
+| `changed` forced to `true` (every row rewritten) | `produces zero writes and no audit rows on an unchanged second run` |
+| `runInTransaction` replaced by a bare async block | 9 tests, incl. `rolls back and leaves needs_recalculation true …` |
+| synthetic-account loop emptied | 10 tests, all on `FOREIGN KEY constraint failed` |
+| `isSynthetic: true` → `false` | `creates the synthetic ownwallet counterparty on demand with is_synthetic = 1` |
+| `disposal_type` dropped from the event column list | 11 tests, incl. `persists disposal_type, provenance and quality flags …` |
+| an `UPDATE manual_price_overrides` injected into `reconcile` | `leaves the user-authored override tables byte-identical across a rebuild` |
+| inserted values made to depend on whether the table was empty | `produces zero writes …` **and** `rebuilds from empty derived tables …` |
+| update replaced by delete-then-insert | `records a changed quantity as one in-place update, not a delete and an insert`, plus 2 more |
+| soft delete replaced by a hard `DELETE` in the override CRUD | both override round-trip tests |
+
+#### Honest note on the Red state
+
+All 11 tests were written first and all 11 failed — but **all 11 failed on the same first write**
+(`NOT NULL constraint failed: lot_history_events.disposal_type`), so no individual assertion was
+reached. That is the same shape as group 5's "18 tests failing in `beforeEach`" finding, and a Red
+of that kind proves only that the old code cannot write the new schema. The per-assertion evidence
+is the ten breaks above, each of which produces a failure naming the property it removed. The Red
+run did establish one useful thing: the harness, the seed and the whole DuckDB chain were reached
+and working, and `tax_lots` wrote successfully before the events write failed.
+
+#### 7.4's `PreciseAmount` clause has nothing to apply to
+
+Task 7.4 asks for "`PreciseAmount` for any monetary field" in the summary. `MaterializationSummary`
+contains **no monetary field** — four counts per table plus two totals. Nothing was invented to
+satisfy the clause; the requirement is vacuously met, recorded here rather than papered over.
+
+`flagged` and `pendingReview` are both derived from `getDataQuality()` rather than from the derived
+rows' own `quality_flag`, because `pending_review` exists only on `FifoDataQualityRow` and because a
+custody residual or imbalance is a defect attached to no lot at all. The test asserts
+`pendingReview <= flagged`.
+
+#### Nine test files were pinned to a hand-picked migration prefix, again
+
+`SQLiteLedgerAdapter.spec.ts` and `CsvIngestionUseCase.spec.ts` still `db.exec`-ed `002` and `003` by
+hand and never called `initialize()`, so they ran against a **pre-004** schema. The moment the
+adapter began writing `parent_account_id` / `is_synthetic` / `disposal_type`, 14 of 15 tests in the
+first file failed with `table accounts has no column named parent_account_id`. Both now let the
+adapter's own runner apply the full set — the same fix group 5 applied elsewhere, and a reminder that
+the pattern is still latent wherever a spec pre-`exec`s migrations.
+
+#### The signature change was a 40-error spike before it was a 22-error win
+
+Replacing `ensureAssetExists(id, symbol)` / `ensureAccountExists(id, name)` with input objects took
+the backend from 28 to **58** `tsc` errors: the old two-argument signature on the adapter had been
+absorbing every positional call site, and the error was reported once on the class instead of 40+
+times at the calls. All were mechanically converted (`SQLiteLedgerAdapter.spec.ts`, `repro.test.ts`,
+`settings.ts`, `CsvIngestionUseCase.ts`) and the two `Mocked<ILedgerPort>` fixtures were given the
+eleven new methods. Net **28 → 6**.
+
+`CsvIngestionUseCase` was adapted at the call site only: `is_fiat` resolution from the ISO-4217 list
+(8.5) and sub-wallet resolution from `wallet` via `deriveSubAccountId` (8.6) remain group 8's, and
+`ensureAccountExists` currently ignores `input.wallet`. The port documents that the returned id "may
+be a child account derived from `wallet`"; today it always returns `input.accountId`.
+
+#### Two smaller findings
+
+1. **`lot_custody_entries.transfer_group_id` is written by nothing.** Migration 004 declares it
+   ("shared by both legs of one physical movement, once a counterparty is resolved"), but
+   `v_custody_entries` does not emit it and neither `CustodyEntryRow` nor `LedgerCustodyEntry`
+   carries it, so it is `NULL` on every row. Either the engine should emit it or the column should
+   go; left as-is because inventing a value in the adapter would be exactly the fabrication D6
+   forbids.
+2. **`getLotHistoryEvents` was silently corrupting nulls.** It ran `toPreciseAmount(row.x as string)`
+   on `sale_price_fiat` / `gain_loss_fiat` unconditionally, so a `NULL` came back as the string
+   `"null"` — undoing group 2's whole reason for making those columns nullable. Fixed at the same
+   time as the write path.
+
 ### Audit — vacuous type assertions across the repo (requested after group 2b)
 
 **Verdict: no pre-existing vacuous assertions. But one real coverage hole, and one fragile path.**
@@ -968,58 +1189,67 @@ Measured content — **materially relevant to group 13 and to design D9**:
 
 ## Resume here — next action
 
-58 of 126 tasks complete; groups 1, 2, 2b, 3, 4, 5 and 6 are closed. **6.3 is the one open task in a
-closed group** and belongs to group 7's write path — see below.
+66 of 126 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6 and 7 are closed. **No task is left open in a
+closed group** — group 7 discharged 6.3.
 
 ### Working tree state
 
-`@kryptofolio/backend` does **not** compile — **28** `tsc` errors, every one the intended consequence
-of the contract-first port change in group 2b (see its table for which group fixes which file).
-**Do not "fix" them ad hoc.**
+`@kryptofolio/backend` still does not compile: **6** `tsc` errors, down from 28. Every one is the
+intended consequence of the contract-first port change in group 2b, and every one belongs to a group
+that has not run yet. **Do not "fix" them ad hoc.**
 
 | package | state |
 |---|---|
 | `packages/shared-types` | ✅ 38/38 tests, `tsc --noEmit` clean |
 | `packages/core-domain` | ✅ 58/58 tests, `tsc --noEmit` clean |
 | `packages/database` | ✅ 99/99 tests, `tsc --noEmit` clean |
-| `apps/backend` ports contract | ✅ 15 type assertions + 2 runtime |
-| `apps/backend` tests | 🟡 143 passing / 2 failing — both are group 8's `repro.test.ts`. **No timeouts across 4 consecutive runs** |
-| `apps/backend` (typecheck) | ❌ intentionally non-compiling, 28 errors |
+| `apps/backend` ports contract | ✅ 16 type assertions + 2 runtime, `Type Errors: no errors` |
+| `apps/backend` tests | 🟡 157 passing / 2 failing — both are group 8's `repro.test.ts`. Identical across 3 consecutive full runs, no timeouts |
+| `apps/backend` (typecheck) | ❌ 6 errors, all owned by groups 10 and 11 |
 
-Remaining `tsc` errors by file: `SQLiteLedgerAdapter.ts` (8), `FifoMaterializerService.ts` (4),
-`CsvIngestionUseCase.ts` (2), `GetSpanishTaxReportUseCase.ts` (2), `mockPortfolio.ts` (2),
-`container.ts` (1), `settings.ts` (1), plus 8 in test mocks.
+Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable proceeds — group 10),
+`GetSpanishTaxReportUseCase.spec.ts` (1) and `GetTokenHistoryUseCase.spec.ts` (1) — both
+`ITaxCalculatorPort` mocks missing `calculateCustodyEntries` / `getDataQuality` (group 10) — and
+`mockPortfolio.ts` (2, missing `disposal_type` — group 11).
 
-### Next task: group 7 — materialisation reconciliation
+### Next task: group 8 — ingestion integrity and sub-accounts
 
-Everything group 7 reads now exists and is green:
+Group 8 owns tasks 8.1–8.7 and starts with two failing tests already in the tree:
+`repro.test.ts > Payload 1 - WITHDRAWAL` and `> Payload 3 - BUY`, both failing on
+`CHECK constraint failed: total_fiat …`. **That is a genuine Red for 8.2** — the payloads carry a
+negative `total_fiat` and the missing `.abs()` in `CsvIngestionUseCase` is exactly what 8.2 repairs.
+Read them before writing anything new.
 
-- **`v_custody_entries`** emits `id`, `tax_lot_id`, `asset_id`, `account_id`, signed `qty_delta`
-  (a `PRINTF('%.12f', …)` string, negative for an outflow), `occurred_at`, `spot_transaction_id` —
-  already projected onto `CustodyEntryRow` by `DuckDbTaxCalculatorAdapter.calculateCustodyEntries()`.
-- **`v_fifo_data_quality`** is the surface behind `MetricsKpis.excludedFlaggedLots` and
-  `SpanishTaxBaseReport.excludedFlaggedEvents`, reachable through
-  `DuckDbTaxCalculatorAdapter.getDataQuality()`.
-- **`v_calculated_tax_lots`** / **`v_calculated_lot_history_events`** carry `disposal_type`,
-  `quality_flag`, `value_provenance` and `is_taxable`; 7.5 must persist all four.
+What group 7 left for group 8 to finish, precisely:
 
-**Group 7 owes 6.3, and `lot_custody_entries` cannot be written without it.** Its `account_id` has an
-FK to `accounts`, and roughly half the custody legs name a synthetic `ownwallet-<ASSET>` account that
-**nothing has ever inserted** — `grep -rn is_synthetic apps/backend/src packages/database/src` returns
-reads only. Before reconciling custody entries, resolve every distinct `account_id` in
-`v_custody_entries` for which `isSyntheticAccountName()` is true and `ensureAccountExists` it with
-`isSynthetic: true` and no `parentAccountId`. `EnsureAccountInput` already carries the field
-(group 2b) and `deriveSyntheticAccountName` is exported from `@kryptofolio/shared-types`, which
-`packages/database` and `apps/backend` both depend on — do not re-derive the name.
+1. **`ensureAccountExists` ignores `input.wallet`.** The port documents that it returns an id which
+   "may be a child account derived from `wallet`"; the adapter currently always returns
+   `input.accountId`. Task 8.6 must add `deriveSubAccountId` resolution plus creation of the venue
+   parent. The parent-creation path already exists (`insertAccount` is called for
+   `input.parentAccountId` when given) and the self-parent trigger from 004 §4.2 is live.
+2. **`ensureAssetExists` writes `is_fiat` from `input.isFiat` but no caller supplies it.**
+   `CsvIngestionUseCase` was adapted at the call site only — `{ assetId: asset, symbol: asset }`.
+   Task 8.5 must resolve it from `isFiatCurrencyCode()` in `@kryptofolio/shared-types`.
+3. **`toSpotTxType()`'s `?? 'BUY'` fallback is untouched** (8.3).
+4. **The `METADATA_DICTIONARY` collision is still live.** `account_id: ["account", "wallet", …]`
+   means Kraken's `wallet` column lands in `metadata.account_id` and collides with the real account
+   identifier. Read the wallet designation before metadata normalisation, or add a distinct key.
 
-Two further things group 7 should know:
+Two things group 8 and later groups should know about what group 7 changed:
 
-1. **`initialize()` no longer creates the custody relations.** They are bound on first use, triggered
-   from `execute` / `queryMany` when a statement mentions one of them (or `duckdb_views()`). Query
-   them through the adapter and nothing changes; reach for `this.connection` directly and they will
-   not exist.
-2. **The recursive allocation costs ~4.3 ms per movement leg.** A reconciliation that reads
-   `v_custody_entries` once per lot instead of once per run will be quadratic. Read it once.
+1. **`FifoMaterializerService.recalculate()` now returns `MaterializationSummary`**, exported from
+   `application/services/FifoMaterializerService.ts`. It is the payload the rebuild route must
+   serialise (9.4 / 10.x) and the DTO in group 11 must mirror it:
+   `{ taxLots, lotHistoryEvents, custodyEntries: ReconciliationSummary, flagged, pendingReview }`.
+   It contains no monetary value.
+2. **`ILedgerPort.runInTransaction<T>()` exists.** Any use case that must write several tables
+   atomically should compose through it rather than opening its own transaction. The override use
+   cases in 9.6–9.7 trigger an immediate rebuild; the rebuild opens its own transaction, so the
+   override write must commit *before* it, not inside it.
+3. **A spec/design conflict is waiting for group 9's decision:** `needs_recalculation` lives in the
+   *vault* database while the derived tables live in the *ledger* database, so the spec's "within the
+   same transaction" is unachievable as wired — and migration 004 §4.9 created a second, unread
+   `user_settings` table in the ledger DB. See the group 7 entry for the full measurement.
 
 ### Standing reminders for every remaining group
 
@@ -1045,7 +1275,98 @@ the sub-wallet designation `deriveSubAccountId` needs — lands in `metadata.acc
 **collides with the real account identifier**. Read the wallet designation before metadata
 normalisation, or add a distinct dictionary key.
 
-## Open issue found while committing — affects CI
+## Cross-cutting cleanup — RESOLVED after group 7
+
+Four items that depended on no other group were closed in one pass. Measured after the change:
+`turbo run test --concurrency=1` → shared-types 38/38, database **118/118**, core-domain 58/58,
+backend 163 passing / 2 failing (the two group-8 `repro.test.ts` cases). Backend `tsc`: 6 errors,
+unchanged, all owned by groups 10–11.
+
+**1. The pending-recalculation flag was written to a database nobody reads.** Migration `004` §4.9
+set `needs_recalculation = 'true'` in the **ledger**'s `user_settings`, while `IUserSettingsPort`
+reads and writes the **vault**'s. Consequence, not cosmetic: after the migration
+`FifoMaterializerService.recalculate()` read `null`, took the early return, and **recalculated
+nothing** — the corrected engine would never have run on its own.
+
+Resolved by removing §4.9's table and INSERT entirely and moving the decision to the layer that can
+see both databases:
+- `ILedgerPort.initialize()` now returns `LedgerInitializationSummary { appliedMigrations }`. The
+  adapter reports which migrations it applied instead of acting on the fact.
+- New `InitializeLedgerUseCase` composes `ILedgerPort` + `IUserSettingsPort`: flags recalculation
+  when at least one migration ran, leaves the flag untouched when the schema was already current
+  (setting it unconditionally would force a full rebuild on every restart), and flags **and
+  rethrows** when a migration fails partway, since a half-applied schema makes the derived tables
+  suspect either way.
+- `index.ts` calls the use case; the container wires it.
+
+6 tests, all written first. Red was weak (the module did not exist, so no assertion was reached), so
+non-vacuity was proven by three deliberate breaks: always-set → 1 failure, never-set → 2 failures,
+no-flag-on-migration-failure → 1 failure. The migration's own test was inverted to assert the flag is
+**absent** from the ledger, plus a second test that the file declares no `user_settings` table;
+re-adding the INSERT fails both.
+
+This closes the group-9 spec defect below. The requirement's wording ("within the same transaction")
+remains unachievable across two SQLite files, but the two observable guarantees now hold and the
+duplicate table is gone.
+
+**2. Six `any` casts in the database adapters.** `params as any[]` in `NodeSqliteAdapter` (×3) and
+`DuckDbAdapter` (×2), plus `appendValue(val as any)`. New `packages/database/src/adapters/sqlParams.ts`
+narrows the port's `unknown[]` onto what each driver actually binds — and the two drivers do **not**
+accept the same set: `node:sqlite` binds ArrayBufferViews but rejects booleans, DuckDB the reverse.
+The cast hid that difference. Errors now name the calling method and the parameter index (or column
+name, for the Appender) instead of surfacing as an opaque native failure several frames away.
+18 tests.
+
+**3. The type-checking coverage hole.** `packages/core-domain` and `packages/shared-types` had **no
+`typecheck` script at all**, so nothing type-checked them in CI; and all three packages' `tsconfig.json`
+include only `src/**`, so `tests/**` was never checked anywhere. Added `tsconfig.typecheck.json` +
+`typecheck` script to all three. This is what makes `expectTypeOf` assertions real in those packages —
+`vitest run` alone never type-checks, and a `typecheck.include` block in a vitest config is decorative
+unless `--typecheck` is passed, so the earlier plan to add those blocks was dropped in favour of the
+tsc pass CI actually runs.
+
+**4. Turbo concurrency (the CI issue below).** `test:packages` is now
+`turbo run test --concurrency=1`; CI and `.husky/pre-commit` both call it, with typecheck and lint
+still running at full concurrency. Also fixed a **cache-correctness bug found while doing it**:
+`turbo.json`'s `test` inputs listed `src/**` but not `tests/**` or `migrations/**`, so editing a test
+file or a migration did not invalidate the cached result — turbo would report a stale pass. Both
+added, and `tests/**` added to `typecheck` inputs.
+
+**5. A package reached up into the application, and it was silently invalidating test results.**
+`packages/database/tests/integration/{tax_base,tax_swaps,tax_stress_test}.spec.ts` imported
+`apps/backend/.../DuckDbTaxCalculatorAdapter` through a relative path escaping the package.
+
+Measured consequence, not a style objection:
+
+```
+turbo run test --filter=@kryptofolio/database   → 118 passed
+[append a line to DuckDbTaxCalculatorAdapter.ts]
+turbo run test --filter=@kryptofolio/database   → cache hit, 118 passed in 55ms
+```
+
+588 lines of tax-engine tests replayed green over an adapter that had just changed. Turbo cannot know
+better: `packages/database` does not declare the backend as a dependency, and **cannot** — the backend
+already depends on `@kryptofolio/database`, so it would be a cycle. The only fix is to move code.
+
+Resolved by moving the three files to `apps/backend/src/core/infrastructure/adapters/__tests__/`,
+where every import is legal in the existing dependency direction. To make that possible without a
+second copy of the migration runner, `applyMigrations` was promoted from
+`packages/database/tests/helpers/` to `packages/database/src/sqlite/migrations.ts` and exported from
+the package: the migration *files* live there, so the runner resolving them belongs there too. The
+old helper is now a re-export, so tests and production share one runner. It also returns the
+filenames it applied, which is what item 1 above needed.
+
+Counts confirm nothing was lost: database 118 → 112, backend 163 → 169, and the 6 moved tests match
+the `it()` count in the three files exactly, with no skips.
+
+`rootDir: "."` is now set in all three `tsconfig.typecheck.json` files, so the boundary is enforced
+rather than merely restored — verified by adding an upward import and watching `tsc` reject it.
+
+**Note for anyone running the suite:** `@kryptofolio/backend#build` fails on the 6 outstanding type
+errors, which aborts `pnpm run test:packages` before it reaches `@kryptofolio/backend#test`. Run
+`pnpm --filter @kryptofolio/backend test` directly until groups 10–11 clear them.
+
+## Open issue found while committing — affects CI — RESOLVED, see above
 
 `packages/database` passes **99/99 in isolation and under `turbo run test --filter=@kryptofolio/database`**,
 but **fails with timeouts under a full `turbo run test`**.
@@ -1073,8 +1394,22 @@ The groups 1–6 commit was made with `--no-verify` for that reason, on a featur
   contains the `wallet` column. Verification is test-driven (group 13 rewritten), so no manual
   re-ingestion is required at all.
 
-- **Open decision (non-blocking):** whether to close the `packages/database` /
-  `packages/shared-types` type-assertion coverage hole in this change or track it separately.
+- ~~**Open decision:** whether to close the `packages/database` / `packages/shared-types`
+  type-assertion coverage hole in this change.~~ **Closed** — see the cross-cutting cleanup section.
+
+- ~~**Open spec defect, for group 9:**~~ **Resolved** by the cross-cutting cleanup: the duplicate
+  ledger `user_settings` table is gone and the flag is set through the port that owns it. The spec
+  scenario's "same transaction" wording still needs amending to match what is physically possible.
+  Original text follows.
+
+- **Open spec defect (non-blocking), for group 9:** the `fifo-materialization-reconciliation` spec
+  requires `needs_recalculation` to be cleared *"within the same transaction that wrote the derived
+  rows"*. It cannot be: the flag is read and written through `IUserSettingsPort` against the **vault**
+  database, while the derived tables live in the **ledger** database. Migration `004` §4.9 also created
+  a second `user_settings` table in the ledger DB that nothing reads. Group 7 implemented the two
+  observable guarantees (a failed run leaves the flag `'true'`; a successful one clears it) and put the
+  write last inside the transaction callback. Either move the flag onto `ILedgerPort` or amend the
+  scenario — but resolve the duplicate table either way.
 
 - **Open decision (non-blocking), for group 10:** `DuckDbMetricsAdapter.getKpis()` costs **~1450 ms
   against an empty ledger** — eleven statements, most of which re-execute the FIFO chain through

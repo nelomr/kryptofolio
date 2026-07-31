@@ -3,9 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DuckDbAdapter } from '../../src/adapters/DuckDbAdapter.js';
-import { DuckDbTaxCalculatorAdapter } from '../../../../apps/backend/src/core/infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
-import { applyMigrations } from '../helpers/migrations.js';
+import { DuckDbAdapter, applyMigrations } from '@kryptofolio/database';
+import { DuckDbTaxCalculatorAdapter } from '../DuckDbTaxCalculatorAdapter.js';
 
 
 describe('Tax Engine — Stress & Edge Case Tests', () => {

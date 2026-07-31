@@ -50,4 +50,4 @@ jobs:
         run: pnpm exec turbo run typecheck
 
       - name: Unit tests (all packages)
-        run: pnpm exec turbo run test
+        run: pnpm run test:packages

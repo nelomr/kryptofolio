@@ -19,8 +19,14 @@ if (process.env.NODE_ENV !== 'test') {
       bffLogger.info('Vault Database initialized successfully.');
 
       bffLogger.info('Initializing Ledger SQLite Database...');
-      await container.ledgerPort.initialize();
-      bffLogger.info('Ledger Database initialized successfully.');
+      const ledgerStartup = await container.initializeLedgerUseCase.execute();
+      bffLogger.info(
+        { appliedMigrations: ledgerStartup.appliedMigrations },
+        'Ledger Database initialized successfully.'
+      );
+      if (ledgerStartup.derivedDataInvalidated) {
+        bffLogger.warn('Schema changed — derived FIFO tables flagged for rebuild.');
+      }
 
       // Initialize the DuckDB analytical engine (FIFO views + Parquet federation)
       bffLogger.info('Initializing DuckDB Analytical Engine...');

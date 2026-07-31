@@ -170,10 +170,10 @@ export class CsvIngestionUseCase {
   }
 
   private async ensureAssetExists(asset: string): Promise<void> {
-    await this.ledgerPort.ensureAssetExists(asset);
+    await this.ledgerPort.ensureAssetExists({ assetId: asset, symbol: asset });
   }
 
   private async ensureAccountExists(accountId: string): Promise<void> {
-    await this.ledgerPort.ensureAccountExists(accountId);
+    await this.ledgerPort.ensureAccountExists({ accountId });
   }
 }

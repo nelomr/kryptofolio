@@ -69,7 +69,7 @@
 
 - [x] 6.1 Write tests: every custody movement emits balanced entries summing to zero; unknown counterparty resolves to `ownwallet-<ASSET>`; a destination override redirects the entry; custody derivation is order-independent and byte-identical across reruns
 - [x] 6.2 Create `v_custody_entries` emitting one debit and one credit per custody movement, resolving the counterparty as `transfer_destination_overrides` → recorded counterparty → `ownwallet-<ASSET>`
-- [ ] 6.3 Ensure synthetic accounts are created on demand during materialisation using the shared naming contract, flagged `is_synthetic = 1`
+- [x] 6.3 Ensure synthetic accounts are created on demand during materialisation using the shared naming contract, flagged `is_synthetic = 1`
 - [x] 6.4 Write tests for custody allocation: the moved quantity draws from the oldest lot held in that account; allocation emits no `lot_history_event`; no lot's `remaining_qty` or `status` changes; no lot row is split
 - [x] 6.5 Implement `v_lot_custody_allocation` as a `WITH RECURSIVE` sequential allocation using `USING KEY` to bound intermediate state, scoped per `(account, asset)` and ordered by `acquisition_timestamp`
 - [x] 6.6 Create `v_lot_current_location` resolving each lot's quantity per holding account, and `v_custody_balances` exposing per-account per-asset balances including synthetic accounts
@@ -80,13 +80,13 @@
 
 ## 7. Application Layer — Materialisation Reconciliation
 
-- [ ] 7.1 Write tests: orphan lot retired; phantom `DEPOSIT` lot retired with its events and custody entries; second run produces zero writes; restored transaction reactivates its row rather than duplicating; mid-run failure rolls back and leaves `needs_recalculation = 'true'`; override tables byte-identical before and after
-- [ ] 7.2 Add reconciliation methods to `SQLiteLedgerAdapter` performing insert / update / soft-delete / reactivate against the recomputed ID set, for `tax_lots`, `lot_history_events`, and `lot_custody_entries` only
-- [ ] 7.3 Rewrite `FifoMaterializerService.recalculate()` to run the full reconciliation inside a single SQLite transaction, clearing `needs_recalculation` only on success
-- [ ] 7.4 Return a plain `{inserted, updated, retired, reactivated, flagged, pendingReview}` summary per derived table with no HTTP or framework coupling, using `PreciseAmount` for any monetary field
-- [ ] 7.5 Persist `disposal_type`, `flag`, manual-value provenance, and custody entries through the materialiser
-- [ ] 7.6 Add a test asserting that emptying all derived tables and re-running produces output identical to an incremental run over the same inputs
-- [ ] 7.7 Verify tests 7.1 and 7.6 pass
+- [x] 7.1 Write tests: orphan lot retired; phantom `DEPOSIT` lot retired with its events and custody entries; second run produces zero writes; restored transaction reactivates its row rather than duplicating; mid-run failure rolls back and leaves `needs_recalculation = 'true'`; override tables byte-identical before and after
+- [x] 7.2 Add reconciliation methods to `SQLiteLedgerAdapter` performing insert / update / soft-delete / reactivate against the recomputed ID set, for `tax_lots`, `lot_history_events`, and `lot_custody_entries` only
+- [x] 7.3 Rewrite `FifoMaterializerService.recalculate()` to run the full reconciliation inside a single SQLite transaction, clearing `needs_recalculation` only on success
+- [x] 7.4 Return a plain `{inserted, updated, retired, reactivated, flagged, pendingReview}` summary per derived table with no HTTP or framework coupling, using `PreciseAmount` for any monetary field
+- [x] 7.5 Persist `disposal_type`, `flag`, manual-value provenance, and custody entries through the materialiser
+- [x] 7.6 Add a test asserting that emptying all derived tables and re-running produces output identical to an incremental run over the same inputs
+- [x] 7.7 Verify tests 7.1 and 7.6 pass
 
 ## 8. Application Layer — Ingestion Integrity and Sub-Accounts
 

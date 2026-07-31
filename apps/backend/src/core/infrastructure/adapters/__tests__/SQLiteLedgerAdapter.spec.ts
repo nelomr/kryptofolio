@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { SQLiteLedgerAdapter } from "../SQLiteLedgerAdapter";
 import type {
   LedgerSpotTransaction,
@@ -10,24 +8,6 @@ import type {
 } from "../../../domain/ports/ILedgerPort";
 import { toPreciseAmount } from "../../../domain/value-objects/PreciseAmount.js";
 
-// Load the REAL migration SQL — this is the source of truth for the schema.
-// Using the real schema (not a simplified inline schema) catches impedance mismatches.
-const MIGRATION_SQL = readFileSync(
-  resolve(
-    __dirname,
-    "../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql",
-  ),
-  "utf-8",
-);
-
-// Migration 003 adds fiat_currency to spot/futures_transactions + exchange_rates table.
-const MIGRATION_003_SQL = readFileSync(
-  resolve(
-    __dirname,
-    "../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql",
-  ),
-  "utf-8",
-);
 
 /** Helper to build a minimal but valid spot transaction */
 function makeSpotTx(
@@ -77,12 +57,14 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
   let db: DatabaseSync;
   let adapter: SQLiteLedgerAdapter;
 
-  beforeEach(() => {
+  // The adapter's own runner applies every migration and records it, which is the only way to get
+  // the post-004 schema. Pre-execing a hand-picked prefix leaves the runner to re-apply it, and
+  // 004's ALTER TABLE statements cannot survive that.
+  beforeEach(async () => {
     db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON;");
-    db.exec(MIGRATION_SQL);
-    db.exec(MIGRATION_003_SQL);
     adapter = new SQLiteLedgerAdapter(db);
+    await adapter.initialize();
   });
 
   afterEach(() => {
@@ -95,9 +77,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe("Spot Transactions", () => {
     it("saves and retrieves a spot transaction with correct PreciseAmount parsing", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       const tx = makeSpotTx();
       await adapter.saveSpotTransaction(tx);
@@ -116,10 +98,10 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("only returns transactions for the requested account", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000002', "Kraken");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000002', name: "Kraken" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       await adapter.saveSpotTransaction(
         makeSpotTx({
@@ -146,10 +128,10 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("returns all transactions when account_id is undefined", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000002', "Kraken");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000002', name: "Kraken" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       await adapter.saveSpotTransaction(
         makeSpotTx({
@@ -171,9 +153,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("upserts transaction on id_hash collision (idempotent ingestion)", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       const txInitial = makeSpotTx({
         id: "tx-001",
@@ -195,9 +177,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("does NOT return soft-deleted transactions", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       await adapter.saveSpotTransaction(makeSpotTx());
       db.exec(
@@ -215,9 +197,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe("UPSERT Idempotency & Resurrection (S-2)", () => {
     it("resurrects a soft-deleted transaction on re-insert with same id_hash", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       const tx = makeSpotTx();
 
@@ -244,9 +226,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("does NOT create duplicate rows when the same id_hash is inserted twice", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       const tx = makeSpotTx();
       await adapter.saveSpotTransaction(tx);
@@ -263,9 +245,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe("Audit Log Trigger (S-1)", () => {
     it("inserts an audit_log record when a spot_transaction is updated", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       await adapter.saveSpotTransaction(makeSpotTx());
 
@@ -294,9 +276,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe("Tax Lots", () => {
     it("saves and retrieves a tax lot with all required fields", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
       await adapter.saveSpotTransaction(makeSpotTx());
 
       const lot = makeTaxLot();
@@ -317,9 +299,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("rejects invalid status values not in OPEN/PARTIAL/CLOSED", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
       await adapter.saveSpotTransaction(makeSpotTx());
 
       // The SQL CHECK constraint should reject 'FULL', 'EMPTY', or random values
@@ -340,9 +322,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe("Lot History Events (S-3)", () => {
     it("saves and retrieves lot history events", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
       await adapter.saveSpotTransaction(makeSpotTx());
       await adapter.createTaxLot(makeTaxLot());
 
@@ -357,6 +339,7 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
         gain_loss_fiat: toPreciseAmount("2500"),
         fiat_currency: "EUR",
         is_taxable: true,
+        disposal_type: "SELL",
         flag: null,
         notes: "Test disposal",
       };
@@ -389,9 +372,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it("resolves FK by calling ensureAccountExists + ensureAssetExists before insert", async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', "Binance");
-      await adapter.ensureAssetExists("asset-btc", "BTC");
-      await adapter.ensureAssetExists("asset-eur", "EUR");
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
 
       await expect(
         adapter.saveSpotTransaction(makeSpotTx()),
@@ -405,9 +388,9 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
 
   describe('fiat_currency propagation', () => {
     it('[Task 1.3/1.5] saves fiat_currency on spot transaction and retrieves it correctly', async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', 'Binance');
-      await adapter.ensureAssetExists('asset-btc', 'BTC');
-      await adapter.ensureAssetExists('asset-usd', 'USD');
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: 'Binance' });
+      await adapter.ensureAssetExists({ assetId: 'asset-btc', symbol: 'BTC' });
+      await adapter.ensureAssetExists({ assetId: 'asset-usd', symbol: 'USD' });
 
       await adapter.saveSpotTransaction(
         makeSpotTx({ fiat_currency: 'USD', fee_asset_id: 'asset-usd', asset_out_id: 'asset-usd' }),
@@ -419,8 +402,8 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
     });
 
     it('[Task 1.3/1.5] saves fiat_currency on futures transaction and retrieves it correctly', async () => {
-      await adapter.ensureAccountExists('10000000-0000-0000-0000-000000000001', 'Binance');
-      await adapter.ensureAssetExists('USDT', 'USDT');
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: 'Binance' });
+      await adapter.ensureAssetExists({ assetId: 'USDT', symbol: 'USDT' });
 
       await adapter.saveFuturesTransaction({
         id: 'f-001',
@@ -437,6 +420,70 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
       const results = await adapter.getFuturesTransactions('10000000-0000-0000-0000-000000000001');
       expect(results).toHaveLength(1);
       expect(results[0].fiat_currency).toBe('USD');
+    });
+  });
+  // -------------------------------------------------------------------------
+  // User-authored overrides
+  // -------------------------------------------------------------------------
+
+  describe("Manual price and transfer destination overrides", () => {
+    it("round-trips a manual price override and retires it non-destructively", async () => {
+      await adapter.setManualPriceOverride({
+        id_hash: "hash-abc123",
+        price_fiat: toPreciseAmount("0.42"),
+        fiat_currency: "EUR",
+        note: "declared by hand",
+      });
+
+      let overrides = await adapter.getManualPriceOverrides();
+      expect(overrides).toEqual([
+        {
+          id_hash: "hash-abc123",
+          price_fiat: "0.42",
+          fiat_currency: "EUR",
+          note: "declared by hand",
+        },
+      ]);
+
+      await adapter.setManualPriceOverride({
+        id_hash: "hash-abc123",
+        price_fiat: toPreciseAmount("0.55"),
+        fiat_currency: "EUR",
+      });
+      overrides = await adapter.getManualPriceOverrides();
+      expect(overrides).toHaveLength(1);
+      expect(overrides[0].price_fiat).toBe("0.55");
+      expect(overrides[0].note).toBeUndefined();
+
+      await adapter.removeManualPriceOverride("hash-abc123");
+      expect(await adapter.getManualPriceOverrides()).toHaveLength(0);
+      const surviving = db
+        .prepare("SELECT COUNT(*) AS count FROM manual_price_overrides")
+        .get() as { count: number };
+      expect(surviving.count).toBe(1);
+    });
+
+    it("round-trips a transfer destination override and retires it non-destructively", async () => {
+      await adapter.setTransferDestinationOverride({
+        id_hash: "hash-abc123",
+        counterparty_account_id: '10000000-0000-0000-0000-000000000004',
+        note: "went to my Ledger",
+      });
+
+      expect(await adapter.getTransferDestinationOverrides()).toEqual([
+        {
+          id_hash: "hash-abc123",
+          counterparty_account_id: '10000000-0000-0000-0000-000000000004',
+          note: "went to my Ledger",
+        },
+      ]);
+
+      await adapter.removeTransferDestinationOverride("hash-abc123");
+      expect(await adapter.getTransferDestinationOverrides()).toHaveLength(0);
+      const surviving = db
+        .prepare("SELECT COUNT(*) AS count FROM transfer_destination_overrides")
+        .get() as { count: number };
+      expect(surviving.count).toBe(1);
     });
   });
 });

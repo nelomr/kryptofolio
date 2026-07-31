@@ -9,6 +9,7 @@ import {
   type FifoQualityFlag,
 } from '@kryptofolio/shared-types';
 import type { IAnalyticalDatabasePort } from '../ports/IAnalyticalDatabasePort.js';
+import { toDuckDbParams, toDuckDbValue } from './sqlParams.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -1666,7 +1667,7 @@ function sanitizeFilePath(filePath: string): string {
     await this.ensureCustodyRelations(sql);
     const stmt = await this.connection!.prepare(sql);
     if (params.length > 0) {
-      stmt.bind(params as any[]);
+      stmt.bind(toDuckDbParams(params, 'DuckDbAdapter.execute'));
     }
     await stmt.run();
   }
@@ -1687,7 +1688,7 @@ function sanitizeFilePath(filePath: string): string {
     await this.ensureCustodyRelations(sql);
     const stmt = await this.connection!.prepare(sql);
     if (params.length > 0) {
-      stmt.bind(params as any[]);
+      stmt.bind(toDuckDbParams(params, 'DuckDbAdapter.queryMany'));
     }
     const reader = await stmt.runAndReadAll();
     return reader.getRowObjects() as unknown as T[];
@@ -1722,7 +1723,7 @@ function sanitizeFilePath(filePath: string): string {
           if (val === undefined || val === null) {
             appender.appendNull();
           } else {
-            appender.appendValue(val as any);
+            appender.appendValue(toDuckDbValue(val, 'DuckDbAdapter.bulkInsert', colName));
           }
         }
         appender.endRow();

@@ -488,17 +488,11 @@ UPDATE assets
 -- 4.END_SEED
 
 -- ---------------------------------------------------------------------------
--- 4.9 Mark the ledger as pending recalculation
+-- 4.9 Pending-recalculation flag — deliberately NOT written here
 --
--- Reframed from "the user must press Sync" to "work is pending": the corrected engine must
--- reprocess the ledger, and a failed automatic rebuild leaves this flag set so it stays retryable.
+-- Dropping the derived tables above invalidates every FIFO figure, but the flag that records that
+-- is `needs_recalculation` in the SETTINGS database, which this migration cannot reach: the ledger
+-- and the settings store are two separate SQLite files. Writing a same-named row here produced a
+-- second `user_settings` table that nothing reads, so the application never learned it had work
+-- pending. The migration runner's caller sets the flag on the port that owns it.
 -- ---------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS user_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'utc'))
-) STRICT;
-
-INSERT INTO user_settings (key, value) VALUES ('needs_recalculation', 'true')
-    ON CONFLICT(key) DO UPDATE SET value = 'true';

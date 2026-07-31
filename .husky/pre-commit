@@ -1,1 +1,4 @@
-pnpm exec turbo run typecheck lint test
+# Tests run one package at a time: each opens its own in-memory DuckDB with its own worker pool,
+# and running them concurrently starves every query enough to blow the per-test timeouts.
+pnpm exec turbo run typecheck lint
+pnpm run test:packages

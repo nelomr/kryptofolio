@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { IDatabasePort } from '../ports/IDatabasePort.js';
+import { toSqliteParams } from './sqlParams.js';
 
 /**
  * NodeSqliteAdapter — Infrastructure adapter for the generic IDatabasePort
@@ -60,17 +61,17 @@ export class NodeSqliteAdapter implements IDatabasePort {
 
   public async execute(sql: string, params: unknown[] = []): Promise<void> {
     const stmt = this.db.prepare(sql);
-    stmt.run(...(params as any[]));
+    stmt.run(...toSqliteParams(params, 'NodeSqliteAdapter.execute'));
   }
 
   public async queryOne<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T | null> {
     const stmt = this.db.prepare(sql);
-    const result = stmt.get(...(params as any[])) as T | undefined;
+    const result = stmt.get(...toSqliteParams(params, 'NodeSqliteAdapter.queryOne')) as T | undefined;
     return result ?? null;
   }
 
   public async queryMany<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     const stmt = this.db.prepare(sql);
-    return stmt.all(...(params as any[])) as T[];
+    return stmt.all(...toSqliteParams(params, 'NodeSqliteAdapter.queryMany')) as T[];
   }
 }

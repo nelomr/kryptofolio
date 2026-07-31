@@ -34,6 +34,7 @@ import { CoinbaseMarketDataAdapter } from '../adapters/CoinbaseMarketDataAdapter
 import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js';
 import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
 import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
+import { InitializeLedgerUseCase } from '../../application/use-cases/InitializeLedgerUseCase.js';
 import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
 import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDailyPricesUseCase.js';
 import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortfolioSummaryUseCase.js';
@@ -98,6 +99,7 @@ export class DIContainer {
   /** Ledger & Ingestion */
   public readonly ledgerPort: ILedgerPort;
   public readonly csvIngestionUseCase: CsvIngestionUseCase;
+  public readonly initializeLedgerUseCase: InitializeLedgerUseCase;
 
   /** Analytical DuckDB Ports & Adapters */
   public priceIngestionPort: IPriceIngestionPort;
@@ -161,6 +163,7 @@ export class DIContainer {
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
     this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider, this.userSettingsPort);
+    this.initializeLedgerUseCase = new InitializeLedgerUseCase(this.ledgerPort, this.userSettingsPort);
 
     // Analytical DuckDB Adapters (initially bound to uninitialized guard)
     const uninitializedDb = new UninitializedAnalyticalDatabaseAdapter();

@@ -28,7 +28,7 @@ describe('Constraint Repro', () => {
   });
 
   it('Payload 1 - WITHDRAWAL', async () => {
-    await adapter.ensureAccountExists("10000000-0000-0000-0000-000000000007", "TestAccount");
+    await adapter.ensureAccountExists({ accountId: "10000000-0000-0000-0000-000000000007", name: "TestAccount" });
     const payload1 = {
       tx_id: "5a68d802-7105-46d9-b314-8fd5fbd731f8", timezone: "Europe/Madrid", tx_type: "WITHDRAWAL",
       account_id: "10000000-0000-0000-0000-000000000007",
@@ -42,7 +42,7 @@ describe('Constraint Repro', () => {
   });
 
   it('Payload 2 - DEPOSIT', async () => {
-    await adapter.ensureAccountExists("10000000-0000-0000-0000-000000000007", "TestAccount");
+    await adapter.ensureAccountExists({ accountId: "10000000-0000-0000-0000-000000000007", name: "TestAccount" });
     const payload2 = {
       tx_id: "7a466c8e-4e56-4e4c-9f29-0c0c34a68003", tx_type: "DEPOSIT",
       account_id: "10000000-0000-0000-0000-000000000007",
@@ -56,7 +56,7 @@ describe('Constraint Repro', () => {
   });
 
   it('Payload 3 - BUY', async () => {
-    await adapter.ensureAccountExists("10000000-0000-0000-0000-000000000007", "TestAccount");
+    await adapter.ensureAccountExists({ accountId: "10000000-0000-0000-0000-000000000007", name: "TestAccount" });
     const payload3 = {
       tx_id: "a00b3738-8d5e-4cee-b074-33a3d074ff77", tx_type: "BUY",
       account_id: "10000000-0000-0000-0000-000000000007",

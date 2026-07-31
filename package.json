@@ -20,7 +20,7 @@
     "dev:full": "pnpm exec turbo run dev",
     "build": "pnpm exec turbo run build",
     "test": "vitest run",
-    "test:packages": "pnpm exec turbo run test",
+    "test:packages": "pnpm exec turbo run test --concurrency=1",
     "typecheck": "pnpm exec turbo run typecheck",
     "lint": "pnpm exec turbo run lint",
     "prepare": "husky",

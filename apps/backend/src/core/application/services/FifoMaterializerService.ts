@@ -1,12 +1,45 @@
-import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
+import { isSyntheticAccountName } from '@kryptofolio/shared-types';
+import type {
+  ILedgerPort,
+  LedgerTaxLot,
+  LedgerTaxLotEvent,
+  LedgerCustodyEntry,
+  ReconciliationSummary,
+} from '../../domain/ports/ILedgerPort.js';
 import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 /**
- * FifoMaterializerService — Application service that coordinates the recalculation
- * of Spot FIFO tax lots and history events inside DuckDB, and materializes them
- * back into the SQLite primary ledger database.
+ * Outcome of one materialisation run.
+ *
+ * Plain data: no HTTP status, no framework type, no database handle. The service is therefore
+ * directly invocable as a tool, and the HTTP layer's only job is to serialise this.
+ */
+export interface MaterializationSummary {
+  taxLots: ReconciliationSummary;
+  lotHistoryEvents: ReconciliationSummary;
+  custodyEntries: ReconciliationSummary;
+  /** Rows carrying a data-quality defect. Advisory — a flagged run is still a successful run. */
+  flagged: number;
+  /** Of those, the ones a user can resolve by declaring a value or a destination. */
+  pendingReview: number;
+}
+
+const NOTHING_RECONCILED: ReconciliationSummary = {
+  inserted: 0,
+  updated: 0,
+  retired: 0,
+  reactivated: 0,
+};
+
+/**
+ * FifoMaterializerService — recomputes the Spot FIFO projection in DuckDB and reconciles the three
+ * derived SQLite tables against it.
+ *
+ * Structured as a Functional Sandwich: every read from the analytical engine happens before the
+ * write transaction opens, so no SQLite write lock is held across a DuckDB query — and the writes
+ * are one atomic block whose failure leaves the ledger exactly as it was.
  */
 export class FifoMaterializerService {
   private readonly ledgerPort: ILedgerPort;
@@ -24,21 +57,25 @@ export class FifoMaterializerService {
   }
 
   /**
-   * Recalculates the tax lots and materializes the output back to SQLite if the database is flagged as dirty.
-   *
-   * @param force - If true, bypasses the needs_recalculation check.
+   * @param force - Recalculate even when nothing has flagged the ledger as pending.
    */
-  public async recalculate(force = false): Promise<void> {
+  public async recalculate(force = false): Promise<MaterializationSummary> {
     const needsRecalculation = await this.userSettingsPort.getSetting('needs_recalculation');
     if (!force && needsRecalculation !== 'true') {
-      return;
+      return {
+        taxLots: { ...NOTHING_RECONCILED },
+        lotHistoryEvents: { ...NOTHING_RECONCILED },
+        custodyEntries: { ...NOTHING_RECONCILED },
+        flagged: 0,
+        pendingReview: 0,
+      };
     }
 
-    // 1. Compute Spot FIFO tax lots and events in DuckDB
     const { lots, events } = await this.taxCalculatorPort.calculateLotsAndEvents();
+    const custodyEntries = await this.taxCalculatorPort.calculateCustodyEntries();
+    const dataQuality = await this.taxCalculatorPort.getDataQuality();
 
-    // 2. Map schema outputs to domain entity types (translating strings to PreciseAmount)
-    const domainLots = lots.map(lot => ({
+    const domainLots: LedgerTaxLot[] = lots.map(lot => ({
       id: lot.id!,
       spot_transaction_id: lot.spot_transaction_id,
       asset_id: lot.asset_id,
@@ -52,28 +89,69 @@ export class FifoMaterializerService {
       exchange_location: lot.exchange_location,
       source_tx_id: lot.source_tx_id,
       status: lot.status,
+      quality_flag: lot.quality_flag ?? null,
+      value_provenance: lot.value_provenance ?? 'MARKET',
     }));
 
-    const domainEvents = events.map(event => ({
+    const domainEvents: LedgerTaxLotEvent[] = events.map(event => ({
       id: event.id!,
       tax_lot_id: event.tax_lot_id,
       spot_transaction_id: event.spot_transaction_id,
       account_id: event.account_id,
       disposal_date: event.disposal_date,
       amount_from_lot: toPreciseAmount(event.amount_from_lot),
-      sale_price_fiat: toPreciseAmount(event.sale_price_fiat),
-      gain_loss_fiat: toPreciseAmount(event.gain_loss_fiat),
+      // An unresolved price stays unresolved: coercing it to 0 would read as a genuine sale at zero.
+      sale_price_fiat:
+        event.sale_price_fiat === null ? null : toPreciseAmount(event.sale_price_fiat),
+      gain_loss_fiat: event.gain_loss_fiat === null ? null : toPreciseAmount(event.gain_loss_fiat),
       fiat_currency: event.fiat_currency,
       is_taxable: event.is_taxable,
-      flag: event.flag,
+      disposal_type: event.disposal_type,
+      flag: event.flag ?? null,
+      quality_flag: event.quality_flag ?? null,
+      value_provenance: event.value_provenance ?? 'MARKET',
       notes: event.notes,
     }));
 
-    // 3. Materialize (UPSERT) into primary SQLite tables
-    await this.ledgerPort.upsertTaxLots(domainLots);
-    await this.ledgerPort.upsertLotHistoryEvents(domainEvents);
+    const domainCustodyEntries: LedgerCustodyEntry[] = custodyEntries.map(entry => ({
+      id: entry.id,
+      tax_lot_id: entry.tax_lot_id,
+      asset_id: entry.asset_id,
+      account_id: entry.account_id,
+      qty_delta: toPreciseAmount(entry.qty_delta),
+      occurred_at: entry.occurred_at,
+      spot_transaction_id: entry.spot_transaction_id,
+    }));
 
-    // 4. Reset the recalculation flag
-    await this.userSettingsPort.setSetting('needs_recalculation', 'false');
+    const syntheticAccountIds = [
+      ...new Set(domainCustodyEntries.map(entry => entry.account_id)),
+    ].filter(isSyntheticAccountName);
+
+    return this.ledgerPort.runInTransaction(async () => {
+      // The synthetic counterparties are the engine's own invention, so nothing has ever inserted
+      // them; every custody leg naming one would be rejected by the account foreign key.
+      for (const accountId of syntheticAccountIds) {
+        await this.ledgerPort.ensureAccountExists({
+          accountId,
+          isSynthetic: true,
+          parentAccountId: null,
+        });
+      }
+
+      // Lots before the rows that reference them, so no insert outruns its foreign key.
+      const taxLots = await this.ledgerPort.reconcileTaxLots(domainLots);
+      const lotHistoryEvents = await this.ledgerPort.reconcileLotHistoryEvents(domainEvents);
+      const custody = await this.ledgerPort.reconcileCustodyEntries(domainCustodyEntries);
+
+      await this.userSettingsPort.setSetting('needs_recalculation', 'false');
+
+      return {
+        taxLots,
+        lotHistoryEvents,
+        custodyEntries: custody,
+        flagged: dataQuality.length,
+        pendingReview: dataQuality.filter(defect => defect.pending_review).length,
+      };
+    });
   }
 }
