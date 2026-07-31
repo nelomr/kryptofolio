@@ -21,6 +21,10 @@ const MIGRATION_003_SQL = fs.readFileSync(
   ),
   'utf-8',
 );
+const MIGRATION_004_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
+  'utf-8',
+);
 
 describe('DuckDbPortfolioAnalyticsAdapter', () => {
   let sqlitePath: string;
@@ -37,6 +41,7 @@ describe('DuckDbPortfolioAnalyticsAdapter', () => {
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
     sqliteDb.exec(MIGRATION_SQL);
     sqliteDb.exec(MIGRATION_003_SQL);
+    sqliteDb.exec(MIGRATION_004_SQL);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';

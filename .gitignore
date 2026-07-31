@@ -30,6 +30,8 @@ dist-ssr
 *.sw?
 .agent/
 .agent/*
+.claude/
+.claude/*
 .atl/
 .atl/*
 .design/

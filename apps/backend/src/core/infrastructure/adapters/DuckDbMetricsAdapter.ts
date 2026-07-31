@@ -12,6 +12,33 @@ import type {
 import Decimal from 'decimal.js';
 import { generateAssetColor } from '@kryptofolio/shared-types';
 
+/**
+ * Lots whose cost basis is not trustworthy enough to aggregate.
+ *
+ * A negative basis inverts the sign of every gain derived from it; an unresolved one is stored as
+ * `0` because the column is NOT NULL, which reads as "acquired for free". Either one silently
+ * corrupts a portfolio total, so both are held out of the headline figure and counted instead.
+ */
+const UNTRUSTWORTHY_BASIS_FLAGS = "('NEGATIVE_COST_BASIS', 'MISSING_PRICE')";
+
+/**
+ * The dual-source lot set: the materialised lots plus any calculated lot the materialiser has not
+ * caught up with. Identical in both places it is used, so the two aggregations cannot disagree about
+ * which lots they are counting.
+ */
+const OPEN_LOTS_WITH_QUALITY = `
+    SELECT asset_id, remaining_qty, unit_cost_fiat, status, quality_flag FROM v_calculated_tax_lots
+    UNION ALL
+    SELECT asset_id, remaining_qty, unit_cost_fiat, status, quality_flag FROM ledger.tax_lots
+    WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
+`;
+
+const TRUSTWORTHY_OPEN_LOTS = `
+    SELECT * FROM (${OPEN_LOTS_WITH_QUALITY})
+    WHERE status IN ('OPEN', 'PARTIAL')
+      AND COALESCE(quality_flag, '') NOT IN ${UNTRUSTWORTHY_BASIS_FLAGS}
+`;
+
 export class DuckDbMetricsAdapter implements IMetricsPort {
   private readonly db: IAnalyticalDatabasePort;
 
@@ -35,13 +62,16 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       SELECT CAST(COALESCE(SUM(
           CAST(remaining_qty AS DOUBLE) * CAST(unit_cost_fiat AS DOUBLE)
       ), 0.0) AS VARCHAR) AS total_cost
-      FROM (
-          SELECT remaining_qty, unit_cost_fiat, status FROM v_calculated_tax_lots
-          UNION ALL
-          SELECT remaining_qty, unit_cost_fiat, status FROM ledger.tax_lots
-          WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
-      )
+      FROM (${TRUSTWORTHY_OPEN_LOTS})
+    `);
+
+    const flaggedLotsRes = await this.db.queryOne<{
+      flagged_lots: number;
+    }>(`
+      SELECT CAST(COUNT(*) AS INTEGER) AS flagged_lots
+      FROM (${OPEN_LOTS_WITH_QUALITY})
       WHERE status IN ('OPEN', 'PARTIAL')
+        AND COALESCE(quality_flag, '') IN ${UNTRUSTWORTHY_BASIS_FLAGS}
     `);
 
     const delta24hRes = await this.db.queryOne<{
@@ -164,14 +194,8 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
               COALESCE(ast.symbol, l.asset_id) AS symbol,
               SUM(CAST(l.remaining_qty AS DOUBLE)) AS total_qty,
               SUM(CAST(CAST(l.remaining_qty AS DOUBLE) * CAST(l.unit_cost_fiat AS DOUBLE) AS DOUBLE)) AS total_cost_fiat
-          FROM (
-              SELECT asset_id, remaining_qty, unit_cost_fiat, status FROM v_calculated_tax_lots
-              UNION ALL
-              SELECT asset_id, remaining_qty, unit_cost_fiat, status FROM ledger.tax_lots
-              WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
-          ) l
+          FROM (${TRUSTWORTHY_OPEN_LOTS}) l
           LEFT JOIN ledger.assets ast ON l.asset_id = ast.id OR l.asset_id = ast.symbol
-          WHERE l.status IN ('OPEN', 'PARTIAL')
           GROUP BY COALESCE(ast.symbol, l.asset_id)
       ),
       latest_prices AS (
@@ -275,6 +299,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       worstAsset,
       totalRoiPercent: Number(new Decimal(totalRoiPercentNum).toFixed(2)),
       totalRoiFiat: totalRoiFiatDec.toFixed(2),
+      excludedFlaggedLots: Number(flaggedLotsRes?.flagged_lots ?? 0),
     };
   }
 

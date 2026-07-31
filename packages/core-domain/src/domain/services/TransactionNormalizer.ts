@@ -3,6 +3,21 @@ import { normalizeMetadataKeys } from "./normalizer/metadataNormalizer";
 import { transactionHandlers } from "./normalizer/handlers";
 
 /**
+ * Their canonical `tx_type` is owned exclusively by `classifyCustodyMovement`; this set exists so the
+ * fallback mapping below cannot coerce an unclassified movement into a plausible type.
+ */
+const MOVEMENT_LABELS: ReadonlySet<string> = new Set([
+  "deposit",
+  "deposito",
+  "depósito",
+  "withdrawal",
+  "withdraw",
+  "retiro",
+  "transfer",
+  "transferencia",
+]);
+
+/**
  * Normalizes a TransactionMappedData object to always provide
  * explicit directional properties according to the Backend MockTax Contracts.
  * 
@@ -62,14 +77,8 @@ export function normalizeTransactionDirection(
     venta: "SELL",
     trade: "BUY",
     
-    // Transfer
-    deposit: "DEPOSIT",
-    deposito: "DEPOSIT",
-    withdrawal: "WITHDRAWAL",
-    withdraw: "WITHDRAWAL",
-    retiro: "WITHDRAWAL",
-    transfer: "TRANSFER",
-    transferencia: "TRANSFER",
+    // Movements are absent from this map on purpose: the label alone does not say whether 500 EUR
+    // was funded or 179 XRP was moved between wallets. `classifyCustodyMovement` owns their type.
 
     // Crypto Native Income
     staking: "STAKING",
@@ -97,8 +106,16 @@ export function normalizeTransactionDirection(
     quema: "BURN",
   };
 
-  // If the handler didn't override it (like transfer does), map it or default to uppercase
-  if (normalized.tx_type === tx_type || normalized.tx_type === tx_type.toUpperCase()) {
+  // Uppercasing an unclassified movement would produce a valid-looking `DEPOSIT` / `WITHDRAWAL`.
+  // Preserving the raw label makes `toSpotTxType` reject the row and name the offending value.
+  const isUnresolvedMovement =
+    MOVEMENT_LABELS.has(tx_type) && normalized.tx_type === tx_type;
+
+  // If the handler didn't override it, map it or default to uppercase.
+  if (
+    !isUnresolvedMovement &&
+    (normalized.tx_type === tx_type || normalized.tx_type === tx_type.toUpperCase())
+  ) {
     normalized.tx_type = TYPE_MAP[tx_type] ?? normalized.tx_type?.toUpperCase() ?? "";
   }
   

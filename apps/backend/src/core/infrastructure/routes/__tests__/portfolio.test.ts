@@ -20,6 +20,10 @@ const MIGRATION_003_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
   'utf-8',
 );
+const MIGRATION_004_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
+  'utf-8',
+);
 
 describe('Portfolio Route API', () => {
   let sqlitePath: string;
@@ -36,6 +40,7 @@ describe('Portfolio Route API', () => {
     sqliteDb.exec(MIGRATION_001_SQL);
     sqliteDb.exec(MIGRATION_SQL);
     sqliteDb.exec(MIGRATION_003_SQL);
+    sqliteDb.exec(MIGRATION_004_SQL);
 
     process.env.MOCK_MODE = 'false';
     process.env.VAULT_DB_PATH = sqlitePath;

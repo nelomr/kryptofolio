@@ -5,15 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { NodeSqliteAdapter } from '../src/adapters/NodeSqliteAdapter.js';
 import { DuckDbAdapter } from '../src/adapters/DuckDbAdapter.js';
-
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../migrations/sqlite/002_ledger_schema.sql'),
-  'utf-8'
-);
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../migrations/sqlite/003_currency_schema.sql'),
-  'utf-8'
-);
+import { applyMigrations } from './helpers/migrations.js';
 
 describe('Database Adapters', () => {
   describe('NodeSqliteAdapter (Vault DB)', () => {
@@ -60,8 +52,9 @@ describe('Database Adapters', () => {
       sqliteDbPath = path.join(os.tmpdir(), `test_ledger_${Date.now()}_${Math.random().toString(36).substring(7)}.db`);
       sqliteDb = new DatabaseSync(sqliteDbPath);
       sqliteDb.exec('PRAGMA foreign_keys = ON;');
-      sqliteDb.exec(MIGRATION_SQL);
-      sqliteDb.exec(MIGRATION_003_SQL);
+      // The full migration set, not a hand-picked prefix: the FIFO views bind against the current
+      // ledger schema, so a partially-migrated ledger is not a schema the adapter supports.
+      applyMigrations(sqliteDb);
 
       process.env.MOCK_MODE = 'false';
       process.env.DUCKDB_PATH = ':memory:';

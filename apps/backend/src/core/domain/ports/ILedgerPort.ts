@@ -6,7 +6,15 @@
  * Infrastructure adapters convert TEXT ↔ PreciseAmount at the boundary.
  * Money arithmetic belongs in the Application / Infrastructure layers.
  */
-import type { SpotTxType, FuturesTxType, TaxLotStatus } from '@kryptofolio/shared-types';
+import type {
+  SpotTxType,
+  FuturesTxType,
+  TaxLotStatus,
+  DisposalType,
+  FifoQualityFlag,
+  FiscalClassificationFlag,
+  ManualValueProvenance,
+} from '@kryptofolio/shared-types';
 import type { PreciseAmount } from '../value-objects/PreciseAmount.js';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +75,10 @@ export interface LedgerTaxLot {
   exchange_location: string;
   source_tx_id?: string;
   status: TaxLotStatus;
+  /** Data-quality defect on this lot's basis, if any. Suppresses gains; never blocks. */
+  quality_flag?: FifoQualityFlag | null;
+  /** Whether the cost basis was observed from market data or declared by the user. */
+  value_provenance?: ManualValueProvenance;
 }
 
 export interface LedgerTaxLotEvent {
@@ -76,12 +88,109 @@ export interface LedgerTaxLotEvent {
   account_id: string;
   disposal_date: string; // ISO-8601
   amount_from_lot: PreciseAmount;
-  sale_price_fiat: PreciseAmount;
-  gain_loss_fiat: PreciseAmount;
+  /**
+   * Fiat proceeds per unit, or `null` when no price could be resolved.
+   *
+   * Nullability is load-bearing: without it the SQL has no way to express "unknown" and resorts to
+   * inventing a plausible number.
+   */
+  sale_price_fiat: PreciseAmount | null;
+  /** `null` whenever `sale_price_fiat` is null — no gain is derivable from an unknown price. */
+  gain_loss_fiat: PreciseAmount | null;
   fiat_currency: string;
   is_taxable: boolean;
-  flag?: string | null;
+  /** Why the lot was consumed. Never assumed — a network fee is not a sale. */
+  disposal_type: DisposalType;
+  /**
+   * Fiscal classification. `WALLET_ACTIVATION` drives the AEAT audit trail. Distinct from
+   * `quality_flag` because the two co-occur.
+   */
+  flag?: FiscalClassificationFlag | null;
+  /** Data-quality defect on this event's valuation, if any. */
+  quality_flag?: FifoQualityFlag | null;
+  /** Whether the monetary value was observed from market data or declared by the user. */
+  value_provenance?: ManualValueProvenance;
   notes?: string;
+}
+
+/**
+ * One leg of a double-entry custody movement: a signed quantity delta of one lot against one account
+ * at a point in time.
+ *
+ * `qty_delta` is signed, unlike every fiat magnitude in this port. The entries for one movement sum
+ * to zero for a given asset, which is what makes custody a balance rather than a pairing heuristic —
+ * no time window, no amount tolerance, order-independent.
+ */
+export interface LedgerCustodyEntry {
+  id: string;
+  tax_lot_id: string;
+  asset_id: string;
+  account_id: string;
+  /** Negative for an outflow, positive for an inflow. */
+  qty_delta: PreciseAmount;
+  occurred_at: string; // ISO-8601
+  spot_transaction_id: string;
+}
+
+/**
+ * A user-declared fiat value for a transaction whose market price could not be resolved.
+ *
+ * A calculation input, never a reconciled output. Keyed on `id_hash` — the deterministic transaction
+ * identity — so it survives re-ingestion of the same source file.
+ */
+export interface LedgerManualPriceOverride {
+  id_hash: string;
+  price_fiat: PreciseAmount;
+  /** Required: a declared value without its currency is not interpretable. */
+  fiat_currency: string;
+  note?: string;
+}
+
+/**
+ * A user-declared counterparty for a custody movement, replacing the synthetic
+ * `ownwallet-<ASSET>` account with a real one. Also a calculation INPUT.
+ */
+export interface LedgerTransferDestinationOverride {
+  id_hash: string;
+  counterparty_account_id: string;
+  note?: string;
+}
+
+/**
+ * Outcome of reconciling one derived table against a recomputed set.
+ *
+ * `retired` is the arm an upsert cannot express. Without it materialisation is monotonic — able only
+ * to grow — so rows whose source disappeared survive indefinitely.
+ */
+export interface ReconciliationSummary {
+  inserted: number;
+  updated: number;
+  retired: number;
+  reactivated: number;
+}
+
+/**
+ * `wallet` carries the source's sub-wallet designation (Kraken's `spot / main`, `earn`, …) so a child
+ * account can be resolved; absent it, the venue account is used and no child is fabricated.
+ */
+export interface EnsureAccountInput {
+  accountId: string;
+  name?: string;
+  type?: string;
+  /** Sub-wallet designation from the source export, if any. */
+  wallet?: string | null;
+  /** Venue parent for a sub-wallet account. */
+  parentAccountId?: string | null;
+  /** True for system-created custody counterparties (`ownwallet-<ASSET>`). */
+  isSynthetic?: boolean;
+}
+
+/** Input for resolving an asset, including whether it is a unit of account rather than a holding. */
+export interface EnsureAssetInput {
+  assetId: string;
+  symbol?: string;
+  /** Fiat assets are excluded from FIFO lot tracking entirely. */
+  isFiat?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,17 +212,53 @@ export interface ILedgerPort {
   // Tax Lots
   getTaxLots(accountId: string): Promise<LedgerTaxLot[]>;
   createTaxLot(lot: LedgerTaxLot): Promise<void>;
-  upsertTaxLots(lots: LedgerTaxLot[]): Promise<void>;
 
   // Lot History Events (S-3: previously missing)
   getLotHistoryEvents(accountId: string): Promise<LedgerTaxLotEvent[]>;
   saveLotHistoryEvent(event: LedgerTaxLotEvent): Promise<void>;
-  upsertLotHistoryEvents(events: LedgerTaxLotEvent[]): Promise<void>;
+
+  // ---------------------------------------------------------------------------
+  // Reconciliation of derived tables
+  //
+  // Each method takes the COMPLETE recomputed set and brings the table into agreement with it:
+  // insert, update, soft-delete the absent, reactivate the returning. An upsert cannot retire an
+  // absent row, which is why these replace one.
+  //
+  // Scope is strictly derived data. The override tables below are calculation inputs and are never
+  // touched here.
+  // ---------------------------------------------------------------------------
+
+  reconcileTaxLots(lots: LedgerTaxLot[]): Promise<ReconciliationSummary>;
+  reconcileLotHistoryEvents(events: LedgerTaxLotEvent[]): Promise<ReconciliationSummary>;
+  reconcileCustodyEntries(entries: LedgerCustodyEntry[]): Promise<ReconciliationSummary>;
+
+  getCustodyEntries(accountId?: string): Promise<LedgerCustodyEntry[]>;
+
+  // ---------------------------------------------------------------------------
+  // User-authored overrides — calculation inputs, exempt from reconciliation
+  // ---------------------------------------------------------------------------
+
+  getManualPriceOverrides(): Promise<LedgerManualPriceOverride[]>;
+  setManualPriceOverride(override: LedgerManualPriceOverride): Promise<void>;
+  removeManualPriceOverride(idHash: string): Promise<void>;
+
+  getTransferDestinationOverrides(): Promise<LedgerTransferDestinationOverride[]>;
+  setTransferDestinationOverride(override: LedgerTransferDestinationOverride): Promise<void>;
+  removeTransferDestinationOverride(idHash: string): Promise<void>;
 
   // FK pre-resolution
-  getAccounts(): Promise<{ id: string; name: string; type: string }[]>;
-  ensureAssetExists(assetId: string, symbol?: string): Promise<void>;
-  ensureAccountExists(accountId: string, name?: string): Promise<void>;
+  getAccounts(): Promise<
+    {
+      id: string;
+      name: string;
+      type: string;
+      parentAccountId?: string | null;
+      isSynthetic: boolean;
+    }[]
+  >;
+  ensureAssetExists(input: EnsureAssetInput): Promise<void>;
+  /** Returns the resolved account id, which may be a child account derived from `wallet`. */
+  ensureAccountExists(input: EnsureAccountInput): Promise<string>;
 
   /**
    * Returns all unique (assetId, symbol) pairs that are currently tracked

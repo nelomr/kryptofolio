@@ -18,6 +18,10 @@ const MIGRATION_003_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
   'utf-8',
 );
+const MIGRATION_004_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
+  'utf-8',
+);
 
 describe('DuckDbMetricsAdapter', () => {
   let sqlitePath: string;
@@ -32,6 +36,7 @@ describe('DuckDbMetricsAdapter', () => {
     sqliteDb.exec(MIGRATION_001_SQL);
     sqliteDb.exec(MIGRATION_SQL);
     sqliteDb.exec(MIGRATION_003_SQL);
+    sqliteDb.exec(MIGRATION_004_SQL);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
@@ -78,5 +83,58 @@ describe('DuckDbMetricsAdapter', () => {
     expect(risk.currency).toBe('USD');
     expect(risk).toHaveProperty('alpha');
     expect(risk).toHaveProperty('beta');
+  });
+
+  // ---------------------------------------------------------------------------
+  // A flagged basis must not be summed into the headline figure
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Three open lots: one trustworthy, two carrying a valuation defect. The lots hang off crypto
+   * DEPOSIT transactions on purpose — those generate no FIFO event, so the adapter's dual-source
+   * `UNION` falls through to the materialised `ledger.tax_lots` rows, which is the branch whose
+   * aggregation ignored `quality_flag` entirely.
+   */
+  const seedCleanAndFlaggedLots = (): void => {
+    sqliteDb.exec(`
+      INSERT INTO assets (id, symbol) VALUES ('BNB', 'BNB');
+      INSERT INTO accounts (id, name, type) VALUES ('acc-1', 'Binance', 'exchange');
+
+      INSERT INTO spot_transactions
+        (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES
+        ('tx-clean', 'h-clean', 'acc-1', 'DEPOSIT', 'BNB', '1.0', '100.00', '100.00', 'EUR', '2023-01-01T10:00:00Z', 'COMPLETED'),
+        ('tx-neg',   'h-neg',   'acc-1', 'DEPOSIT', 'BNB', '1.0', '0',      '0',      'EUR', '2023-01-02T10:00:00Z', 'COMPLETED'),
+        ('tx-missing','h-missing','acc-1','DEPOSIT', 'BNB', '1.0', '0',      '0',      'EUR', '2023-01-03T10:00:00Z', 'COMPLETED');
+
+      INSERT INTO tax_lots
+        (id, spot_transaction_id, asset_id, account_id, original_qty, remaining_qty,
+         unit_cost_fiat, total_cost_fiat, fiat_currency, acquisition_timestamp, exchange_location,
+         status, quality_flag)
+      VALUES
+        ('lot-clean',   'tx-clean',   'BNB', 'acc-1', '1.0', '1.0', '100.00', '100.00', 'EUR',
+         '2023-01-01T10:00:00Z', 'Binance', 'OPEN', NULL),
+        ('lot-neg',     'tx-neg',     'BNB', 'acc-1', '1.0', '1.0', '500.00', '500.00', 'EUR',
+         '2023-01-02T10:00:00Z', 'Binance', 'OPEN', 'NEGATIVE_COST_BASIS'),
+        ('lot-missing', 'tx-missing', 'BNB', 'acc-1', '1.0', '1.0', '700.00', '700.00', 'EUR',
+         '2023-01-03T10:00:00Z', 'Binance', 'OPEN', 'MISSING_PRICE');
+    `);
+  };
+
+  it('keeps a flagged cost basis out of totalCostBasis', async () => {
+    seedCleanAndFlaggedLots();
+    const kpis = await adapter.getKpis('EUR');
+    expect(Number(kpis.totalCostBasis)).toBe(100);
+  });
+
+  it('reports the flagged lots separately rather than dropping them silently', async () => {
+    seedCleanAndFlaggedLots();
+    const kpis = await adapter.getKpis('EUR');
+    expect(kpis.excludedFlaggedLots).toBe(2);
+  });
+
+  it('reports zero excluded lots when every basis is trustworthy', async () => {
+    const kpis = await adapter.getKpis('EUR');
+    expect(kpis.excludedFlaggedLots).toBe(0);
   });
 });

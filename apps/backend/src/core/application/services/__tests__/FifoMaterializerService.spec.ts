@@ -11,13 +11,6 @@ import { FifoMaterializerService } from '../FifoMaterializerService';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
 
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql',
-  ),
-  'utf-8',
-);
 
 describe('FifoMaterializerService — Integration Tests', () => {
   let sqliteDb: DatabaseSync;
@@ -33,8 +26,10 @@ describe('FifoMaterializerService — Integration Tests', () => {
     sqliteDbPath = path.join(os.tmpdir(), `test_ledger_${Date.now()}_${Math.random().toString(36).substring(7)}.db`);
     sqliteDb = new DatabaseSync(sqliteDbPath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_SQL);
 
+    // The adapter's own runner applies every migration and records it in `_schema_migrations`.
+    // Pre-execing files by hand bypasses that bookkeeping, so the runner then re-applies them —
+    // harmless for the `IF NOT EXISTS` DDL in 002, fatal for the ALTER TABLE statements in 004.
     ledgerAdapter = new SQLiteLedgerAdapter(sqliteDb);
     await ledgerAdapter.initialize();
 

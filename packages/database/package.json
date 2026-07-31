@@ -13,6 +13,7 @@
     "seed:ecb-rates": "tsx scripts/seed_ecb_rates.ts"
   },
   "dependencies": {
+    "@kryptofolio/shared-types": "workspace:*",
     "@duckdb/node-api": "1.5.3-r.3",
     "@napi-rs/keyring": "^1.3.0",
     "pino": "^10.3.1"

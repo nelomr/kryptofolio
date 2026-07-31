@@ -65,7 +65,10 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
   });
 
   describe("Transfer Strategies", () => {
-    it("should handle deposit mapping generic to IN", () => {
+    // CHANGED BY fix-fifo-transfer-traceability: a `deposit` of a CRYPTO asset is a custody
+    // movement, not a funding event. Mapping it to `DEPOSIT` is what made the FIFO engine
+    // fabricate a zero-cost lot for it. See specs/non-taxable-transfer-classification.
+    it("should classify a crypto deposit as an inbound custody movement", () => {
       const data: TransactionMappedData = {
         date: "2023-01-01",
         time: "12:00",
@@ -75,13 +78,13 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         metadata: {},
       };
       const result = normalizeTransactionDirection(data);
-      expect(result.tx_type).toBe("DEPOSIT");
+      expect(result.tx_type).toBe("TRANSFER_IN");
       expect(result.amount_in).toBe("100");
       expect(result.asset_in).toBe("XRP");
       expect(result.amount_out).toBeUndefined();
     });
 
-    it("should handle withdrawal mapping generic to OUT", () => {
+    it("should classify a crypto withdrawal as an outbound custody movement", () => {
       const data: TransactionMappedData = {
         date: "2023-01-01",
         time: "12:00",
@@ -91,10 +94,51 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         metadata: {},
       };
       const result = normalizeTransactionDirection(data);
-      expect(result.tx_type).toBe("WITHDRAWAL");
+      expect(result.tx_type).toBe("TRANSFER_OUT");
       expect(result.amount_out).toBe("50");
       expect(result.asset_out).toBe("ADA");
       expect(result.amount_in).toBeUndefined();
+    });
+
+    it("should keep a FIAT deposit as a funding event, outside FIFO", () => {
+      const data: TransactionMappedData = {
+        date: "2023-01-01",
+        time: "12:00",
+        tx_type: "deposit",
+        amount: "500",
+        asset: "EUR",
+        metadata: {},
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.tx_type).toBe("DEPOSIT");
+      expect(result.asset_in).toBe("EUR");
+    });
+
+    it("should preserve the raw label when a movement cannot be classified", () => {
+      // No asset means no fiscal meaning. Coercing this to `DEPOSIT` would let an
+      // unclassifiable row enter FIFO looking valid; the raw label makes ingestion reject it.
+      const data: TransactionMappedData = {
+        date: "2023-01-01",
+        time: "12:00",
+        tx_type: "deposit",
+        amount: "100",
+        metadata: {},
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.tx_type).toBe("deposit");
+    });
+
+    it("should honour an explicit crypto subclass over the ISO-4217 lookup", () => {
+      const data: TransactionMappedData = {
+        date: "2023-01-01",
+        time: "12:00",
+        tx_type: "withdrawal",
+        amount: "10",
+        asset: "CHF",
+        metadata: { subclass: "crypto" },
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.tx_type).toBe("TRANSFER_OUT");
     });
 
     it("should split generic transfer based on sign", () => {

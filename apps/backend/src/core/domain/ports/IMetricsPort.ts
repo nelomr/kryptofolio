@@ -27,6 +27,14 @@ export interface MetricsKpis {
   worstAsset?: AssetKpiSummary | null;
   totalRoiPercent?: number;
   totalRoiFiat?: string;
+  /**
+   * Open lots whose cost basis carries a data-quality defect and is therefore absent from
+   * `totalCostBasis`.
+   *
+   * Reported rather than merely filtered: a basis silently dropped makes the headline figure look
+   * complete when it is not, and every derived percentage — unrealised P&L, ROI — inherits that.
+   */
+  excludedFlaggedLots?: number;
 }
 
 

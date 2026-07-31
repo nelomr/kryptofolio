@@ -330,6 +330,9 @@ importers:
       '@duckdb/node-api':
         specifier: 1.5.3-r.3
         version: 1.5.3-r.3
+      '@kryptofolio/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
       '@napi-rs/keyring':
         specifier: ^1.3.0
         version: 1.3.0

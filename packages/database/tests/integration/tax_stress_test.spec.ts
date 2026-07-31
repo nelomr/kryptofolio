@@ -5,19 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { DuckDbAdapter } from '../../src/adapters/DuckDbAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../../apps/backend/src/core/infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
+import { applyMigrations } from '../helpers/migrations.js';
 
-const MIGRATION_001_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../migrations/sqlite/001_vault_schema.sql'),
-  'utf-8'
-);
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../migrations/sqlite/002_ledger_schema.sql'),
-  'utf-8'
-);
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../migrations/sqlite/003_currency_schema.sql'),
-  'utf-8'
-);
 
 describe('Tax Engine — Stress & Edge Case Tests', () => {
   let sqlitePath: string;
@@ -29,9 +18,9 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     sqlitePath = path.join(os.tmpdir(), `test_ledger_stress_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_001_SQL);
-    sqliteDb.exec(MIGRATION_SQL);
-    sqliteDb.exec(MIGRATION_003_SQL);
+    // The full migration set, not a hand-picked prefix: the FIFO views bind against the
+    // current ledger schema, so a partially-migrated ledger is not a schema the adapter supports.
+    applyMigrations(sqliteDb);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
