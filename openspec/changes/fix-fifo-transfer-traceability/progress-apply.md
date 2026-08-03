@@ -1688,7 +1688,7 @@ but they are not the test's own verdict either.
 | `apps/backend` tests | 301 passing / 0 failing | **301 passing / 0 failing** (untouched) |
 | `apps/backend` typecheck | **2 errors**, both `mockPortfolio.ts` | **0 errors** |
 | `apps/frontend` tests | 271 passing | **328 passing** (+57) |
-| `apps/frontend` typecheck (`vue-tsc --noEmit`) | clean | clean |
+| `apps/frontend` typecheck (`vue-tsc --noEmit`) | ~~clean~~ **invalid — checked 0 files** | ~~clean~~ → really **18 errors**, fixed in `919bc43` |
 
 Measured with `pnpm --filter <pkg> test`, `pnpm --filter @kryptofolio/backend exec tsc --noEmit`,
 and `pnpm --filter @kryptofolio/frontend run typecheck`. The group's own target — backend `tsc`
@@ -1831,17 +1831,28 @@ type-only deep import — `import type { TokenLotDto } from
 the pnpm symlink and is erased entirely by esbuild/vite before the test runs; no backend runtime
 code executes, no DuckDB or SQLite adapter is ever touched.
 
-Verified before relying on it: a smoke test confirmed `vitest run` resolves and passes with such an
-import, and — the thing that actually matters for not shipping a broken CI gate —
-`pnpm --filter @kryptofolio/frontend run typecheck` (the real script `turbo run typecheck` calls, via
-project references in `tsconfig.json`) stays clean with the import present. A **direct**
-`vue-tsc --noEmit -p tsconfig.app.json` (bypassing project-reference/build mode) does **not** stay
-clean — it pulls backend files into a single-project compile and applies the frontend's stricter
-`noUnusedParameters` to them, producing 3 pre-existing backend lint errors unrelated to this change.
-That failure mode is **not** introduced by this group: it reproduces identically on a clean
-`git stash` with zero edits, because `BffClient.ts`'s existing `AppType` import already pulls the
-same dependency graph in. Recorded so a future reader does not mistake the direct-`-p` invocation
-for a regression.
+**⚠️ THE PARAGRAPH BELOW REACHED THE WRONG CONCLUSION — corrected in commit `919bc43`.** It observed
+the right facts and inverted the verdict: `vue-tsc --noEmit -p tsconfig.app.json` was reporting
+errors and `vue-tsc --noEmit` was not, and it concluded the *former* was the faulty invocation. The
+opposite is true. `apps/frontend/tsconfig.json` is a solution-style config (`"files": []`, only
+`references`), so `vue-tsc --noEmit` against it checks **zero files** and always exits `0`. The
+`-p tsconfig.app.json` run was the only one looking at any source at all, and the 18 errors it
+reported were real — 8 of them the `null`-renders-as-profit bug. The 3 backend `noUnusedParameters`
+errors it mentions were also real and are now fixed. The script is `vue-tsc --build --force`.
+
+Original text, kept for the record:
+
+> Verified before relying on it: a smoke test confirmed `vitest run` resolves and passes with such an
+> import, and — the thing that actually matters for not shipping a broken CI gate —
+> `pnpm --filter @kryptofolio/frontend run typecheck` (the real script `turbo run typecheck` calls, via
+> project references in `tsconfig.json`) stays clean with the import present. A **direct**
+> `vue-tsc --noEmit -p tsconfig.app.json` (bypassing project-reference/build mode) does **not** stay
+> clean — it pulls backend files into a single-project compile and applies the frontend's stricter
+> `noUnusedParameters` to them, producing 3 pre-existing backend lint errors unrelated to this change.
+> That failure mode is **not** introduced by this group: it reproduces identically on a clean
+> `git stash` with zero edits, because `BffClient.ts`'s existing `AppType` import already pulls the
+> same dependency graph in. Recorded so a future reader does not mistake the direct-`-p` invocation
+> for a regression.
 
 Five files use this mechanism: `FiscalIntegritySchemas.spec.ts` (fixtures typed against
 `FiscalIntegrityReportDto`, `RebuildOutcomeDto`, `IngestionOutcomeDto`, `OverrideOutcomeDto`),
@@ -1894,6 +1905,93 @@ the evidence.
   is *why* `COALESCE(price, 1.0)` existed in the first place — the schema left the SQL no way to
   express "unknown". Making them nullable is a precondition for removing the fabricated fallbacks
   in group 5, not merely a cosmetic type change.
+
+## Cross-cutting cleanup — third pass, after group 11 (commit `919bc43`)
+
+Not an OpenSpec group: general `apps/frontend` type-safety debt found opportunistically while
+closing group 11, plus the root cause that had been hiding it. Recorded here because the finding
+below invalidates verification claims made earlier in this document.
+
+### ⚠️ READ THIS FIRST — `vue-tsc --noEmit` in `apps/frontend` checked ZERO files
+
+`apps/frontend/package.json` declared `"typecheck": "vue-tsc --noEmit"`, but
+`apps/frontend/tsconfig.json` is a solution-style config: `"files": []` with only `references`.
+Without `--build`, TypeScript checks nothing and exits `0`.
+
+```
+vue-tsc --noEmit                      → 0 errors (over 0 files)
+vue-tsc --noEmit -p tsconfig.app.json → 18 errors
+```
+
+**Consequence for this document:** every "frontend `vue-tsc` clean" claim in the group 10 and
+group 11 entries above was produced by that command and verified nothing. The `build` script did
+use `-b`, so a real build would have caught these; the typecheck script never could. Fixed to
+`vue-tsc --build --force`. This is also the structural reason 47 `any` occurrences and a stale
+`z.enum(["FULL","PARTIAL","EMPTY"])` survived undetected — nothing had ever type-checked
+`apps/frontend` in CI.
+
+**Standing lesson, and the third instance of D27's shape:** a green check is only evidence if you
+have confirmed the checker looks at the files. Both this and D27's fixture problem were found by
+comparing a tool against what it claims to cover, not by running more of it.
+
+### `null` was rendering as profit — the same defect class this change exists to remove
+
+`gainLossEur` became `number | null` when group 2 made unresolved proceeds expressible and group 10
+carried the `null` over HTTP. Five call sites then compared `event.gainLossEur >= 0`, and
+**`null >= 0` is `true` in JavaScript** — so a disposal whose gain nobody could compute was painted
+green as a gain. Structurally identical to `COALESCE(price, 1.0)`: asserting a conclusion from data
+that does not exist.
+
+Fixed as a real third state, not a defensive guard: a new `unresolved` badge variant with its
+`tax.audit.badge_unresolved` key in both dictionaries (`PENDING` / `PENDIENTE`), and `gainLossClass`
+widened to `number | null`. The five sites — `useTaxCalculations.ts:162`, `LotEventHistory.vue` ×2,
+`TokenSalesHistory.vue` ×2, `TaxReportDetailsTable.vue` — now share one helper instead of repeating
+the comparison. `formatCurrency` already rendered `null` as `'-'`, so only the colour and badge
+decisions were ever wrong.
+
+**Group 12 still owns the richer indicator** per task 12.1; this stops the false assertion without
+inventing that UI.
+
+### Zero `any` remain in `apps/frontend` (was 47)
+
+Beyond mechanical typing, three findings:
+
+1. **A dead rendering path.** `useAssetAllocationChart`'s `(chart as any).innerRadius` read a
+   property that does not exist on `Chart` — it lives on `DoughnutController`, reached via
+   `chart.getDatasetMeta(0).controller`. So `if (!innerRadius) return` was **always true** and the
+   doughnut's background-track ring never drew. A failing test was written first; the ring now draws.
+2. **Two stale test fixtures**, both hidden by `any`: `PerformanceHistory.spec.ts` used a renamed
+   field, and `AssetAllocation.spec.ts` passed `totalAssets: '2 Activos'` where the port types it
+   `number`.
+3. **The vault result types were describing an unreachable shape.** The `success: false` arms could
+   never be returned, because the adapter throws on `!res.ok` first. They now describe only the
+   successful outcome, and the adapter maps the body explicitly instead of forwarding `res.json()`
+   raw — which is what an anti-corruption boundary is for.
+
+Seven of the 18 type errors were regressions introduced by the `any` cleanup itself, which had
+verified itself with the same broken command. Three more were pre-existing unused declarations in
+the backend's `UninitializedAnalyticalDatabaseAdapter`, visible only because group 11's
+cross-package contract test pulls backend types into the frontend program.
+
+### Measured, and it recalibrates task 14.36b
+
+While checking whether the frontend needs a precision value object at all:
+
+- **The frontend does almost no financial arithmetic.** No aggregations, no sums of amounts; totals
+  come from the backend already computed with `PreciseAmount`. What exists is a sort comparator, one
+  division feeding a boolean, and sign checks.
+- **`float64` represents every real value in the user's own exports faithfully** — `179.11`,
+  `247.10551`, `546.844684`, `1.6724`, `0.00129693` all round-trip identically. It only breaks above
+  ~17 significant digits or below `1e-6`, where it switches to exponential notation — the same
+  failure 14.26 already documents for the xlsx reader.
+
+So adopting `Money` on `TaxLotEntity` is a correctness-of-model improvement, **not a bug fix**, and
+14.36b is correctly scoped as a deferred follow-up rather than urgent work.
+
+### Verified
+
+`frontend typecheck` 0 errors (was 18, reported as 0 by the broken command), frontend 330/330,
+backend `tsc` 0, backend 301/301, shared-types 40/40, core-domain 69/69, database 112/112.
 
 ## Cross-cutting cleanup — second pass, after group 8
 
@@ -2046,7 +2144,7 @@ kept stable while the order changed. The group header says so.
 | `packages/shared-types` | ✅ 40/40 tests, `tsc --noEmit` clean |
 | `packages/core-domain` | ✅ 69/69 tests, `tsc --noEmit` clean |
 | `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean |
-| `apps/frontend` | ✅ **328/328 tests** (+57), `vue-tsc --noEmit` clean |
+| `apps/frontend` | ✅ **328/328 tests** (+57); ~~`vue-tsc --noEmit` clean~~ — **that check read 0 files**; 18 real errors surfaced and were fixed in `919bc43`, now 330/330 and genuinely 0 |
 | `apps/backend` tests | ✅ **301/301 passing** |
 | `apps/backend` (typecheck) | ✅ **0 errors** |
 
@@ -2093,6 +2191,14 @@ What group 11 leaves for it, in priority order:
 
 ### Standing reminders for every remaining group
 
+0. **A green check proves nothing until you confirm the checker read your files.** The frontend's
+   `typecheck` script exited `0` for the entire life of this change while compiling **zero files**,
+   because `apps/frontend/tsconfig.json` is solution-style (`"files": []`, only `references`) and
+   `vue-tsc --noEmit` needs `--build` to follow references. Eighteen real errors sat behind it,
+   including five that painted an unresolved gain green as a profit. Two group entries in this
+   document reported "vue-tsc clean" on the strength of it, and one agent saw the real errors and
+   concluded the *working* invocation was the broken one. Before trusting any new gate — a linter, a
+   type-checker, a coverage threshold — make it fail on purpose once.
 1. **Verify Red for the intended assertion**, not merely because a module or symbol is missing. Use
    a stub that exists and returns the wrong answer, as done in group 3. Four vacuous-pass traps have
    now been caught, plus one suite whose entire first `describe` failed in `beforeEach` while
@@ -2116,11 +2222,12 @@ What group 11 leaves for it, in priority order:
    erases it before the test runs — no runtime code from the other package executes, and it costs
    nothing at test time. It is a materially stronger fixture than one the schema's own author
    invented, and it caught two real bugs in this group (see the group 11 entry) before either
-   shipped. **Caveat:** do not use a direct `vue-tsc --noEmit -p tsconfig.app.json` to sanity-check
-   this pattern — it bypasses project-reference mode and pulls the other package's files into a
-   single-project compile under the consumer's stricter lint options, which fails on pre-existing,
-   unrelated code in the other package. The project's real typecheck entrypoint
-   (`vue-tsc --noEmit`, via `tsconfig.json`'s `references`) does not have this problem.
+   shipped. ~~**Caveat:** do not use a direct `vue-tsc --noEmit -p tsconfig.app.json`…~~ **That caveat
+   was backwards and is withdrawn (commit `919bc43`).** `vue-tsc --noEmit` against the
+   solution-style `tsconfig.json` (`"files": []`) checked **zero files** and always exited `0`; the
+   `-p tsconfig.app.json` run was the only one compiling any source, and its errors were genuine.
+   The script is now `vue-tsc --build --force`, and the 3 backend errors that caveat dismissed as
+   noise are fixed. Do sanity-check this pattern — just do it with a checker that reads files.
 
 ### Carried-forward finding for group 8 — RESOLVED in group 8
 
