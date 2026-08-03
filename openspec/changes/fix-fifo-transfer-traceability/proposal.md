@@ -92,6 +92,7 @@ Neither model is sufficient here. Wealthfolio's account-scoped re-lotting dates 
 - `fifo-data-quality-flags`: Explicit flagging of missing prices, currency mismatches, custody residuals, and untracked inflows instead of silent numeric defaults — advisory, never blocking.
 - `fifo-materialization-reconciliation`: Deterministic reconciliation between the recomputed FIFO set and the materialised SQLite tables, scoped strictly to derived data.
 - `automatic-portfolio-rebuild`: Application-layer orchestration that materialises automatically after an ingestion batch or an override edit, with `needs_recalculation` as a retryable pending-work marker.
+- `multi-leg-movement-integrity`: The two legs of a movement between the user's own accounts survive to the domain rather than being merged away before classification, their shared identity is recorded so custody resolution can pair them from fact, and the ledger can state that a fiat magnitude is unknown rather than conflating it with zero. Scoped to group 14, which runs after the twelve primary groups; every requirement in it was measured while applying groups 7 and 8, not anticipated.
 
 ### Modified Capabilities
 - `spot-fifo-tax-calculator`: Event flattening becomes policy-driven; the fee-disposal branch is scoped by policy; invented price fallbacks are removed; lot status uses the canonical enum; disposal provenance is preserved; custody FIFO is separated from taxation FIFO.

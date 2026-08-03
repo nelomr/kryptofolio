@@ -4,7 +4,10 @@ import { getTransactionMappedDataSchema } from "@kryptofolio/shared-types";
 export const COLUMN_DICTIONARY: Record<string, string[]> = {
   // Identificadores y Agrupamiento
   tx_id: ["txid", "transaction id", "hash", "order id", "uid", "trade id", "trx. id"],
-  group_id: ["refid", "reference", "group", "grupo", "linked tx"],
+  // `group` / `grupo` are deliberately absent: Bit2Me's `Grupo` column names a wallet compartment,
+  // not a transaction reference, and aggregating on it merged an entire multi-year history into one
+  // row per compartment. Only identifiers that genuinely link the legs of one operation belong here.
+  group_id: ["refid", "reference", "linked tx"],
   
   // Base
   date: ["date", "fecha", "timestamp", "utc_time", "datetime", "date (utc)", "time"], // Separated from time

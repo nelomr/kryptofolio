@@ -3,17 +3,17 @@
 Session log for `/openspec-apply-change`. Updated as each task group closes so an interrupted
 session can be resumed from here.
 
-**Total:** 126 tasks in 14 groups. **Complete: 66.**
+**Total:** 126 tasks in 14 groups. **Complete: 73.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
 
 ## Session summary
 
-Eight groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
+Nine groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
 ports), **3** (pure classification), **4** (migration `004`), **5** (policy-driven flattening),
 **6** (double-entry custody), **7** (materialisation reconciliation, which also discharged group 6's
-deferred 6.3). Groups 8–13 remain.
+deferred 6.3), **8** (ingestion integrity and sub-accounts). Groups 9–13 remain.
 
 ### What was built
 
@@ -142,7 +142,7 @@ pnpm -F @kryptofolio/backend  exec vitest run --typecheck src/core/domain/ports/
 | 5 | DuckDB policy-driven event flattening | ✅ done (49/126) |
 | 6 | DuckDB double-entry custody | ✅ done (58/126) — 6.3 discharged in group 7 |
 | 7 | Materialisation reconciliation | ✅ done (66/126) |
-| 8 | Ingestion integrity and sub-accounts | ⬜ pending |
+| 8 | Ingestion integrity and sub-accounts | ✅ done (73/126) |
 | 9 | Automatic rebuild and overrides | ⬜ pending |
 | 10 | Read path: status, provenance, custody | ⬜ pending |
 | 11 | Anti-corruption layer DTO realignment | ⬜ pending |
@@ -692,7 +692,7 @@ A methodological warning from the same episode: the intermediate measurements we
 changes to it. Two "before" numbers were wrong until that was spotted. Do not use `git stash` to
 A/B a file in a tree with 30 uncommitted files.
 
-**4. The tests were not slow, they were starved.**
+**5. The tests were not slow, they were starved.**
 
 Once the per-test cost was down to migrations ~100 ms + `initialize()` ~320 ms + `getKpis()`
 ~1450 ms, the timeouts still came and went — and the variable turned out to be the machine's own
@@ -1073,6 +1073,182 @@ be a child account derived from `wallet`"; today it always returns `input.accoun
    `"null"` — undoing group 2's whole reason for making those columns nullable. Fixed at the same
    time as the write path.
 
+### Group 8 — Ingestion integrity and sub-accounts ✅ 7/7
+
+| package | before | after |
+|---|---|---|
+| `packages/shared-types` | 38 passing, `tsc` clean | **38 passing**, `tsc` clean (untouched) |
+| `packages/core-domain` | 58 passing, `tsc` clean | **60 passing**, `tsc` clean |
+| `packages/database` | 112 passing, `tsc` clean | **112 passing**, `tsc` clean (untouched) |
+| `apps/frontend` | 271 passing | **271 passing** (untouched) |
+| `apps/backend` tests | 169 passing / **2 failing** | **195 passing / 0 failing** |
+| `apps/backend` typecheck | 6 errors | **6 errors**, the same six, all owned by groups 10–11 |
+
+The two long-standing failures are gone: `repro.test.ts`'s `Payload 1 - WITHDRAWAL` and
+`Payload 3 - BUY` were failing on `CHECK constraint failed: total_fiat …`, which is exactly the
+defect 8.2 repairs.
+
+#### What was built
+
+| file | Δ | what |
+|---|---|---|
+| `CsvIngestionUseCase.ts` | +154 / −30 | `IngestionResult`, sign normalisation, unmapped-type rejection, `is_fiat`, wallet resolution |
+| `CsvIngestionUseCase.spec.ts` | +305 / −5 | 17 new tests |
+| `repro.test.ts` | +75 / −48 | rewritten: typed, asserting, no `as any` |
+| `SQLiteLedgerAdapter.ts` | +23 / −1 | `ensureAccountExists` resolves the sub-account |
+| `SQLiteLedgerAdapter.spec.ts` | +115 | 7 new tests |
+| `routes/ingestion.ts` | +8 / −3 | reports persisted rather than submitted rows |
+| `routes/__tests__/ingestion.test.ts` | +37 / −1 | 1 new test, mock updated to the new result |
+| `metadataNormalizer.ts` | +5 / −1 | `wallet` is its own dictionary key |
+| `transactionNormalizer.spec.ts` | +28 / −1 | 2 new tests, 1 existing rewritten |
+
+- **8.2 — one fiat resolution path, and it never fabricates.** `resolveFiatMagnitudes()` takes the
+  magnitudes through `Decimal.abs()` and fills in *only* what the source left out: a recorded total
+  with a missing unit price now yields `total / qty` instead of being **overwritten** by the fetched
+  price. The old code fetched whenever *either* value was zero and replaced both, which is how a
+  recorded €299,70 became €246.858,40 in the failing test that caught it. The derived total also
+  `.abs()`-es the quantity, which is the second half of the `-439.55` withdrawal bug.
+- **8.3 — `toSpotTxType()` throws `UnmappedTransactionTypeError`** naming the value and the row
+  timestamp. The type is resolved **before** any FK is created, so a rejected row leaves no account
+  and no asset behind. `execute()` catches that one error class per row and collects it; every other
+  error still aborts the batch, because a missing `id_hash` or an undeterminable fee asset is a
+  programmer error, not a data defect the user can act on.
+- **8.4 — the count is the distinction.** See the finding below: the ledger column cannot hold
+  `NULL`.
+- **8.5 — `isFiatCurrencyCode()`** at the single `ensureAssetExists` call site. `USDT` stays
+  non-fiat, asserted.
+- **8.6 — `ensureAccountExists` resolves the sub-account.** `deriveSubAccountId(accountId, wallet)`
+  gives the *identifier* (stable across imports because it is derived from the venue's id), while the
+  *name* is derived from the venue's own name, so the child reads as `Kraken:earn` rather than
+  `<uuid>:earn`. The venue parent is created first; `ON CONFLICT DO NOTHING` keeps it idempotent. No
+  wallet, an empty wallet or a whitespace wallet all return the venue unchanged and create nothing.
+- **The `METADATA_DICTIONARY` collision carried forward from group 3 is closed.** `wallet` is now its
+  own key (`wallet`, `subwallet`, `sub_wallet`, `cartera`, `subcartera`) and was **removed** from
+  `account_id`'s pattern list. Both were required: `Object.entries(...).find(...)` matches in
+  insertion order, so leaving `wallet` under `account_id` would have kept winning. Ingestion reads
+  `metadata.wallet`.
+
+`execute()` now returns `IngestionResult { persisted, rejected: IngestionRejection[], unresolvedFiat }`
+instead of `void`, and `needs_recalculation` is flagged when `persisted > 0` rather than when
+`rows.length > 0` — a batch in which every row was rejected has nothing to recalculate.
+
+#### ⚠️ 8.4 cannot be satisfied as the spec words it, and the reason is a constraint this change added
+
+The `csv-data-ingestion` spec requires unresolved fiat magnitudes be "recorded as unresolved rather
+than as `0`". **They cannot be.** `spot_transactions.total_fiat` and `price_fiat` are `TEXT NOT NULL`
+with a non-negative CHECK (migration `004` §4.6, group 4), and `nonNegativePreciseAmountSchema`
+(group 2) says the same at the type level. `0` is the only value the column can carry for an unknown
+magnitude — the same value a genuinely free acquisition would carry.
+
+Implemented instead, without widening the schema:
+
+1. `IngestionResult.unresolvedFiat` counts the rows persisted with an unresolvable magnitude, which
+   is what the spec's own third scenario asks for ("the result MUST report the count pending manual
+   review").
+2. Downstream the distinction already exists and is already read: `tx_context` in
+   `v_flattened_fifo_events` derives `has_recorded_fiat = recorded_fiat IS NOT NULL AND recorded_fiat
+   <> 0`, so a stored `0` falls through to the override, then the market series, then `NULL` +
+   `MISSING_PRICE`. Nothing treats a `0` as a genuine price.
+3. A provider that throws is caught and treated as unresolved rather than aborting the batch, per
+   `Unresolved price does not block the batch`.
+
+**Recommendation for group 13:** either amend the scenario to "recorded as `0` and reported as
+pending", or make the two columns nullable — which is a migration change and would reopen a table
+group 4 rebuilt. The engine's behaviour is already correct either way; only the wording is wrong.
+
+#### `transfer_group_id` — measured, and deliberately left unwritten
+
+`spot_transactions.transfer_group_id` is declared in `004`, joined by `v_custody_movements`'s
+`recorded_counterparty` CTE, and **written by nothing**, so that middle tier of counterparty
+resolution matches no rows today. Ingestion is the only layer that could know two legs belong to one
+movement, so this was examined as group 8's work. It is not, for three measured reasons:
+
+1. **No task and no spec scenario requires it.** `grep -rn transfer_group` over `tasks.md`,
+   `design.md` and all 17 spec files returns nothing. It is an implementation detail group 6
+   introduced with task 6.2's "recorded counterparty" tier.
+2. **The only candidate source is consumed before ingestion sees it.** `TransactionMappedData.group_id`
+   is Kraken's `refid` (`AutoMapColumnsUseCase`: `group_id: ["refid", "reference", …]`), and
+   `aggregateRows()` — called from `useImportProcessor.ts:47`, before submission — **merges every row
+   sharing a `group_id` into a single transaction**. A `group_id` that survives to the backend
+   therefore had exactly one row, so there is no second leg for `recorded_counterparty` to join to
+   (it requires `o.own_account_id <> l.own_account_id`). Writing the column would populate it with
+   values that can never pair.
+3. It would require extending `LedgerSpotTransaction` and the port surface group 2b froze.
+
+**Consequence worth stating plainly:** a Kraken `spot → earn` transfer exported as two rows with one
+`refid` is collapsed by the aggregator into one transaction on one account, so the sub-wallet
+scenario cannot be reproduced from a real Kraken export even with 8.6 in place. This is consistent
+with what group 1 measured — the real export contains only `spot / main` and a single `transfer` row
+— and with group 13 keeping the synthetic fixture. **For group 13 to decide:** drop
+`transfer_group_id` and the `recorded_counterparty` tier as unreachable, or open a follow-up change
+that keeps multi-account legs separate through the aggregator and links them explicitly. Do not leave
+a resolution tier that no ledger row can enter.
+
+#### The Red, honestly
+
+19 tests failed before any production line changed, and **15 of them failed on their own assertions**:
+
+| observed failure | property |
+|---|---|
+| `expected '-299.7' to be '299.7'` | 8.2 |
+| `expected '-1.2128' to be '1.2128'` | 8.2, price leg |
+| `expected '-1234567890123456789.123456789' to be '1234567890123456789.123456789'` | decimal, not `Number` |
+| `expected '-439.55' to be '439.55'` | absolute quantity in the derived total |
+| `expected '246858.40449' to be '299.7'` | the recorded total was being overwritten |
+| `expected "vi.fn()" to not be called at all, but actually been called 1 times` | the `?? 'BUY'` fallback, D16 |
+| `expected '…-000000000002' to be '…-000000000002:earn'` (×2) | 8.6 |
+| `expected null to be '20000000-…-aa'` | venue parent not created |
+| `expected [{ id: 'EUR', is_fiat: 0 }] to deeply equal [{ id: 'EUR', is_fiat: 1 }]` | 8.5 |
+| `expected undefined to be 'earn'` (core-domain) | the metadata collision |
+
+**4 were weak** — `TypeError: Cannot read properties of undefined (reading 'persisted' / 'rejected' /
+'unresolvedFiat')`, because `execute()` returned `void` and the result type did not exist yet. Those
+four prove nothing on their own, so each was pinned afterwards by a deliberate break.
+
+#### Six deliberate breaks, six named failures
+
+Each applied to the shipped code, suite run, then reverted.
+
+| break | test that failed |
+|---|---|
+| `unresolvedFiat` increment disabled | `reports an unpriceable acquisition as pending …`, `completes the batch and reports every unresolvable row in it` |
+| `rejected.push` removed (row still skipped) | `rejects an unmapped type, naming the value and the row timestamp`, `persists the valid rows of a batch that also contains an unmappable one` |
+| `persisted` returned as `rows.length` | `persists the valid rows of a batch that also contains an unmappable one` |
+| child name derived from the venue id instead of its name | `returns the child account and parents it to the venue`, `creates the venue parent …`, `collapses Kraken's composite primary wallet label …` |
+| `isFiat` hardcoded `false` | `persists the fiat classification of every asset it resolves` |
+| fiat fetch triggered on `total OR price` zero (the old predicate) | `keeps a recorded total when only the unit price is missing` |
+| `readWalletDesignation` forced to `undefined` | `resolves the wallet designation to a child account under the venue`, `resolves the identical child account when the same file is ingested twice` |
+| route `processedCount` back to `rows.length` | `counts only the persisted rows and names the rejected ones` |
+
+#### Three pre-existing tests were changed, deliberately
+
+1. `resolves FK dependencies before inserting` asserted `ensureAssetExists({ assetId, symbol })` and
+   `ensureAccountExists({ accountId })` exactly; both now carry the new fields (`isFiat`, `wallet`).
+2. `should normalize obscure metadata keys` used `wallet: "My Main Account"` to assert the
+   `account_id` rename. Rewritten to use `account`, which is what that requirement was actually
+   about; `wallet` now has its own two tests.
+3. The route's `execute` mock returned `undefined`; it returns an `IngestionResult` now.
+
+#### `repro.test.ts` was a scratch file that asserted nothing
+
+It contained three `it()` blocks with **no `expect` at all** — they passed or failed only on whether
+`execute()` threw — and four `as any` casts, the only ones in an `apps/backend` use-case test. Since
+the whole group-8 Red rested on this file, it was rewritten: typed payloads (`IngestibleTransaction`),
+typed port stubs, `afterEach` closing the database, and each case now asserting the persisted
+`total_fiat` / `price_fiat` pair. The production rows are unchanged, verbatim.
+
+#### Two smaller findings
+
+1. **`toFuturesTxType()` keeps its `?? 'TRADE'` fallback.** It is the identical defect to
+   `toSpotTxType()`'s and was left alone on purpose: D16 and the `csv-data-ingestion` spec name
+   `toSpotTxType()` only, and futures are out of this change's scope. Recorded so it is a decision
+   rather than an oversight.
+2. **The ingestion route reported submitted rows as processed.** `processedCount: rows.length` would
+   have counted a rejected row as ingested, re-hiding at the HTTP boundary what 8.3 surfaces in the
+   use case. Now `result.persisted`, with the rejection reasons appended to the existing `message`
+   string. No new response field was added — the response shape is a frontend DTO's, and extending it
+   belongs to 10.6 / 11.7.
+
 ### Audit — vacuous type assertions across the repo (requested after group 2b)
 
 **Verdict: no pre-existing vacuous assertions. But one real coverage hole, and one fragile path.**
@@ -1119,13 +1295,13 @@ the typecheck step — but a developer running `pnpm test` locally gets a false 
 `shared-types` has the same structural hole as `database`; it is currently harmless only because its
 tests contain no type assertions.
 
-#### Recommendation (not yet applied — needs a decision)
+#### Recommendation — SUPERSEDED, and the reasoning was partly wrong
 
-Smallest fix that closes both: add `typecheck: { include: ['**/*.spec-d.ts'] }` to the `database`
-and `shared-types` vitest configs, and append `--typecheck` to the five `test` scripts so the
-assertions run with the tests rather than only in a separate CI step. This is repo-wide test
-infrastructure, arguably outside this change's scope — flagged for the user rather than applied
-unilaterally.
+Closed by the cross-cutting cleanup after group 7, but **not** the way this section proposed. Adding
+`typecheck: { include: [...] }` to the vitest configs would have been decorative: `vitest run` never
+type-checks without `--typecheck`, and no `test` script passes it. What actually closed the hole was
+`tsconfig.typecheck.json` + a `typecheck` script in all three packages, covering `tests/**` with
+`rootDir` enforcing the package boundary — the pass CI already runs.
 
 ### Real source CSVs located
 
@@ -1187,24 +1363,163 @@ Measured content — **materially relevant to group 13 and to design D9**:
   express "unknown". Making them nullable is a precondition for removing the fabricated fallbacks
   in group 5, not merely a cosmetic type change.
 
+## Cross-cutting cleanup — second pass, after group 8
+
+Group 8's findings were triaged into "resolvable now" and "needs its own group". The first set was
+closed here; the second became **group 14**, with a new `multi-leg-movement-integrity` capability spec
+and decisions **D16b** and **D19**. `openspec validate` passes.
+
+Measured after this pass: shared-types 38/38, core-domain 60/60, database 112/112,
+**backend 204/204**. Backend `tsc` unchanged at 6, all groups 10–11.
+
+**0. The mapper tightening was verified against the real source vocabulary, and it had broken
+futures.** Asked whether different exchanges use different labels, every distinct type value in
+`/Users/nelo/proyectos/AgenteIA/cripto-proyect/listadoTransacciones` was counted and driven through
+the real `normalizeTransactionDirection`:
+
+| file | label | → | rows | verdict |
+|---|---|---|---|---|
+| kraken_spot | `deposit` | `TRANSFER_IN` | 11 | accepted |
+| kraken_spot | `trade` | `BUY` | 20 | accepted — the **frontend** `TYPE_MAP` resolves it before the backend ever sees `trade` |
+| kraken_spot | `withdrawal` | `TRANSFER_OUT` | 2 | accepted |
+| kraken_spot | `transfer` | `WITHDRAWAL` | 1 | accepted — EUR + negative sign, resolved by the classifier |
+| bitvavo | `withdrawal` / `deposit` / `buy` | canonical | 41 | accepted |
+| bitvavo | `campaign_new_user_incentive` | raw | 1 | **rejected**, pre-existing, no mapping anywhere |
+| bitunix | `Deposit` | `TRANSFER_IN` | 2 | accepted |
+| bitunix | `Withdraw` | `TRANSFER_OUT` | 1 | **was rejected** — fixed here, see 4 below |
+| tangem | `WALLET_ACTIVATION` | raw | 1 | **rejected**, pre-existing — the whole file cannot be ingested |
+| kraken_futures | `futures trade` | `TRADE` | 598 | accepted after the fix below |
+| kraken_futures | `funding rate change` | `FUNDING_FEE` | 167 | accepted after the fix below |
+| kraken_futures | `futures liquidation` | `LIQUIDATION` | 20 | accepted after the fix below |
+| kraken_futures | `conversion` | raw | 314 | rejected by name — no `FuturesTxType` member means "collateral converted" |
+| kraken_futures | `cross-exchange transfer` | raw | 1 | rejected by name — a venue movement is not a position event |
+
+**Spot: nothing broke.** No real spot row reaches the backend as a bare `trade` or `transfer`; both
+are resolved upstream, so removing those two entries changed no real path.
+
+**Futures: the first version of this change did break it.** The map keyed on idealised labels
+(`TRADE`, `FUNDING`) while Kraken writes `futures trade` and `funding rate change`, so **all 1100
+rows would have been rejected**. Fixed by keying on the labels the export actually carries: now 785
+rows are correctly typed where previously all 1100 were flattened into `TRADE`, and the 315 genuinely
+ambiguous ones are rejected by name rather than recorded as phantom trades. 14.17 owns the decision on
+those.
+
+**Two pre-existing rejections found, both assigned to group 14.** `WALLET_ACTIVATION` is the serious
+one: group 5 recorded it as live production data justifying the separate `flag` column, but the CSV
+carries it in the `Type` column and nothing maps it to a `tx_type`, so `tangem_activacion_xrp.csv`
+cannot be ingested at all (14.15).
+
+**A circular import found while building the check.** `shared-types`'s `ledger.ts` and
+`fifo-policy.ts` import from each other. It resolves under ESM but throws
+`Cannot access 'FIFO_QUALITY_FLAGS' before initialization` under tsx's CJS transform — and
+`packages/database`'s seed scripts run under tsx (14.19).
+
+**1. The type mappers still invented a direction in four places** — D16b. Removing `?? 'BUY'` in
+group 8 left `TRADE: 'BUY'` and `TRANSFER: 'TRANSFER_IN'` in the same table, and the futures mapper
+kept both `?? 'TRADE'` and `TRANSFER: 'TRADE'`. All four name an operation without naming its
+direction, and `TransactionNormalizer` keeps a movement's raw label *precisely when*
+`classifyCustodyMovement` declined to resolve one — so the mapper was overruling the domain's refusal.
+All four removed; 7 tests added, 4 of them Red on their own assertions first (`expected [] to have a
+length of 1`). A futures `transfer` is now rejected rather than recorded as a `TRADE`, since a margin
+movement is custody and recording it as a trade invents a position that was never opened.
+
+**2. Three `as any` in `StreamNormalizedMarketDataUC` were hiding a real conversion bug.**
+`FiatCurrency` is `'USD' | 'EUR'`; the casts forced any provider string into it. Red proved the
+consequence: a GBP price at 50000 came back as **58500 EUR**, converted with a rate typed as something
+it was not. Added `isSupportedCurrency()` to `shared-types` and an early return matching the existing
+"no rate available" path. 3 tests, all Red on their own assertions.
+
+**`any` census afterwards:** 3 occurrences repo-wide, all in `MarketDataAdapters.test.ts`'s WebSocket
+double — a third-party class mock unrelated to this change. Assigned to 14.15 rather than touched.
+
+**3. A flaky timeout I introduced with the tax-test move, found by forcing contention.** One backend
+run showed 14 failures that three subsequent runs did not reproduce. Rather than dismiss it,
+`--maxWorkers=6` reproduced a single failure: `produces zero writes and no audit rows on an unchanged
+second run` at **5722 ms against the 5000 ms default**. Cause: moving three DuckDB-heavy tax files
+into `apps/backend` raised that package's count of two-database integration files, so it now sits at
+the edge of the default ceiling. Fixed with `testTimeout: 15_000` in the backend vitest config —
+the hook budget was already 10 s for the same reason — verified at `--maxWorkers=6` and `=8`.
+
+**4. Bitunix withdrawals were being rejected, and the fix belonged in the domain.**
+`classifyCustodyMovement` already lists `withdraw` in `OUTBOUND_LABELS`, but `transactionHandlers` had
+only `withdrawal` and `retiro`, so the handler never ran, the raw label survived normalisation, and
+ingestion rejected the row. One line added to the handler table; before group 8 the same row became a
+silent `BUY`. Test written first, Red on its own assertion (`expected 'Withdraw' to be
+'TRANSFER_OUT'`).
+
+**5. `scripts/check-domain-isolation.sh` is a non-issue.** It is a skill helper that resolves
+`src/core/domain` relative to an app root, not the repo root. Run from `apps/backend` it passes:
+`✅ Domain isolation looks good`. 13.13 should invoke it per app.
+
+### What went to group 14 instead, and why it could not be done now
+
+| finding | why not now |
+|---|---|
+| `aggregateRows()` collapses a same-asset opposing-sign group into one record with `asset_in === asset_out` | The fix changes a domain service the frontend calls, and the pipeline ordering around it |
+| Aggregation runs **before** classification, removing the `amount` the classifier reads | Requires reordering `useImportProcessor` and deciding whether aggregation belongs behind the ingestion boundary at all |
+| `transfer_group_id` unwritten, `recorded_counterparty` tier unreachable | Depends on the two above: while the merge happens in the frontend, the backend never receives two legs to link |
+| `total_fiat` / `price_fiat` cannot express "unknown" | A migration reopening a table group 4 rebuilt, cascading through Zod, the port, the adapter, and `has_recorded_fiat` |
+
+The first three share one root cause and are written up as **D19**. Latency check: the real Kraken
+export contains **zero** same-asset opposing-sign groups — all ten of its multi-row `refid` groups are
+genuine trades — so all three are latent, not active. D16b makes the interim behaviour a loud
+rejection rather than a silent mis-ingestion.
+
+## Group 14 was reordered, and it now runs BEFORE group 13
+
+Reviewed as a whole once the fee findings landed. Three structural problems in the order, all fixed:
+
+**1. Group 14 was scheduled after group 13, and blocks two of its tasks.** Group 13 is end-to-end
+verification; running it against known defects either fails or certifies an incomplete system.
+`13.3` drives a real Kraken CSV through ingestion, and **every Kraken row with a fee currently fails
+persistence** (14.30c), so the fixture cannot load. `13.5` asserts fee-event sums, which depend on the
+fee model. The two groups are now swapped in the file, and `14.22` — "re-run 13.1, 13.7, 13.11, 13.14
+afterwards" — is marked superseded, since group 13 becomes a single gate needing no second pass.
+
+**2. Three tasks were blockers buried in later phases.** Promoted into a new first phase, 14α:
+- `14.26` (xlsx float precision) — deriving Bit2Me's fee as `origen − destino` is meaningless while
+  both operands carry float noise, and `14.27` cannot assert digit for digit. Blocks every Bit2Me task.
+- `14.30c` (Kraken fee with no denomination) — 14 real rows cannot be persisted at all. Blocks `13.3`.
+- `14.20` (circular import) — breaks any measurement or fixture script running outside vitest.
+
+**3. Two tasks were filed under the wrong theme.** `14.19` (Bit2Me's fee as the gross/net difference)
+sat under "source vocabulary gaps", but it is an instance of the fee-convention model, so it moved into
+14γ where that model is built. `14.19b` (Bit2Me deposits duplicating a side) moved into 14δ with the
+other leg-integrity work.
+
+The phases now read as a dependency chain: **14α** foundations → **14β** every real file becomes
+ingestible → **14γ** the fee model as one surface → **14δ** leg integrity → **14ε** counterparty
+linking (impossible before 14δ decides where aggregation lives) → **14ζ** the nullable-magnitude
+migration (last, because it touches a view 14.25 also modifies) → **14η** the fidelity net.
+
+Two tasks added: `14.34` verifies the 14α foundations, and `14.35` requires the outcome of every
+decision in the group — 14.4, 14.8, 14.13, 14.16, 14.17, 14.19b — to be written back into `design.md`
+and this file, so the next reader inherits the reasoning and not only the result.
+
+Task IDs are deliberately **not sequential** now: `design.md` and this file cite them, so they were
+kept stable while the order changed. The group header says so.
+
 ## Resume here — next action
 
-66 of 126 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6 and 7 are closed. **No task is left open in a
-closed group** — group 7 discharged 6.3.
+73 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7 and 8 are closed. Group 14 holds 39 tasks
+and runs **before** group 13. **No task is left open in
+a closed group** — group 7 discharged 6.3.
 
 ### Working tree state
 
-`@kryptofolio/backend` still does not compile: **6** `tsc` errors, down from 28. Every one is the
-intended consequence of the contract-first port change in group 2b, and every one belongs to a group
-that has not run yet. **Do not "fix" them ad hoc.**
+`@kryptofolio/backend` still does not compile: **6** `tsc` errors, down from 28 and unchanged by
+group 8. Every one is the intended consequence of the contract-first port change in group 2b, and
+every one belongs to a group that has not run yet. **Do not "fix" them ad hoc.** Every test suite in
+the repo is green.
 
 | package | state |
 |---|---|
 | `packages/shared-types` | ✅ 38/38 tests, `tsc --noEmit` clean |
-| `packages/core-domain` | ✅ 58/58 tests, `tsc --noEmit` clean |
-| `packages/database` | ✅ 99/99 tests, `tsc --noEmit` clean |
+| `packages/core-domain` | ✅ 60/60 tests, `tsc --noEmit` clean |
+| `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean (was 118 before three tax tests moved to the backend) |
+| `apps/frontend` | ✅ 271/271 tests |
 | `apps/backend` ports contract | ✅ 16 type assertions + 2 runtime, `Type Errors: no errors` |
-| `apps/backend` tests | 🟡 157 passing / 2 failing — both are group 8's `repro.test.ts`. Identical across 3 consecutive full runs, no timeouts |
+| `apps/backend` tests | ✅ **195 passing / 0 failing** — group 8 cleared the last two |
 | `apps/backend` (typecheck) | ❌ 6 errors, all owned by groups 10 and 11 |
 
 Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable proceeds — group 10),
@@ -1212,28 +1527,31 @@ Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable pro
 `ITaxCalculatorPort` mocks missing `calculateCustodyEntries` / `getDataQuality` (group 10) — and
 `mockPortfolio.ts` (2, missing `disposal_type` — group 11).
 
-### Next task: group 8 — ingestion integrity and sub-accounts
+### Next task: group 9 — automatic rebuild and overrides
 
-Group 8 owns tasks 8.1–8.7 and starts with two failing tests already in the tree:
-`repro.test.ts > Payload 1 - WITHDRAWAL` and `> Payload 3 - BUY`, both failing on
-`CHECK constraint failed: total_fiat …`. **That is a genuine Red for 8.2** — the payloads carry a
-negative `total_fiat` and the missing `.abs()` in `CsvIngestionUseCase` is exactly what 8.2 repairs.
-Read them before writing anything new.
+Group 9 owns tasks 9.1–9.10. **The tree is green everywhere except the 6 known typecheck errors**, so
+group 9 starts with no inherited Red — write yours.
 
-What group 7 left for group 8 to finish, precisely:
+What group 8 leaves for it:
 
-1. **`ensureAccountExists` ignores `input.wallet`.** The port documents that it returns an id which
-   "may be a child account derived from `wallet`"; the adapter currently always returns
-   `input.accountId`. Task 8.6 must add `deriveSubAccountId` resolution plus creation of the venue
-   parent. The parent-creation path already exists (`insertAccount` is called for
-   `input.parentAccountId` when given) and the self-parent trigger from 004 §4.2 is live.
-2. **`ensureAssetExists` writes `is_fiat` from `input.isFiat` but no caller supplies it.**
-   `CsvIngestionUseCase` was adapted at the call site only — `{ assetId: asset, symbol: asset }`.
-   Task 8.5 must resolve it from `isFiatCurrencyCode()` in `@kryptofolio/shared-types`.
-3. **`toSpotTxType()`'s `?? 'BUY'` fallback is untouched** (8.3).
-4. **The `METADATA_DICTIONARY` collision is still live.** `account_id: ["account", "wallet", …]`
-   means Kraken's `wallet` column lands in `metadata.account_id` and collides with the real account
-   identifier. Read the wallet designation before metadata normalisation, or add a distinct key.
+1. **`CsvIngestionUseCase.execute()` now returns `IngestionResult`**, exported from
+   `application/use-cases/CsvIngestionUseCase.ts`:
+   `{ persisted: number, rejected: IngestionRejection[], unresolvedFiat: number }`. Task 9.2's
+   `IngestAndMaterializeUseCase` must combine this with `MaterializationSummary`, and 9.4's route
+   response must carry both. `POST /ingestion/transactions` currently reports `processedCount:
+   result.persisted` and appends the rejection reasons to `message`; the rejections have **no
+   structured field in the HTTP response yet** — adding one is 10.6 / 11.7, since the response shape
+   is a frontend DTO's.
+2. **`needs_recalculation` is flagged when `persisted > 0`**, not `rows.length > 0`. 9.1's "an empty
+   batch triggers none" therefore also holds for a batch in which every row was rejected — worth a
+   test.
+3. **`ensureAccountExists` returns a resolved child account id.** Any use case that needs the account
+   a transaction actually landed on must read the return value, never re-derive it.
+4. The spec/design conflict on `needs_recalculation` living in the vault database (item 3 below) was
+   resolved by the cross-cutting cleanup; only the spec **wording** still needs amending.
+5. **Two open decisions were handed to group 13, not to group 9:** the 8.4 spec wording (unresolved
+   fiat cannot be `NULL` in a `NOT NULL` column) and `transfer_group_id`'s unreachable
+   `recorded_counterparty` tier. Both are written up in the group 8 entry.
 
 Two things group 8 and later groups should know about what group 7 changed:
 
@@ -1248,8 +1566,8 @@ Two things group 8 and later groups should know about what group 7 changed:
    override write must commit *before* it, not inside it.
 3. **A spec/design conflict is waiting for group 9's decision:** `needs_recalculation` lives in the
    *vault* database while the derived tables live in the *ledger* database, so the spec's "within the
-   same transaction" is unachievable as wired — and migration 004 §4.9 created a second, unread
-   `user_settings` table in the ledger DB. See the group 7 entry for the full measurement.
+   same transaction" is unachievable as wired. The duplicate ledger `user_settings` table created by
+   migration 004 §4.9 has since been removed by the cross-cutting cleanup; the wording remains.
 
 ### Standing reminders for every remaining group
 
@@ -1261,19 +1579,20 @@ Two things group 8 and later groups should know about what group 7 changed:
    `apps/backend/vitest.config.ts` has that block today.
 3. **Strip `--` comment lines before asserting on SQL content**, or a documented decision fails the
    test that enforces it.
-4. `packages/database/tests/` is **not** covered by `tsc --noEmit` (its tsconfig `include` is
-   `src/**/*.ts`), so type assertions placed there verify nothing.
+4. ~~`packages/database/tests/` is not covered by `tsc --noEmit`.~~ **No longer true.** All three
+   packages now type-check `tests/**` via `tsconfig.typecheck.json`, with `rootDir` enforcing the
+   package boundary. Type assertions there are real.
 5. **Never put a backtick inside a SQL comment in a template literal.** It terminates the string, and
    the resulting oxc parse error points at a line 170 below the real cause.
 6. **A test that pre-`exec`s migration files and then calls a real adapter's `initialize()` will apply
    them twice**, which 004's `ALTER TABLE` cannot survive. Let the runner do it.
 
-### Carried-forward finding for group 8
+### Carried-forward finding for group 8 — RESOLVED in group 8
 
-`METADATA_DICTIONARY` maps `account_id: ["account", "wallet", ...]`, so Kraken's `wallet` column —
-the sub-wallet designation `deriveSubAccountId` needs — lands in `metadata.account_id` and
-**collides with the real account identifier**. Read the wallet designation before metadata
-normalisation, or add a distinct dictionary key.
+~~`METADATA_DICTIONARY` maps `account_id: ["account", "wallet", ...]`, so Kraken's `wallet` column
+lands in `metadata.account_id` and collides with the real account identifier.~~ Closed: `wallet` is
+its own dictionary key and was removed from `account_id`'s patterns. Ingestion reads
+`metadata.wallet`.
 
 ## Cross-cutting cleanup — RESOLVED after group 7
 

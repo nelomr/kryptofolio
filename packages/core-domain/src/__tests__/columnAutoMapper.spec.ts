@@ -199,4 +199,27 @@ describe('dateNormalizer', () => {
     const result = normalizeToUtcIso('08/02/2026 09:40:59', null, 'UTC')
     expect(result).toBe('2026-02-08T09:40:59.000Z')
   })
+
+  /**
+   * Bit2Me's export header is `Grupo`, and its values are wallet compartments — `earn`, `trading`,
+   * `pocket` — not transaction references. Reading it as a linking identifier is the same class of
+   * error as folding a sub-wallet designation into the account identifier.
+   */
+  describe("Bit2Me's `Grupo` column names a compartment, not a reference", () => {
+    it('does not map Grupo to the aggregation identifier', () => {
+      // Merging on it collapsed 706 real Bit2Me rows into 5 transactions.
+      expect(guessColumnMapping(['Grupo'])['Grupo']).not.toBe('group_id')
+    })
+
+    it('lets Grupo fall through to metadata, where the wallet designation lives', () => {
+      // `TransactionMappedData` has no top-level `wallet`; Kraken's column reaches
+      // `metadata.wallet` the same way.
+      const headers = ['Tipo de operación', 'Cantidad de destino', 'Grupo', 'Fecha']
+      expect(guessColumnMapping(headers)['Grupo']).toBe('metadata')
+    })
+
+    it("still maps Kraken's refid to the aggregation identifier", () => {
+      expect(guessColumnMapping(['refid'])['refid']).toBe('group_id')
+    })
+  })
 })

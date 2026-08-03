@@ -387,6 +387,130 @@ The inversion is worth stating precisely, because the naming is what let it surv
 
 `toSpotTxType()` currently returns `'BUY'` for anything unrecognised (`CsvIngestionUseCase.ts:31`). Under D1 an unknown type would instead be excluded by the policy join — silently dropping the transaction. Both silent outcomes are wrong: the row is rejected with a named error, and valid rows in the batch still persist.
 
+### D16b — The mapper must not overrule the domain's refusal
+
+D16 removed the `?? 'BUY'` default but left `TRADE: 'BUY'` and `TRANSFER: 'TRANSFER_IN'` in the same table, and the futures mapper kept both a `?? 'TRADE'` default and `TRANSFER: 'TRADE'`. All four name an operation without naming its direction.
+
+That matters because of where they sit. `TransactionNormalizer` keeps a movement's raw lowercase label exactly when `classifyCustodyMovement` declined to resolve a direction, so a label like `transfer` arriving at the backend *carries that refusal*. Mapping it anyway means the outermost layer silently overrules the only layer entitled to decide — the same shape as the original bug, where a withdrawal became an acquisition because something downstream guessed.
+
+All four are removed. Directional forms (`transfer_in`, `transfer_out`, `buy`, `sell`) are unaffected, and every canonical futures type still maps to itself through the early `includes` check. A futures `transfer` is rejected rather than recorded as a `TRADE`, because a margin movement is custody and recording it as a trade invents a position that was never opened.
+
+### D19 — Aggregation before classification is the root of the multi-leg gap
+
+`useImportProcessor` calls `aggregateRows()` and *then* `normalizeTransactionDirection()`. `mergeRows()` destructures `amount` and `asset` out of the merged record and redistributes them into `amount_in` / `amount_out`, so by the time the classifier runs, the field it reads to determine direction no longer exists.
+
+Consequences, all measured:
+
+1. For a same-asset opposing-sign group the merged record has `asset_in === asset_out` — a transaction that both spends and receives the same asset.
+2. `classifyCustodyMovement` returns `UNCLASSIFIED` for it, the normalizer keeps the raw label, and the backend mapper used to supply a direction anyway. With D16b that row is now rejected loudly instead, which is the correct interim state.
+3. Because the merge happens in the frontend, the backend never receives two legs, so `transfer_group_id` has no pair to record and the `recorded_counterparty` tier of `v_custody_movements` is unreachable by construction.
+
+The real Kraken export contains **zero** same-asset opposing-sign groups — all ten of its multi-row `refid` groups are genuine trades — so via *Kraken* this is latent. **Via Bit2Me it was not**, see D20.
+
+### D20 — A shared group identifier is not evidence of one operation
+
+`COLUMN_DICTIONARY` mapped `group` and `grupo` onto `group_id`, the field `aggregateRows()` merges on. Bit2Me's export header is `Grupo`, and its values are **wallet compartments** — `earn`, `trading`, `pocket`, `blockchain`, `bank-transfer` — so an entire multi-year history shares five values.
+
+Measured on the real files by driving all 706 rows through the actual aggregator:
+
+| | before | after |
+|---|---|---|
+| rows out | **5** | 706 |
+| Σ `amount_in` | 173 504 | 204 274 |
+
+706 rows collapsed into five transactions, each keeping only the first row's quantity: 499 staking rewards became one record of 0.0789 B2M. **~99% silent data loss on real production input**, and it is the same class of error as the `wallet` → `account_id` collision group 8 fixed — a column read as the wrong concept.
+
+Two independent guards, because either alone is insufficient:
+
+1. `group` / `grupo` are removed from `group_id`'s patterns and `grupo` is added to the metadata `wallet` patterns, where Kraken's equivalent column already goes. That alone restores 706 → 706, and it also feeds `deriveSubAccountId`, which had no Bit2Me input at all before.
+2. `aggregateRows()` keys on the identifier **and the instant**. The legs of a genuine trade are recorded at the same moment — verified: all ten Kraken `refid` groups share an exact timestamp — while rows that merely share a category do not. This is defence in depth for any future source with a category-like group column.
+
+Guard 2 alone was measured as **insufficient**: Bit2Me's timestamps have minute resolution, and 19 `(grupo, minute)` keys still held 71 rows — six distinct USDT trades in one minute, two staking rewards in different assets in another. The dictionary fix is what actually solves it.
+
+### D21 — Bit2Me encodes a movement's fee as the gross/net difference, not as the fee column
+
+An earlier draft of this section claimed Bit2Me's 87 movement rows all carry the same asset *and the same amount* on both sides. That is wrong, and measuring every row at full precision showed something more consequential:
+
+| type | rows | `origen` vs `destino` |
+|---|---|---|
+| `Deposit` | 42 | identical amount and asset |
+| `Withdrawal` | 43 | **different** — `origen` is larger |
+| `Withdrawal` | 2 | identical |
+
+For a withdrawal the difference *is* the network fee, denominated in the asset, while `Moneda de la comisión` is `EUR` in all 45 rows and carries a EUR valuation rather than a quantity:
+
+```
+dest=1.536429 HBAR   orig=2.236429 HBAR   fee=0.210620368 EUR
+                     difference = 0.7 HBAR
+```
+
+Verified through the real normalizer: the row survives as `TRANSFER_OUT` with `amount_in` and `amount_out` both in HBAR. Two consequences follow.
+
+1. Under the event policy `TRANSFER_OUT` generates a fee disposal from `fee_asset`, which is EUR — fiat, excluded from lot tracking. **The 0.7 HBAR disposal is never recorded**, though a fee paid in crypto is a disposal under IRPF. Across the real file: JASMY 220, GIGA 20, HBAR 11.4, XLM 3.9, ADA 2, AI16Z 2, USDC 0.3, XRP 0.0024, ETH 0.0005, BNB 0.0002.
+2. Custody moves the **gross** quantity, so the destination is credited 2.236429 HBAR when only 1.536429 ever arrived — the holding there is overstated by the fee on every withdrawal.
+
+The fee is derivable exactly as `origen − destino` whenever both sides name the same asset. That is 14.19.
+
+The deposits are a different defect: 42 rows duplicate one side, of which 34 are EUR and therefore excluded from lot tracking anyway, but **8 are crypto**. Whether that double-counts depends on whether `v_custody_movements` derives one leg or two from a row carrying both directions — 14.19b.
+
+### D22 — Fee denomination is a per-row fact, and it decides quantity versus basis
+
+Measured across all five real exports, there are **four different conventions**, and one source uses two of them within a single file:
+
+| source | columns | denomination |
+|---|---|---|
+| Kraken spot | `fee`, **no currency column** | the row's own `asset` |
+| Bitvavo | `Fee currency` + `Fee amount` | **mixed** — `EUR` on a `buy`, `XRP`/`XLM` on a `withdrawal` |
+| Bitunix | `Fee Asset` + `Fee Amount` | the asset |
+| Bit2Me | `Moneda de la comisión` = `EUR` always | a EUR **valuation**; the real amount is `origen − destino` |
+| Kraken futures | `fee`, `symbol = usd` | the collateral currency |
+
+The distinction is not cosmetic. A fee paid **in the asset** is a disposal: it reduces the remaining quantity of the lot it is drawn from, and it is itself taxable — the quantity needs no conversion, only the valuation does. A fee paid **in fiat** is a cost that adjusts the basis or the proceeds and must leave every quantity untouched. Treating one as the other either destroys quantity still held or invents quantity that was spent.
+
+Because Bitvavo mixes both inside one file, a per-source default is not merely imprecise, it is wrong. The denomination has to be read per row, with a fallback to the row's own asset only where the source demonstrably has no fee-currency column at all — Kraken spot.
+
+### D23 — The spreadsheet path loses precision before validation ever sees the value
+
+`parseExcel` reads cells with `XLSX.utils.sheet_to_json(..., { header: 1 })`, which returns float64 for numeric cells, and `processRawRows` then applies `String(cell)`. Two measured consequences:
+
+1. **Float artefacts already present in the real files.** 13 cells across the three Bit2Me workbooks carry values such as `0.15742981799999997` where the source figure is `0.157429818`. These pass `preciseAmountSchema`, so they are ingested silently and stored as the artefact.
+2. **Exponential notation below `1e-6` is rejected outright.** `String(0.00000001)` is `"1e-8"`, and `preciseAmountSchema` is `/^-?\d+(\.\d+)?$/` — so the row fails validation. The current Bit2Me files bottom out at `1e-4`, so this is not firing today, but satoshi- and gwei-scale quantities are ordinary in crypto and a BTC or ETH workbook would hit it.
+
+The CSV path is unaffected: PapaParse yields strings. The fix is to read cells as formatted text so the source's digits survive to the anti-corruption layer, which is where a decimal string belongs.
+
+Both defects were found by reading the real files, not by the suite — as were D20 and D21. That is why 14.18 and 14.27 exist: a label-level and a quantity-level regression fixture per real source, so a convention cannot change, or a precision assumption fail, without a test noticing.
+
+### D24 — Every movement is `gross = net + fee`, and each source gives you two of the three
+
+Denomination (D22) is only half of what a fee's treatment depends on. The other half is whether the amount the source reports **already reflects** the fee. Deducting a fee the source has already applied destroys quantity that is still held; ignoring one that is charged on top leaves the balance unaccounted for. Both are silent.
+
+Rather than a per-source special case, the model that unifies all five exports is that a movement has three quantities — **gross debited**, **net moved**, **fee** — related by `gross = net + fee`. Every source supplies two and the third is derived:
+
+| source | supplies | derive | evidence |
+|---|---|---|---|
+| Kraken spot | net (`amount`) + `fee`, in the asset | `gross = net + fee` | its own `balance` column reconciles **8/8**; Kraken's documentation states `balance = old_balance +/- amount - fee` verbatim |
+| Bitunix | net (`Outgoing Amount`) + `Fee Amount`, in the asset | `gross = net + fee` | `546.844684 + 1 = 547.844684`, exactly the ADA deposited |
+| Bit2Me | gross (`origen`) + net (`destino`) | `fee = gross − net` | the fee column names EUR and holds a valuation |
+| Bitvavo `buy` | quantity + price + a fiat fee **already inside** the paid total | nothing — the total is gross | `q × p + fee = paid` exact for **12/12** rows |
+| Kraken futures | `fee` in the collateral currency | — | column definition |
+
+Worked example of the hazard, from the real files. A Kraken `withdrawal` of SOL: `amount = -0.006`, `fee = 0.005`, and `balance` drops by `0.011`. The correct treatment moves `0.006` to the destination and records `0.005` as a fee disposal. Treating `amount` as gross would move only `0.001`, and ignoring the fee would leave `0.005` SOL unaccounted for.
+
+The mirror hazard, also from the real files. A Bitvavo `buy`: `0.30338 ETH` at `1645` for a paid total of `499.81 EUR` with a `0.7499 EUR` fee. The basis is `499.81`. Adding the fee again gives `500.5599` — a basis inflated by a fee already inside the total, which understates every future gain on that lot.
+
+**A zero fee is a value, not missing information — and that resolves what looked like an open question.** An earlier draft of this section held that Bitvavo's six withdrawals were undetermined because they all carry `fee = 0`, and sent them to pending review. That was wrong. `fee = 0` states a fact: no fee was charged. And since `gross = net + 0`, **both conventions coincide on a zero-fee row**, so there is nothing left to establish and nothing for the user to review. Kraken writes an explicit `0` on 22 rows and Bitvavo on 18; flagging them would put 40 rows in front of the user with no decision to make.
+
+The state that *is* unknown is an **absent** fee, and the real data carries both: the same Bitvavo export has `Fee amount = '0'` on 12 deposits and an empty cell on 11 others. Verified that the distinction already survives the pipeline — the normalizer emits `fee_amount="0"` versus `undefined`, `preciseAmountSchema.optional()` keeps them apart, and the SQL column is nullable with `CHECK ((fee_amount IS NULL) = (fee_asset_id IS NULL))`. It is preserved; 14.30b pins it with tests and audits for any `Number(fee)` or `!fee` that would collapse `'0'` into absence.
+
+Two defects surfaced while checking that, both measured:
+
+1. **A Kraken fee reaches the ledger with no denomination.** A standalone Kraken row emerges as `fee_amount="0.0050000000"` with `fee_currency=undefined`, because Kraken has no fee-currency column and `mergeRows` fills it only for *merged* rows — a merged trade does get `fee_currency="PUMP"`. That pair is rejected by both the Zod refine and the SQL CHECK, so 14 real rows cannot be persisted: 11 deposits and 1 transfer at `fee = 0`, plus the two SOL withdrawals at a genuine `0.005`. The denomination belongs in the handler, where the row's own asset is still in scope (14.30c).
+2. **`mergeRows` computes fees in floating point and can sum different assets.** `Number(acc.fee_amount || 0) + Math.abs(Number(data.fee_amount))` turned `'17.720'` into `'17.72'` in a measured run, and `fee_currency` keeps whichever leg came last — so two legs with fees in different assets would be added together under one label (14.30d).
+
+**A negative fee exists in the real data.** Bitvavo's promotional row carries `fee = -0.00543739 EUR`, exactly cancelling `q × p` so the paid total is `0.00`. `preciseAmountSchema` and the SQL `CHECK` both permit the sign — verified — so no schema change is needed, but the fee-routing logic must treat it as a credit against the basis and never as a disposal of a negative quantity (14.31).
+
+The general safeguard is 14.32: wherever a source ships a running-balance column, assert `balance = previous ± amount − fee` for every row. That is what proved Kraken's convention here, and it is what would catch the exchange changing it.
+
 ### D18 — Ports change before adapters
 
 `ITaxCalculatorPort` currently declares `calculateLotsAndEvents(): Promise<{lots, events}>`, and `ILedgerPort` declares `upsertTaxLots` / `upsertLotHistoryEvents` — an UPSERT-only contract that structurally cannot express retirement. Both are extended first, so the compiler forces every adapter to conform rather than letting an adapter return data the port never promised.

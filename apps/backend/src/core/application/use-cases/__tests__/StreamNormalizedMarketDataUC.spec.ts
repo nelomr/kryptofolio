@@ -77,4 +77,59 @@ describe('StreamNormalizedMarketDataUC', () => {
     const result = await useCase.execute(rawPrice);
     expect(result).toEqual(rawPrice); // Fallback to raw
   });
+
+  /**
+   * `ExchangeRate` and `FiatMoney` accept only the supported currency union. Three `as any` casts
+   * used to force any string into it, so an unsupported code reached `CurrencyConverter` typed as
+   * something it was not.
+   */
+  describe('unsupported currency codes', () => {
+    const gbpPrice: AssetPrice = {
+      symbol: 'BTC',
+      currency: 'GBP',
+      price: '50000',
+      change24hPercent: '2.5',
+      provider: 'kraken',
+      timestamp: '2023-01-01T00:00:00Z',
+    };
+
+    it('returns the raw price when the source currency is not supported', async () => {
+      userSettingsPort.getSetting.mockImplementation(async (key: string) => {
+        if (key === 'base_currency') return 'EUR';
+        if (key === 'exchange_rate_gbp_eur') return '1.17';
+        return null;
+      });
+
+      const result = await useCase.execute(gbpPrice);
+
+      expect(result).toEqual(gbpPrice);
+      expect(result.currency).toBe('GBP');
+    });
+
+    it('returns the raw price when the configured base currency is not supported', async () => {
+      userSettingsPort.getSetting.mockImplementation(async (key: string) => {
+        if (key === 'base_currency') return 'JPY';
+        if (key === 'exchange_rate_usd_jpy') return '150';
+        return null;
+      });
+
+      const usdPrice: AssetPrice = { ...gbpPrice, currency: 'USD' };
+      const result = await useCase.execute(usdPrice);
+
+      expect(result).toEqual(usdPrice);
+    });
+
+    it('does not convert using a rate it cannot type', async () => {
+      // The old casts produced a converted figure carrying a currency the domain never accepted.
+      userSettingsPort.getSetting.mockImplementation(async (key: string) => {
+        if (key === 'base_currency') return 'EUR';
+        if (key === 'exchange_rate_gbp_eur') return '1.17';
+        return null;
+      });
+
+      const result = await useCase.execute(gbpPrice);
+
+      expect(result.price).toBe('50000');
+    });
+  });
 });

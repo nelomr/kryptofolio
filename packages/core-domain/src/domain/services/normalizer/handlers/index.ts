@@ -15,6 +15,7 @@ export const transactionHandlers: Record<string, NormalizerHandler> = {
   deposit: handleDeposit,
   deposito: handleDeposit,
   withdrawal: handleWithdrawal,
+  withdraw: handleWithdrawal,
   retiro: handleWithdrawal,
   transfer: handleTransfer,
   transferencia: handleTransfer,

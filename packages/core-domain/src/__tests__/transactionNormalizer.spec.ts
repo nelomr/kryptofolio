@@ -84,6 +84,38 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
       expect(result.amount_out).toBeUndefined();
     });
 
+    it("reads Bit2Me's `Grupo` as the sub-wallet designation", () => {
+      // Its values are compartments — earn, trading, pocket — which is what `deriveSubAccountId`
+      // consumes. Nothing read them before, so Bit2Me resolved to the bare venue.
+      const data: TransactionMappedData = {
+        date: "2025-01-01",
+        time: "11:32",
+        tx_type: "staking",
+        amount: "0.2229808",
+        asset: "B2M",
+        metadata: { Grupo: "earn" },
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.metadata?.wallet).toBe("earn");
+    });
+
+    it("classifies Bitunix's `Withdraw` label, not only `withdrawal`", () => {
+      // `classifyCustodyMovement` already recognises this label; the handler table did not, so the
+      // raw label survived normalisation and ingestion rejected the row.
+      const data: TransactionMappedData = {
+        date: "2025-12-13",
+        time: "22:03:31",
+        tx_type: "Withdraw",
+        amount: "546.844684",
+        asset: "ADA",
+        metadata: {},
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.tx_type).toBe("TRANSFER_OUT");
+      expect(result.amount_out).toBe("546.844684");
+      expect(result.asset_out).toBe("ADA");
+    });
+
     it("should classify a crypto withdrawal as an outbound custody movement", () => {
       const data: TransactionMappedData = {
         date: "2023-01-01",
@@ -193,7 +225,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         metadata: {
           chain: "Ethereum",
           estado: "Completed",
-          wallet: "My Main Account",
+          account: "My Main Account",
         },
       };
       const result = normalizeTransactionDirection(data);
@@ -201,6 +233,33 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
       expect(result.metadata.status).toBe("Completed");
       expect(result.metadata.account_id).toBe("My Main Account");
       expect(result.metadata.chain).toBeUndefined();
+    });
+
+    it("keeps a sub-wallet designation distinct from the account identifier", () => {
+      const data: TransactionMappedData = {
+        date: "2023-01-01",
+        time: "12:00",
+        tx_type: "transfer",
+        metadata: {
+          wallet: "earn",
+          account: "My Main Account",
+        },
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.metadata.wallet).toBe("earn");
+      expect(result.metadata.account_id).toBe("My Main Account");
+    });
+
+    it("normalises alternative sub-wallet column labels onto one key", () => {
+      const data: TransactionMappedData = {
+        date: "2023-01-01",
+        time: "12:00",
+        tx_type: "transfer",
+        metadata: { cartera: "spot / main" },
+      };
+      const result = normalizeTransactionDirection(data);
+      expect(result.metadata.wallet).toBe("spot / main");
+      expect(result.metadata.cartera).toBeUndefined();
     });
   });
 });

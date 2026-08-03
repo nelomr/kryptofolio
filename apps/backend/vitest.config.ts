@@ -23,6 +23,13 @@ export default defineConfig({
     maxWorkers: 2,
     minWorkers: 1,
     /**
+     * Several files here build a SQLite ledger and a DuckDB instance and then run a full
+     * materialisation twice. The heaviest needs ~3.5 s unloaded and was measured at 5.7 s on a busy
+     * machine — starved, not slow, and the default 5 s ceiling turns that into a phantom failure.
+     * The hook budget is already 10 s for the same reason.
+     */
+    testTimeout: 15_000,
+    /**
      * Type-level assertions (`expectTypeOf`) compile to nothing, so they pass vacuously unless
      * the file is type-checked. `include` above deliberately does not match `*.spec-d.ts`;
      * this block is what makes those assertions real during `vitest run --typecheck`.

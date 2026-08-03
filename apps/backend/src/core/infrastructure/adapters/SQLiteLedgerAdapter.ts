@@ -17,6 +17,7 @@ import type {
   EnsureAccountInput,
   EnsureAssetInput,
 } from '../../domain/ports/ILedgerPort';
+import { deriveSubAccountId } from '@kryptofolio/shared-types';
 
 /** A value as SQLite accepts it. `null` is a first-class value here, not a missing one. */
 type SqlValue = string | number | null;
@@ -437,7 +438,28 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       input.isSynthetic === true,
     );
 
-    return input.accountId;
+    const subAccountId = deriveSubAccountId(input.accountId, input.wallet);
+    if (subAccountId === input.accountId) return input.accountId;
+
+    // The identifier is derived from the venue's id so it stays stable across imports, but the
+    // name is derived from the venue's *name*, which is the part a user reads.
+    const venueName = this.readAccountName(input.accountId) ?? input.name ?? input.accountId;
+    this.insertAccount(
+      subAccountId,
+      deriveSubAccountId(venueName, input.wallet),
+      type,
+      input.accountId,
+      false,
+    );
+
+    return subAccountId;
+  }
+
+  private readAccountName(accountId: string): string | undefined {
+    const row = this.db.prepare('SELECT name FROM accounts WHERE id = ?').get(accountId) as
+      | { name: string }
+      | undefined;
+    return row?.name;
   }
 
   /**

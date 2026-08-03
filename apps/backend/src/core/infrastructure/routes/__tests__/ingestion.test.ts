@@ -19,7 +19,11 @@ function makeMockContainer(
 ): DIContainer {
   return {
     csvIngestionUseCase: {
-      execute: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn(async (rows: unknown[]) => ({
+        persisted: rows.length,
+        rejected: [],
+        unresolvedFiat: 0,
+      })),
       ...overrides,
     },
   } as unknown as DIContainer;
@@ -77,6 +81,38 @@ describe("POST /ingestion/transactions", () => {
     expect(rows[0].id_hash).toBe("hash-ingestion-test");
     expect(rows[0].account_id).toBe("00000000-0000-0000-0000-000000000001");
     expect(market).toBe("spot");
+  });
+
+  it("counts only the persisted rows and names the rejected ones", async () => {
+    (
+      container.csvIngestionUseCase.execute as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
+      persisted: 1,
+      rejected: [
+        {
+          idHash: "hash-bad",
+          timestamp: "2023-01-15T10:00:00Z",
+          txType: "LIQUIDATION_TRANSFER",
+          reason: "Unmapped transaction type 'LIQUIDATION_TRANSFER' in row at 2023-01-15T10:00:00Z",
+        },
+      ],
+      unresolvedFiat: 0,
+    });
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [VALID_ROW, { ...VALID_ROW, id_hash: "hash-bad", tx_type: "LIQUIDATION_TRANSFER" }],
+        market: "spot",
+        timezone: "UTC",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { processedCount: number; message: string };
+    expect(body.processedCount).toBe(1);
+    expect(body.message).toContain("LIQUIDATION_TRANSFER");
   });
 
   it("returns 500 when csvIngestionUseCase.execute throws", async () => {

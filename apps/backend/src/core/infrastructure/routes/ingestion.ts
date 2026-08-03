@@ -47,7 +47,7 @@ export function createIngestionApi(container: DIContainer) {
         const { rows, market } = c.req.valid('json');
 
         try {
-          await container.csvIngestionUseCase.execute(
+          const result = await container.csvIngestionUseCase.execute(
             rows.map(row => ({
               ...row,
               account_id: row.account_id,
@@ -56,10 +56,15 @@ export function createIngestionApi(container: DIContainer) {
             market
           );
 
+          // Counting the submitted rows would report a rejected one as ingested.
+          const rejectedNote = result.rejected.length > 0
+            ? `, ${result.rejected.length} rejected: ${result.rejected.map(r => r.reason).join('; ')}`
+            : '';
+
           return c.json({
             status: 'success',
-            processedCount: rows.length,
-            message: `${rows.length} transactions ingested successfully`,
+            processedCount: result.persisted,
+            message: `${result.persisted} transactions ingested successfully${rejectedNote}`,
           }, 201);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown ingestion error';

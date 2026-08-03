@@ -7,6 +7,7 @@ import type {
   LedgerTaxLotEvent,
 } from "../../../domain/ports/ILedgerPort";
 import { toPreciseAmount } from "../../../domain/value-objects/PreciseAmount.js";
+import { deriveSubAccountId } from "@kryptofolio/shared-types";
 
 
 /** Helper to build a minimal but valid spot transaction */
@@ -484,6 +485,120 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
         .prepare("SELECT COUNT(*) AS count FROM transfer_destination_overrides")
         .get() as { count: number };
       expect(surviving.count).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sub-account resolution
+  // -------------------------------------------------------------------------
+
+  describe("Sub-account resolution from a wallet designation", () => {
+    const KRAKEN = "10000000-0000-0000-0000-000000000002";
+
+    function readAccount(id: string): {
+      id: string;
+      name: string;
+      parent_account_id: string | null;
+      is_synthetic: number;
+    } | undefined {
+      return db
+        .prepare(
+          "SELECT id, name, parent_account_id, is_synthetic FROM accounts WHERE id = ?",
+        )
+        .get(id) as
+        | { id: string; name: string; parent_account_id: string | null; is_synthetic: number }
+        | undefined;
+    }
+
+    it("returns the child account and parents it to the venue", async () => {
+      const resolved = await adapter.ensureAccountExists({
+        accountId: KRAKEN,
+        wallet: "earn",
+      });
+
+      expect(resolved).toBe(deriveSubAccountId(KRAKEN, "earn"));
+      expect(resolved).not.toBe(KRAKEN);
+
+      const child = readAccount(resolved);
+      expect(child?.parent_account_id).toBe(KRAKEN);
+      expect(child?.is_synthetic).toBe(0);
+      // The venue's own name is what makes the child legible; the id is a UUID.
+      expect(child?.name).toBe("Kraken:earn");
+    });
+
+    it("creates the venue parent when it does not exist yet", async () => {
+      const venue = "20000000-0000-0000-0000-0000000000aa";
+      const resolved = await adapter.ensureAccountExists({
+        accountId: venue,
+        name: "Bitvavo",
+        wallet: "earn",
+      });
+
+      expect(readAccount(venue)?.name).toBe("Bitvavo");
+      expect(readAccount(resolved)?.parent_account_id).toBe(venue);
+      expect(readAccount(resolved)?.name).toBe("Bitvavo:earn");
+    });
+
+    it("collapses Kraken's composite primary wallet label to a stable identifier", async () => {
+      const resolved = await adapter.ensureAccountExists({
+        accountId: KRAKEN,
+        wallet: "spot / main",
+      });
+
+      expect(resolved).toBe(deriveSubAccountId(KRAKEN, "spot"));
+      expect(readAccount(resolved)?.name).toBe("Kraken:spot");
+    });
+
+    it("falls back to the venue and fabricates no child when no wallet is given", async () => {
+      const before = (
+        db.prepare("SELECT COUNT(*) AS count FROM accounts").get() as { count: number }
+      ).count;
+
+      expect(await adapter.ensureAccountExists({ accountId: KRAKEN })).toBe(KRAKEN);
+      expect(await adapter.ensureAccountExists({ accountId: KRAKEN, wallet: "" })).toBe(KRAKEN);
+      expect(await adapter.ensureAccountExists({ accountId: KRAKEN, wallet: null })).toBe(KRAKEN);
+
+      const after = (
+        db.prepare("SELECT COUNT(*) AS count FROM accounts").get() as { count: number }
+      ).count;
+      expect(after).toBe(before);
+    });
+
+    it("resolves the same account twice without duplicating it", async () => {
+      const first = await adapter.ensureAccountExists({ accountId: KRAKEN, wallet: "EARN" });
+      const second = await adapter.ensureAccountExists({ accountId: KRAKEN, wallet: "earn " });
+
+      expect(second).toBe(first);
+      const rows = db
+        .prepare("SELECT COUNT(*) AS count FROM accounts WHERE parent_account_id = ?")
+        .get(KRAKEN) as { count: number };
+      expect(rows.count).toBe(1);
+    });
+
+    it("accepts a spot transaction written against the resolved child account", async () => {
+      const resolved = await adapter.ensureAccountExists({ accountId: KRAKEN, wallet: "earn" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+      await adapter.ensureAssetExists({ assetId: "asset-eur", symbol: "EUR" });
+
+      await expect(
+        adapter.saveSpotTransaction(makeSpotTx({ account_id: resolved })),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("Asset fiat classification", () => {
+    it("persists is_fiat as given, defaulting a crypto asset to 0", async () => {
+      await adapter.ensureAssetExists({ assetId: "EUR", symbol: "EUR", isFiat: true });
+      await adapter.ensureAssetExists({ assetId: "BTC", symbol: "BTC" });
+
+      const rows = db
+        .prepare("SELECT id, is_fiat FROM assets WHERE id IN ('EUR', 'BTC') ORDER BY id")
+        .all() as { id: string; is_fiat: number }[];
+
+      expect(rows).toEqual([
+        { id: "BTC", is_fiat: 0 },
+        { id: "EUR", is_fiat: 1 },
+      ]);
     });
   });
 });

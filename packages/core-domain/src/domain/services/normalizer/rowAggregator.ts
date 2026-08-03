@@ -1,28 +1,43 @@
 import type { ValidTransactionRow, TransactionMappedData } from "@kryptofolio/shared-types";
 
+/** The instant a row was recorded, however the source spelled it. */
+function instantOf(data: TransactionMappedData): string {
+  return data.timestamp ?? `${data.date ?? ""}T${data.time ?? ""}`;
+}
+
 /**
- * Aggregates multiple TransactionRows that share the same group_id.
- * This is crucial for exchanges like Kraken that export a single trade as multiple rows.
+ * Reunites the several rows an exchange writes for a single operation — Kraken exports one trade as
+ * a negative leg and a positive leg sharing a `refid`.
+ *
+ * Grouping is keyed on the identifier **and the instant**, because a shared identifier alone does not
+ * mean one operation: Bit2Me's `Grupo` column names a wallet compartment (`earn`, `trading`,
+ * `pocket`), so an entire multi-year history shares five values. Keying on the identifier alone
+ * collapsed 706 real rows into 5 transactions, keeping only the first quantity of each. The legs of a
+ * genuine trade are recorded at the same instant, which is what distinguishes them from rows that
+ * merely share a category.
  */
 export function aggregateRows(rows: ValidTransactionRow[]): ValidTransactionRow[] {
   const groups = new Map<string, ValidTransactionRow[]>();
   const standalone: ValidTransactionRow[] = [];
 
-  // 1. O(N) grouping pass
   rows.forEach((row) => {
     const groupId = row.mappedData.group_id;
     if (!groupId) {
       standalone.push(row);
-    } else {
-      const group = groups.get(groupId);
-      if (group) group.push(row);
-      else groups.set(groupId, [row]);
+      return;
     }
+    // Serialised rather than concatenated: a group identifier may itself contain the separator,
+    // which would merge two groups that only look alike.
+    const key = JSON.stringify([groupId, instantOf(row.mappedData)]);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
   });
 
-  // 2. Functional map to merge groups
-  const mergedGroups = Array.from(groups.entries()).map(([groupId, groupRows]) =>
-    groupRows.length === 1 ? groupRows[0] : mergeRows(groupRows, groupId)
+  const mergedGroups = Array.from(groups.values()).map((groupRows) =>
+    groupRows.length === 1
+      ? groupRows[0]
+      : mergeRows(groupRows, groupRows[0].mappedData.group_id ?? "")
   );
 
   return [...standalone, ...mergedGroups];

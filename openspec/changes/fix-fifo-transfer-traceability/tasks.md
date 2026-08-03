@@ -90,13 +90,13 @@
 
 ## 8. Application Layer — Ingestion Integrity and Sub-Accounts
 
-- [ ] 8.1 Write tests: negative `total_fiat` persisted as absolute value; unknown `tx_type` rejected with a named error while valid rows persist; unresolvable price recorded as unresolved rather than genuine `0`; currency mismatch flagged without mixing arithmetic; `wallet = 'earn'` resolves to `Kraken:earn` under parent `Kraken`
-- [ ] 8.2 Apply `.abs()` to `total_fiat` and `price_fiat` in `CsvIngestionUseCase` using `Decimal`, matching the treatment already given to `amount_in`/`amount_out`
-- [ ] 8.3 Replace the `?? 'BUY'` fallback in `toSpotTxType()` with a controlled error naming the offending value and row timestamp; collect rejected rows into the use case result instead of aborting the batch
-- [ ] 8.4 Mark unresolved fiat magnitudes distinctly from genuine zero so downstream flagging can tell them apart
-- [ ] 8.5 Resolve and persist `is_fiat` in `ensureAssetExists` from the ISO-4217 code list
-- [ ] 8.6 Add sub-account resolution: `ensureAccountExists` creates the venue parent and the child account via `deriveSubAccountId`, falling back to the venue when no wallet designation is present
-- [ ] 8.7 Verify tests 8.1 pass
+- [x] 8.1 Write tests: negative `total_fiat` persisted as absolute value; unknown `tx_type` rejected with a named error while valid rows persist; unresolvable price recorded as unresolved rather than genuine `0`; currency mismatch flagged without mixing arithmetic; `wallet = 'earn'` resolves to `Kraken:earn` under parent `Kraken`
+- [x] 8.2 Apply `.abs()` to `total_fiat` and `price_fiat` in `CsvIngestionUseCase` using `Decimal`, matching the treatment already given to `amount_in`/`amount_out`
+- [x] 8.3 Replace the `?? 'BUY'` fallback in `toSpotTxType()` with a controlled error naming the offending value and row timestamp; collect rejected rows into the use case result instead of aborting the batch
+- [x] 8.4 Mark unresolved fiat magnitudes distinctly from genuine zero so downstream flagging can tell them apart
+- [x] 8.5 Resolve and persist `is_fiat` in `ensureAssetExists` from the ISO-4217 code list
+- [x] 8.6 Add sub-account resolution: `ensureAccountExists` creates the venue parent and the child account via `deriveSubAccountId`, falling back to the venue when no wallet designation is present
+- [x] 8.7 Verify tests 8.1 pass
 
 ## 9. Application Layer — Automatic Rebuild and Overrides
 
@@ -147,7 +147,125 @@
 - [ ] 12.9 Add i18n keys for `lot_status.closed`, disposal types, every quality flag with its explanation, manual-value markers, and custody labels in both `es.ts` and `en.ts`; remove the inverted `lot_status.open`/`lot_status.sold` usages
 - [ ] 12.10 Verify tests 12.1 pass and confirm DESIGN.md compliance: mono for all numerics, no raw `animate-pulse`, brand colour used at most twice per view
 
-## 13. End-to-End Verification (test-driven, no manual re-ingestion)
+## 14. Source Fidelity and Multi-Leg Integrity
+
+**This group runs BEFORE group 13.** Group 13 is end-to-end verification; running it against known
+defects would either fail or certify an incomplete system. Two of its tasks are blocked outright:
+
+- **13.3** drives a real Kraken CSV through ingestion. Every Kraken row with a fee currently fails
+  persistence — see 14.30c. The fixture cannot load until that is fixed.
+- **13.5** asserts fee-event sums. That depends on the fee model in 14γ being correct.
+
+Task IDs are stable because `design.md` and `progress-apply.md` cite them; they are therefore **not
+sequential**. Execute top to bottom by phase, not by number.
+
+Every finding here was **measured** against the user's real exports in
+`/Users/nelo/proyectos/AgenteIA/cripto-proyect/listadoTransacciones`, not anticipated. The evidence
+sits in `design.md` D19–D24 and in the group 7/8 entries of `progress-apply.md`. Four of the six
+findings were surfaced by the user reading the source files, and none by the test suite — which is
+why the two regression nets, 14.18 and 14.27, exist.
+
+---
+
+### 14α. Foundations — nothing downstream can be measured until these land
+
+These three block work in every other phase, so they come first regardless of severity.
+
+- [ ] 14.20 Break the circular import between `shared-types`'s `ledger.ts` and `fifo-policy.ts`. They import from each other, which resolves under ESM but throws `Cannot access 'FIFO_QUALITY_FLAGS' before initialization` under tsx's CJS transform — and `packages/database`'s seed scripts run under tsx. **Blocks** any fixture or measurement script that runs outside vitest
+- [ ] 14.26 **Fix the xlsx precision loss.** `parseExcel` calls `XLSX.utils.sheet_to_json(..., { header: 1 })`, which returns float64 for numeric cells, and `processRawRows` then applies `String(cell)`. Two measured consequences: 13 cells in the real Bit2Me files already carry float noise (`0.15742981799999997` where the source is `0.157429818`), and `String(v)` emits exponential notation below `1e-6`, so `String(0.00000001)` is `"1e-8"` — which `preciseAmountSchema` **rejects**, silently failing the row. Read cells as formatted text (`raw: false`, or the cell's `w` value) so the source's digits survive. **Blocks** every Bit2Me task: deriving a fee as `origen − destino` is meaningless while both operands carry float noise, and 14.27 cannot assert digit for digit
+- [ ] 14.30c **Kraken fee amounts reach the ledger with no denomination, violating an invariant at two layers.** Measured: a standalone Kraken row emerges from the normalizer as `fee_amount="0.0050000000"` with `fee_currency=undefined`, because Kraken has no fee-currency column and `mergeRows` only fills it for *merged* rows — a merged trade correctly gets `fee_currency="PUMP"`. Both `LedgerSpotTransactionSchema`'s refine and the SQLite `CHECK ((fee_amount IS NULL) = (fee_asset_id IS NULL))` reject that pair. Affects 14 real rows: 11 deposits and 1 transfer at `fee = 0`, plus the 2 SOL withdrawals at a genuine `0.005`. Resolve the denomination from the row's own asset in the handler, not in the aggregator. **Blocks 13.3** and any end-to-end Kraken test
+- [ ] 14.34 Verify the three above: a tsx script can import `shared-types`; a Bit2Me xlsx cell reaches the ledger with the source's digits; a Kraken row with a fee persists
+
+### 14β. Every real file becomes ingestible
+
+Until these land, two of the six real exports cannot be loaded at all, so no fixture can cover them.
+
+- [ ] 14.15 `WALLET_ACTIVATION` cannot be ingested: `tangem_activacion_xrp.csv` carries it in the `Type` column, but the design models it as a `FISCAL_CLASSIFICATION_FLAGS` value, not a `tx_type`, so ingestion rejects the row and **the file cannot be loaded at all**. Map it to an acquisition-like `tx_type` plus the `WALLET_ACTIVATION` flag, with a test driving the real row shape. Note group 5 recorded this as live production data justifying the separate `flag` column, so the flag must survive to `lot_history_events`
+- [ ] 14.16 `campaign_new_user_incentive` (1 Bitvavo row) maps nowhere. Decide whether promotional credits are `REWARD` or `GIFT` and add the label to `TYPE_MAP`. Note the same row carries the negative fee handled in 14.31 — they are one row, so do them together
+- [ ] 14.17 Decide what a Kraken futures `conversion` is (314 rows) and whether `cross-exchange transfer` (1 row) is a custody movement. Both are currently rejected by name because `FuturesTxType` has no member meaning either; adding one is a `shared-types` change. 785 of 1100 futures rows already map correctly, so this decides the remaining 315
+- [ ] 14.18 Add the **label-level regression net**: drive every distinct type label from every real export through the real normalizer and assert the result is one the ingestion mapper accepts. This is what would have caught the futures vocabulary gap the user found. Must come after 14.15–14.17 so it starts green
+
+### 14γ. The fee model — denomination, convention, and precision as one surface
+
+The single largest source of divergence between exchanges, and the phase most likely to produce a
+silently wrong tax figure. Five real exports use **four denomination conventions** and **two
+"already applied?" conventions**, and Bitvavo mixes denominations inside one file.
+
+Two independent questions must be answered per row, and conflating them is the hazard:
+
+1. **Denomination** — a fee in the asset is a disposal that reduces the lot's remaining quantity; a
+   fee in fiat adjusts the basis and must never touch a quantity.
+2. **Already applied?** — every movement is `gross = net + fee`, and each source supplies two of the
+   three. Deducting a fee the source already applied destroys quantity still held; ignoring one
+   charged on top leaves the balance unaccounted for.
+
+| source | denomination | supplies | derive |
+|---|---|---|---|
+| Kraken spot | the row's own `asset` (no fee-currency column) | net (`amount`) + `fee` | `gross = net + fee` |
+| Bitunix | `Fee Asset` | net (`Outgoing`) + `Fee Amount` | `gross = net + fee` |
+| Bit2Me | fee column is a **EUR valuation** | gross (`origen`) + net (`destino`) | `fee = gross − net`, in the asset |
+| Bitvavo `buy` | `EUR` | quantity + price + a fee **already inside** the paid total | nothing |
+| Bitvavo `withdrawal` | `XRP` / `XLM` named, but amount is `0` | — | nothing needed, see 14.30 |
+| Kraken futures | the collateral currency | `fee` column | — |
+
+- [ ] 14.30b **A zero fee is a value and an absent fee is unknown; keep them distinct end to end.** Already true at the normalizer (`fee_amount="0"` vs `undefined`), in `preciseAmountSchema.optional()`, and in the nullable SQL column — verified. Write the regression tests that pin it, and audit for any `Number(fee)`, `!fee` or `fee || …` that would collapse `'0'` into absence. First in this phase because every task below depends on the distinction holding
+- [ ] 14.23 Write the denomination tests, one per convention, from the real row shapes: Kraken spot `fee = 17.720` with `asset = PUMP` resolves to `17.720 PUMP`; a Bitvavo `buy` fee in `EUR` adjusts basis and leaves the quantity untouched; Bitunix `Fee Asset = ADA`; Bit2Me's derived `origen − destino`; a fee whose denomination cannot be resolved is reported pending rather than assumed
+- [ ] 14.29 Write the convention tests, one per established convention, using the real figures: Kraken's `0.006` net + `0.005` fee debits `0.011`; Bitunix's `546.844684 + 1 = 547.844684`; Bit2Me's `2.236429 − 1.536429 = 0.7`; Bitvavo's basis stays `499.81` and is **not** raised to `500.5599`
+- [ ] 14.24 Resolve the denomination per row, falling back to the row's own asset **only** where the source demonstrably has no fee-currency column (Kraken spot), never as a global default — Bitvavo proves a per-source default is wrong, since it mixes `EUR` and the asset across its own row types
+- [ ] 14.30 Model the "already applied?" convention explicitly per source rather than per row shape. **A zero fee needs no convention**: `gross = net + 0` makes both treatments identical, so the 40 real rows with an explicit `0` — 22 Kraken, 18 Bitvavo — are fully determined and must not be flagged. Reserve pending review for a fee amount that is genuinely **absent**, a different state the data really carries: the same Bitvavo file has `'0'` on 12 deposits and an empty cell on 11 others
+- [ ] 14.19 **Bit2Me withdrawals hide the network fee in the gross/net difference.** All 43 differing `Withdrawal` rows record `origen` gross and `destino` net; the difference is the fee paid *in the asset*, while `Moneda de la comisión` says `EUR` in all 45 rows and holds a valuation. Measured unrecorded asset fees: JASMY 220, GIGA 20, HBAR 11.4, XLM 3.9, ADA 2, AI16Z 2, USDC 0.3, XRP 0.0024, ETH 0.0005, BNB 0.0002. Two consequences: a taxable asset disposal is never recorded, and custody attributes the **gross** quantity to the destination, overstating the holding there on every withdrawal. Derive the fee as `origen − destino` when both sides name the same asset. Depends on 14.26 for exact operands, and on 14.24/14.30 for the model it plugs into
+- [ ] 14.31 Handle the real negative fee: Bitvavo's promotional row carries `fee = -0.00543739 EUR`, exactly cancelling `quantity × price` so the paid total is `0.00`. It must reduce the basis as a credit and must never become a fee disposal of a negative quantity. `preciseAmountSchema` and the SQL `CHECK` already permit the sign — verified — so the guard belongs in the fee-routing logic. Same row as 14.16
+- [ ] 14.30d **`mergeRows` does float arithmetic on fees and can sum different assets.** `Number(acc.fee_amount || 0) + Math.abs(Number(data.fee_amount))` turned `'17.720'` into `'17.72'` in a measured run, and `fee_currency` takes the last leg seen — so two legs with fees in different assets would be added under one label. Use `PreciseAmount`, and refuse to combine mismatched denominations
+- [ ] 14.25 Route an in-asset fee to a fee disposal that reduces the lot quantity, and a fiat fee to the basis, with `PreciseAmount` arithmetic throughout and no `number` in the path. This is where 14.24 and 14.30 converge into behaviour
+- [ ] 14.32 Add the balance-reconciliation guard: for any source shipping a running-balance column, assert `balance = previous ± amount − fee` holds for every row. This is the method that established Kraken's convention — 8/8, corroborated by Kraken's own documentation — and it is what would catch the exchange changing it
+- [ ] 14.33 Verify 14.23 and 14.29 pass, and assert no path deducts a fee the source had already applied, nor routes an in-asset fee to the basis
+
+### 14δ. Leg integrity — a movement's two sides survive to the domain
+
+Ordered after the fee model because 14.19 already establishes how a row carrying both sides is read,
+and 14.3 changes what `mergeRows` receives, which 14.30d touches.
+
+- [ ] 14.1 Write tests: a same-asset opposing-sign group is not merged; a genuine fiat/crypto trade still is; a merged record never has `asset_in === asset_out`; the classifier receives each leg's own signed amount
+- [ ] 14.2 Guard `aggregateRows()` against same-asset opposing-sign groups, leaving genuine trade merging untouched. Note the two guards already shipped — removing `group`/`grupo` from `group_id`'s patterns, and keying the merge on identifier **and** instant — restored 706 → 706 rows on the real Bit2Me files; this task closes the remaining same-asset case
+- [ ] 14.19b **Bit2Me deposits duplicate one side.** All 42 `Deposit` rows carry `origen` and `destino` with the same asset **and** amount, so they reach the ledger with `asset_in === asset_out`. 34 are EUR — fiat, excluded from lot tracking, so benign — but **8 are crypto** (HBAR ×4, USDC, XRP, ETH, ADA). First confirm whether `v_custody_movements` derives one leg or two from such a row; if two, the deposit both credits and debits the same account and nets to zero. Then decide whether the normalizer should drop the side that contradicts the resolved direction
+- [ ] 14.3 Move direction resolution ahead of aggregation in the ingestion pipeline, so `classifyCustodyMovement` reads a field no later step removes. Today `aggregateRows()` runs first and `mergeRows()` destructures away the `amount` the classifier needs, so the classifier returns `UNCLASSIFIED` for exactly the case it was built for
+- [ ] 14.4 Decide and record whether `aggregateRows()` belongs behind the ingestion boundary rather than in a frontend composable, given that its current position is the reason the backend never receives two legs. This decision gates 14ε
+- [ ] 14.5 Verify 14.1 passes, and add a regression test driving a two-row same-asset Kraken group end to end
+
+### 14ε. The recorded-counterparty tier stops being unreachable
+
+Strictly after 14δ: while the merge happens in the frontend there are no two legs to link, so this
+phase cannot be evaluated before 14.3 and 14.4.
+
+- [ ] 14.6 Write tests: two legs sharing a source group id resolve to each other; an ambiguous group falls through to synthetic; a single-leg group does not pair
+- [ ] 14.7 Populate `spot_transactions.transfer_group_id` from the source group identifier at ingestion, extending `LedgerSpotTransaction` and the port surface. Note the identifier must be a genuine transaction reference — Kraken's `refid` — never a category column, which is what D20 was about
+- [ ] 14.8 If 14.7 proves unachievable, remove the column, its index, and the `recorded_counterparty` CTE from `v_custody_movements` instead — a resolution tier no ledger row can enter must not remain in the engine
+- [ ] 14.9 Verify 14.6 passes and that `v_lot_custody_allocation` attributes a recorded pair to the real destination rather than to `ownwallet-<ASSET>`
+
+### 14ζ. The ledger can state "unknown" for a fiat magnitude
+
+Last of the implementation phases: it is a migration reopening a table group 4 rebuilt, and it
+touches `v_flattened_fifo_events`, which 14.25 also modifies. Doing it after the fee model avoids
+migrating the same view twice.
+
+- [ ] 14.10 Write tests: an unresolvable magnitude is distinguishable from `0`; a genuinely free acquisition stays `0` and is not reported pending; a negative magnitude is still rejected. Mirrors 14.30b's zero-versus-absent distinction, one layer down
+- [ ] 14.11 Add a migration making `total_fiat` and `price_fiat` nullable while keeping the non-negative `CHECK` on non-null values
+- [ ] 14.12 Propagate nullability through `nonNegativePreciseAmountSchema`, `LedgerSpotTransaction`, `SQLiteLedgerAdapter`, and `v_flattened_fifo_events`'s `has_recorded_fiat` derivation
+- [ ] 14.13 Alternative, if 14.11 is rejected: amend the `csv-data-ingestion` scenario to "recorded as `0` and reported as pending" and delete this sub-group, recording the decision. The engine already behaves correctly either way — only the ledger's ability to state the difference is at stake
+- [ ] 14.14 Verify 14.10 passes and that no downstream reader treats a `NULL` magnitude as zero
+
+### 14η. The fidelity net and closing out
+
+- [ ] 14.27 Add the **quantity-level regression net**: a fixture per real export shape — Kraken spot, Kraken futures, Bitvavo, Bitunix, Bit2Me, Tangem — driven through the real parser and normalizer, asserting every amount, fee, and fee denomination **digit for digit**. Last among the implementation work because it asserts the end state of every phase above. Together with 14.18 these are the two nets covering what the suite missed and the user's reading found
+- [ ] 14.28 Verify 14.27 passes, and assert no `number` appears in any monetary or quantity path from parser to ledger
+- [ ] 14.21 Remove the three `any` occurrences in `MarketDataAdapters.test.ts`'s WebSocket double, or record why a third-party class mock is exempt
+- [ ] 14.22 ~~Re-run 13.1, 13.7, 13.11, 13.14 after 14a–14c~~ — **superseded**: group 14 now runs before group 13, so group 13 is the single verification gate and needs no second pass
+- [ ] 14.35 Update `design.md` and `progress-apply.md` with the outcome of every decision taken in 14.4, 14.8, 14.13, 14.16, 14.17 and 14.19b, so the next reader inherits the reasoning rather than the result alone
+
+## 13. End-to-End Verification (the final gate — runs AFTER group 14)
+
+Group 14 lands first: this group verifies the finished system, and 13.3 and 13.5 are blocked by
+defects group 14 repairs. Task numbering is historical, not an execution order.
 
 - [ ] 13.1 Run the full suite: `pnpm exec turbo run test`
 - [ ] 13.2 Add a migration integration test applying `004` to a ledger pre-seeded with the exact baseline defects, asserting: empty transactional/derived tables, preserved vault and `user_settings`, correct `is_fiat` seeding, and `needs_recalculation = 'true'`

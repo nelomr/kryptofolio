@@ -1,4 +1,5 @@
 import type { AssetPrice } from "@kryptofolio/shared-types";
+import { isSupportedCurrency } from "@kryptofolio/shared-types";
 import type { IUserSettingsPort } from "../../domain/ports/IUserSettingsPort";
 import { CurrencyConverter } from "@kryptofolio/core-domain";
 import type { FiatMoney, ExchangeRate } from "@kryptofolio/core-domain";
@@ -25,6 +26,12 @@ export class StreamNormalizedMarketDataUC {
       return rawPrice;
     }
 
+    // Converting a code the money model cannot represent would yield an amount labelled with a
+    // currency that has no definition, which is worse than leaving the price in its source currency.
+    if (!isSupportedCurrency(rawPrice.currency) || !isSupportedCurrency(baseCurrency)) {
+      return rawPrice;
+    }
+
     // Try to fetch the exchange rate
     // E.g., if rawPrice is USD and base is EUR, we need exchange_rate_usd_eur
     const rateStr = await this.userSettingsPort.getSetting(
@@ -36,15 +43,15 @@ export class StreamNormalizedMarketDataUC {
     }
 
     const rate: ExchangeRate = {
-      from: rawPrice.currency as any,
-      to: baseCurrency as any,
+      from: rawPrice.currency,
+      to: baseCurrency,
       rate: new Money(rateStr),
       timestamp: new Date().toISOString(),
     };
 
     const money: FiatMoney = {
       amount: new Money(rawPrice.price),
-      currency: rawPrice.currency as any,
+      currency: rawPrice.currency,
     };
 
     const converted = CurrencyConverter.convert(money, rate);
