@@ -91,10 +91,17 @@ The `needs_recalculation` setting SHALL be retained and reframed from a user-act
 - **WHEN** `needs_recalculation` is `'true'`
 - **THEN** the UI MUST indicate that derived figures are pending recalculation
 
-#### Scenario: Flag is cleared transactionally
+#### Scenario: Flag is cleared only after the derived rows are committed
 
 - **WHEN** materialisation succeeds
-- **THEN** the flag MUST be cleared within the same transaction that wrote the derived rows
+- **THEN** the flag MUST be cleared as the last step of the successful run, after every derived row has
+  been written
+- **AND** a run that fails at any earlier point MUST leave the flag `'true'`
+
+The flag is read and written through `IUserSettingsPort` against the settings database, while the
+derived tables live in the ledger database. One transaction cannot span two SQLite files, so
+"within the same transaction" is not achievable as wired; the two observable guarantees above are, and
+they are what the retry behaviour depends on.
 
 ### Requirement: Data-Quality Flags Never Block a Rebuild
 

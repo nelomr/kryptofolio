@@ -63,7 +63,12 @@ Materialisation SHALL execute inserts, updates, and soft-deletes for all derived
 #### Scenario: Recalculation flag is cleared only on success
 
 - **WHEN** materialisation completes without error
-- **THEN** `needs_recalculation` MUST be set to `'false'` within the same transaction that wrote the derived rows
+- **THEN** `needs_recalculation` MUST be set to `'false'` as the last step of the run, after every
+  derived row has been written and committed
+- **AND** the flag MUST remain `'true'` when any earlier step fails
+
+The flag lives in the settings database and the derived tables in the ledger database, so a single
+transaction cannot cover both.
 
 #### Scenario: Custody entries are written in the same transaction
 

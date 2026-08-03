@@ -41,6 +41,11 @@ import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortf
 import { GetSpanishTaxReportUseCase } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
 import { GetTokenHistoryUseCase } from '../../application/use-cases/GetTokenHistoryUseCase.js';
 import { FifoMaterializerService } from '../../application/services/FifoMaterializerService.js';
+import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
+import { SetManualPriceOverrideUseCase } from '../../application/use-cases/overrides/SetManualPriceOverrideUseCase.js';
+import { RemoveManualPriceOverrideUseCase } from '../../application/use-cases/overrides/RemoveManualPriceOverrideUseCase.js';
+import { SetTransferDestinationUseCase } from '../../application/use-cases/overrides/SetTransferDestinationUseCase.js';
+import { RemoveTransferDestinationUseCase } from '../../application/use-cases/overrides/RemoveTransferDestinationUseCase.js';
 
 
 class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort {
@@ -113,6 +118,11 @@ export class DIContainer {
   public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
   public getTokenHistoryUseCase: GetTokenHistoryUseCase;
   public fifoMaterializerService: FifoMaterializerService;
+  public ingestAndMaterializeUseCase: IngestAndMaterializeUseCase;
+  public setManualPriceOverrideUseCase: SetManualPriceOverrideUseCase;
+  public removeManualPriceOverrideUseCase: RemoveManualPriceOverrideUseCase;
+  public setTransferDestinationUseCase: SetTransferDestinationUseCase;
+  public removeTransferDestinationUseCase: RemoveTransferDestinationUseCase;
 
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
@@ -197,6 +207,33 @@ export class DIContainer {
       this.taxCalculatorPort,
       this.userSettingsPort,
     );
+
+    this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
+      this.csvIngestionUseCase,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+
+    this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
   }
 
   /**
@@ -232,6 +269,33 @@ export class DIContainer {
     this.fifoMaterializerService = new FifoMaterializerService(
       this.ledgerPort,
       this.taxCalculatorPort,
+      this.userSettingsPort,
+    );
+
+    this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
+      this.csvIngestionUseCase,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+
+    this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
+      this.userSettingsPort,
+    );
+    this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.fifoMaterializerService,
       this.userSettingsPort,
     );
   }

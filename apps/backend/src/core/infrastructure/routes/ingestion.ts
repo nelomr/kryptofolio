@@ -2,6 +2,11 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { DIContainer } from '../di/container.js';
+import { ingestionOutcomeSchema } from '../dtos/materialization.js';
+
+type IngestAndMaterializeRows = Parameters<
+  DIContainer['ingestAndMaterializeUseCase']['execute']
+>[0]['rows'];
 
 /**
  * Ingestion API — routes for CSV ledger ingestion.
@@ -47,25 +52,37 @@ export function createIngestionApi(container: DIContainer) {
         const { rows, market } = c.req.valid('json');
 
         try {
-          const result = await container.csvIngestionUseCase.execute(
-            rows.map(row => ({
+          // One call: the route states what happened, never in which order it has to happen.
+          const outcome = await container.ingestAndMaterializeUseCase.execute({
+            rows: rows.map(row => ({
               ...row,
               account_id: row.account_id,
               id_hash: row.id_hash,
-            })) as Parameters<typeof container.csvIngestionUseCase.execute>[0],
-            market
-          );
+            })) as IngestAndMaterializeRows,
+            market,
+          });
+
+          const { ingestion } = outcome;
 
           // Counting the submitted rows would report a rejected one as ingested.
-          const rejectedNote = result.rejected.length > 0
-            ? `, ${result.rejected.length} rejected: ${result.rejected.map(r => r.reason).join('; ')}`
+          const rejectedNote = ingestion.rejected.length > 0
+            ? `, ${ingestion.rejected.length} rejected: ${ingestion.rejected.map(r => r.reason).join('; ')}`
+            : '';
+          const rebuildNote = outcome.materializationError
+            ? `; recalculation pending: ${outcome.materializationError}`
             : '';
 
-          return c.json({
+          const body = ingestionOutcomeSchema.parse({
             status: 'success',
-            processedCount: result.persisted,
-            message: `${result.persisted} transactions ingested successfully${rejectedNote}`,
-          }, 201);
+            processedCount: ingestion.persisted,
+            message: `${ingestion.persisted} transactions ingested successfully${rejectedNote}${rebuildNote}`,
+            materialized: outcome.materialized,
+            materialization: outcome.materialization,
+            materializationError: outcome.materializationError,
+            pendingReview: outcome.materialization?.pendingReview ?? 0,
+          });
+
+          return c.json(body, 201);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown ingestion error';
           return c.json({ status: 'error', message }, 500);

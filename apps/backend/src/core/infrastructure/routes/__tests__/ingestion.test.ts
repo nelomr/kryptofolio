@@ -1,12 +1,12 @@
 /**
- * Ingestion Route — Integration tests with real SQLite in-memory schema.
+ * Ingestion Route.
  *
  * Verifies that POST /transactions:
  *  - accepts a valid payload and returns 201
- *  - calls csvIngestionUseCase.execute with the correct rows
+ *  - delegates to the orchestrating use case with the correct rows
+ *  - carries the rebuild outcome back to the caller
  *  - returns 500 when the use case throws
  *  - returns 400 when the payload is malformed (zValidator)
- *  - is idempotent: same id_hash twice does not duplicate rows
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,20 +14,35 @@ import { Hono } from "hono";
 import { createIngestionApi } from "../ingestion.js";
 import type { DIContainer } from "../../di/container.js";
 
-function makeMockContainer(
-  overrides: Partial<DIContainer["csvIngestionUseCase"]> = {},
-): DIContainer {
+const EMPTY_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
+
+const SUMMARY = {
+  taxLots: { ...EMPTY_RECONCILIATION, inserted: 1 },
+  lotHistoryEvents: { ...EMPTY_RECONCILIATION },
+  custodyEntries: { ...EMPTY_RECONCILIATION, inserted: 2 },
+  flagged: 3,
+  pendingReview: 2,
+};
+
+function makeMockContainer(): DIContainer {
   return {
-    csvIngestionUseCase: {
-      execute: vi.fn(async (rows: unknown[]) => ({
-        persisted: rows.length,
-        rejected: [],
-        unresolvedFiat: 0,
+    ingestAndMaterializeUseCase: {
+      execute: vi.fn(async ({ rows }: { rows: unknown[] }) => ({
+        ingestion: { persisted: rows.length, rejected: [], unresolvedFiat: 0 },
+        materialization: SUMMARY,
+        materialized: true,
+        materializationError: null,
       })),
-      ...overrides,
     },
+    // Present on the container but never reachable from this route: the ordering between them is
+    // the orchestrator's decision.
+    csvIngestionUseCase: { execute: vi.fn() },
+    fifoMaterializerService: { recalculate: vi.fn() },
   } as unknown as DIContainer;
 }
+
+const orchestrator = (container: DIContainer) =>
+  container.ingestAndMaterializeUseCase.execute as ReturnType<typeof vi.fn>;
 
 const VALID_ROW = {
   id_hash: "hash-ingestion-test",
@@ -54,7 +69,7 @@ describe("POST /ingestion/transactions", () => {
     vi.clearAllMocks();
   });
 
-  it("returns 201 and calls execute with the submitted rows", async () => {
+  it("returns 201 and delegates the submitted rows to the orchestrator", async () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -72,31 +87,91 @@ describe("POST /ingestion/transactions", () => {
     };
     expect(body.status).toBe("success");
     expect(body.processedCount).toBe(1);
-    expect(container.csvIngestionUseCase.execute).toHaveBeenCalledOnce();
+    expect(orchestrator(container)).toHaveBeenCalledOnce();
 
     // Verify the row was passed through with id_hash and account_id intact
-    const [rows, market] = (
-      container.csvIngestionUseCase.execute as ReturnType<typeof vi.fn>
-    ).mock.calls[0];
+    const [{ rows, market }] = orchestrator(container).mock.calls[0];
     expect(rows[0].id_hash).toBe("hash-ingestion-test");
     expect(rows[0].account_id).toBe("00000000-0000-0000-0000-000000000001");
     expect(market).toBe("spot");
   });
 
+  it("sequences nothing itself: it never reaches ingestion or the materialiser directly", async () => {
+    await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
+    expect(container.fifoMaterializerService.recalculate).not.toHaveBeenCalled();
+    expect(orchestrator(container)).toHaveBeenCalledOnce();
+  });
+
+  it("carries the reconciliation summary and the pending-review count", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    const body = (await res.json()) as {
+      materialized: boolean;
+      pendingReview: number;
+      materialization: typeof SUMMARY | null;
+    };
+    expect(body.materialized).toBe(true);
+    expect(body.pendingReview).toBe(2);
+    expect(body.materialization).toEqual(SUMMARY);
+  });
+
+  it("reports a failed rebuild as a successful ingestion that still needs recalculation", async () => {
+    orchestrator(container).mockResolvedValueOnce({
+      ingestion: { persisted: 1, rejected: [], unresolvedFiat: 0 },
+      materialization: null,
+      materialized: false,
+      materializationError: "Catalog Error: v_custody_entries",
+    });
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      status: string;
+      processedCount: number;
+      materialized: boolean;
+      materializationError: string | null;
+      pendingReview: number;
+    };
+    expect(body.status).toBe("success");
+    expect(body.processedCount).toBe(1);
+    expect(body.materialized).toBe(false);
+    expect(body.materializationError).toContain("v_custody_entries");
+    expect(body.pendingReview).toBe(0);
+  });
+
   it("counts only the persisted rows and names the rejected ones", async () => {
-    (
-      container.csvIngestionUseCase.execute as ReturnType<typeof vi.fn>
-    ).mockResolvedValueOnce({
-      persisted: 1,
-      rejected: [
-        {
-          idHash: "hash-bad",
-          timestamp: "2023-01-15T10:00:00Z",
-          txType: "LIQUIDATION_TRANSFER",
-          reason: "Unmapped transaction type 'LIQUIDATION_TRANSFER' in row at 2023-01-15T10:00:00Z",
-        },
-      ],
-      unresolvedFiat: 0,
+    orchestrator(container).mockResolvedValueOnce({
+      ingestion: {
+        persisted: 1,
+        rejected: [
+          {
+            idHash: "hash-bad",
+            timestamp: "2023-01-15T10:00:00Z",
+            txType: "LIQUIDATION_TRANSFER",
+            reason:
+              "Unmapped transaction type 'LIQUIDATION_TRANSFER' in row at 2023-01-15T10:00:00Z",
+          },
+        ],
+        unresolvedFiat: 0,
+      },
+      materialization: SUMMARY,
+      materialized: true,
+      materializationError: null,
     });
 
     const res = await app.request("/ingestion/transactions", {
@@ -115,10 +190,8 @@ describe("POST /ingestion/transactions", () => {
     expect(body.message).toContain("LIQUIDATION_TRANSFER");
   });
 
-  it("returns 500 when csvIngestionUseCase.execute throws", async () => {
-    (
-      container.csvIngestionUseCase.execute as ReturnType<typeof vi.fn>
-    ).mockRejectedValueOnce(new Error("FK constraint failed"));
+  it("returns 500 when the orchestrator throws", async () => {
+    orchestrator(container).mockRejectedValueOnce(new Error("FK constraint failed"));
 
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
@@ -151,7 +224,7 @@ describe("POST /ingestion/transactions", () => {
 
     expect(res.status).toBe(400);
     // execute should never be called if validation fails
-    expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
+    expect(orchestrator(container)).not.toHaveBeenCalled();
   });
 
   it("returns 400 when account_id is empty", async () => {
@@ -171,7 +244,7 @@ describe("POST /ingestion/transactions", () => {
     });
 
     expect(res.status).toBe(400);
-    expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
+    expect(orchestrator(container)).not.toHaveBeenCalled();
   });
 
   it("returns 400 when market is an unknown value", async () => {
@@ -186,7 +259,7 @@ describe("POST /ingestion/transactions", () => {
     });
 
     expect(res.status).toBe(400);
-    expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
+    expect(orchestrator(container)).not.toHaveBeenCalled();
   });
 
   it("accepts futures market type", async () => {
@@ -208,9 +281,7 @@ describe("POST /ingestion/transactions", () => {
     });
 
     expect(res.status).toBe(201);
-    const [, market] = (
-      container.csvIngestionUseCase.execute as ReturnType<typeof vi.fn>
-    ).mock.calls[0];
+    const [{ market }] = orchestrator(container).mock.calls[0];
     expect(market).toBe("futures");
   });
 });
@@ -225,6 +296,6 @@ describe("GET /ingestion/status", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("idle");
-    expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
+    expect(orchestrator(container)).not.toHaveBeenCalled();
   });
 });

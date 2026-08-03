@@ -608,3 +608,80 @@ None outstanding. The four questions raised in the first draft are resolved:
 - **Unpriceable acquisitions** → flagged and manually assignable per D6/D7; never blocking.
 - **Exchange sub-wallets** → first-class child accounts per D9.
 - **Custody storage location** → persisted SQLite tables per D7, with DuckDB retained as the sole calculation engine and user overrides separated as inputs.
+
+### D25 — The six open decisions of group 14, settled before implementation
+
+Each was decided against measured evidence, with the rejected alternatives recorded so a later reader
+does not have to re-derive them. The task entries carry the same verdicts inline.
+
+**14.4 — Row aggregation moves behind the ingestion boundary.** The frontend sends rows as the source
+wrote them; the backend classifies first, aggregates after. Its position in a frontend composable is
+precisely why the backend never receives two legs, which made the recorded-counterparty tier
+unreachable. Moving it also makes re-ingestion deterministic server-side rather than dependent on a
+frontend version, and stops `generateIdHash` computing an idempotency key over an already-merged
+record in the client. *Rejected:* keeping it in the frontend with only the ordering fixed — cheaper,
+but leaves the counterparty tier permanently dead. *Rejected:* removing aggregation entirely — the
+most faithful option, but `LedgerSpotTransaction` models one transaction with an in and an out side,
+so a Kraken purchase would arrive as a separate EUR outflow and XRP inflow that the engine would have
+to pair into an acquisition. That is an engine change, not an ingestion change.
+
+**14.8 — `transfer_group_id` is populated from the source's own reference, guarded.** With 14.4
+decided the tier becomes reachable, so removing it would discard information the source does provide.
+The merge rule: legs naming **different** assets merge into one transaction; legs naming the **same**
+asset persist separately and share the group id. The guard is what prevents repeating D20 — at
+ingestion, validate that the identifier behaves like a reference: same instant, at most two legs. A
+group spanning 499 rows over three years is not a reference and is ignored as a link, neither merging
+nor pairing. *Rejected:* a backend-synthesised identifier, which derives from the same source
+reference and so inherits its reliability while losing direct traceability to the file, and would
+still need the guard.
+
+**14.13 — `total_fiat` and `price_fiat` become nullable in migration `005`.** The decisive argument is
+internal consistency: the same table already treats `fee_amount` as nullable-with-CHECK while the
+fiat magnitudes are `NOT NULL`. This aligns an existing inconsistency rather than inventing a pattern,
+and it follows the rule settled for fees — `0` means genuinely free, so "unknown" needs its own
+representation. Cost stated plainly: SQLite cannot drop a `NOT NULL` via `ALTER`, so `005` rebuilds
+the table as `004` did, and group 4's tests need updating. *Rejected:* amending the spec to "recorded
+as `0` and reported as pending", which would leave the distinction living only in an ingestion counter
+and a SQL derivation, never in the recorded fact.
+
+**14.16 — a promotional credit becomes a new `PROMOTION` type, recorded in the general base.** The
+real row is `Currency: EUR, Amount: 10` — fiat, so no lot is created under any mapping, since
+acquisitions require `NOT asset_in_is_fiat`. What was at stake is whether the 10 € survives as income.
+*Rejected:* `REWARD`, which appears in neither `general_base_airdrops` nor `savings_base_yields`, so
+the income would simply vanish. *Rejected:* `DEPOSIT`, which makes a gift indistinguishable from the
+user's own money. *Rejected:* `AIRDROP`, which is fiscally correct and free but calls a euro credit an
+airdrop — the class of untrue label this change exists to eliminate — and would permanently mix real
+airdrops with promotions. `GIFT` is not in `SPOT_TX_TYPES` at all. `PROMOTION` costs one enum member,
+one policy entry that the key-parity test in 2.1 forces, one `TYPE_MAP` entry and one view predicate;
+campaigns recur, so the type is reused.
+
+**14.17 — the 315 futures rows stay rejected here, and futures collateral becomes a separate change.**
+This reverses an earlier recommendation, on two grounds. First, what the rows are: the 314
+`conversion` rows are 157 EUR↔USD collateral pairs — one negative `eur` leg, one positive `usd` leg,
+same instant, `conversion spread percentage` on the EUR side — and the single `cross-exchange transfer`
+is 200 € arriving in the `flex` account, whose matching leg sits in the **spot** export as
+`transfer / spottofutures / EUR / -200`, so no single-file aggregation could ever pair them. Neither
+is a position event. Second, what the table is: `futures_transactions` models position events, its
+`tx_type` CHECK cannot be extended without a full table rebuild, and its `symbol` column means the
+contract — storing `'eur'` there would repeat exactly the error class D20 documented. Position events
+and collateral movements are as distinct as spot and futures. Nothing is lost meanwhile: no rejected
+row touches crypto FIFO, and `v_futures_realized_pnl` derives PnL from `realized_pnl`, which the
+accepted 785 rows carry. *Rejected:* building the collateral table inside group 14, which would add a
+futures capability to a change whose subject is spot FIFO traceability.
+
+**Confirmed while deciding 14.17:** the separation the user requires already holds and is strict.
+`futures_transactions` is referenced in exactly one place in the whole DuckDB engine —
+`v_futures_realized_pnl` — and the entire FIFO and custody chain reads `spot_transactions` only. No
+futures row can create a tax lot.
+
+**14.19b — normalise in the anti-corruption layer: a custody movement persists exactly one directional
+side.** Confirmed by reading the SQL rather than assuming: `v_custody_movements`'s `legs` CTE is a
+`UNION ALL` of the OUT and IN sides, so a row carrying both yields **two** legs on the same account,
+netting to zero against the same synthetic counterparty. The deposit lands nowhere, and nothing flags
+it, because a net of exactly zero leaves no imbalance to flag. Of the 42 Bit2Me deposits, 34 are EUR
+and genuinely harmless — `NOT IN (SELECT id FROM fiat_assets)` drops both legs — but 8 are crypto:
+HBAR ×4, USDC, XRP, ETH, ADA. The rule: a deposit keeps `amount_in = destino` and drops the OUT side;
+a withdrawal keeps `amount_out = destino` as the net moved, with the fee as `origen − destino` in the
+asset, and drops the IN side. That unifies Bit2Me with the `gross = net + fee` model of D24.
+*Rejected:* compensating in the DuckDB view, which must read an already-normalised ledger — otherwise
+the knowledge that one source duplicates sides is buried in SQL and repeated for the next such source.

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { DIContainer } from '../di/container.js';
+import { rebuildOutcomeSchema } from '../dtos/materialization.js';
 
 export function createPortfolioApi(container: DIContainer) {
   return new Hono()
@@ -53,8 +54,17 @@ export function createPortfolioApi(container: DIContainer) {
       zValidator('json', z.object({}).optional()),
       async (c) => {
         try {
-          await container.fifoMaterializerService.recalculate(true);
-          return c.json({ success: true }, 200);
+          // Forced: this endpoint is the retry, so it must not consult the pending marker it clears.
+          const materialization = await container.fifoMaterializerService.recalculate(true);
+
+          const body = rebuildOutcomeSchema.parse({
+            materialized: true,
+            materialization,
+            materializationError: null,
+            pendingReview: materialization.pendingReview,
+          });
+
+          return c.json(body, 200);
         } catch (error) {
           console.error('[PortfolioApi] Failed to rebuild metrics:', error);
           return c.json({ success: false, error: 'Internal Server Error' }, 500);

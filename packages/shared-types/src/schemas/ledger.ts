@@ -222,6 +222,15 @@ export type AccountId = string & { readonly __brand: 'AccountId' };
 export type AssetId = string & { readonly __brand: 'AssetId' };
 export type LotHistoryEventId = string & { readonly __brand: 'LotHistoryEventId' };
 
+/**
+ * The deterministic identity of a transaction, derived from the source row's own content.
+ *
+ * Distinct from `TransactionId`, which is the ledger's surrogate key: a re-ingestion of the same
+ * file produces a new `TransactionId` and the same `TransactionIdHash`, which is why user-authored
+ * overrides key on this one.
+ */
+export type TransactionIdHash = string & { readonly __brand: 'TransactionIdHash' };
+
 /** Create a strongly-typed TransactionId from a raw string */
 export function createTransactionId(id: string): TransactionId {
   if (!id || typeof id !== 'string') throw new Error(`Invalid TransactionId: "${id}"`);
@@ -238,6 +247,12 @@ export function createFuturesTransactionId(id: string): FuturesTransactionId {
 export function createTaxLotId(id: string): TaxLotId {
   if (!id || typeof id !== 'string') throw new Error(`Invalid TaxLotId: "${id}"`);
   return id as TaxLotId;
+}
+
+/** Create a strongly-typed TransactionIdHash from a raw string */
+export function createTransactionIdHash(idHash: string): TransactionIdHash {
+  if (!idHash || typeof idHash !== 'string') throw new Error(`Invalid TransactionIdHash: "${idHash}"`);
+  return idHash as TransactionIdHash;
 }
 
 /** Create a strongly-typed AccountId from a raw string */

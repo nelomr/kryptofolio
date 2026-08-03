@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { SpotTransactionSchema, FuturesTransactionSchema } from "../../src/schemas/ledger";
+import {
+  SpotTransactionSchema,
+  FuturesTransactionSchema,
+  createTransactionIdHash,
+} from "../../src/schemas/ledger";
 
 describe("Ledger Schemas", () => {
   describe("SpotTransactionSchema", () => {
@@ -94,5 +98,18 @@ describe("Ledger Schemas", () => {
       };
       expect(FuturesTransactionSchema.safeParse(invalid).success).toBe(false);
     });
+  });
+});
+
+describe("createTransactionIdHash", () => {
+  it("carries the deterministic transaction identity that overrides key on", () => {
+    expect(createTransactionIdHash("a3f1c2")).toBe("a3f1c2");
+  });
+
+  it("rejects an empty identity, which would silently apply an override to every row", () => {
+    // Matched on the full message on purpose: a bare /TransactionIdHash/ also matches
+    // "createTransactionIdHash is not a function", so the assertion would pass before the function
+    // existed at all.
+    expect(() => createTransactionIdHash("")).toThrow(/^Invalid TransactionIdHash/);
   });
 });

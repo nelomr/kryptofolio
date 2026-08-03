@@ -3,17 +3,18 @@
 Session log for `/openspec-apply-change`. Updated as each task group closes so an interrupted
 session can be resumed from here.
 
-**Total:** 126 tasks in 14 groups. **Complete: 73.**
+**Total:** 126 tasks in 14 groups. **Complete: 83.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
 
 ## Session summary
 
-Nine groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
+Ten groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
 ports), **3** (pure classification), **4** (migration `004`), **5** (policy-driven flattening),
 **6** (double-entry custody), **7** (materialisation reconciliation, which also discharged group 6's
-deferred 6.3), **8** (ingestion integrity and sub-accounts). Groups 9–13 remain.
+deferred 6.3), **8** (ingestion integrity and sub-accounts), **9** (automatic rebuild and overrides).
+Groups 10–14 remain.
 
 ### What was built
 
@@ -143,7 +144,7 @@ pnpm -F @kryptofolio/backend  exec vitest run --typecheck src/core/domain/ports/
 | 6 | DuckDB double-entry custody | ✅ done (58/126) — 6.3 discharged in group 7 |
 | 7 | Materialisation reconciliation | ✅ done (66/126) |
 | 8 | Ingestion integrity and sub-accounts | ✅ done (73/126) |
-| 9 | Automatic rebuild and overrides | ⬜ pending |
+| 9 | Automatic rebuild and overrides | ✅ done (83/126) |
 | 10 | Read path: status, provenance, custody | ⬜ pending |
 | 11 | Anti-corruption layer DTO realignment | ⬜ pending |
 | 12 | UI: status, custody, pending review | ⬜ pending |
@@ -1335,6 +1336,155 @@ Measured content — **materially relevant to group 13 and to design D9**:
 `WALLET_ACTIVATION` is live production data, not dead code, validating the group-2 decision to keep
 `flag` and `quality_flag` as separate columns.
 
+### Group 9 — Automatic rebuild and overrides ✅ 10/10
+
+| package | before | after |
+|---|---|---|
+| `packages/shared-types` | 38 passing, `tsc` clean | **40 passing**, `tsc` clean |
+| `packages/core-domain` | 69 passing, `tsc` clean | **69 passing**, `tsc` clean (untouched) |
+| `packages/database` | 112 passing, `tsc` clean | **112 passing**, `tsc` clean (untouched) |
+| `apps/frontend` | 271 passing | **271 passing** (untouched) |
+| `apps/backend` tests | 206 passing / 0 failing | **263 passing / 0 failing** |
+| `apps/backend` typecheck | 6 errors | **6 errors**, the same six, all owned by groups 10–11 |
+
+Measured with `pnpm --filter <pkg> test` per package and `tsc --noEmit` (plus
+`tsconfig.typecheck.json` for the three packages). `pnpm run test:packages` still aborts at
+`backend#build` on those six errors.
+
+#### What was built
+
+| layer | artefact |
+|---|---|
+| Application | `use-cases/IngestAndMaterializeUseCase.ts` — ingestion, then **one** rebuild, returning `{ ingestion, materialization, materialized, materializationError }` |
+| Application | `use-cases/overrides/OverrideMutation.ts` — `OverrideValidationError`, `OverrideMutationResult`, and the shared *validate → one transaction → one forced rebuild* shape |
+| Application | `SetManualPriceOverrideUseCase`, `RemoveManualPriceOverrideUseCase`, `SetTransferDestinationUseCase`, `RemoveTransferDestinationUseCase` — batched, branded inputs, no framework import |
+| Contracts | `shared-types`: `TransactionIdHash` + `createTransactionIdHash` |
+| Infrastructure | `dtos/materialization.ts` (rebuild/ingestion/override response schemas) and `dtos/overrides.ts` (inbound batches, built on the canonical ledger schemas) |
+| Infrastructure | `routes/fiscal.ts` — `PUT`/`DELETE /api/fiscal/overrides/{prices,destinations}`, mounted in `app.ts` |
+| Infrastructure | ingestion route now calls the orchestrator only; `POST /api/portfolio/rebuild` returns the same outcome shape |
+| DI | five new use cases registered in both the constructor and `setDuckDbAdapter` |
+
+#### Decisions taken
+
+1. **A rebuild is owed by `persisted > 0`, never by `rows.length`.** An empty batch and a batch whose
+   every row was rejected are the same fact — the ledger did not move — and both are covered by their
+   own test. This is the note group 8 left, made executable.
+2. **The override write commits *before* the rebuild, and the pending marker is set between them.**
+   `runInTransaction` returns having committed; the rebuild then opens its own. The marker is written
+   *before* the rebuild rather than after, because it lives in the settings database and therefore
+   cannot ride the ledger's rollback — so a rebuild that dies partway leaves it standing.
+3. **Override rebuilds are forced (`recalculate(true)`).** The user is waiting to see the effect of a
+   value they just declared; whether a rebuild is owed was decided by the act of declaring it.
+4. **A rejected declaration is `422`, not `500`.** `OverrideValidationError` is raised before any
+   write, from the use case, and names the account or the transaction. SQLite would also have rejected
+   both cases — a foreign key on the counterparty, `trg_transfer_dest_not_self_*` on the
+   self-reference — but only mid-batch and with a message about a constraint.
+5. **The whole batch is refused when one entry is invalid.** Validation runs over every entry before
+   the transaction opens, so a partially applied request cannot exist.
+6. **A failed automatic rebuild does not fail the request.** `POST /ingestion/transactions` still
+   returns `201`: the rows are valid and recorded, only the projection over them is stale. The
+   response carries `materialized: false` and the reason, and the marker stays `'true'`.
+7. **`TransactionIdHash` is a new brand rather than a reuse of `TransactionId`.** `TransactionId` is
+   the ledger's surrogate key; a re-ingestion produces a new one and the same hash, which is exactly
+   why overrides key on the hash. Calling both by one name would have made the distinction
+   unstateable — and it is the distinction "overrides survive re-ingestion" rests on.
+8. **The response DTOs live in `infrastructure/dtos/` and are parsed on the way out.** The
+   `automatic-portfolio-rebuild` scenario asks for Zod validation "before reaching the UI"; the
+   frontend half of that is 11.7. Server-side parsing means a summary that lost a field fails here
+   rather than showing the UI a missing count.
+9. **The ingestion response still has no structured `rejected` field.** Rejection reasons remain
+   appended to `message`, as group 8 left them: the response shape is a frontend DTO's, and extending
+   it is 10.6 / 11.7. The rebuild fields were added because the spec scenario names them explicitly.
+
+#### ⚠️ Spec wording amended: the flag cannot be cleared "in the same transaction"
+
+Both `automatic-portfolio-rebuild` ("Flag is cleared transactionally") and
+`fifo-materialization-reconciliation` ("Recalculation flag is cleared only on success") required the
+clear to happen *within the transaction that wrote the derived rows*. It cannot: the flag is read and
+written through `IUserSettingsPort` against the **settings** database while the derived tables live in
+the **ledger** database, and one SQLite transaction cannot span two files. The cross-cutting cleanup
+after group 7 had already removed the duplicate ledger `user_settings` table; only the wording was
+outstanding.
+
+Both scenarios now state the two guarantees that *are* achievable and that the retry behaviour actually
+depends on — cleared last, after every derived row is committed; left `'true'` when any earlier step
+fails — and each says why the stronger wording is not. `openspec validate --changes` passes.
+
+#### ⚠️ A fifth vacuous-pass trap, caught in my own first draft
+
+The Red run for `createTransactionIdHash` reported **one** failure where two were expected. The
+rejection test asserted `toThrow(/TransactionIdHash/)` — and
+`createTransactionIdHash is not a function` **contains that substring**, so it passed against a
+function that did not exist. Tightened to `/^Invalid TransactionIdHash/`, with a comment saying why.
+Same family as the four already recorded: an assertion that looks present and fires on the wrong thing.
+
+#### ⚠️ My "unpriceable" fixture was priced all along
+
+`OverrideMaterialization.spec.ts` first used **XRP** for the unpriced `STAKING` receipt and asserted
+`MISSING_PRICE`. Measured: the lot came back **`CURRENCY_MISMATCH`** with a basis of `2.006`. The repo
+ships real historical prices for XRP quoted in **USD**, so against an EUR ledger the receipt resolves
+and picks up the currency defect instead. Had the assertion been written the other way round it would
+have "passed" while testing a different flag. Replaced with `TSTCOIN`, an asset absent from the price
+parquet, and the reason is a comment in the fixture.
+
+A second assertion in the same file was wrong for a related reason: `pendingReview` after assigning a
+price is **1, not 0** — the withdrawal to an undeclared destination still leaves a custody residual,
+which is a separate declaration the user has not made. Now asserted as `before.pendingReview - 1`.
+
+#### The Red, honestly
+
+**52 of the 57 new tests failed on their own assertions before the code existed**, with a stub in place
+that answered wrongly. The breakdown per file:
+
+| file | Red | how |
+|---|---|---|
+| `IngestAndMaterializeUseCase.spec.ts` (12) | 4 | stub that always rebuilt and never caught: 2 clean assertion failures, 2 failing because the rebuild error propagated |
+| `ingestion.test.ts` (+4, 13 total) | 7 | route still called `csvIngestionUseCase` |
+| `portfolio.test.ts` (+2) | 2 | `{ success: true }` instead of the summary |
+| override use cases (23) | 17 | stub that rebuilt per entry, opened no transaction and validated nothing |
+| `fiscal.test.ts` (10) | 9 | route existed with one endpoint returning the wrong shape |
+| `OverrideMaterialization.spec.ts` (7) | 3 | genuinely Red against the real engine, see the fixture finding above |
+| `shared-types/ledger.spec.ts` (+2) | 1 | the other was the vacuous pass described above |
+
+**Every test that passed against its stub was pinned afterwards by a deliberate break** — applied to
+the shipped code, suite run, reverted:
+
+| break | tests it turned Red |
+|---|---|
+| rebuild once per persisted row | 3 (`exactly once`, `several files`, `never per row`) |
+| rebuild before ingestion | 8 |
+| summary not propagated to the result | 2 |
+| framework import added to the orchestrator + a `Materializer` reference added to `CsvIngestionUseCase` | 2 |
+| the `count === 0` guard removed | 4 (both empty-batch pairs) |
+| note dropped and the declared value pushed through `Number()` | 2 |
+| override written under `'mismatched-' + idHash` | 4 in the real-engine file |
+| every failure reported as a rejected declaration (422) | 1 |
+
+Three assertions are **not** covered by a break, and are recorded rather than claimed: `applied`
+arity on `CsvIngestionUseCase` (`length === 3`), `leaves the override table untouched across a rebuild`
+(an absence, already enforced by group 7's reconciliation scope), and
+`flags the unpriced receipt before any value is declared` (which failed for real during development —
+that is how the XRP finding surfaced).
+
+#### Pre-existing tests changed, deliberately
+
+1. **`ingestion.test.ts` was retargeted at the orchestrator.** Its container double now provides
+   `ingestAndMaterializeUseCase`, and keeps `csvIngestionUseCase` / `fifoMaterializerService` present
+   but unreachable — which is what the new "sequences nothing itself" test asserts.
+2. **`portfolio.test.ts`** gained two rebuild tests; no existing assertion was weakened.
+3. **`shared-types/tests/schemas/ledger.spec.ts`** gained a `createTransactionIdHash` describe.
+
+#### Two smaller findings
+
+1. **`erasableSyntaxOnly` forbids constructor parameter properties.** Both new use-case files were
+   first written with `constructor(private readonly x: T)` and produced 6 `TS1294` errors — briefly
+   taking the backend from 6 to 12. Rewritten as explicit fields plus assignments, matching every
+   existing use case. Worth knowing before writing the next one.
+2. **The rebuild endpoint's response shape was safe to change.** `RestCryptoAdapter` does
+   `await bffClient.api.portfolio.rebuild.$post()` and reads nothing from the body; the frontend suite
+   is unchanged at 271.
+
+
 ## Notes and decisions taken during apply
 
 - **A test that passed for the wrong reason was caught and fixed.** The "must not invent a 1.0
@@ -1501,25 +1651,22 @@ kept stable while the order changed. The group header says so.
 
 ## Resume here — next action
 
-73 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7 and 8 are closed. Group 14 holds 39 tasks
-and runs **before** group 13. **No task is left open in
-a closed group** — group 7 discharged 6.3.
+83 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8 and 9 are closed. Group 14 holds 39 tasks
+and runs **before** group 13. **No task is left open in a closed group.**
 
 ### Working tree state
 
-`@kryptofolio/backend` still does not compile: **6** `tsc` errors, down from 28 and unchanged by
-group 8. Every one is the intended consequence of the contract-first port change in group 2b, and
-every one belongs to a group that has not run yet. **Do not "fix" them ad hoc.** Every test suite in
-the repo is green.
+`@kryptofolio/backend` still does not compile: **6** `tsc` errors, unchanged by group 9 (it briefly
+introduced 6 more via constructor parameter properties, which `erasableSyntaxOnly` rejects; fixed).
+Every one belongs to a group that has not run yet. **Do not "fix" them ad hoc.**
 
 | package | state |
 |---|---|
-| `packages/shared-types` | ✅ 38/38 tests, `tsc --noEmit` clean |
-| `packages/core-domain` | ✅ 60/60 tests, `tsc --noEmit` clean |
-| `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean (was 118 before three tax tests moved to the backend) |
+| `packages/shared-types` | ✅ 40/40 tests, `tsc --noEmit` clean |
+| `packages/core-domain` | ✅ 69/69 tests, `tsc --noEmit` clean |
+| `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean |
 | `apps/frontend` | ✅ 271/271 tests |
-| `apps/backend` ports contract | ✅ 16 type assertions + 2 runtime, `Type Errors: no errors` |
-| `apps/backend` tests | ✅ **195 passing / 0 failing** — group 8 cleared the last two |
+| `apps/backend` tests | ✅ **263/263 passing** |
 | `apps/backend` (typecheck) | ❌ 6 errors, all owned by groups 10 and 11 |
 
 Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable proceeds — group 10),
@@ -1527,47 +1674,26 @@ Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable pro
 `ITaxCalculatorPort` mocks missing `calculateCustodyEntries` / `getDataQuality` (group 10) — and
 `mockPortfolio.ts` (2, missing `disposal_type` — group 11).
 
-### Next task: group 9 — automatic rebuild and overrides
+### Next task: group 10 — read path: canonical status, provenance, custody
 
-Group 9 owns tasks 9.1–9.10. **The tree is green everywhere except the 6 known typecheck errors**, so
-group 9 starts with no inherited Red — write yours.
+What group 9 leaves for it:
 
-What group 8 leaves for it:
-
-1. **`CsvIngestionUseCase.execute()` now returns `IngestionResult`**, exported from
-   `application/use-cases/CsvIngestionUseCase.ts`:
-   `{ persisted: number, rejected: IngestionRejection[], unresolvedFiat: number }`. Task 9.2's
-   `IngestAndMaterializeUseCase` must combine this with `MaterializationSummary`, and 9.4's route
-   response must carry both. `POST /ingestion/transactions` currently reports `processedCount:
-   result.persisted` and appends the rejection reasons to `message`; the rejections have **no
-   structured field in the HTTP response yet** — adding one is 10.6 / 11.7, since the response shape
-   is a frontend DTO's.
-2. **`needs_recalculation` is flagged when `persisted > 0`**, not `rows.length > 0`. 9.1's "an empty
-   batch triggers none" therefore also holds for a batch in which every row was rejected — worth a
-   test.
-3. **`ensureAccountExists` returns a resolved child account id.** Any use case that needs the account
-   a transaction actually landed on must read the return value, never re-derive it.
-4. The spec/design conflict on `needs_recalculation` living in the vault database (item 3 below) was
-   resolved by the cross-cutting cleanup; only the spec **wording** still needs amending.
-5. **Two open decisions were handed to group 13, not to group 9:** the 8.4 spec wording (unresolved
-   fiat cannot be `NULL` in a `NOT NULL` column) and `transfer_group_id`'s unreachable
-   `recorded_counterparty` tier. Both are written up in the group 8 entry.
-
-Two things group 8 and later groups should know about what group 7 changed:
-
-1. **`FifoMaterializerService.recalculate()` now returns `MaterializationSummary`**, exported from
-   `application/services/FifoMaterializerService.ts`. It is the payload the rebuild route must
-   serialise (9.4 / 10.x) and the DTO in group 11 must mirror it:
-   `{ taxLots, lotHistoryEvents, custodyEntries: ReconciliationSummary, flagged, pendingReview }`.
-   It contains no monetary value.
-2. **`ILedgerPort.runInTransaction<T>()` exists.** Any use case that must write several tables
-   atomically should compose through it rather than opening its own transaction. The override use
-   cases in 9.6–9.7 trigger an immediate rebuild; the rebuild opens its own transaction, so the
-   override write must commit *before* it, not inside it.
-3. **A spec/design conflict is waiting for group 9's decision:** `needs_recalculation` lives in the
-   *vault* database while the derived tables live in the *ledger* database, so the spec's "within the
-   same transaction" is unachievable as wired. The duplicate ledger `user_settings` table created by
-   migration 004 §4.9 has since been removed by the cross-cutting cleanup; the wording remains.
+1. **The four remaining backend type errors in group 10's files are now the only thing between
+   `pnpm run test:packages` and a full green run** (with `mockPortfolio.ts`, which is group 11's).
+2. **`IngestAndMaterializeUseCase` returns `{ ingestion, materialization, materialized,
+   materializationError }`**, and the HTTP shapes are already Zod-parsed in
+   `infrastructure/dtos/materialization.ts` (`rebuildOutcomeSchema`, `ingestionOutcomeSchema`,
+   `overrideOutcomeSchema`). Group 11's frontend DTOs should mirror these three rather than restate
+   them.
+3. **The ingestion response still lacks a structured `rejected` field** — 10.6 / 11.7 own it. The
+   reasons are currently concatenated into `message`, together with the rebuild failure reason.
+4. **New routes to cover in the read path and the UI:**
+   `PUT`/`DELETE /api/fiscal/overrides/prices` and `.../destinations`, all batched, all returning
+   `{ applied, materialization, pendingReview }`. `POST /api/portfolio/rebuild` now returns the
+   rebuild outcome instead of `{ success: true }`; the frontend adapter ignores the body today, so
+   group 12 can start reading it.
+5. **`getKpis()` at ~1450 ms on an empty ledger is still the open performance decision** recorded at
+   the end of this file, and it is group 10's read path.
 
 ### Standing reminders for every remaining group
 
@@ -1720,6 +1846,10 @@ The groups 1–6 commit was made with `--no-verify` for that reason, on a featur
   ledger `user_settings` table is gone and the flag is set through the port that owns it. The spec
   scenario's "same transaction" wording still needs amending to match what is physically possible.
   Original text follows.
+
+- ~~**Open spec defect (non-blocking), for group 9:**~~ **CLOSED in group 9** — both scenarios were
+  reworded to the two guarantees that are physically achievable across two SQLite files, each stating
+  why the stronger wording is not. Original text follows.
 
 - **Open spec defect (non-blocking), for group 9:** the `fifo-materialization-reconciliation` spec
   requires `needs_recalculation` to be cleared *"within the same transaction that wrote the derived

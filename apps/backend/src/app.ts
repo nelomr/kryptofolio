@@ -8,6 +8,7 @@ import { createPortfolioApi } from './core/infrastructure/routes/portfolio.js';
 import { createTaxApi } from './core/infrastructure/routes/tax.js';
 import { createMetricsApi } from './core/infrastructure/routes/metrics.js';
 import { createIngestionApi } from './core/infrastructure/routes/ingestion.js';
+import { createFiscalApi } from './core/infrastructure/routes/fiscal.js';
 import { container } from './core/infrastructure/di/container.js';
 
 export const app = new Hono<{
@@ -24,6 +25,7 @@ const routes = app
   .route('/tax', createTaxApi(container))
   .route('/metrics', createMetricsApi(container))
   .route('/ingestion', createIngestionApi(container))
+  .route('/fiscal', createFiscalApi(container))
   .route('/credentials', credentialsApi)
   .route('/settings', settingsApi)
   .route('/market', marketApi);

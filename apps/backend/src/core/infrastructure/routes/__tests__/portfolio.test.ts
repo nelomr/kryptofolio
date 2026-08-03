@@ -76,6 +76,56 @@ describe('Portfolio Route API', () => {
     expect(Array.isArray(body)).toBe(true);
   });
 
+  it('POST /portfolio/rebuild returns the same summary shape as the automatic path', async () => {
+    const res = await app.request('/portfolio/rebuild', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      materialized: boolean;
+      materializationError: string | null;
+      materialization: {
+        taxLots: Record<string, number>;
+        lotHistoryEvents: Record<string, number>;
+        custodyEntries: Record<string, number>;
+        flagged: number;
+        pendingReview: number;
+      } | null;
+    };
+
+    expect(body.materialized).toBe(true);
+    expect(body.materializationError).toBeNull();
+    expect(Object.keys(body.materialization?.taxLots ?? {}).sort()).toEqual([
+      'inserted',
+      'reactivated',
+      'retired',
+      'updated',
+    ]);
+    expect(body.materialization).toHaveProperty('lotHistoryEvents');
+    expect(body.materialization).toHaveProperty('custodyEntries');
+    expect(typeof body.materialization?.pendingReview).toBe('number');
+  });
+
+  it('POST /portfolio/rebuild runs regardless of the pending flag', async () => {
+    // The manual endpoint is the retry, so it must not consult the marker that the automatic path
+    // uses to decide whether a rebuild is owed.
+    await container.userSettingsPort.setSetting('needs_recalculation', 'false');
+
+    const res = await app.request('/portfolio/rebuild', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { materialized: boolean };
+    expect(body.materialized).toBe(true);
+    expect(await container.userSettingsPort.getSetting('needs_recalculation')).toBe('false');
+  });
+
   it('GET /portfolio/derivatives/pnl returns derivatives pnl array', async () => {
     const res = await app.request('/portfolio/derivatives/pnl');
     expect(res.status).toBe(200);
