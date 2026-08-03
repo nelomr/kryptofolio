@@ -39,7 +39,8 @@ function makePort(
     }),
     calculateLotsAndEvents: vi.fn().mockResolvedValue({ lots: [], events }),
     calculateCustodyEntries: vi.fn().mockResolvedValue([]),
-    getLotCustodyLocations: vi.fn().mockResolvedValue([]),
+    getLotCustodyLocations: vi.fn(),
+    getLotCustodyTimeline: vi.fn().mockResolvedValue([]),
     getDataQuality: vi.fn().mockResolvedValue([]),
   };
 }
@@ -55,7 +56,8 @@ describe('[Strict Hexagonal] GetSpanishTaxReportUseCase', () => {
         excludedFlaggedEvents: 0,
       }),
       calculateCustodyEntries: vi.fn().mockResolvedValue([]),
-      getLotCustodyLocations: vi.fn().mockResolvedValue([]),
+      getLotCustodyLocations: vi.fn(),
+      getLotCustodyTimeline: vi.fn().mockResolvedValue([]),
       getDataQuality: vi.fn().mockResolvedValue([]),
       calculateLotsAndEvents: vi.fn().mockResolvedValue({
         lots: [],

@@ -192,6 +192,52 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     expect(debit?.occurred_at).toBe('2024-02-01T10:00:00.000Z');
   });
 
+  // The lot's custody *timeline*: where it has been, as against where it is now.
+  it('returns one relocation per allocated movement leg, with both ends named', async () => {
+    seedCustodyMovement();
+    const rows = await adapter.getLotCustodyTimeline();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.from_account_id).toBe('acc-1');
+    expect(rows[0]?.from_account_name).toBe('Exchange A');
+    expect(rows[0]?.from_is_synthetic).toBe(false);
+    expect(rows[0]?.to_account_id).toBe('ownwallet-BTC');
+    expect(rows[0]?.to_is_synthetic).toBe(true);
+    expect(rows[0]?.occurred_at).toBe('2024-02-01T10:00:00.000Z');
+    expect(Number(rows[0]?.qty)).toBeCloseTo(4, 9);
+    expect(typeof rows[0]?.qty).toBe('string');
+    expect(rows[0]?.tax_lot_id).toBeTruthy();
+    expect(rows[0]?.spot_transaction_id).toBe('tx-out');
+  });
+
+  it('reports no relocation for a lot that never moved', async () => {
+    sqliteDb.exec(`
+      INSERT INTO assets (id, symbol, is_fiat) VALUES ('BTC', 'BTC', 0), ('EUR', 'EUR', 1);
+      INSERT INTO accounts (id, name, type) VALUES ('acc-1', 'Exchange A', 'exchange');
+      INSERT INTO spot_transactions
+        (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat,
+         fiat_currency, timestamp, status)
+      VALUES
+        ('tx-buy', 'h-buy', 'acc-1', 'BUY', 'BTC', '10', '10000', '1000', 'EUR',
+         '2024-01-01T10:00:00.000Z', 'COMPLETED');
+    `);
+
+    expect(await adapter.getLotCustodyTimeline()).toEqual([]);
+  });
+
+  it('scopes the timeline to an account on either end of the movement', async () => {
+    seedCustodyMovement();
+
+    expect(await adapter.getLotCustodyTimeline('acc-1')).toHaveLength(1);
+    expect(await adapter.getLotCustodyTimeline('ownwallet-BTC')).toHaveLength(1);
+    expect(await adapter.getLotCustodyTimeline('acc-2')).toEqual([]);
+  });
+
+  it('[SQL Injection] getLotCustodyTimeline with a malicious accountId returns safely', async () => {
+    seedCustodyMovement();
+    expect(await adapter.getLotCustodyTimeline("'; DROP TABLE tax_lots; --")).toEqual([]);
+  });
+
   it('scopes custody entries to the requested account', async () => {
     seedCustodyMovement();
     const rows = await adapter.calculateCustodyEntries('acc-1');

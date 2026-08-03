@@ -3,6 +3,8 @@ import { mount } from '@vue/test-utils'
 import TaxReportView from './TaxReportView.vue'
 import TaxReportHeader from './components/TaxReportHeader.vue'
 import TaxReportSummaryCards from './components/TaxReportSummaryCards.vue'
+import IntegrityCard from './components/IntegrityCard.vue'
+import PendingValuesReview from './components/PendingValuesReview.vue'
 
 
 // Mock the composable
@@ -41,6 +43,49 @@ vi.mock('@/composables/queries/useTaxQueries', async () => {
     useFuturesDerivativesQuery: vi.fn(() => ({ data: vue.ref([]), isLoading: vue.ref(false) })),
     useTaxReportQuery: vi.fn(() => ({ data: vue.ref(null), isLoading: vue.ref(false) })),
     useAvailableYearsQuery: vi.fn(() => ({ data: vue.ref([2024]), isLoading: vue.ref(false) })),
+    useFiscalIntegrityQuery: vi.fn(() => ({
+      data: vue.ref({
+        groups: [],
+        totalDefects: 0,
+        pendingReview: 0,
+        needsRecalculation: false,
+      }),
+      isLoading: vue.ref(false),
+      refresh: vi.fn(),
+    })),
+  }
+})
+
+vi.mock('@/composables/queries/useTaxMutations', async () => {
+  const vue = await import('vue')
+  const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isLoading: vue.ref(false) })
+  return {
+    useSetManualPriceOverrideMutation: vi.fn(mutation),
+    useSetTransferDestinationMutation: vi.fn(mutation),
+  }
+})
+
+vi.mock('@/composables/queries/useSettingsQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useSelectableAccountsQuery: vi.fn(() => ({
+      data: vue.ref([
+        { id: 'kraken', name: 'Kraken', type: 'exchange', parentAccountId: null },
+        { id: 'kraken:earn', name: 'Kraken / earn', type: 'exchange', parentAccountId: 'kraken' },
+      ]),
+      isLoading: vue.ref(false),
+    })),
+  }
+})
+
+vi.mock('@/composables/queries/usePortfolioQueries', async () => {
+  const vue = await import('vue')
+  return {
+    useRebuildMutation: vi.fn(() => ({
+      mutate: vi.fn(),
+      mutateAsync: vi.fn(),
+      isLoading: vue.ref(false),
+    })),
   }
 })
 
@@ -57,7 +102,19 @@ describe('TaxReportView.vue', () => {
 
     expect(wrapper.findComponent(TaxReportHeader).exists()).toBe(true)
     expect(wrapper.findComponent(TaxReportSummaryCards).exists()).toBe(true)
-    // expect(wrapper.findComponent(IntegrityCard).exists()).toBe(true) // TODO: IntegrityCard functionality pending
+    expect(wrapper.findComponent(IntegrityCard).exists()).toBe(true)
+    expect(wrapper.findComponent(PendingValuesReview).exists()).toBe(true)
+  })
+
+  it('feeds the destination picker from the selectable-accounts query', () => {
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    expect(wrapper.findComponent(PendingValuesReview).props('accounts')).toEqual([
+      { id: 'kraken', name: 'Kraken' },
+      { id: 'kraken:earn', name: 'Kraken / earn' },
+    ])
   })
 
   it('renders Tabs navigation', () => {

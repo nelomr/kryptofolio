@@ -1,6 +1,7 @@
 import type {
   ITaxCalculatorPort,
   LotCustodyLocationRow,
+  LotCustodyRelocationRow,
 } from '../../domain/ports/ITaxCalculatorPort.js';
 import type {
   DisposalType,
@@ -25,6 +26,16 @@ export interface TokenLotDto {
   unit_cost: number;
   total_cost: number;
   status: TaxLotStatus;
+  /**
+   * Defect on this lot's own basis, if any.
+   *
+   * Load-bearing rather than informational: when it is set, `unit_cost` and `total_cost` were forced
+   * to `0` by the view because the column cannot be null, so reading the figure without this field
+   * turns an unresolved basis into a free acquisition.
+   */
+  quality_flag: FifoQualityFlag | null;
+  /** Whether the basis was observed from market data or declared by the user. */
+  value_provenance?: ManualValueProvenance;
   /** Where the quantity sits now. Empty when nothing has moved and the projection has no row. */
   custody: TokenLotCustodyDto[];
 }
@@ -35,6 +46,24 @@ export interface TokenLotCustodyDto {
   is_synthetic: boolean;
   parent_account_id: string | null;
   qty: number;
+}
+
+/**
+ * One relocation of a lot, for the merged Level 3 timeline.
+ *
+ * Carries no valuation of any kind, and cannot be widened to carry one: a movement between the
+ * user's own accounts realises nothing, so there is no price, gain or loss to report.
+ */
+export interface TokenLotRelocationDto {
+  id: string;
+  occurred_at: string;
+  qty: number;
+  from_account_id: string;
+  from_account_name: string;
+  from_is_synthetic: boolean;
+  to_account_id: string;
+  to_account_name: string;
+  to_is_synthetic: boolean;
 }
 
 export interface TokenLotHistoryEventDto {
@@ -58,6 +87,12 @@ export interface TokenLotHistoryEventDto {
 export interface GetTokenHistoryResponse {
   lots: TokenLotDto[];
   history: Record<string, TokenLotHistoryEventDto[]>;
+  /**
+   * Keyed by lot id, like `history`, and deliberately a second map rather than entries appended to
+   * it: a relocation is not a `lot_history_event` and merging them on the wire would lose the
+   * distinction the view has to draw.
+   */
+  relocations: Record<string, TokenLotRelocationDto[]>;
 }
 
 export class GetTokenHistoryUseCase {
@@ -71,9 +106,10 @@ export class GetTokenHistoryUseCase {
     const { symbol, accountId } = req;
     const symbolUpper = symbol.toUpperCase();
 
-    const [{ lots, events }, custodyLocations] = await Promise.all([
+    const [{ lots, events }, custodyLocations, relocations] = await Promise.all([
       this.taxCalculatorPort.calculateLotsAndEvents(accountId),
       this.taxCalculatorPort.getLotCustodyLocations(accountId),
+      this.taxCalculatorPort.getLotCustodyTimeline(accountId),
     ]);
 
     const custodyByLot = groupCustodyByLot(custodyLocations);
@@ -97,11 +133,15 @@ export class GetTokenHistoryUseCase {
         unit_cost: Number(lot.unit_cost_fiat),
         total_cost: Number(lot.total_cost_fiat),
         status: lot.status,
+        quality_flag: lot.quality_flag ?? null,
+        value_provenance: lot.value_provenance,
         custody: custodyByLot.get(lotId) ?? [],
       };
     });
 
-    const targetLotIds = new Set(targetLots.map((l) => l.id).filter(Boolean));
+    const targetLotIds = new Set(
+      targetLots.map((l) => l.id).filter((id): id is string => Boolean(id)),
+    );
 
     const historyMap: Record<string, TokenLotHistoryEventDto[]> = {};
 
@@ -137,8 +177,40 @@ export class GetTokenHistoryUseCase {
     return {
       lots: lotDtos,
       history: historyMap,
+      relocations: groupRelocationsByLot(relocations, targetLotIds),
     };
   }
+}
+
+/**
+ * Scoped to the lots being returned: the custody timeline is asset-wide, and a caller asking for one
+ * symbol has no use for another asset's movements.
+ */
+function groupRelocationsByLot(
+  rows: readonly LotCustodyRelocationRow[],
+  lotIds: ReadonlySet<string>,
+): Record<string, TokenLotRelocationDto[]> {
+  const byLot: Record<string, TokenLotRelocationDto[]> = {};
+
+  for (const row of rows) {
+    if (!lotIds.has(row.tax_lot_id)) continue;
+
+    const bucket = byLot[row.tax_lot_id] ?? [];
+    bucket.push({
+      id: `${row.spot_transaction_id ?? row.occurred_at}-${row.tax_lot_id}-${row.to_account_id}`,
+      occurred_at: row.occurred_at,
+      qty: Number(row.qty),
+      from_account_id: row.from_account_id,
+      from_account_name: row.from_account_name,
+      from_is_synthetic: row.from_is_synthetic,
+      to_account_id: row.to_account_id,
+      to_account_name: row.to_account_name,
+      to_is_synthetic: row.to_is_synthetic,
+    });
+    byLot[row.tax_lot_id] = bucket;
+  }
+
+  return byLot;
 }
 
 /**

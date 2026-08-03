@@ -13,7 +13,14 @@
 
 import { errorBus } from './errorBus'
 
-export type TaxOperationErrorCode = 'UPLOAD_FAILED' | 'DELETE_FAILED' | 'IMPORT_FAILED' | 'SYNC_FAILED' | 'DOWNLOAD_FAILED'
+export type TaxOperationErrorCode =
+  | 'UPLOAD_FAILED'
+  | 'DELETE_FAILED'
+  | 'IMPORT_FAILED'
+  | 'SYNC_FAILED'
+  | 'DOWNLOAD_FAILED'
+  // A declaration the backend refused: the user's to correct, not a server fault.
+  | 'OVERRIDE_REJECTED'
 
 export class TaxOperationError extends Error {
   readonly code: TaxOperationErrorCode

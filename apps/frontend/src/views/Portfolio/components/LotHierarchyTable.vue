@@ -23,13 +23,26 @@ import TableSkeleton from "./table/TableSkeleton.vue";
 import ExpandedLotsTable from "./table/ExpandedLotsTable.vue";
 import { createColumns } from "./table/columns";
 import type { HoldingEntity } from "@/core/domain/models/PortfolioEntities";
+import type {
+  LotRelocationEntity,
+  TaxLotEntity,
+  TaxLotHistoryEvent,
+} from "@/core/domain/models/FiscalEntities";
 import { useI18n } from '@/composables/useI18n';
+
+/** Per-symbol lot detail, fetched lazily as Level 1 rows are expanded. */
+interface HoldingDetails {
+  lots?: TaxLotEntity[];
+  history?: Record<string, TaxLotHistoryEvent[]>;
+  relocations?: Record<string, LotRelocationEntity[]>;
+  isLoading?: boolean;
+}
 
 const props = defineProps<{
   data: HoldingEntity[];
   isLoading?: boolean;
   onExpand?: (symbol: string) => void;
-  detailsMap?: Record<string, any>;
+  detailsMap?: Record<string, HoldingDetails | undefined>;
 }>();
 
 const emit = defineEmits(['expandRow']);
@@ -186,6 +199,7 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
                       "
                       :lots="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.lots"
                       :tokenHistory="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.history"
+                      :tokenRelocations="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.relocations"
                       :isLoadingDetails="props.detailsMap?.[table.getRowModel().rows[virtualRow.index].original.symbol]?.isLoading"
                     />
                   </TableCell>

@@ -14,6 +14,11 @@ import type { ITaxPort } from "@/core/domain/ports/ITaxPort";
 
 function createMockTaxPort(): ITaxPort {
   return {
+    getFiscalIntegrity: vi.fn(),
+    setManualPriceOverrides: vi.fn(),
+    removeManualPriceOverrides: vi.fn(),
+    setTransferDestinations: vi.fn(),
+    removeTransferDestinations: vi.fn(),
     getSpotTransactions: vi.fn(),
     getFuturesTransactions: vi.fn(),
     getFuturesDerivatives: vi.fn(),

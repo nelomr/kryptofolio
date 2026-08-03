@@ -306,7 +306,7 @@ const {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    class="text-primary hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                    class="text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
                     :title="t('tax.col.actions')"
                     @click="emit('edit', tx)"
                   >

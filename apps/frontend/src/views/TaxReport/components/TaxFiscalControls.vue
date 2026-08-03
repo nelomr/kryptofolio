@@ -83,7 +83,7 @@ const downloadFormats = [
     <CardHeader class="pb-3">
       <div class="flex items-center gap-2">
         <span class="flex items-center justify-center rounded border border-primary/20 bg-primary/10 p-1">
-          <CalendarDays class="h-3.5 w-3.5 text-primary" />
+          <CalendarDays class="h-3.5 w-3.5 text-muted-foreground" />
         </span>
         <div class="flex-1">
           <CardTitle class="text-xs font-black uppercase tracking-widest text-foreground">
@@ -116,7 +116,7 @@ const downloadFormats = [
           </Select>
           <!-- Loading indicator for the reactive select -->
           <div v-if="isLoading" class="absolute -right-6 top-[28px]">
-             <Loader2 class="h-4 w-4 animate-spin text-primary" />
+             <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         </div>
 

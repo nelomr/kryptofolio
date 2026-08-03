@@ -223,17 +223,70 @@ export const es: I18nDictionary = {
   "expanded_lots.total_cost": "Coste Total",
   "expanded_lots.buy": "COMPRA",
   "expanded_lots.sold": "VENDIDO",
-  "expanded_lots.ai_insight": "💡 AI Insight",
+  "expanded_lots.ai_insight": "AI Insight",
   "expanded_lots.tax_loss": "Tax-Loss Harvesting",
   "expanded_lots.tax_loss_desc": " antes del cierre fiscal.",
   "expanded_lots.no_lots": "No se han encontrado lotes fiscales detallados",
   "expanded_lots.view_history": "Ver historial del lote",
   "expanded_lots.unknown_exchange": "Desconocido",
 
-  // Lot Status
+  // Lot Status — el vocabulario canónico OPEN | PARTIAL | CLOSED
   "lot_status.open": "ABIERTO",
   "lot_status.partial": "PARCIAL",
-  "lot_status.sold": "VENDIDO",
+  "lot_status.closed": "CERRADO",
+
+  // Tipos de disposición — por qué se consumió el lote
+  "disposal_type.sell": "VENTA",
+  "disposal_type.swap": "PERMUTA",
+  "disposal_type.fee": "COMISIÓN",
+  "disposal_type.spend": "GASTO",
+
+  // Custodia — dónde está ahora la cantidad del lote, frente a dónde se adquirió
+  "custody.acquired_at": "Plataforma de adquisición",
+  "custody.held_in": "Custodiado en",
+  "custody.synthetic": "Autocustodia",
+  "custody.synthetic_desc":
+    "No se registró destino para este movimiento, así que la cantidad se atribuye a una cuenta sintética de autocustodia. Declara el destino real para resolverlo.",
+  "custody.sub_wallet": "Subcuenta",
+  "custody.sub_wallet_desc":
+    "Custodiado en una subcuenta de la plataforma, como una cartera de staking o earn. El saldo de la cuenta padre no cambia.",
+  "custody.relocation": "Traslado",
+  "custody.no_pnl":
+    "Los movimientos de custodia no son transmisiones y no generan ganancia ni pérdida.",
+
+  // Procedencia del valor manual
+  "value_provenance.manual": "Declarado",
+  "value_provenance.manual_desc":
+    "Esta cifra se asignó a mano, no se observó en datos de mercado.",
+
+  // Marcas de calidad del dato — una etiqueta y una explicación por cada FIFO_QUALITY_FLAGS
+  "fifo_quality.missing_price.label": "Sin precio",
+  "fifo_quality.missing_price.explanation":
+    "No se pudo resolver un precio de mercado para esta operación, por lo que su valor es desconocido, no cero. Los eventos afectados quedan excluidos de la base fiscal hasta que se asigne un valor.",
+  "fifo_quality.currency_mismatch.label": "Divisa incoherente",
+  "fifo_quality.currency_mismatch.explanation":
+    "La divisa de la operación no coincide con la de su comisión o su serie de precios. No se aplicó ninguna conversión y los eventos afectados quedan excluidos de la base fiscal.",
+  "fifo_quality.custody_residual.label": "Residuo de custodia",
+  "fifo_quality.custody_residual.explanation":
+    "Una cuenta de autocustodia mantiene más de lo que explican los movimientos registrados. La cantidad es autocustodia real o una comisión de red no registrada.",
+  "fifo_quality.untracked_inflow.label": "Entrada sin origen",
+  "fifo_quality.untracked_inflow.explanation":
+    "Llegó más de lo que salió de cuentas conocidas, así que existe una tenencia sin coste de adquisición establecido. Declara la cuenta de origen del movimiento para resolverlo.",
+  "fifo_quality.custody_imbalance.label": "Descuadre de custodia",
+  "fifo_quality.custody_imbalance.explanation":
+    "La custodia agregada difiere del saldo registrado de esta cuenta para el activo más allá de la tolerancia de precisión.",
+  "fifo_quality.negative_cost_basis.label": "Coste negativo",
+  "fifo_quality.negative_cost_basis.explanation":
+    "El coste de adquisición de este lote es negativo, lo que es un defecto del dato y no una entrada válida. Las ganancias derivadas de él se suprimen.",
+  "fifo_quality.orphan_lot.label": "Lote huérfano",
+  "fifo_quality.orphan_lot.explanation":
+    "La transacción de origen de esta fila derivada ya no existe, por lo que la última reconstrucción la retiró.",
+  "fifo_quality.unknown_tx_type.label": "Tipo desconocido",
+  "fifo_quality.unknown_tx_type.explanation":
+    "El tipo de operación de origen no se pudo asignar a ninguno conocido, así que la fila se rechazó en lugar de suponerlo.",
+  "fifo_quality.unresolved_basis.label": "Coste sin verificar",
+  "fifo_quality.unresolved_basis.explanation":
+    "El coste de adquisición de este lote no es una cifra positiva, por lo que no se puede derivar ninguna ganancia ni pérdida.",
 
   // Token Details
   "token.no_details": "No hay detalles disponibles para este activo.",
@@ -318,6 +371,21 @@ export const es: I18nDictionary = {
   "tax.integrity.analyzing": "Analizando integridad de datos...",
   "tax.integrity.healthy":
     "Los datos fiscales son consistentes. No se detectaron anomalías.",
+  "tax.integrity.pending_review":
+    "filas pendientes de tu intervención. Los informes siguen disponibles mientras tanto.",
+  "tax.integrity.needs_recalculation":
+    "Las cifras derivadas están pendientes de recálculo y pueden estar desactualizadas.",
+
+  // Revisión de valores pendientes
+  "tax.pending.title": "Pendiente de tu intervención",
+  "tax.pending.excluded_notice":
+    "Estas operaciones quedan excluidas de la base fiscal hasta que se declare un valor o un destino.",
+  "tax.pending.none": "No hay nada pendiente de tu intervención.",
+  "tax.pending.declare_price": "Declarar valor",
+  "tax.pending.declare_destination": "Declarar destino",
+  "tax.pending.price_placeholder": "0,00",
+  "tax.pending.select_account": "Selecciona una cuenta",
+  "tax.pending.save": "Guardar",
 
   "tax.tabs.ledgers": "Libros de Operaciones",
   "tax.tabs.report": "Auditoría e Informes",

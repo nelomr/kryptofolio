@@ -238,7 +238,7 @@ When 100 XRP leave `Kraken:spot`, the quantity is drawn from the oldest lots *cu
 
 ### D5b — Data-quality flags are a new column, not a reuse of `flag`
 
-`lot_history_events.flag` is already live with a different meaning: `WALLET_ACTIVATION`, produced by `TangemCsvParser` and consumed by `useTaxCalculations.ts:160`, `LotEventHistory.vue:30`, `TaxTransactionsTable.vue:133` and three test files, for the AEAT audit trail. Reusing that column for data-quality defects would delete a working fiscal feature.
+`lot_history_events.flag` is already live with a different meaning: `WALLET_ACTIVATION`, consumed by `useTaxCalculations.ts:160`, `LotEventHistory.vue:30`, `TaxTransactionsTable.vue:133` and three test files, for the AEAT audit trail. It has **no producer** in the running application — `TangemCsvParser` was the only code that ever emitted it and nothing outside tests imports it, so the flag arrives from persisted data alone until the source-format profiles emit it. Reusing that column for data-quality defects would still delete a working fiscal feature: the consumers are live even though the producer is not.
 
 ```
    flag          — FISCAL CLASSIFICATION   (existing, preserved)

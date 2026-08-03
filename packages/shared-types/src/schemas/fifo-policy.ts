@@ -114,8 +114,10 @@ export type DisposalType = (typeof DISPOSAL_TYPES)[number];
 /**
  * Fiscal classification: what kind of event this is.
  *
- * `WALLET_ACTIVATION` is load-bearing — produced by `TangemCsvParser` and consumed for the AEAT
- * audit trail. It must never be folded into the data-quality vocabulary below.
+ * `WALLET_ACTIVATION` is load-bearing — it is consumed for the AEAT audit trail and must never be
+ * folded into the data-quality vocabulary below. It currently has **no producer** in the running
+ * application: the only code that ever emitted it is reachable from tests alone. The source-format
+ * profiles are what will emit it.
  */
 export const FISCAL_CLASSIFICATION_FLAGS = ['WALLET_ACTIVATION'] as const;
 export type FiscalClassificationFlag = (typeof FISCAL_CLASSIFICATION_FLAGS)[number];

@@ -139,6 +139,39 @@ export interface LotCustodyLocation {
 }
 
 // ---------------------------------------------------------------------------
+// LotRelocationEntity — one custody movement of a lot (Level 3, second source)
+// ---------------------------------------------------------------------------
+
+/**
+ * A quantity of a lot leaving one account for another.
+ *
+ * There is deliberately no price, gain, loss or taxability field, and there must never be one: a
+ * movement between the user's own accounts realises nothing. That is also why this is not a
+ * `TaxLotHistoryEvent` — the event policy emits none for a custody movement.
+ */
+export interface LotRelocationEntity {
+  id: string
+  occurredAt: Date
+  /** Magnitude moved, never signed: a relocation consumes nothing. */
+  qty: number
+  fromAccountId: AccountId
+  fromAccountName: string
+  fromIsSynthetic: boolean
+  toAccountId: AccountId
+  toAccountName: string
+  /** True when the destination is the synthetic counterparty an unrecorded movement resolves to. */
+  toIsSynthetic: boolean
+}
+
+/**
+ * A Level 3 row: the lot's history is two record types merged by date, never one shape with optional
+ * fields — a discriminated union is what stops a relocation being read as a disposal.
+ */
+export type LotTimelineRow =
+  | { kind: 'DISPOSAL'; occurredAt: Date; event: TaxLotHistoryEvent }
+  | { kind: 'RELOCATION'; occurredAt: Date; relocation: LotRelocationEntity }
+
+// ---------------------------------------------------------------------------
 // TaxLotEntity — FIFO tax lot (Level 2)
 // ---------------------------------------------------------------------------
 
@@ -161,6 +194,15 @@ export interface TaxLotEntity {
   totalCost: number
   /** Canonical lot status, passed through from the calculation engine unchanged */
   status: TaxLotStatus
+  /**
+   * Defect on this lot's own basis, if any.
+   *
+   * When set, `unitCost` and `totalCost` arrive as `0` because the persisted column cannot be null —
+   * so presenting either figure without consulting this field reports an unknown basis as free.
+   */
+  qualityFlag?: FifoQualityFlag | null
+  /** Whether the basis was observed from market data or declared by the user */
+  valueProvenance?: ManualValueProvenance
   /** Present-day custody per account. Empty when nothing has moved and the projection has no row. */
   currentLocations: LotCustodyLocation[]
 }

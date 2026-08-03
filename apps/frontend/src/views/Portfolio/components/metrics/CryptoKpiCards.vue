@@ -3,6 +3,7 @@ import { inject } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { CRYPTO_METRICS_PORT_KEY } from '@/core/injectionKeys'
 import KpiCard from './KpiCard.vue'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useI18n } from '@/composables/useI18n'
 import { formatCurrency } from '@/composables/useFormatters'
 
@@ -30,8 +31,8 @@ const formatPercent = (val?: number) => {
 
 <template>
   <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-    <!-- Skeleton loader -->
-    <div v-for="i in 4" :key="i" class="h-40 bg-surface-2 animate-pulse rounded-3xl border border-border-soft"></div>
+    <!-- Same height and radius as a loaded KPI card, so the grid does not shift. -->
+    <Skeleton v-for="i in 4" :key="i" class="h-40 w-full rounded-3xl" />
   </div>
   
   <div v-else-if="error" class="mb-6 p-6 bg-loss-soft text-loss rounded-3xl border border-loss-soft">

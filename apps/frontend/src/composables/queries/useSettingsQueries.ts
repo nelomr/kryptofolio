@@ -95,21 +95,21 @@ export function useExchangeRateQuery(
 }
 
 /**
- * useSupportedAccountsQuery
+ * useSelectableAccountsQuery
  *
- * Fetches the supported accounts configuration.
+ * The accounts a user may pick in a selector. Read straight from the port, per CQRS.
  */
-export function useSupportedAccountsQuery() {
+export function useSelectableAccountsQuery() {
   const settingsPort = inject(SETTINGS_PORT_KEY);
 
   if (!settingsPort) {
-    throw new Error('[useSupportedAccountsQuery] Required port ISettingsPort is not provided.');
+    throw new Error('[useSelectableAccountsQuery] Required port ISettingsPort is not provided.');
   }
 
   return useQuery({
-    key: ['settings', 'supported_accounts'],
+    key: ['settings', 'selectable_accounts'],
     query: async () => {
-      return await settingsPort.getSupportedAccounts();
+      return await settingsPort.getSelectableAccounts();
     },
     staleTime: 5 * 60 * 1000,
   });

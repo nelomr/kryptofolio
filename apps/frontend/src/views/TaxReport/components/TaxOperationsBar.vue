@@ -84,7 +84,7 @@ const isAnyLoading = computed(
       >
         <div class="flex flex-col gap-0.5">
           <h3
-            class="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5"
+            class="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-1.5"
           >
             <span class="rounded border border-primary/20 bg-primary/10 p-1">
               <Upload class="h-3 w-3" />
@@ -129,7 +129,7 @@ const isAnyLoading = computed(
       >
         <div class="flex flex-col gap-0.5">
           <h3
-            class="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-1.5"
+            class="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-1.5"
           >
             <span class="rounded border border-primary/20 bg-primary/10 p-1">
               <Link class="h-3 w-3" />

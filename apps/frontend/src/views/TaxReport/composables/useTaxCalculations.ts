@@ -8,7 +8,14 @@
 
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
-import type { TaxTransactionEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
+import { FLAG_SEVERITY } from '@kryptofolio/shared-types'
+import type { DisposalType, FifoQualityFlag, FlagSeverity } from '@kryptofolio/shared-types'
+import type {
+  LotRelocationEntity,
+  LotTimelineRow,
+  TaxTransactionEntity,
+  TaxLotHistoryEvent,
+} from '@/core/domain/models/FiscalEntities'
 
 // ---------------------------------------------------------------------------
 // useSmartYearLogic
@@ -199,4 +206,106 @@ export function gainLossClass(value: number | null): string {
   if (value > 0) return 'text-profit'
   if (value < 0) return 'text-loss'
   return 'text-muted-foreground'
+}
+
+// ---------------------------------------------------------------------------
+// Data-quality presentation — severity comes from FLAG_SEVERITY, never from a local ranking.
+// ---------------------------------------------------------------------------
+
+/** Severity of a defect. Delegates to the shared map so no consumer invents its own ordering. */
+export function qualityFlagSeverity(flag: FifoQualityFlag): FlagSeverity {
+  return FLAG_SEVERITY[flag]
+}
+
+/** Ascending, so the highest severity present on a set of flags can be picked without a comparator. */
+const SEVERITY_RANK: Record<FlagSeverity, number> = { low: 0, medium: 1, high: 2 }
+
+/** The prominence a group of defects earns is the prominence of its worst member. */
+export function highestSeverity(flags: readonly FifoQualityFlag[]): FlagSeverity | null {
+  let worst: FlagSeverity | null = null
+  for (const flag of flags) {
+    const severity = FLAG_SEVERITY[flag]
+    if (worst === null || SEVERITY_RANK[severity] > SEVERITY_RANK[worst]) worst = severity
+  }
+  return worst
+}
+
+/** Visual weight per severity. `high` borrows the loss colour because the figure cannot be trusted. */
+export const SEVERITY_CLASSES: Record<FlagSeverity, string> = {
+  low: 'text-muted-foreground',
+  medium: 'text-warning',
+  high: 'text-loss',
+}
+
+const SEVERITY_DOT: Record<FlagSeverity, string> = {
+  low: 'bg-muted-foreground',
+  medium: 'bg-warning',
+  high: 'bg-loss',
+}
+
+export function severityDotClass(severity: FlagSeverity): string {
+  return SEVERITY_DOT[severity]
+}
+
+/**
+ * i18n key for a defect's short label.
+ *
+ * A flag with no explanation is a code the user cannot act on, so the two keys are generated as a
+ * pair and the dictionary test asserts both exist for every vocabulary member.
+ */
+export function qualityFlagLabelKey(flag: FifoQualityFlag): string {
+  return `fifo_quality.${flag.toLowerCase()}.label`
+}
+
+/** i18n key explaining what the defect means and what it excludes from the tax base. */
+export function qualityFlagExplanationKey(flag: FifoQualityFlag): string {
+  return `fifo_quality.${flag.toLowerCase()}.explanation`
+}
+
+/** i18n key for a disposal's real nature — a network fee is not a sale. */
+export function disposalTypeLabelKey(disposalType: DisposalType): string {
+  return `disposal_type.${disposalType.toLowerCase()}`
+}
+
+/**
+ * Level 3 as one chronological sequence.
+ *
+ * The two sources are structurally different records — a disposal consumes the lot, a relocation only
+ * changes who holds it — so they are merged as a discriminated union. Widening one shape to cover
+ * both would make "a relocation with a gain" expressible, which is precisely the confusion the
+ * custody model exists to prevent.
+ */
+export function mergeLotTimeline(
+  events: readonly TaxLotHistoryEvent[],
+  relocations: readonly LotRelocationEntity[],
+): LotTimelineRow[] {
+  const rows: LotTimelineRow[] = [
+    ...events.map((event): LotTimelineRow => ({
+      kind: 'DISPOSAL',
+      occurredAt: event.disposalDate,
+      event,
+    })),
+    ...relocations.map((relocation): LotTimelineRow => ({
+      kind: 'RELOCATION',
+      occurredAt: relocation.occurredAt,
+      relocation,
+    })),
+  ]
+
+  return rows.sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
+}
+
+/**
+ * Whether a lot's cost basis can carry a profit-or-loss judgement.
+ *
+ * A flagged lot arrives with its basis forced to `0` because the persisted column is non-nullable, so
+ * a zero is ambiguous on its own: it is either a genuinely free acquisition or a figure nobody could
+ * resolve. Either way it cannot support a comparison against the current price.
+ */
+export function hasTrustworthyBasis(lot: {
+  unitCost: number
+  qualityFlag?: FifoQualityFlag | null
+}): boolean {
+  if (lot.qualityFlag) return false
+  return lot.unitCost > 0
 }

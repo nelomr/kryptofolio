@@ -91,7 +91,7 @@ const { heatmapCells, stats, getCellBg } = useVolatilityGrid(data);
                         :class="getCellBg(day.returnPercent)"
                       ></div>
                     </TooltipTrigger>
-                    <TooltipContent side="top" class="bg-primary text-primary-foreground border-primary">
+                    <TooltipContent side="top">
                       <div class="flex flex-col gap-1 p-1">
                         <span class="font-semibold">{{ day.dateStr }}</span>
                         <span
@@ -152,7 +152,7 @@ const { heatmapCells, stats, getCellBg } = useVolatilityGrid(data);
               <TooltipTrigger asChild>
                 <span class="font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.volatility.stats.best_day') }}</span>
               </TooltipTrigger>
-              <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <TooltipContent side="top">
                 <span class="text-xs max-w-[200px] block text-center font-sans normal-case tracking-normal">{{ t('metrics.volatility.stats.best_day_desc') }}</span>
               </TooltipContent>
             </Tooltip>
@@ -165,7 +165,7 @@ const { heatmapCells, stats, getCellBg } = useVolatilityGrid(data);
               <TooltipTrigger asChild>
                 <span class="font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.volatility.stats.worst_day') }}</span>
               </TooltipTrigger>
-              <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <TooltipContent side="top">
                 <span class="text-xs max-w-[200px] block text-center font-sans normal-case tracking-normal">{{ t('metrics.volatility.stats.worst_day_desc') }}</span>
               </TooltipContent>
             </Tooltip>
@@ -178,7 +178,7 @@ const { heatmapCells, stats, getCellBg } = useVolatilityGrid(data);
               <TooltipTrigger asChild>
                 <span class="font-mono text-[11px] tracking-[0.18em] uppercase text-muted-foreground underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.volatility.stats.bullish_days') }}</span>
               </TooltipTrigger>
-              <TooltipContent side="top" class="bg-brand text-white border-brand">
+              <TooltipContent side="top">
                 <span class="text-xs max-w-[200px] block text-center font-sans normal-case tracking-normal">{{ t('metrics.volatility.stats.bullish_days_desc') }}</span>
               </TooltipContent>
             </Tooltip>

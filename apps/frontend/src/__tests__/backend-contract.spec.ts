@@ -28,10 +28,12 @@ describe('Backend contract — canonical status vocabulary', () => {
     const openLot: TokenLotDto = {
       id: 'lot-1', symbol: 'XRP', date: '2024-01-01', exchange: 'Kraken',
       original_qty: 179.11, remaining_qty: 179.11, unit_cost: 1.6724, total_cost: 299.46,
-      status: 'OPEN', custody: [],
+      status: 'OPEN', quality_flag: null, custody: [],
     }
     const closedLot: TokenLotDto = { ...openLot, id: 'lot-2', status: 'CLOSED', remaining_qty: 0 }
-    const backendResponse: GetTokenHistoryResponse = { lots: [openLot, closedLot], history: {} }
+    const backendResponse: GetTokenHistoryResponse = {
+      lots: [openLot, closedLot], history: {}, relocations: {},
+    }
 
     const result = ExternalTokenHistorySchema.safeParse(backendResponse)
     expect(result.success).toBe(true)
@@ -100,7 +102,7 @@ describe('Backend contract — a backend field with no frontend counterpart is c
     const sample: TokenLotDto = {
       id: 'x', symbol: 'BTC', date: '2024-01-01', exchange: 'Kraken',
       original_qty: 1, remaining_qty: 1, unit_cost: 1, total_cost: 1,
-      status: 'OPEN', custody: [],
+      status: 'OPEN', quality_flag: null, custody: [],
     }
     const backendKeys = Object.keys(sample).sort()
     const declaredKeys = Object.keys(ExternalTaxLotShape.shape).sort()

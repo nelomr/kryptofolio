@@ -18,7 +18,7 @@ defineProps<{
 <template>
   <section>
     <h3 class="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_10px_var(--color-primary)] opacity-80"></span>
+      <span class="w-2 h-2 rounded-full bg-primary/30"></span>
       {{ t('token.active_lots.title') }}
     </h3>
     <div class="overflow-x-auto rounded-lg border border-border/20 bg-card shadow-inner">

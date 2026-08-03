@@ -19,6 +19,10 @@ vi.mock('../../di/container', () => ({
     updateActiveMarketProviderUseCase: {
       execute: vi.fn(),
     },
+    ledgerPort: {
+      getAccounts: vi.fn(),
+      ensureAccountExists: vi.fn(),
+    },
   },
 }));
 
@@ -93,6 +97,48 @@ describe('Settings API', () => {
       const res = await app.request('/settings/exchange-rate/usd_eur');
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ key: 'usd_eur', rate: null, date: null });
+    });
+  });
+
+  describe('GET /settings/accounts', () => {
+    const LEDGER_ACCOUNTS = [
+      { id: 'kraken', name: 'Kraken', type: 'exchange', parentAccountId: null, isSynthetic: false },
+      { id: 'kraken:earn', name: 'Kraken / earn', type: 'exchange', parentAccountId: 'kraken', isSynthetic: false },
+      { id: 'ownwallet-XRP', name: 'Own Wallet XRP', type: 'wallet', parentAccountId: null, isSynthetic: true },
+    ];
+
+    it('omits synthetic accounts, which are custody counterparties and not selectable', async () => {
+      vi.mocked(container.ledgerPort.getAccounts).mockResolvedValue(LEDGER_ACCOUNTS);
+
+      const res = await app.request('/settings/accounts');
+      const body = await res.json() as { accounts: { value: string }[] };
+
+      expect(res.status).toBe(200);
+      expect(body.accounts.map((a) => a.value)).not.toContain('ownwallet-XRP');
+      expect(body.accounts).toHaveLength(2);
+    });
+
+    it('carries the parent account id so a sub-wallet can render under its venue', async () => {
+      vi.mocked(container.ledgerPort.getAccounts).mockResolvedValue(LEDGER_ACCOUNTS);
+
+      const res = await app.request('/settings/accounts');
+      const body = await res.json() as {
+        accounts: { value: string; label: string; type: string; parentAccountId: string | null }[];
+      };
+
+      expect(body.accounts).toEqual([
+        { value: 'kraken', label: 'Kraken', type: 'exchange', parentAccountId: null },
+        { value: 'kraken:earn', label: 'Kraken / earn', type: 'exchange', parentAccountId: 'kraken' },
+      ]);
+    });
+
+    it('reports a read failure instead of presenting an empty account list as the truth', async () => {
+      vi.mocked(container.ledgerPort.getAccounts).mockRejectedValueOnce(new Error('ledger unavailable'));
+
+      const res = await app.request('/settings/accounts');
+
+      expect(res.status).toBe(500);
+      expect(await res.json()).toMatchObject({ error: 'FAILED_TO_READ_ACCOUNTS' });
     });
   });
 });

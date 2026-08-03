@@ -147,16 +147,56 @@ verified, and D26 records the reasoning.
 
 ## 12. UI — Correct Status, Custody, and Pending Review
 
-- [ ] 12.1 Write component tests: `status = 'OPEN'` renders the open label without the `profit` variant; `status = 'CLOSED'` renders the closed label; a `MISSING_PRICE` lot renders a data-quality indicator and no tax-loss suggestion; a `FEE` event renders a fee indicator and not `SELL`; a manually assigned figure renders its marker
-- [ ] 12.2 Delete `getLotStatus`, `getLotBadgeVariant`, and `getLotStatusText` from `ExpandedLotsTable.vue` and render `lot.status` directly with a correct label and variant mapping
-- [ ] 12.3 Guard `isLotInLoss` so a zero, negative, or flagged basis renders the data-quality indicator instead of a profit/loss judgement
-- [ ] 12.4 Display split custody per account on Level 2 rows, marking synthetic accounts and staking sub-wallets distinctly, alongside the acquiring venue
-- [ ] 12.5 Render `disposalType`, non-taxable badges, flag severity, and manual-value markers in `LotEventHistory.vue`; render custody relocations with origin and destination and no P&L figure
-- [ ] 12.6 Add a colocated `PendingValuesReview` component under the owning view's `components/` directory listing pending rows with an assignment affordance, using Shadcn `<Card>` wrappers and `<Skeleton>` loading states that match the final geometry
-- [ ] 12.7 Wire the fiscal-integrity card and the pending-review surface via Pinia Colada `useQuery`, and the override submissions via `useMutation` — no global Pinia store
-- [ ] 12.8 Surface the `needs_recalculation` pending indicator and the explicit rebuild action
-- [ ] 12.9 Add i18n keys for `lot_status.closed`, disposal types, every quality flag with its explanation, manual-value markers, and custody labels in both `es.ts` and `en.ts`; remove the inverted `lot_status.open`/`lot_status.sold` usages
-- [ ] 12.10 Verify tests 12.1 pass and confirm DESIGN.md compliance: mono for all numerics, no raw `animate-pulse`, brand colour used at most twice per view
+- [x] 12.1 Write component tests: `status = 'OPEN'` renders the open label without the `profit` variant; `status = 'CLOSED'` renders the closed label; a `MISSING_PRICE` lot renders a data-quality indicator and no tax-loss suggestion; a `FEE` event renders a fee indicator and not `SELL`; a manually assigned figure renders its marker
+- [x] 12.2 Delete `getLotStatus`, `getLotBadgeVariant`, and `getLotStatusText` from `ExpandedLotsTable.vue` and render `lot.status` directly with a correct label and variant mapping
+- [x] 12.3 Guard `isLotInLoss` so a zero, negative, or flagged basis renders the data-quality indicator instead of a profit/loss judgement
+- [x] 12.4 Display split custody per account on Level 2 rows, marking synthetic accounts and staking sub-wallets distinctly, alongside the acquiring venue
+- [x] 12.5 Render `disposalType`, non-taxable badges, flag severity, and manual-value markers in `LotEventHistory.vue`; ~~render custody relocations with origin and destination and no P&L figure~~ — **second clause is unachievable and is a spec contradiction, not an omission:** `lot-custody-traceability` requires that a custody movement produce **no** `lot_history_event` ("Movement does not consume the lot"), so no Level 3 row for a relocation exists to render. `TaxLotHistoryEvent` has no origin/destination field and `DISPOSAL_TYPES` has no relocation member, by design. Custody is surfaced on the Level 2 row instead (12.4), where the projection actually lives. See the group 12 entry in `progress-apply.md`
+- [x] 12.6 Add a colocated `PendingValuesReview` component under the owning view's `components/` directory listing pending rows with an assignment affordance, using Shadcn `<Card>` wrappers and `<Skeleton>` loading states that match the final geometry
+- [x] 12.7 Wire the fiscal-integrity card and the pending-review surface via Pinia Colada `useQuery`, and the override submissions via `useMutation` — no global Pinia store
+- [x] 12.8 Surface the `needs_recalculation` pending indicator and the explicit rebuild action
+- [x] 12.9 Add i18n keys for `lot_status.closed`, disposal types, every quality flag with its explanation, manual-value markers, and custody labels in both `es.ts` and `en.ts`; remove the inverted `lot_status.open`/`lot_status.sold` usages
+- [x] 12.10 Verify tests 12.1 pass and confirm DESIGN.md compliance: mono for all numerics, no raw `animate-pulse`, brand colour used at most twice per view
+
+### Added after group 12 — four findings from its own audit, all verified
+
+Group 12 surfaced these while closing 12.1–12.10. Each is measured, not suspected. The first two are
+defects with an unambiguous fix; the last two were approved as designs before work began.
+
+- [x] 12.11 **`GET /accounts` discards data the `account-hierarchy` spec requires, and cannot filter what the spec forbids.** `ILedgerPort.getAccounts()` returns `{ id, name, type, parentAccountId, isSynthetic }`, but `routes/settings.ts:160` maps it to `{ value: acc.id, label: acc.name }` — dropping both `isSynthetic` and `parentAccountId`. `account-hierarchy/spec.md:53` states synthetic accounts "SHALL be excluded from user-facing account selectors and account counts", with two scenarios of its own, and nothing downstream can honour it because the flag never arrives. Verified live path: `useSupportedAccountsQuery` → `accountOptions` → the account `Select` in the wizard's step 1, so the first `ownwallet-<ASSET>` account group 14 creates would appear as an ingestible account. Return the full shape, exclude synthetic accounts from this endpoint, and expose `parentAccountId` so sub-wallets can render hierarchically. Write the test first, asserting a synthetic account is absent and a child account carries its parent
+- [x] 12.12 **This also unblocks the destination picker 12.7 left without a data source.** With 12.11 landed, add the frontend accounts port method, its Zod DTO and its Pinia Colada query, and feed the `PendingValuesReview` destination selector from it. Assert a synthetic account is not offered as a destination — declaring a movement's destination to be "unknown" is meaningless, and it is the case the override exists to correct
+- [x] 12.13 **Remove a comment that states something false.** `packages/shared-types/src/schemas/fifo-policy.ts:117` and `design.md:241` both say `WALLET_ACTIVATION` is "produced by `TangemCsvParser`". That parser is unreachable and group 14.47 deletes it, so **nothing in the running application produces the flag today**; 14.15 will be its producer. Originally deferred to 14.48 to land with the deletion, pulled forward because it costs nothing and until then the code asserts a falsehood a reader could rely on. Correct both statements; do not touch the parser itself, that is 14.47's
+
+#### 12e. The brand budget becomes measurable, then enforced
+
+`DESIGN.md` rule 3 said "a maximum of twice per view" without defining a use, so the violation was
+unactionable — a raw token count reads 34 in Portfolio and 27 in TaxReport, but that counts
+`border-primary/10` hairlines the same as a solid `bg-brand` fill. Rule 3 now carries an operational
+definition: a **saturated, resting** application (no opacity or ≥ 50%), with `hover:` states and
+opacities ≤ 40% exempt because §1.3's token table already sanctions those contexts.
+
+Measured under that definition: **Portfolio 34, TaxReport 27, against a budget of 2.** Concentrated in
+`TaxOperationsBar.vue` (4), `TaxFiscalControls.vue` (4), `VolatilityHeatmap.vue` (4),
+`PerformanceHistory.vue` (4), `ExpandedLotsTable.vue` (3), then seven files with one or two each.
+
+- [x] 12.14 **Write the enforcement test first** — it is the only part that makes this survive. Count saturated resting brand applications per view directory and fail above the budget. Without it any reduction unwinds within a few commits, and the rule returns to being decorative. Assert the definition's exemptions explicitly: a `hover:` application and a `/10` hairline must both pass
+- [x] 12.15 Reduce the concentrated over-spend, in this order: `VolatilityHeatmap.vue`'s four `bg-brand text-white` tooltips become `bg-popover`, matching every other tooltip in the project — a tooltip is not a brand moment; then the 3.5 px `text-primary` icons in `TaxFiscalControls.vue` and `TaxOperationsBar.vue` become `text-muted-foreground`, since a decorative glyph is not hierarchy. Take a visual pass per file rather than a blind find-and-replace
+- [x] 12.16 Choose and record the two survivors per view. Proposed, subject to a visual check: in **Portfolio**, the expansion chevron — it is the table's primary affordance — noting the Level 2 left border is `border-primary/40` and therefore already exempt, so Portfolio may end at one. In **TaxReport**, the primary action button in `TaxOperationsBar`. Record the choice in `DESIGN.md` beside rule 3 so the next reader inherits the intent and not just the count
+- [x] 12.17 Verify 12.14 passes with every view inside budget, and that no view lost a needed affordance — the point is fewer brand moments, not a colourless interface
+
+#### 12f. Level 3 becomes the lot's custody history, not just its disposals
+
+The `hierarchical-table` spec wanted a Level 3 row per custody relocation while
+`lot-custody-traceability` requires custody movements to emit **no** `lot_history_event` — so as
+written there was no row to render. Resolved by widening what Level 3 is rather than withdrawing the
+scenario: Level 2's `currentLocations` answers *where the lot is now*, and only a merged timeline
+answers *where it has been*, which is the traceability this entire change is named for. The data
+already exists in `v_lot_custody_allocation`. The spec has been amended to say so explicitly.
+
+- [x] 12.18 Write the tests first: a lot bought, relocated, partially sold and relocated again renders four Level 3 rows in date order; disposals and relocations are visually distinguishable; a relocation shows origin and destination and **no** profit-or-loss figure; a lot that never moved renders its disposals alone with no empty relocation section
+- [x] 12.19 Add the custody-timeline read path: an `ITaxCalculatorPort` method returning per-lot relocations from `v_lot_custody_allocation` (`occurred_at`, `qty_delta`, origin and destination accounts, synthetic marker), its backend DTO, and the port method plus Zod DTO on the frontend. Ports before adapters, per D18
+- [x] 12.20 Merge the two sources in the Level 3 component, ordered by date, with a discriminated union rather than an optional-field bag so a relocation cannot be mistaken for a disposal at the type level. Reuse `LotEventHistory.vue`'s existing quality-flag and provenance rendering; do not fork it
+- [x] 12.21 Verify 12.18 passes, `pnpm --filter @kryptofolio/frontend run typecheck` is 0, and the `any` count in `apps/frontend` is still 0
 
 ## 14. Source Fidelity and Multi-Leg Integrity
 

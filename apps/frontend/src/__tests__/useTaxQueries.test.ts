@@ -43,6 +43,11 @@ const mockReport: TaxReportEntity = {
 
 function createMockTaxPort(): ITaxPort {
   return {
+    getFiscalIntegrity: vi.fn(),
+    setManualPriceOverrides: vi.fn(),
+    removeManualPriceOverrides: vi.fn(),
+    setTransferDestinations: vi.fn(),
+    removeTransferDestinations: vi.fn(),
     getSpotTransactions: vi.fn().mockResolvedValue([mockTx]),
     getFuturesTransactions: vi.fn().mockResolvedValue([mockTx]),
     getFuturesDerivatives: vi.fn().mockResolvedValue([]),

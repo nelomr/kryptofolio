@@ -1,6 +1,8 @@
 import type { ISettingsPort } from '@/core/domain/ports/ISettingsPort';
 import type { FiatCurrency } from '@kryptofolio/core-domain';
 import { bffClient } from '@/core/infrastructure/http/BffClient';
+import type { SelectableAccountEntity } from '@/core/domain/models/AccountEntities';
+import { parseSelectableAccounts } from '@/core/infrastructure/dtos/SettingsSchemas';
 
 /**
  * RestSettingsAdapter — Infrastructure adapter implementing ISettingsPort.
@@ -104,15 +106,13 @@ export class RestSettingsAdapter implements ISettingsPort {
     }
   }
 
-  async getSupportedAccounts(): Promise<{ value: string; label: string }[]> {
-    try {
-      const res = await bffClient.api.settings.accounts.$get();
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data as { accounts: { value: string; label: string }[] }).accounts ?? [];
-    } catch {
-      return [];
+  async getSelectableAccounts(): Promise<SelectableAccountEntity[]> {
+    const res = await bffClient.api.settings.accounts.$get();
+    // A failed read is not an empty ledger. Swallowing it would present "no accounts" as fact.
+    if (!res.ok) {
+      throw new Error('FAILED_TO_READ_ACCOUNTS');
     }
+    return parseSelectableAccounts(await res.json());
   }
 
   async setSupportedAccounts(accounts: { value: string; label: string }[]): Promise<void> {

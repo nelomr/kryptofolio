@@ -10,7 +10,7 @@
  */
 
 import type { AssetId } from './BrandedTypes'
-import type { TaxLotEntity, TaxLotHistoryEvent } from './FiscalEntities'
+import type { LotRelocationEntity, TaxLotEntity, TaxLotHistoryEvent } from './FiscalEntities'
 
 // ---------------------------------------------------------------------------
 // CryptoAssetEntity — single holding in the portfolio (Level 1)
@@ -104,6 +104,13 @@ export interface TokenHistoryEntity {
    * Each key is a LotId string, value is the ordered list of disposal events.
    */
   history: Record<string, TaxLotHistoryEvent[]>
+  /**
+   * Custody relocations keyed by lot ID — the second half of Level 3.
+   *
+   * A separate map rather than entries inside `history`, because a relocation is not a disposal
+   * event and the view has to tell them apart.
+   */
+  relocations: Record<string, LotRelocationEntity[]>
 }
 
 // ---------------------------------------------------------------------------

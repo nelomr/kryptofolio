@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ExternalTaxLotSchema,
   ExternalTaxLotHistorySchema,
+  ExternalTokenHistorySchema,
 } from '../ExternalTaxSchemas'
 
 describe('ExternalTaxLotSchema — canonical status vocabulary', () => {
@@ -264,5 +265,61 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
       expect(result.data.salePriceEur).toBe(0)
       expect(result.data.gainLossEur).toBe(0)
     }
+  })
+})
+
+describe('ExternalTokenHistorySchema — the custody timeline arrives beside the disposals', () => {
+  const RELOCATION = {
+    id: 'tx-move-lot-1-ownwallet-XRP',
+    occurred_at: '2024-03-01T10:00:00.000Z',
+    qty: 50,
+    from_account_id: 'kraken',
+    from_account_name: 'Kraken',
+    from_is_synthetic: false,
+    to_account_id: 'ownwallet-XRP',
+    to_account_name: 'ownwallet-XRP',
+    to_is_synthetic: true,
+  }
+
+  it('maps a relocation onto the domain entity', () => {
+    const result = ExternalTokenHistorySchema.safeParse({
+      lots: [],
+      history: {},
+      relocations: { 'lot-1': [RELOCATION] },
+    })
+
+    expect(result.success).toBe(true)
+    const move = result.data?.relocations['lot-1']?.[0]
+    expect(move?.occurredAt).toBeInstanceOf(Date)
+    expect(move?.qty).toBe(50)
+    expect(move?.fromAccountName).toBe('Kraken')
+    expect(move?.toIsSynthetic).toBe(true)
+  })
+
+  it('declares no valuation key on a relocation', () => {
+    const result = ExternalTokenHistorySchema.safeParse({
+      relocations: { 'lot-1': [RELOCATION] },
+    })
+    const move = result.data?.relocations['lot-1']?.[0]
+
+    expect(Object.keys(move ?? {})).not.toContain('salePriceEur')
+    expect(Object.keys(move ?? {})).not.toContain('gainLossEur')
+    expect(Object.keys(move ?? {})).not.toContain('isTaxable')
+  })
+
+  it('defaults to no relocations rather than to undefined, so the view can iterate', () => {
+    const result = ExternalTokenHistorySchema.safeParse({ lots: [], history: {} })
+
+    expect(result.success).toBe(true)
+    expect(result.data?.relocations).toEqual({})
+  })
+
+  it('rejects a relocation with no destination account', () => {
+    const { to_account_id: _omitted, ...withoutDestination } = RELOCATION
+    const result = ExternalTokenHistorySchema.safeParse({
+      relocations: { 'lot-1': [withoutDestination] },
+    })
+
+    expect(result.success).toBe(false)
   })
 })

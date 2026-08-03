@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import TaxReportHeader from "./components/TaxReportHeader.vue";
 import TaxReportSummaryCards from "./components/TaxReportSummaryCards.vue";
 
@@ -10,12 +10,82 @@ import TaxDerivativesTable from "./components/TaxDerivativesTable.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataIngestionWizard } from "@/modules/data-ingestion";
 import { BookText, FileText, MessageSquare } from "lucide-vue-next";
+import IntegrityCard from "./components/IntegrityCard.vue";
+import PendingValuesReview from "./components/PendingValuesReview.vue";
 import { useTaxReportPort } from "./composables/useTaxReportPort";
 import { useTaxLedgers } from "./composables/useTaxLedgers";
+import { useFiscalIntegrityQuery } from "@/composables/queries/useTaxQueries";
+import {
+  useSetManualPriceOverrideMutation,
+  useSetTransferDestinationMutation,
+} from "@/composables/queries/useTaxMutations";
+import { useRebuildMutation } from "@/composables/queries/usePortfolioQueries";
+import { useSelectableAccountsQuery } from "@/composables/queries/useSettingsQueries";
 import { useI18n } from "@/composables/useI18n";
+import type { AccountId, TransactionIdHash } from "@/core/domain/models/BrandedTypes";
 
 const { t } = useI18n();
 const { metrics, syncWeb3, selectedYear, effectiveYear } = useTaxReportPort();
+
+// Declarative reads and writes only — no fiscal state is held in a global store.
+const {
+  data: integrityReport,
+  isLoading: integrityLoading,
+  refresh: refreshIntegrity,
+} = useFiscalIntegrityQuery();
+const setPriceOverride = useSetManualPriceOverrideMutation();
+const setDestinationOverride = useSetTransferDestinationMutation();
+const rebuild = useRebuildMutation();
+
+const { data: selectableAccounts } = useSelectableAccountsQuery();
+
+// The picker needs a name and an id; the hierarchy fields are irrelevant to a destination choice.
+const destinationAccounts = computed(() =>
+  (selectableAccounts.value ?? []).map((account) => ({
+    id: account.id,
+    name: account.name,
+  })),
+);
+
+const pendingRows = computed(
+  () => integrityReport.value?.groups.flatMap((group) => group.rows) ?? [],
+);
+
+const isSubmittingOverride = computed(
+  () => setPriceOverride.isLoading.value || setDestinationOverride.isLoading.value,
+);
+
+function declarePrice(payload: {
+  idHash: string;
+  priceFiat: string;
+  fiatCurrency: string;
+}) {
+  setPriceOverride.mutate([
+    {
+      idHash: payload.idHash as TransactionIdHash,
+      priceFiat: payload.priceFiat,
+      fiatCurrency: payload.fiatCurrency,
+    },
+  ]);
+}
+
+function declareDestination(payload: {
+  idHash: string;
+  counterpartyAccountId: string;
+}) {
+  setDestinationOverride.mutate([
+    {
+      idHash: payload.idHash as TransactionIdHash,
+      counterpartyAccountId: payload.counterpartyAccountId as AccountId,
+    },
+  ]);
+}
+
+async function runRebuild() {
+  await rebuild.mutateAsync();
+  // The defect counts are derived, so they only become current once the rebuild has finished.
+  await refreshIntegrity();
+}
 
 const {
   spotLoading,
@@ -117,9 +187,21 @@ const isUploadModalOpen = ref(false);
       </TabsList>
 
       <TabsContent value="ledgers" class="space-y-4 mt-4">
-        <!-- Integrity summary card (Fiscal Hospital) TODO: Functionality not implemented yet 
-        <IntegrityCard :warnings="warnings" :isLoading="isLoading" />
-        -->
+        <IntegrityCard
+          :report="integrityReport ?? null"
+          :isLoading="integrityLoading"
+          :isRebuilding="rebuild.isLoading.value"
+          @rebuild="runRebuild"
+        />
+
+        <PendingValuesReview
+          :rows="pendingRows"
+          :accounts="destinationAccounts"
+          :isLoading="integrityLoading"
+          :isSubmitting="isSubmittingOverride"
+          @assignPrice="declarePrice"
+          @assignDestination="declareDestination"
+        />
 
         <!-- Operations Ledgers Sub-Tabs -->
         <Tabs v-model="activeMarket" class="space-y-4 mt-4">

@@ -170,7 +170,7 @@ export function useUpdateSupportedAccountsMutation() {
       return accounts;
     },
     onSuccess: () => {
-      queryCache.invalidateQueries({ key: ['settings', 'supported_accounts'] });
+      queryCache.invalidateQueries({ key: ['settings', 'selectable_accounts'] });
       const label = i18nPort?.translate('settings.accounts.success') ?? 'Accounts updated successfully';
       toast.success(label);
     },

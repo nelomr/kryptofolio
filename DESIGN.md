@@ -305,6 +305,15 @@ Typical usage:
 1. **Light only.** The background is never dark. Not even for emphasis — emphasis is gained through size and weight.
 2. **Mono is law.** If the character is a digit, it uses `font-mono`. No exceptions.
 3. **Budgeted brand.** The brand color is used a maximum of twice per view. The rest of the color comes from profit/loss/neutral.
+
+   *What counts as a use:* a **saturated, resting** application of `--brand` or Shadcn's `primary` — a solid fill, border or text at no opacity or ≥ 50%. One `class` attribute is one use: a fill and its matching border dress a single element, so they are one brand moment. Deliberately exempt, because §1.3 already sanctions them as contexts: any transient-state variant (`hover:`, `group-hover/name:`, `focus:`, `focus-visible:`, `active:` — the view at rest does not carry the colour, and §1.3 lists focus as a brand context); opacities ≤ 40%, and the `brand-soft` / `brand-medium` tokens whose alpha is already 0.08 and 0.14 (hairlines and tinted backgrounds — the "main lines" and "tinted backgrounds, soft badges" rows of the token table); and `primary-foreground`, which is the contrast colour laid *over* brand rather than an application of it. Counting a `border-primary/10` rule the same as a `bg-brand` fill produces a number nobody can act on.
+
+   *Enforced* by `apps/frontend/src/__tests__/brand-budget.spec.ts`, which counts per view directory and fails above the budget. **Its blind spot, stated so it is not mistaken for a clean bill of health:** it reads brand tokens written in view files, so brand delivered through a Shadcn variant default (`<Button variant="default">`) is invisible to it. Keep those deliberate too.
+
+   *The surviving choices, so the next reader inherits the intent and not just the count:*
+   - **Portfolio (2).** The expansion chevron in `ExpandedLotsTable.vue` — the table's primary affordance, and the one thing a user must find to reach a lot's detail — and the Level 2 left border in the same file, which is the only thing tying an expanded block to the row that owns it. Nothing else in the view spends brand: tooltips, section bullets and numeric totals earn emphasis from size, weight and the mono font.
+   - **TaxReport (1 counted, 2 intended).** The active fiscal-year pill in `TaxFiscalControls.vue` — the report is meaningless without knowing which year it covers, so that filter is worth a brand moment — plus the primary ingestion button in `TaxOperationsBar.vue`, which is brand through `<Button variant="default">` and therefore uncounted.
+   - **Settings (0).** It spends none, and needs none.
 4. **One idea per card.** Cards are not stacked: each has a single headline and a single message.
 5. **Data over decoration.** Charts always display real numbers from the brief; never generic placeholders.
 6. **Breathing spacing.** No value less than `space-4` (16 px) from the edge of its card. Density is achieved through typography and color, not padding.

@@ -6,12 +6,27 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
-import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
-import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
+import type {
+  ITaxPort,
+  ManualPriceOverrideInput,
+  TransferDestinationInput,
+} from '@/core/domain/ports/ITaxPort'
+import type {
+  TaxTransactionEntity,
+  TaxReportEntity,
+  TaxDerivativeEntity,
+  FiscalIntegrityReportEntity,
+  OverrideOutcomeEntity,
+} from '@/core/domain/models/FiscalEntities'
+import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 import {
   ExternalTaxTransactionSchema,
   ExternalTaxReportSchema,
 } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
+import {
+  ExternalFiscalIntegritySchema,
+  ExternalOverrideOutcomeSchema,
+} from '@/core/infrastructure/dtos/FiscalIntegritySchemas'
 import { CexFuturesLedgerSchema } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
@@ -230,5 +245,77 @@ export class RestTaxAdapter implements ITaxPort {
     } catch (err) {
       throw new TaxOperationError('DOWNLOAD_FAILED', `Report download failed: ${(err as Error).message}`)
     }
+  }
+
+  async getFiscalIntegrity(accountId?: string): Promise<FiscalIntegrityReportEntity> {
+    const res = await bffClient.api.fiscal.integrity.$get(
+      accountId ? { query: { accountId } } : {},
+    )
+    const rawData = await res.json()
+    return parseOrFail(ExternalFiscalIntegritySchema, rawData, 'getFiscalIntegrity')
+  }
+
+  async setManualPriceOverrides(
+    overrides: ManualPriceOverrideInput[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.prices.$put({
+      json: {
+        overrides: overrides.map((override) => ({
+          id_hash: override.idHash,
+          price_fiat: override.priceFiat,
+          fiat_currency: override.fiatCurrency,
+          note: override.note,
+        })),
+      },
+    })
+    return this.parseOverrideOutcome(res, 'setManualPriceOverrides')
+  }
+
+  async removeManualPriceOverrides(
+    idHashes: TransactionIdHash[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.prices.$delete({ json: { idHashes } })
+    return this.parseOverrideOutcome(res, 'removeManualPriceOverrides')
+  }
+
+  async setTransferDestinations(
+    overrides: TransferDestinationInput[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.destinations.$put({
+      json: {
+        overrides: overrides.map((override) => ({
+          id_hash: override.idHash,
+          counterparty_account_id: override.counterpartyAccountId,
+          note: override.note,
+        })),
+      },
+    })
+    return this.parseOverrideOutcome(res, 'setTransferDestinations')
+  }
+
+  async removeTransferDestinations(
+    idHashes: TransactionIdHash[],
+  ): Promise<OverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.destinations.$delete({ json: { idHashes } })
+    return this.parseOverrideOutcome(res, 'removeTransferDestinations')
+  }
+
+  /**
+   * A refused declaration is the user's to correct, so the message the backend wrote is carried
+   * through rather than replaced — reporting it as an applied override would be the worse failure.
+   */
+  private async parseOverrideOutcome(
+    res: { ok: boolean; json: () => Promise<unknown> },
+    context: string,
+  ): Promise<OverrideOutcomeEntity> {
+    const rawData = await res.json()
+    if (!res.ok) {
+      const message =
+        typeof rawData === 'object' && rawData !== null && 'message' in rawData
+          ? String((rawData as { message: unknown }).message)
+          : 'Override was rejected'
+      throw new TaxOperationError('OVERRIDE_REJECTED', message)
+    }
+    return parseOrFail(ExternalOverrideOutcomeSchema, rawData, context)
   }
 }

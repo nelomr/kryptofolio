@@ -21,7 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 import type { AccountId } from "@kryptofolio/shared-types";
-import { useSupportedAccountsQuery } from "@/composables/queries/useSettingsQueries";
+import { useSelectableAccountsQuery } from "@/composables/queries/useSettingsQueries";
 import { useUpdateSupportedAccountsMutation } from "@/composables/queries/useSettingsMutations";
 
 const TIMEZONES = [
@@ -38,13 +38,13 @@ const TIMEZONES = [
 const wizard = useCsvImportWizardProvider();
 const { t } = useI18n();
 
-const { data: supportedAccounts } = useSupportedAccountsQuery();
+const { data: selectableAccounts } = useSelectableAccountsQuery();
 const { mutateAsync: updateAccounts } = useUpdateSupportedAccountsMutation();
 
 const accountOptions = computed(() => {
-  return (supportedAccounts.value ?? []).map((acc) => ({
-    ...acc,
-    value: acc.value as AccountId,
+  return (selectableAccounts.value ?? []).map((acc) => ({
+    value: acc.id as AccountId,
+    label: acc.name,
   }));
 });
 
@@ -56,13 +56,16 @@ const handleAddAccount = async () => {
   const val = crypto.randomUUID();
   const label = newAccountName.value.trim();
 
-  const current = supportedAccounts.value ?? [];
-  if (current.some((a) => a.label.toLowerCase() === label.toLowerCase())) {
+  const current = selectableAccounts.value ?? [];
+  if (current.some((a) => a.name.toLowerCase() === label.toLowerCase())) {
     toast.error(t("ingestion.wizard.account_exists"));
     return;
   }
 
-  await updateAccounts([...current, { value: val, label }]);
+  await updateAccounts([
+    ...current.map((a) => ({ value: a.id, label: a.name })),
+    { value: val, label },
+  ]);
   newAccountName.value = "";
   showNewAccountInput.value = false;
   wizard.selectedAccountId.value = val as AccountId;

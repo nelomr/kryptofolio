@@ -222,17 +222,69 @@ export const en: I18nDictionary = {
   "expanded_lots.total_cost": "Total Cost",
   "expanded_lots.buy": "BUY",
   "expanded_lots.sold": "SOLD",
-  "expanded_lots.ai_insight": "💡 AI Insight",
+  "expanded_lots.ai_insight": "AI Insight",
   "expanded_lots.tax_loss": "Tax-Loss Harvesting",
   "expanded_lots.tax_loss_desc": " before tax closure.",
   "expanded_lots.no_lots": "No detailed tax lots found",
   "expanded_lots.view_history": "View lot history",
   "expanded_lots.unknown_exchange": "Unknown",
 
-  // Lot Status
+  // Lot Status — the canonical OPEN | PARTIAL | CLOSED vocabulary
   "lot_status.open": "OPEN",
   "lot_status.partial": "PARTIAL",
-  "lot_status.sold": "SOLD",
+  "lot_status.closed": "CLOSED",
+
+  // Disposal types — why a lot was consumed
+  "disposal_type.sell": "SALE",
+  "disposal_type.swap": "SWAP",
+  "disposal_type.fee": "FEE",
+  "disposal_type.spend": "SPEND",
+
+  // Custody — where a lot's quantity sits now, versus where it was acquired
+  "custody.acquired_at": "Acquiring venue",
+  "custody.held_in": "Held in",
+  "custody.synthetic": "Self-custody",
+  "custody.synthetic_desc":
+    "No destination was recorded for this movement, so the quantity is attributed to a synthetic self-custody account. Declare the real destination to resolve it.",
+  "custody.sub_wallet": "Sub-wallet",
+  "custody.sub_wallet_desc":
+    "Held in a sub-account of the venue, such as a staking or earn wallet. The parent balance is unchanged.",
+  "custody.relocation": "Relocation",
+  "custody.no_pnl": "Custody movements are not disposals and produce no gain or loss.",
+
+  // Manual value provenance
+  "value_provenance.manual": "Declared",
+  "value_provenance.manual_desc":
+    "This figure was assigned by hand, not observed from market data.",
+
+  // Data-quality flags — one label and one explanation per FIFO_QUALITY_FLAGS member
+  "fifo_quality.missing_price.label": "No price",
+  "fifo_quality.missing_price.explanation":
+    "No market price could be resolved for this operation, so its value is unknown rather than zero. Affected events are excluded from the tax base until a value is assigned.",
+  "fifo_quality.currency_mismatch.label": "Currency mismatch",
+  "fifo_quality.currency_mismatch.explanation":
+    "The operation's currency disagrees with its fee or price series. No conversion was applied, and the affected events are excluded from the tax base.",
+  "fifo_quality.custody_residual.label": "Custody residual",
+  "fifo_quality.custody_residual.explanation":
+    "A self-custody account holds more than the recorded movements explain. The quantity is either genuinely self-custodied or an unrecorded network fee.",
+  "fifo_quality.untracked_inflow.label": "Untracked inflow",
+  "fifo_quality.untracked_inflow.explanation":
+    "More arrived than ever left a known account, so a holding exists with no established cost basis. Declare the movement's source account to resolve it.",
+  "fifo_quality.custody_imbalance.label": "Custody imbalance",
+  "fifo_quality.custody_imbalance.explanation":
+    "Aggregated custody diverges from this account's recorded balance for the asset beyond the precision tolerance.",
+  "fifo_quality.negative_cost_basis.label": "Negative basis",
+  "fifo_quality.negative_cost_basis.explanation":
+    "This lot's acquisition cost is negative, which is a data defect rather than a valid input. Gains derived from it are suppressed.",
+  "fifo_quality.orphan_lot.label": "Orphan lot",
+  "fifo_quality.orphan_lot.explanation":
+    "The source transaction behind this derived row no longer exists, so the row was retired by the last rebuild.",
+  "fifo_quality.unknown_tx_type.label": "Unknown type",
+  "fifo_quality.unknown_tx_type.explanation":
+    "The source operation type could not be mapped to a known kind, so the row was refused rather than guessed at.",
+  "fifo_quality.unresolved_basis.label": "Unverified basis",
+  "fifo_quality.unresolved_basis.explanation":
+    "This lot's cost basis is not a positive figure, so no profit or loss can be derived from it.",
 
   // Token Details
   "token.no_details": "No details available for this asset.",
@@ -314,6 +366,20 @@ export const en: I18nDictionary = {
   "tax.integrity.title": "Fiscal Hospital",
   "tax.integrity.analyzing": "Analyzing data integrity...",
   "tax.integrity.healthy": "Fiscal data is consistent. No anomalies detected.",
+  "tax.integrity.pending_review": "rows awaiting your input. Reports remain available meanwhile.",
+  "tax.integrity.needs_recalculation":
+    "Derived figures are pending recalculation and may be out of date.",
+
+  // Pending values review
+  "tax.pending.title": "Pending your input",
+  "tax.pending.excluded_notice":
+    "These operations are excluded from the tax base until a value or a destination is declared.",
+  "tax.pending.none": "Nothing is awaiting your input.",
+  "tax.pending.declare_price": "Declare value",
+  "tax.pending.declare_destination": "Declare destination",
+  "tax.pending.price_placeholder": "0.00",
+  "tax.pending.select_account": "Select an account",
+  "tax.pending.save": "Save",
 
   "tax.tabs.ledgers": "Ledgers",
   "tax.tabs.report": "Audit & Reports",

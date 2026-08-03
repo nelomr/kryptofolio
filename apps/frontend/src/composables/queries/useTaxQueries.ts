@@ -14,7 +14,12 @@ import { useQuery } from '@pinia/colada'
 import type { Ref } from 'vue'
 import { TAX_PORT_KEY } from '@/core/injectionKeys'
 import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
-import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
+import type {
+  TaxTransactionEntity,
+  TaxReportEntity,
+  TaxDerivativeEntity,
+  FiscalIntegrityReportEntity,
+} from '@/core/domain/models/FiscalEntities'
 import { GetSpotTransactionsUseCase } from '@/core/application/use-cases/GetSpotTransactionsUseCase'
 import { GetFuturesTransactionsUseCase } from '@/core/application/use-cases/GetFuturesTransactionsUseCase'
 import { GetTaxReportUseCase } from '@/core/application/use-cases/GetTaxReportUseCase'
@@ -123,5 +128,21 @@ export function useAvailableYearsQuery() {
   return useQuery<number[]>({
     key: AVAILABLE_YEARS_KEY,
     query: () => useCase.execute(),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useFiscalIntegrityQuery
+// The pending-review surface. A read, so it delegates straight to the port per the CQRS split.
+// ---------------------------------------------------------------------------
+
+export const FISCAL_INTEGRITY_KEY = ['fiscal-integrity'] as const
+
+export function useFiscalIntegrityQuery() {
+  const port = useTaxPort()
+
+  return useQuery<FiscalIntegrityReportEntity>({
+    key: FISCAL_INTEGRITY_KEY,
+    query: () => port.getFiscalIntegrity(),
   })
 }

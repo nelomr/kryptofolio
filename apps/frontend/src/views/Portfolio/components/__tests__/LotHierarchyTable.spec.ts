@@ -13,7 +13,6 @@ interface ExpandedLotsTableTestInstance {
   expandedLots: Set<string>
   toggleLotHistory: (lotId: string) => void
   getLotHistory: (lotId: string) => TaxLotHistoryEvent[]
-  getLotStatus: (lot: TaxLotEntity) => string
 }
 
 // Mock useVirtualizer to avoid complex DOM calculations in jsdom
@@ -122,14 +121,19 @@ describe('ExpandedLotsTable.vue', () => {
     expect(vm.expandedLots.has('lot1')).toBe(false)
   })
 
-  it('correctly maps token history and status', () => {
+  it('correctly maps token history', () => {
     const vm = wrapper.vm as unknown as ExpandedLotsTableTestInstance
     const history = vm.getLotHistory('lot1')
-    
+
     expect(history).toHaveLength(1)
     expect(history[0].gainLossEur).toBe(2000)
-    
-    const status = vm.getLotStatus(mockLots[0])
-    expect(status).toBe('FULL')
+  })
+
+  it('renders the status it was given rather than one derived from quantities', () => {
+    // Both lots have their full quantity remaining; the retired local derivation called that 'FULL'
+    // and labelled it sold.
+    const badges = wrapper.findAll('[data-testid="lot-status-badge"]')
+
+    expect(badges.map((b) => b.text())).toEqual(['lot_status.open', 'lot_status.partial'])
   })
 })

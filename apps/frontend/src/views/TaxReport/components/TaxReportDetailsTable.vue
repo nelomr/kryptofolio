@@ -113,7 +113,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
     <!-- Card Header -->
     <div class="flex items-center justify-between border-b border-border bg-card px-6 py-4">
       <h3 class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-        <BookOpenCheck class="h-3.5 w-3.5 text-primary" />
+        <BookOpenCheck class="h-3.5 w-3.5 text-muted-foreground" />
         {{ t('tax.audit.table_title') }}
       </h3>
       <span
@@ -126,7 +126,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
 
     <!-- Loading skeleton -->
     <div v-if="isLoading" class="space-y-2 p-6">
-      <p class="mb-4 animate-pulse text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+      <p class="mb-4 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
         {{ t('tax.audit.table_loading') }}
       </p>
       <Skeleton v-for="i in 8" :key="i" class="h-10 w-full rounded" />

@@ -47,7 +47,7 @@ const currentCostBasis = computed(() => {
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.return', { range: selectedRange }) }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.return_desc') }}</span>
             </TooltipContent>
           </Tooltip>
@@ -62,7 +62,7 @@ const currentCostBasis = computed(() => {
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.vs_cost') }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.vs_cost_desc') }}</span>
             </TooltipContent>
           </Tooltip>
@@ -77,7 +77,7 @@ const currentCostBasis = computed(() => {
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.volatility') }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.volatility_desc') }}</span>
             </TooltipContent>
           </Tooltip>
@@ -90,7 +90,7 @@ const currentCostBasis = computed(() => {
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('portfolio.metrics_tabs.performance.stats.best_day') }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('portfolio.metrics_tabs.performance.stats.best_day_desc') }}</span>
             </TooltipContent>
           </Tooltip>

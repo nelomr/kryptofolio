@@ -18,6 +18,7 @@ import type {
   TaxLotHistoryEvent,
   TaxLotEntity,
   LotCustodyLocation,
+  LotRelocationEntity,
 } from "@/core/domain/models/FiscalEntities";
 import {
   TAX_LOT_STATUSES,
@@ -280,6 +281,38 @@ const ExternalLotCustodyLocationSchema = z
   );
 
 // ---------------------------------------------------------------------------
+// ExternalLotRelocationSchema — one custody movement of a lot (Level 3)
+// ---------------------------------------------------------------------------
+
+// No price, gain or taxability key is declared, and none may be added: a movement between the
+// user's own accounts realises nothing, so there is no figure for this boundary to carry.
+const ExternalLotRelocationSchema = z
+  .object({
+    id: z.string().min(1),
+    occurred_at: timestampToDate,
+    qty: numericField,
+    from_account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
+    from_account_name: z.string(),
+    from_is_synthetic: z.boolean(),
+    to_account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
+    to_account_name: z.string(),
+    to_is_synthetic: z.boolean(),
+  })
+  .transform(
+    (raw): LotRelocationEntity => ({
+      id: raw.id,
+      occurredAt: raw.occurred_at,
+      qty: raw.qty,
+      fromAccountId: raw.from_account_id,
+      fromAccountName: raw.from_account_name,
+      fromIsSynthetic: raw.from_is_synthetic,
+      toAccountId: raw.to_account_id,
+      toAccountName: raw.to_account_name,
+      toIsSynthetic: raw.to_is_synthetic,
+    }),
+  );
+
+// ---------------------------------------------------------------------------
 // ExternalTaxLotSchema — typed FIFO tax lot
 // ---------------------------------------------------------------------------
 
@@ -297,6 +330,10 @@ export const ExternalTaxLotShape = z.object({
     // Canonical OPEN|PARTIAL|CLOSED, passed through unchanged from the calculation engine.
     // Required: a lot with no status is not a valid lot.
     status: z.enum(TAX_LOT_STATUSES),
+    // Defect on the lot's own basis. Required to read unit_cost at all: the view forces the figure
+    // to 0 whenever this is set, so the two must be consumed together.
+    quality_flag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
+    value_provenance: z.enum(MANUAL_VALUE_PROVENANCE).optional(),
     // Wire name is "custody" (TokenLotDto.custody in GetTokenHistoryUseCase) — the domain field
     // is named currentLocations to read clearly at the call site, but the two must not drift.
     custody: z.array(ExternalLotCustodyLocationSchema).optional().default([]),
@@ -314,6 +351,8 @@ export const ExternalTaxLotSchema = ExternalTaxLotShape
       unitCost: raw.unit_cost,
       totalCost: raw.total_cost,
       status: raw.status,
+      qualityFlag: raw.quality_flag ?? null,
+      valueProvenance: raw.value_provenance,
       currentLocations: raw.custody,
     }),
   );
@@ -329,10 +368,15 @@ export const ExternalTokenHistorySchema = z
       .record(z.string(), z.array(ExternalTaxLotHistorySchema))
       .optional()
       .default({}),
+    relocations: z
+      .record(z.string(), z.array(ExternalLotRelocationSchema))
+      .optional()
+      .default({}),
   })
   .transform((raw) => ({
     lots: raw.lots,
     history: raw.history,
+    relocations: raw.relocations,
   }));
 
 // ---------------------------------------------------------------------------

@@ -154,14 +154,26 @@ const settingsApi = new Hono()
     },
   )
   // ── Supported Accounts ───────────────────────────────────────────────────────
+  // This is the user-facing account selector. Synthetic accounts exist only as custody
+  // counterparties, so naming one as an import target or a movement destination is meaningless —
+  // they are filtered here, at the single point every selector reads from.
   .get("/accounts", async (c) => {
     try {
       const accounts = await container.ledgerPort.getAccounts();
-      const mapped = accounts.map(acc => ({ value: acc.id, label: acc.name }));
+      const mapped = accounts
+        .filter(acc => !acc.isSynthetic)
+        .map(acc => ({
+          value: acc.id,
+          label: acc.name,
+          type: acc.type,
+          parentAccountId: acc.parentAccountId ?? null,
+        }));
       return c.json({ accounts: mapped });
     } catch (err) {
       bffLogger.error({ err }, "Failed to get supported accounts");
-      return c.json({ accounts: [] });
+      // An empty list is indistinguishable from "no accounts configured", and the wizard would
+      // present that silence as fact. A read failure has to be visible as a failure.
+      return c.json({ accounts: [], error: "FAILED_TO_READ_ACCOUNTS" as const }, 500);
     }
   })
   .post(

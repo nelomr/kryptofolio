@@ -72,7 +72,7 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.assets_kicker') }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('metrics.assets_kicker_desc') }}</span>
             </TooltipContent>
           </Tooltip>
@@ -85,7 +85,7 @@ const { chartData, chartOptions } = useAssetAllocationChart(toRef(() => data.val
             <TooltipTrigger asChild>
               <span class="text-[11px] text-muted-foreground uppercase tracking-wider font-medium underline decoration-dotted underline-offset-2 cursor-default">{{ t('metrics.hhi_kicker') }}</span>
             </TooltipTrigger>
-            <TooltipContent side="top" class="bg-brand text-white border-brand">
+            <TooltipContent side="top">
               <span class="text-xs max-w-[200px] block text-center">{{ t('metrics.hhi_kicker_desc') }}</span>
             </TooltipContent>
           </Tooltip>

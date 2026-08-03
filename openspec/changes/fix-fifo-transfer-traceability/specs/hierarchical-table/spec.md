@@ -1,7 +1,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Render 3-Level Table
-The system SHALL display a dynamic data table with three levels of data: Holding Summary, Lots Breakdown, and Lot History. The Level 2 lot rows SHALL render the canonical `OPEN | PARTIAL | CLOSED` status received from the backend and SHALL NOT recompute or re-label it locally. Level 2 SHALL additionally display the accounts currently holding the lot when they differ from its acquiring venue, marking synthetic custody accounts distinctly. Level 3 event rows SHALL render each event's real `disposalType` rather than a universal sale label, and SHALL render custody movements as non-taxable relocations.
+The system SHALL display a dynamic data table with three levels of data: Holding Summary, Lots Breakdown, and Lot History. The Level 2 lot rows SHALL render the canonical `OPEN | PARTIAL | CLOSED` status received from the backend and SHALL NOT recompute or re-label it locally. Level 2 SHALL additionally display the accounts currently holding the lot when they differ from its acquiring venue, marking synthetic custody accounts distinctly.
+
+**Level 3 is a merged timeline of two distinct record types**, ordered by date: disposal events from `lot_history_events`, and custody relocations from `lot_custody_entries`. A custody relocation is **not** a `lot_history_event` and never will be — the event policy deliberately emits none for a custody movement, since a movement between the user's own accounts is not a disposal. Reading Level 3 as "the lot's history events" is what made an earlier draft of this requirement unsatisfiable. Disposal rows SHALL render each event's real `disposalType` rather than a universal sale label; relocation rows SHALL render origin and destination with no profit-or-loss figure.
+
+Level 2 answers *where the lot is now*; Level 3 answers *where it has been*. Both are required, and neither substitutes for the other.
 
 #### Scenario: Display main holding rows
 - **WHEN** the portfolio data is loaded
@@ -53,10 +57,23 @@ The system SHALL display a dynamic data table with three levels of data: Holding
 
 #### Scenario: Custody movement is rendered as non-taxable
 
-- **WHEN** a Level 3 row represents a custody relocation
+- **WHEN** a Level 3 row represents a custody relocation, sourced from `lot_custody_entries` rather than from `lot_history_events`
 - **THEN** it MUST show the origin and destination accounts
 - **AND** MUST show no gain or loss figure
 - **AND** MUST be marked non-taxable
+
+#### Scenario: Disposals and relocations interleave by date
+
+- **WHEN** a lot was bought, moved to another account, partially sold, and moved again
+- **THEN** Level 3 MUST show all four records in chronological order
+- **AND** each MUST be visually distinguishable as a disposal or a relocation
+- **AND** the sequence MUST read as the lot's custody history, not as two separate lists
+
+#### Scenario: A lot that never moved shows only its disposals
+
+- **WHEN** a lot has no custody entries because nothing relocated it
+- **THEN** Level 3 MUST render its disposal events alone
+- **AND** MUST NOT render an empty relocation section
 
 ### Requirement: Visual Cues for Tax Status
 The system SHALL display badges and tooltips to explain specific tax events (e.g., Tax-Loss Harvesting opportunities, non-taxable events). Data-quality flags received from the backend SHALL be surfaced on the affected rows with their severity, no tax-optimisation suggestion SHALL be shown for a lot whose cost basis is flagged as unreliable, and values that were manually assigned SHALL be visually distinguishable from market-sourced values.

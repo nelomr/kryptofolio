@@ -3,6 +3,7 @@ import { GetTokenHistoryUseCase } from '../GetTokenHistoryUseCase.js';
 import type {
   ITaxCalculatorPort,
   LotCustodyLocationRow,
+  LotCustodyRelocationRow,
 } from '../../../domain/ports/ITaxCalculatorPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
 
@@ -10,6 +11,7 @@ function makePort(data: {
   lots?: TaxLotType[];
   events?: TaxLotEventType[];
   custody?: LotCustodyLocationRow[];
+  relocations?: LotCustodyRelocationRow[];
 }): ITaxCalculatorPort {
   return {
     getSpanishTaxReport: vi.fn(),
@@ -18,6 +20,7 @@ function makePort(data: {
       .mockResolvedValue({ lots: data.lots ?? [], events: data.events ?? [] }),
     calculateCustodyEntries: vi.fn().mockResolvedValue([]),
     getLotCustodyLocations: vi.fn().mockResolvedValue(data.custody ?? []),
+    getLotCustodyTimeline: vi.fn().mockResolvedValue(data.relocations ?? []),
     getDataQuality: vi.fn().mockResolvedValue([]),
   };
 }
@@ -308,6 +311,83 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
       await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-1' });
 
       expect(port.getLotCustodyLocations).toHaveBeenCalledWith('acc-1');
+    });
+  });
+
+  describe('custody timeline — where the lot has been', () => {
+    const MOVE: LotCustodyRelocationRow = {
+      tax_lot_id: 'lot-xlm-1',
+      asset_id: 'XLM',
+      spot_transaction_id: 'tx-move',
+      occurred_at: '2024-03-01T10:00:00Z',
+      qty: '500.0',
+      from_account_id: 'acc-1',
+      from_account_name: 'Binance',
+      from_is_synthetic: false,
+      to_account_id: 'ownwallet-XLM',
+      to_account_name: 'ownwallet-XLM',
+      to_is_synthetic: true,
+    };
+
+    it('returns the relocations keyed by lot, alongside the disposals', async () => {
+      const port = makePort({ lots: [XLM_LOT], events: [XLM_EVENT], relocations: [MOVE] });
+
+      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+
+      expect(res.relocations['lot-xlm-1']).toHaveLength(1);
+      expect(res.history['lot-xlm-1']).toHaveLength(1);
+    });
+
+    it('names both ends and marks a synthetic counterparty', async () => {
+      const port = makePort({ lots: [XLM_LOT], relocations: [MOVE] });
+
+      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const move = res.relocations['lot-xlm-1']?.[0];
+
+      expect(move?.from_account_name).toBe('Binance');
+      expect(move?.to_account_name).toBe('ownwallet-XLM');
+      expect(move?.from_is_synthetic).toBe(false);
+      expect(move?.to_is_synthetic).toBe(true);
+      expect(move?.qty).toBe(500);
+      expect(move?.occurred_at).toBe('2024-03-01T10:00:00Z');
+    });
+
+    it('carries no valuation on a relocation, since a movement realises nothing', async () => {
+      const port = makePort({ lots: [XLM_LOT], relocations: [MOVE] });
+
+      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const move = res.relocations['lot-xlm-1']?.[0];
+
+      expect(Object.keys(move ?? {})).not.toContain('sale_price_eur');
+      expect(Object.keys(move ?? {})).not.toContain('gain_loss_eur');
+      expect(Object.keys(move ?? {})).not.toContain('is_taxable');
+    });
+
+    it('drops a relocation belonging to a lot of a different asset', async () => {
+      const port = makePort({
+        lots: [XLM_LOT],
+        relocations: [MOVE, { ...MOVE, tax_lot_id: 'lot-btc-1', asset_id: 'BTC' }],
+      });
+
+      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+
+      expect(Object.keys(res.relocations)).toEqual(['lot-xlm-1']);
+    });
+
+    it('reports no relocations for a lot that never moved', async () => {
+      const port = makePort({ lots: [XLM_LOT], events: [XLM_EVENT] });
+
+      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+
+      expect(res.relocations).toEqual({});
+    });
+
+    it('scopes the timeline query to the requested account', async () => {
+      const port = makePort({ lots: [XLM_LOT] });
+
+      await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-9' });
+
+      expect(port.getLotCustodyTimeline).toHaveBeenCalledWith('acc-9');
     });
   });
 });

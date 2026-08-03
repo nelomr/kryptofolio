@@ -11,7 +11,22 @@
  */
 
 import { useMutation, useQueryCache } from '@pinia/colada'
-import { useTaxPort, TAX_TRANSACTIONS_KEY } from '@/composables/queries/useTaxQueries'
+import {
+  useTaxPort,
+  TAX_TRANSACTIONS_KEY,
+  FISCAL_INTEGRITY_KEY,
+} from '@/composables/queries/useTaxQueries'
+import {
+  SetManualPriceOverrideUseCase,
+  RemoveManualPriceOverrideUseCase,
+  SetTransferDestinationUseCase,
+  RemoveTransferDestinationUseCase,
+} from '@/core/application/use-cases/overrides/ManualFiscalOverrideUseCases'
+import type {
+  ManualPriceOverrideInput,
+  TransferDestinationInput,
+} from '@/core/domain/ports/ITaxPort'
+import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 import { UploadTaxFileUseCase } from '@/core/application/use-cases/UploadTaxFileUseCase'
 import { ImportWalletUseCase } from '@/core/application/use-cases/ImportWalletUseCase'
 import { SyncWeb3UseCase } from '@/core/application/use-cases/SyncWeb3UseCase'
@@ -115,6 +130,64 @@ export function useDeleteTransactionsMutation() {
       }
       queryCache.invalidateQueries({ key: ['tax-report'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Override mutations — the user's calculation inputs.
+//
+// Each one invalidates the integrity surface and everything derived from it, because the backend
+// rebuilds on write: leaving the old counts on screen would show a warning the user just resolved.
+// ---------------------------------------------------------------------------
+
+function invalidateDerivedFiscalData(queryCache: ReturnType<typeof useQueryCache>) {
+  queryCache.invalidateQueries({ key: FISCAL_INTEGRITY_KEY })
+  queryCache.invalidateQueries({ key: ['tax-report'] })
+  queryCache.invalidateQueries({ key: ['token-history'] })
+  queryCache.invalidateQueries({ key: ['portfolio-summary'] })
+}
+
+export function useSetManualPriceOverrideMutation() {
+  const port = useTaxPort()
+  const queryCache = useQueryCache()
+  const useCase = new SetManualPriceOverrideUseCase(port)
+
+  return useMutation({
+    mutation: (overrides: ManualPriceOverrideInput[]) => useCase.execute(overrides),
+    onSuccess: () => invalidateDerivedFiscalData(queryCache),
+  })
+}
+
+export function useRemoveManualPriceOverrideMutation() {
+  const port = useTaxPort()
+  const queryCache = useQueryCache()
+  const useCase = new RemoveManualPriceOverrideUseCase(port)
+
+  return useMutation({
+    mutation: (idHashes: TransactionIdHash[]) => useCase.execute(idHashes),
+    onSuccess: () => invalidateDerivedFiscalData(queryCache),
+  })
+}
+
+export function useSetTransferDestinationMutation() {
+  const port = useTaxPort()
+  const queryCache = useQueryCache()
+  const useCase = new SetTransferDestinationUseCase(port)
+
+  return useMutation({
+    mutation: (overrides: TransferDestinationInput[]) => useCase.execute(overrides),
+    onSuccess: () => invalidateDerivedFiscalData(queryCache),
+  })
+}
+
+export function useRemoveTransferDestinationMutation() {
+  const port = useTaxPort()
+  const queryCache = useQueryCache()
+  const useCase = new RemoveTransferDestinationUseCase(port)
+
+  return useMutation({
+    mutation: (idHashes: TransactionIdHash[]) => useCase.execute(idHashes),
+    onSuccess: () => invalidateDerivedFiscalData(queryCache),
   })
 }
 

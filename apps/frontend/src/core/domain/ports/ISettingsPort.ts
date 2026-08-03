@@ -1,4 +1,5 @@
 import type { FiatCurrency } from '@kryptofolio/core-domain';
+import type { SelectableAccountEntity } from '@/core/domain/models/AccountEntities';
 
 /**
  * ISettingsPort — Port for reading and writing user application settings.
@@ -19,8 +20,11 @@ export interface ISettingsPort {
   setExchangeRate(from: FiatCurrency, to: FiatCurrency, rate: string): Promise<void>;
   /** Manually trigger exchange rate synchronization */
   syncExchangeRates(): Promise<void>;
-  /** Gets supported accounts configuration */
-  getSupportedAccounts(): Promise<{ value: string; label: string }[]>;
+  /**
+   * Returns the accounts that may be offered in a user-facing selector. Synthetic custody
+   * counterparties are never among them.
+   */
+  getSelectableAccounts(): Promise<SelectableAccountEntity[]>;
   /** Updates the supported accounts configuration */
   setSupportedAccounts(accounts: { value: string; label: string }[]): Promise<void>;
 }

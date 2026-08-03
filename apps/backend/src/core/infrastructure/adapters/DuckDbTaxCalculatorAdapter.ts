@@ -4,6 +4,7 @@ import type {
   FifoDataQualityRow,
   ITaxCalculatorPort,
   LotCustodyLocationRow,
+  LotCustodyRelocationRow,
   SpanishTaxBaseReport,
 } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
@@ -108,6 +109,55 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
     query += ` ORDER BY tax_lot_id, account_id`;
 
     return (await this.db.queryMany(query, params)) as LotCustodyLocationRow[];
+  }
+
+  /**
+   * The relocations themselves, rather than the position they add up to.
+   *
+   * Both account names are resolved here so the read path never has to fetch accounts separately to
+   * render a movement. A synthetic destination has no `accounts` row until one is created, so the
+   * flag falls back to the naming contract — the same fallback `v_lot_current_location` uses.
+   *
+   * Scoped on either end: a movement is equally part of the sending and the receiving account's
+   * history, and scoping on one side alone would hide half of every transfer.
+   */
+  public async getLotCustodyTimeline(
+    accountId?: string,
+  ): Promise<LotCustodyRelocationRow[]> {
+    let query = `
+      SELECT
+          a.tax_lot_id,
+          a.asset_id,
+          a.spot_transaction_id,
+          a.occurred_at,
+          CAST(a.qty AS VARCHAR) AS qty,
+          a.from_account_id,
+          COALESCE(src.name, a.from_account_id) AS from_account_name,
+          CAST(COALESCE(
+              src.is_synthetic,
+              CASE WHEN is_synthetic_account_name(a.from_account_id) THEN 1 ELSE 0 END
+          ) AS BOOLEAN) AS from_is_synthetic,
+          a.to_account_id,
+          COALESCE(dst.name, a.to_account_id) AS to_account_name,
+          CAST(COALESCE(
+              dst.is_synthetic,
+              CASE WHEN is_synthetic_account_name(a.to_account_id) THEN 1 ELSE 0 END
+          ) AS BOOLEAN) AS to_is_synthetic
+      FROM v_lot_custody_allocation a
+      LEFT JOIN ledger.accounts src ON src.id = a.from_account_id
+      LEFT JOIN ledger.accounts dst ON dst.id = a.to_account_id
+    `;
+    const params: unknown[] = [];
+
+    if (accountId) {
+      params.push(accountId);
+      // $1 is safe — DuckDB parameterized binding, not interpolation
+      query += ` WHERE a.from_account_id = $1 OR a.to_account_id = $1`;
+    }
+
+    query += ` ORDER BY a.tax_lot_id, a.occurred_at, a.allocation_step`;
+
+    return (await this.db.queryMany(query, params)) as LotCustodyRelocationRow[];
   }
 
   /**

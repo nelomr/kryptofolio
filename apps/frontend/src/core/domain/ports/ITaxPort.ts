@@ -11,8 +11,35 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
-import type { TaxTransactionEntity, TaxReportEntity, TaxDerivativeEntity } from '@/core/domain/models/FiscalEntities'
+import type {
+  TaxTransactionEntity,
+  TaxReportEntity,
+  TaxDerivativeEntity,
+  FiscalIntegrityReportEntity,
+  OverrideOutcomeEntity,
+} from '@/core/domain/models/FiscalEntities'
+import type { AccountId, TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 import type { TransactionRow } from '@/modules/data-ingestion/types'
+
+/**
+ * A price the user declares for an operation whose market value could not be resolved.
+ *
+ * The amount stays a decimal string all the way to the wire: it is validated against the ledger's
+ * own precise-amount rule server-side, and passing it through a float would defeat that.
+ */
+export interface ManualPriceOverrideInput {
+  idHash: TransactionIdHash
+  priceFiat: string
+  fiatCurrency: string
+  note?: string
+}
+
+/** A correction naming the real counterparty of a custody movement. */
+export interface TransferDestinationInput {
+  idHash: TransactionIdHash
+  counterpartyAccountId: AccountId
+  note?: string
+}
 
 export interface ITaxPort {
   /**
@@ -119,4 +146,30 @@ export interface ITaxPort {
    * @returns A Blob representing the generated file
    */
   downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob>
+
+  /**
+   * The data-quality defects the calculation engine found, grouped by flag.
+   *
+   * Read-only and advisory: defects are counted and reported, never blocking, so this never fails a
+   * request that would otherwise succeed.
+   * @param accountId - Optional account scope; omit for the whole ledger
+   */
+  getFiscalIntegrity(accountId?: string): Promise<FiscalIntegrityReportEntity>
+
+  /**
+   * Declare fiat values for operations whose market price could not be resolved.
+   *
+   * Batched deliberately: the backend rebuilds derived data once per call, so submitting one
+   * override at a time would cost one full recalculation each.
+   */
+  setManualPriceOverrides(overrides: ManualPriceOverrideInput[]): Promise<OverrideOutcomeEntity>
+
+  /** Withdraw declared prices, reverting the affected rows to the market value or to the flag. */
+  removeManualPriceOverrides(idHashes: TransactionIdHash[]): Promise<OverrideOutcomeEntity>
+
+  /** Declare the real counterparty of custody movements attributed to a synthetic account. */
+  setTransferDestinations(overrides: TransferDestinationInput[]): Promise<OverrideOutcomeEntity>
+
+  /** Withdraw declared counterparties, reverting to the inferred synthetic account. */
+  removeTransferDestinations(idHashes: TransactionIdHash[]): Promise<OverrideOutcomeEntity>
 }
