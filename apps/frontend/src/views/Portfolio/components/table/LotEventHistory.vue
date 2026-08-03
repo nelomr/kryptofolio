@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/composables/useFormatters";
 import { useI18n } from "@/composables/useI18n";
+import { gainLossClass } from "@/views/TaxReport/composables/useTaxCalculations";
 import type { TaxLotHistoryEvent } from "@/core/domain/models/FiscalEntities";
 
 const { t } = useI18n();
@@ -31,6 +32,9 @@ const getEventBadge = (
     return { variant: "secondary", label: t("lot_events.badge_activation") };
   if (!event.isTaxable)
     return { variant: "secondary", label: t("lot_events.badge_exempt") };
+  // `null >= 0` is `true` in JavaScript, so an unresolved figure would render as a profit.
+  if (event.gainLossEur === null)
+    return { variant: "secondary", label: t("tax.audit.badge_unresolved") };
   return event.gainLossEur >= 0
     ? { variant: "profit", label: t("lot_events.badge_gain") }
     : { variant: "loss", label: t("lot_events.badge_loss") };
@@ -99,7 +103,7 @@ const getEventBadge = (
           >
           <TableCell
             class="py-2 text-right font-mono text-[10px] tabular-nums font-bold"
-            :class="event.gainLossEur >= 0 ? 'text-profit' : 'text-loss'"
+            :class="gainLossClass(event.gainLossEur)"
             >{{ formatCurrency(event.gainLossEur) }}</TableCell
           >
           <TableCell class="py-2 text-right">

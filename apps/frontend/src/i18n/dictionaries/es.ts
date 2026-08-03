@@ -369,6 +369,7 @@ export const es: I18nDictionary = {
   "tax.audit.badge_loss": "PÉRDIDA",
   "tax.audit.badge_exempt": "EXENTO",
   "tax.audit.badge_activation": "RESERVA",
+  "tax.audit.badge_unresolved": "PENDIENTE",
 
   // Vault Settings
   "vault.title": "Bóveda de Secretos",

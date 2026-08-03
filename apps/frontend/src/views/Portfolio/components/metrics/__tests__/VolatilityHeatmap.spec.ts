@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
 import VolatilityHeatmap from '../VolatilityHeatmap.vue';
+import type { VolatilityHeatmapEntity } from '@/core/domain/ports/ICryptoMetricsPort';
 
 // Mock i18n
 vi.mock('@/composables/useI18n', () => ({
@@ -13,8 +14,8 @@ vi.mock('@/composables/useI18n', () => ({
 // Mock queries
 const mockQueryData = {
   isLoading: ref(true),
-  data: ref<any>(null),
-  error: ref<any>(null)
+  data: ref<VolatilityHeatmapEntity | null>(null),
+  error: ref<Error | null>(null)
 };
 
 vi.mock('@/composables/queries/useCryptoMetricsQueries', () => ({

@@ -1,5 +1,11 @@
 import { bffClient } from '@/core/infrastructure/http/BffClient';
-import type { IVaultPort, VaultStatusResponse } from '@/core/domain/ports/IVaultPort';
+import type {
+  IVaultPort,
+  VaultStatusResponse,
+  VaultUnlockResult,
+  VaultSaveKeyResult,
+  VaultToggleProviderResult,
+} from '@/core/domain/ports/IVaultPort';
 import type { VaultProvider } from '@/core/domain/models/VaultEntities';
 
 const parseBffError = (errorData: unknown, fallback: string): string => {
@@ -30,7 +36,7 @@ export class RestVaultAdapter implements IVaultPort {
     return (await res.json()) as VaultProvider[];
   }
 
-  async unlockVault(password: string): Promise<any> {
+  async unlockVault(password: string): Promise<VaultUnlockResult> {
     const res = await bffClient.api.credentials.vault.unlock.$post({
       json: { password },
     });
@@ -38,10 +44,11 @@ export class RestVaultAdapter implements IVaultPort {
       const errorData = await res.json().catch(() => null);
       throw new Error(parseBffError(errorData, "vault.errors.unlock_failed"));
     }
-    return res.json();
+    const body = await res.json();
+    return { message: 'message' in body ? body.message : '' };
   }
 
-  async saveVaultKey(service: string, payload: Record<string, string>): Promise<any> {
+  async saveVaultKey(service: string, payload: Record<string, string>): Promise<VaultSaveKeyResult> {
     const res = await bffClient.api.credentials.vault[':service'].$post({
       param: { service },
       json: { payload },
@@ -50,10 +57,11 @@ export class RestVaultAdapter implements IVaultPort {
       const errorData = await res.json().catch(() => null);
       throw new Error(parseBffError(errorData, "vault.errors.save_failed"));
     }
-    return res.json();
+    const body = await res.json();
+    return { message: 'message' in body ? body.message : '' };
   }
 
-  async toggleVaultProvider(service: string, enabled: boolean): Promise<any> {
+  async toggleVaultProvider(service: string, enabled: boolean): Promise<VaultToggleProviderResult> {
     const res = await bffClient.api.credentials.vault[':service'].status.$patch({
       param: { service },
       json: { enabled },
@@ -62,6 +70,7 @@ export class RestVaultAdapter implements IVaultPort {
       const errorData = await res.json().catch(() => null);
       throw new Error(parseBffError(errorData, "vault.errors.toggle_failed"));
     }
-    return res.json();
+    const body = await res.json();
+    return { enabled: 'enabled' in body ? body.enabled : enabled };
   }
 }

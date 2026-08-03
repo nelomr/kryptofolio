@@ -1,6 +1,6 @@
 import { computed, type Ref } from "vue";
 import type { AssetAllocationItem } from "@/core/domain/ports/ICryptoMetricsPort";
-import type { ChartData, ChartOptions, Plugin } from "chart.js";
+import type { ChartData, ChartOptions, Plugin, DoughnutController } from "chart.js";
 
 // Helper to get CSS variables
 const getCSSVar = (name: string) => {
@@ -15,8 +15,11 @@ export const backgroundTrackPlugin: Plugin<"doughnut"> = {
   id: "backgroundTrack",
   beforeDraw: (chart) => {
     const { ctx, chartArea } = chart;
-    const innerRadius = (chart as any).innerRadius;
-    const outerRadius = (chart as any).outerRadius;
+    // Chart#getDatasetMeta() types `.controller` as the base DatasetController;
+    // innerRadius/outerRadius are only computed by DoughnutController (chart.js's
+    // own public type for it), so we narrow to read them.
+    const controller = chart.getDatasetMeta(0).controller as DoughnutController;
+    const { innerRadius, outerRadius } = controller;
     if (!innerRadius || !outerRadius) return;
 
     const x = (chartArea.left + chartArea.right) / 2;

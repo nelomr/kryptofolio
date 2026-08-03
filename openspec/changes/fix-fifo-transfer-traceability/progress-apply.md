@@ -1731,16 +1731,22 @@ was touched.
    be unused surface, not a fix. `MockDtoSchemas.ts` got its own `nullableNumericField` import from
    `CommonSchemaHelpers` rather than a second local implementation, since nothing in that file
    needed the loose local coercion for anything the shared helper doesn't already do identically.
-4. **Quantities in `LotCustodyLocation` stay `number`, not a `PreciseAmount` value object — a spec
+4. **Quantities in `LotCustodyLocation` stay `number`, not the `Money` value object — a spec
    defect, recorded rather than papered over.** The `lot-custody-traceability` spec's own scenario
    ("Custody entries use branded identifiers and precision values") requires "the project's
-   precision value object, not a raw primitive." **No such object exists anywhere in
-   `apps/frontend`.** `originalQty`, `remainingQty`, `unitCost`, `totalCost` — every quantity and
-   monetary field already on `TaxLotEntity`, predating this group — is a plain `number`. Introducing
-   a new value-object system as a side effect of a 13-task DTO-realignment group would be exactly
-   the kind of invented behaviour the brief warns against. The branded-identifier half of the same
-   scenario *is* achievable and is done (`AccountId` on `accountId`/`parentAccountId`). Left for
-   whichever group next touches frontend monetary types generally, not scoped to custody alone.
+   precision value object, not a raw primitive." **CORRECTED — a later audit (task 14.36b) found
+   the claim below, that no such object exists, to be false.** `packages/core-domain/src/value-objects/Money.ts`
+   is real and already a workspace dependency of `apps/frontend`, already imported in
+   `views/Settings/components/CurrencySettings.vue`. The gap is adoption, not absence:
+   `originalQty`, `remainingQty`, `unitCost`, `totalCost` — every quantity and monetary field
+   already on `TaxLotEntity`, predating this group — is a plain `number` that was never migrated
+   to it. Introducing a value-object *migration* as a side effect of a 13-task DTO-realignment
+   group would still have been the kind of invented behaviour the brief warns against, so the
+   deferral itself was the right call — only the stated reason was wrong. The branded-identifier
+   half of the same scenario *is* achievable and is done (`AccountId` on
+   `accountId`/`parentAccountId`). Left for whichever group next touches frontend monetary types
+   generally, not scoped to custody alone; see task 14.36b for the corrected finding and the
+   follow-up change it opens.
 5. **`ExternalTaxLotShape` and `ExternalTaxLotHistoryShape` are exported as named intermediates**,
    separate from the transformed `ExternalTaxLotSchema` / `ExternalTaxLotHistorySchema`. No existing
    consumer's import changed — both transformed names still exist and behave identically — but the
@@ -2075,12 +2081,15 @@ What group 11 leaves for it, in priority order:
 4. **i18n keys are still owed.** Task 12.9 needs `lot_status.closed`, disposal-type labels, one key
    per `FIFO_QUALITY_FLAGS` member with an explanation, manual-value markers, and custody labels in
    both `es.ts` and `en.ts` — none of this group's new domain fields have a translation yet.
-5. **A pre-existing spec defect to fix while touching the same area:** `lot-custody-traceability`
-   requires `LotCustodyLocation.qty` to use "the project's precision value object, not a raw
-   primitive." No such object exists anywhere in `apps/frontend` — every quantity on `TaxLotEntity`
-   is a plain `number` and always has been. This is not group 12's blocker (nothing in 12's task list
-   asks for a value-object migration), but do not treat the current `number` typing as an oversight
-   if it comes up; it is a recorded, deliberate deferral, not a miss.
+5. **A pre-existing spec defect, not group 12's to fix — and the note above it was wrong about
+   why.** `lot-custody-traceability` requires `LotCustodyLocation.qty` to use "the project's
+   precision value object, not a raw primitive." **CORRECTED (task 14.36b): a value object does
+   exist** — `packages/core-domain/src/value-objects/Money.ts`, already a workspace dependency of
+   `apps/frontend`, already imported in `CurrencySettings.vue` — the gap is that `TaxLotEntity`'s
+   fields were never migrated to it, not that nothing was ever built. This is not group 12's
+   blocker (nothing in 12's task list asks for a value-object migration), but do not treat the
+   current `number` typing as an oversight if it comes up; it is a recorded, deliberate deferral,
+   opened as its own follow-up change by task 14.36b.
 
 ### Standing reminders for every remaining group
 

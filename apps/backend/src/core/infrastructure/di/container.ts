@@ -54,16 +54,13 @@ class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort 
   async queryOne<T = Record<string, unknown>>(): Promise<T | null> {
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
-  async queryMany<T>(
-    sql: string,
-    params?: unknown[],
-  ): Promise<T[]> {
+  async queryMany<T>(): Promise<T[]> {
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
   async execute(): Promise<void> {
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
-  async bulkInsert<T extends Record<string, unknown>>(): Promise<void> {
+  async bulkInsert(): Promise<void> {
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
 }

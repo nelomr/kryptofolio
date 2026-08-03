@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import { ref } from 'vue'
 import AssetAllocation from '../AssetAllocation.vue'
+import type { AssetAllocationItem } from '@/core/domain/ports/ICryptoMetricsPort'
 
 vi.mock('@/composables/useI18n', () => ({
   useI18n: () => ({
@@ -20,8 +21,8 @@ vi.mock('vue-chartjs', () => ({
 // We create a factory to let us override the mocked query results per test
 const mockQueryData = {
   isLoading: ref(true),
-  data: ref<any>(null),
-  error: ref<any>(null)
+  data: ref<{ items: AssetAllocationItem[]; totalAssets: number; hhiScore: number } | null>(null),
+  error: ref<Error | null>(null)
 }
 
 vi.mock('@/composables/queries/useCryptoMetricsQueries', () => ({
@@ -58,17 +59,18 @@ describe('AssetAllocation.vue', () => {
         { symbol: 'BTC', name: 'Bitcoin', allocationPercent: 70, valueFiat: 7000, colorHex: '#F7931A' },
         { symbol: 'ETH', name: 'Ethereum', allocationPercent: 30, valueFiat: 3000, colorHex: '#627EEA' }
       ],
-      totalAssets: '2 Activos',
+      totalAssets: 2,
       hhiScore: 5800
     }
-    
+
     const wrapper = mount(AssetAllocation)
-    
+
     // Check if the vue-chartjs Doughnut component is rendered
     expect(wrapper.find('.mock-doughnut').exists()).toBe(true)
-    
-    // Check center text overlay renders totalAssets
-    expect(wrapper.text()).toContain('2 Activos')
+
+    // Check center text overlay renders totalAssets (ICryptoMetricsPort types this as a
+    // plain count, not a pre-formatted label; the component interpolates it as-is)
+    expect(wrapper.text()).toContain('2')
     
     // Check if HHI score is rendered properly with number formatting
     expect(wrapper.text()).toContain('metrics.hhi_kicker')

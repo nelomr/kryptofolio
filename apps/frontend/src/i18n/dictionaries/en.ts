@@ -364,6 +364,7 @@ export const en: I18nDictionary = {
   "tax.audit.badge_loss": "LOSS",
   "tax.audit.badge_exempt": "EXEMPT",
   "tax.audit.badge_activation": "RESERVE",
+  "tax.audit.badge_unresolved": "PENDING",
 
   // Vault Settings
   "vault.title": "Local Secrets Vault",

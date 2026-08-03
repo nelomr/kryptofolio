@@ -7,6 +7,7 @@ import { formatCurrency, formatNumber, formatDate } from '@/composables/useForma
 import { Badge } from '@/components/ui/badge'
 import type { TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 import { useI18n } from '@/composables/useI18n'
+import { gainLossClass } from '@/views/TaxReport/composables/useTaxCalculations'
 
 const { t } = useI18n()
 
@@ -37,8 +38,8 @@ defineProps<{
             <td class="px-4 py-3 text-muted-foreground">{{ formatDate(disp.disposalDate) }}</td>
             <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(disp.amountFromLot) }}</td>
             <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">{{ formatCurrency(disp.salePriceEur) }}</td>
-            <td class="px-4 py-3 text-right font-mono font-bold tabular-nums" :class="disp.gainLossEur >= 0 ? 'text-profit' : 'text-loss'">
-              <span v-if="disp.gainLossEur > 0">+</span>{{ formatCurrency(disp.gainLossEur) }}
+            <td class="px-4 py-3 text-right font-mono font-bold tabular-nums" :class="gainLossClass(disp.gainLossEur)">
+              <span v-if="disp.gainLossEur !== null && disp.gainLossEur > 0">+</span>{{ formatCurrency(disp.gainLossEur) }}
             </td>
             <td class="px-4 py-3 text-center">
                 <Badge variant="outline" class="text-[9px] bg-destructive/10 text-destructive border-destructive/20 uppercase tracking-widest border-none">{{ t('token.sales_history.sold') }}</Badge>

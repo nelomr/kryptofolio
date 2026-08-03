@@ -1,7 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
+import type { ClassValue } from 'clsx'
 import ExpandedLotsTable from '../table/ExpandedLotsTable.vue'
 import { I18N_PORT_KEY } from '@/core/injectionKeys'
+import type { TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
+import type { LotId } from '@/core/domain/models/BrandedTypes'
+
+// <script setup> components don't expose their internal bindings on the public
+// InstanceType unless defineExpose is used; Vue Test Utils still surfaces them on
+// `.vm` in dev builds. This describes exactly the bindings these tests read.
+interface ExpandedLotsTableTestInstance {
+  expandedLots: Set<string>
+  toggleLotHistory: (lotId: string) => void
+  getLotHistory: (lotId: string) => TaxLotHistoryEvent[]
+  getLotStatus: (lot: TaxLotEntity) => string
+}
 
 // Mock useVirtualizer to avoid complex DOM calculations in jsdom
 vi.mock('@tanstack/vue-virtual', () => {
@@ -25,33 +38,37 @@ vi.mock('@/composables/useFormatters', () => ({
   formatPercent: (val: number) => `${val.toFixed(2)}%`,
   formatDate: () => '01 Jan 2024'
 }))
-vi.mock('@/lib/utils', () => ({ cn: (...args: any[]) => args.join(' ') }))
+vi.mock('@/lib/utils', () => ({ cn: (...args: ClassValue[]) => args.join(' ') }))
 
 describe('ExpandedLotsTable.vue', () => {
-  const mockLots = [
+  const mockLots: TaxLotEntity[] = [
     {
-      id: 'lot1',
+      id: 'lot1' as LotId,
       date: new Date(1672531200 * 1000),
       originalQty: 1.0,
       remainingQty: 1.0,
       unitCost: 30000,
       totalCost: 30000,
       exchange: 'Kraken',
-      symbol: 'BTC'
+      symbol: 'BTC',
+      status: 'OPEN',
+      currentLocations: []
     },
     {
-      id: 'lot2',
+      id: 'lot2' as LotId,
       date: new Date(1675209600 * 1000),
       originalQty: 0.5,
       remainingQty: 0.5,
       unitCost: 32000,
       totalCost: 16000,
       exchange: 'Kraken',
-      symbol: 'BTC'
+      symbol: 'BTC',
+      status: 'PARTIAL',
+      currentLocations: []
     }
-  ] as any[]
+  ]
 
-  const mockTokenHistory = {
+  const mockTokenHistory: Record<string, TaxLotHistoryEvent[]> = {
     lot1: [
       {
         id: 'event1',
@@ -59,12 +76,13 @@ describe('ExpandedLotsTable.vue', () => {
         isTaxable: true,
         amountFromLot: 0.2,
         salePriceEur: 8000,
-        gainLossEur: 2000
+        gainLossEur: 2000,
+        disposalType: 'SELL'
       }
     ]
-  } as any
+  }
 
-  let wrapper: any
+  let wrapper: VueWrapper<InstanceType<typeof ExpandedLotsTable>>
 
   beforeEach(() => {
     wrapper = mount(ExpandedLotsTable, {
@@ -95,7 +113,7 @@ describe('ExpandedLotsTable.vue', () => {
   })
 
   it('handles Level 3 expansion state (expandedLots)', async () => {
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as unknown as ExpandedLotsTableTestInstance
 
     expect(vm.expandedLots.has('lot1')).toBe(false)
     vm.toggleLotHistory('lot1')
@@ -105,7 +123,7 @@ describe('ExpandedLotsTable.vue', () => {
   })
 
   it('correctly maps token history and status', () => {
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as unknown as ExpandedLotsTableTestInstance
     const history = vm.getLotHistory('lot1')
     
     expect(history).toHaveLength(1)

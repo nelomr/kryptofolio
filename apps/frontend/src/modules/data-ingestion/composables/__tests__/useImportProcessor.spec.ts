@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useImportProcessor } from '../useImportProcessor'
 import * as taxMutations from '@/composables/queries/useTaxMutations'
+import type { ValidTransactionRow } from '@kryptofolio/shared-types'
 
 vi.mock('@/composables/queries/useTaxMutations', () => ({
   useSubmitIngestionMutation: vi.fn()
@@ -19,12 +20,18 @@ describe('useImportProcessor', () => {
     const mockMutateAsync = vi.fn().mockResolvedValue(true)
     vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
       mutateAsync: mockMutateAsync
-    } as any)
-    
+    } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
+
     const { isProcessing, processingErrors, processAndSubmit } = useImportProcessor()
 
-    const rows = [
-      { id: '1', mappedData: { date: '2023-01-01', time: '00:00:00' } } as any
+    const rows: ValidTransactionRow[] = [
+      {
+        id: '1',
+        originalData: {},
+        mappedData: { tx_type: null, date: '2023-01-01', time: '00:00:00', metadata: {} },
+        errors: [],
+        hasError: false,
+      }
     ]
     const result = await processAndSubmit(rows, 'spot', '10000000-0000-0000-0000-000000000001')
 
@@ -35,7 +42,14 @@ describe('useImportProcessor', () => {
     expect(mockMutateAsync).toHaveBeenCalledWith({
       market: 'spot',
       rows: [
-        { id: '1', mappedData: { account_id: '10000000-0000-0000-0000-000000000001', timestamp: '2023-01-01T00:00:00Z', metadata: {} }, id_hash: 'mocked-hash-123' }
+        {
+          id: '1',
+          originalData: {},
+          errors: [],
+          hasError: false,
+          mappedData: { tx_type: null, account_id: '10000000-0000-0000-0000-000000000001', timestamp: '2023-01-01T00:00:00Z', metadata: {} },
+          id_hash: 'mocked-hash-123'
+        }
       ],
       timezone: 'UTC'
     })
@@ -54,11 +68,18 @@ describe('useImportProcessor', () => {
     const mockMutateAsync = vi.fn().mockRejectedValue(new Error('Network error'))
     vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
       mutateAsync: mockMutateAsync
-    } as any)
+    } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
 
     const { isProcessing, processingErrors, processAndSubmit } = useImportProcessor()
 
-    const result = await processAndSubmit([{ id: '1', mappedData: {} } as any], 'spot', '10000000-0000-0000-0000-000000000001')
+    const errorRow: ValidTransactionRow = {
+      id: '1',
+      originalData: {},
+      mappedData: { tx_type: null, metadata: {} },
+      errors: [],
+      hasError: false,
+    }
+    const result = await processAndSubmit([errorRow], 'spot', '10000000-0000-0000-0000-000000000001')
 
     expect(result).toBe(false)
     expect(isProcessing.value).toBe(false)

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createTestingPinia } from "@pinia/testing";
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import PortfolioView from "@/views/Portfolio/PortfolioView.vue";
 import * as portfolioData from "@/views/Portfolio/composables/usePortfolioData";
 
@@ -143,23 +143,25 @@ function mountView(
     ReturnType<typeof portfolioData.usePortfolioData>
   > = {},
 ) {
+  // The fields the real composable exposes as `computed` are mocked as `computed` too — a plain
+  // `Ref` is not assignable to `ComputedRef`, and matching the real shape is what keeps the mock
+  // substitutable for the thing it stands in for.
   vi.spyOn(portfolioData, "usePortfolioData").mockReturnValue({
-    metrics: ref(mockMetrics),
-    isFetching: ref(false) as any,
-    isRebuilding: ref(false) as any,
+    metrics: computed(() => mockMetrics),
+    isFetching: computed(() => false),
+    isRebuilding: computed(() => false),
     handleRebuild: vi.fn(),
-    store: {} as any,
-    filteredHoldings: ref([]),
+    filteredHoldings: computed(() => []),
     isModalOpen: ref(false),
     selectedSymbol: ref(""),
-    selectedHolding: ref(undefined),
+    selectedHolding: computed(() => undefined),
     tokenDetails: ref(undefined),
     isFetchingDetails: ref(false),
     handleExpandSymbol: vi.fn(),
     expandedDetailsMap: ref({}),
     handleRowExpand: vi.fn(),
     ...dataOverrides,
-  } as any);
+  });
 
   return mount(PortfolioView, {
     global: {
@@ -213,7 +215,7 @@ describe("PortfolioView", () => {
   });
 
   it("shows sync text when rebuilding", () => {
-    const wrapper = mountView({ isRebuilding: ref(true) as any });
+    const wrapper = mountView({ isRebuilding: computed(() => true) });
     expect(wrapper.text()).toContain("portfolio.syncing");
   });
 

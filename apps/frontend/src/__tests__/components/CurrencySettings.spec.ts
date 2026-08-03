@@ -4,7 +4,7 @@ import CurrencySettings from '@/views/Settings/components/CurrencySettings.vue';
 import { createTestingPinia } from '@pinia/testing';
 import { I18N_PORT_KEY, SETTINGS_PORT_KEY } from '@/core/injectionKeys';
 import type { ISettingsPort } from '@/core/domain/ports/ISettingsPort';
-import type { I18nDictionary } from '@/core/domain/models/I18nDictionary';
+import type { I18nPort } from '@/core/domain/ports/I18nPort';
 
 // Mock matchMedia for UI components
 Object.defineProperty(window, 'matchMedia', {
@@ -44,7 +44,7 @@ vi.mock('@/composables/queries/useSettingsQueries', () => ({
 
 describe('CurrencySettings.vue', () => {
   let mockSettingsPort: ISettingsPort;
-  let mockI18nPort: any;
+  let mockI18nPort: I18nPort;
 
   beforeEach(() => {
     mockSettingsPort = {
@@ -60,9 +60,10 @@ describe('CurrencySettings.vue', () => {
     } as unknown as ISettingsPort;
 
     mockI18nPort = {
-      translate: vi.fn((key: keyof I18nDictionary) => key),
-      setLanguage: vi.fn(),
-      getCurrentLanguage: vi.fn().mockReturnValue('en'),
+      translate: vi.fn((key: string) => key),
+      setLocale: vi.fn(),
+      getLocale: vi.fn().mockReturnValue('en'),
+      getSupportedLocales: vi.fn().mockReturnValue([{ code: 'en', labelKey: 'settings.language.en' }]),
     };
   });
 

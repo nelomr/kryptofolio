@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useFileParser } from '../useFileParser'
 import * as parsers from '../../utils/parsers'
+import type { ParseResult } from '../../utils/parsers'
 
 vi.mock('../../utils/parsers', () => ({
   parseCsv: vi.fn(),
@@ -17,12 +18,12 @@ describe('useFileParser', () => {
   })
 
   it('should parse CSV files correctly', async () => {
-    const mockResult = {
+    const mockResult: ParseResult = {
       data: [{ col1: 'val1' }],
       headers: ['col1'],
       errors: []
     }
-    vi.mocked(parsers.parseCsv).mockResolvedValueOnce(mockResult as any)
+    vi.mocked(parsers.parseCsv).mockResolvedValueOnce(mockResult)
 
     const { parseFile, isParsing, rawHeaders, rawRows } = useFileParser()
     const file = new File([''], 'test.csv', { type: 'text/csv' })

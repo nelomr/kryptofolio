@@ -5,6 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Vue's CSSProperties/StyleValue types don't index CSS custom properties (`--foo`).
+ * Use this to type `:style` bindings that set custom properties, e.g. `--badge-hue`.
+ */
+export type CSSVars = Record<`--${string}`, string | number>
+
 export const MONETARY_FIELDS = [
   'amount', 'price_eur', 'total_eur', 'cost_basis_eur', 'pnl_eur', 'fee_eur',
   'original_amount', 'remaining_amount', 'acquisition_price', 'current_value_eur',

@@ -1,4 +1,4 @@
-import type { IVaultPort } from '@/core/domain/ports/IVaultPort';
+import type { IVaultPort, VaultToggleProviderResult } from '@/core/domain/ports/IVaultPort';
 
 export class ToggleVaultProviderUseCase {
   private readonly vaultPort: IVaultPort;
@@ -7,7 +7,7 @@ export class ToggleVaultProviderUseCase {
     this.vaultPort = vaultPort;
   }
 
-  async execute(service: string, enabled: boolean): Promise<any> {
+  async execute(service: string, enabled: boolean): Promise<VaultToggleProviderResult> {
     return this.vaultPort.toggleVaultProvider(service, enabled);
   }
 }

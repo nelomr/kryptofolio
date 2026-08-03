@@ -1,7 +1,29 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ref } from 'vue'
-import { useAssetAllocationChart } from '../useAssetAllocationChart'
+import type { Chart } from 'chart.js'
+import { useAssetAllocationChart, backgroundTrackPlugin } from '../useAssetAllocationChart'
 import type { AssetAllocationItem } from '@/core/domain/ports/ICryptoMetricsPort'
+
+// Minimal fake of the slice of Chart<"doughnut"> the plugin actually reads:
+// ctx (canvas 2D context), chartArea (layout box) and getDatasetMeta(0).controller
+// (the DoughnutController holding the computed innerRadius/outerRadius for this frame).
+function createFakeDoughnutChart(controllerRadii: { innerRadius: number; outerRadius: number }) {
+  const ctx = {
+    save: vi.fn(),
+    beginPath: vi.fn(),
+    arc: vi.fn(),
+    stroke: vi.fn(),
+    restore: vi.fn(),
+    lineWidth: 0,
+    strokeStyle: '',
+  }
+  const chart = {
+    ctx,
+    chartArea: { left: 0, right: 100, top: 0, bottom: 100 },
+    getDatasetMeta: vi.fn().mockReturnValue({ controller: controllerRadii }),
+  }
+  return { ctx, chart: chart as unknown as Chart<'doughnut'> }
+}
 
 vi.mock('@/composables/useI18n', () => ({
   useI18n: () => ({
@@ -49,5 +71,24 @@ describe('useAssetAllocationChart', () => {
     expect(chartOptions.value.responsive).toBe(true)
     expect(chartOptions.value.cutout).toBe('74%')
     expect(chartOptions.value.plugins?.legend?.display).toBe(false)
+  })
+})
+
+describe('backgroundTrackPlugin', () => {
+  it('draws the background track arc using the doughnut controller radii', () => {
+    const { ctx, chart } = createFakeDoughnutChart({ innerRadius: 30, outerRadius: 50 })
+
+    backgroundTrackPlugin.beforeDraw?.(chart, { cancelable: true }, {})
+
+    expect(ctx.arc).toHaveBeenCalledWith(50, 50, 40, 0, 2 * Math.PI)
+    expect(ctx.stroke).toHaveBeenCalled()
+  })
+
+  it('does nothing when the controller has not computed radii yet', () => {
+    const { ctx, chart } = createFakeDoughnutChart({ innerRadius: 0, outerRadius: 0 })
+
+    backgroundTrackPlugin.beforeDraw?.(chart, { cancelable: true }, {})
+
+    expect(ctx.arc).not.toHaveBeenCalled()
   })
 })

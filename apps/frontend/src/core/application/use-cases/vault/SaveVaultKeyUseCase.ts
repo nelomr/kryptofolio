@@ -1,4 +1,4 @@
-import type { IVaultPort } from '@/core/domain/ports/IVaultPort';
+import type { IVaultPort, VaultSaveKeyResult } from '@/core/domain/ports/IVaultPort';
 
 export class SaveVaultKeyUseCase {
   private readonly vaultPort: IVaultPort;
@@ -7,7 +7,7 @@ export class SaveVaultKeyUseCase {
     this.vaultPort = vaultPort;
   }
 
-  async execute(service: string, payload: Record<string, string>): Promise<any> {
+  async execute(service: string, payload: Record<string, string>): Promise<VaultSaveKeyResult> {
     return this.vaultPort.saveVaultKey(service, payload);
   }
 }

@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
 import PerformanceHistory from '../PerformanceHistory.vue';
+import type { PerformancePoint, PerformanceMetrics } from '@/core/domain/ports/ICryptoMetricsPort';
 
 // Mock i18n
 vi.mock('@/composables/useI18n', () => ({
@@ -28,8 +29,8 @@ vi.mock('@/components/charts/TimeAreaChart.vue', () => ({
 // Mock queries
 const mockQueryData = {
   isLoading: ref(true),
-  data: ref<any>(null),
-  error: ref<any>(null)
+  data: ref<{ history: PerformancePoint[]; metrics: PerformanceMetrics } | null>(null),
+  error: ref<Error | null>(null)
 };
 
 vi.mock('@/composables/queries/useCryptoMetricsQueries', () => ({
@@ -62,8 +63,8 @@ describe('PerformanceHistory.vue', () => {
     mockQueryData.error.value = null;
     mockQueryData.data.value = {
       history: [
-        { dateStr: '2023-10-01', portfolioValueFiat: 10000, costBasisFiat: 9000 },
-        { dateStr: '2023-10-02', portfolioValueFiat: 11000, costBasisFiat: 9000 }
+        { timestamp: 1696118400, dateStr: '2023-10-01', valueFiat: 10000, costBasisFiat: 9000 },
+        { timestamp: 1696204800, dateStr: '2023-10-02', valueFiat: 11000, costBasisFiat: 9000 }
       ],
       metrics: {
         returnFiat: 2000,

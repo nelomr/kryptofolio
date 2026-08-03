@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import AssetAllocationLegend from '../AssetAllocationLegend.vue'
+import type { AssetAllocationItem } from '@/core/domain/ports/ICryptoMetricsPort'
 
 // Mock useI18n to just return the key
 vi.mock('@/composables/useI18n', () => ({
@@ -11,10 +12,10 @@ vi.mock('@/composables/useI18n', () => ({
 
 describe('AssetAllocationLegend.vue', () => {
   it('renders a list of items correctly', () => {
-    const mockItems = [
+    const mockItems: AssetAllocationItem[] = [
       { symbol: 'BTC', name: 'Bitcoin', allocationPercent: 70, valueFiat: 7000, colorHex: '#F7931A' },
       { symbol: 'ETH', name: 'Ethereum', allocationPercent: 30, valueFiat: 3000, colorHex: '#627EEA' }
-    ] as any // type casting to avoid strict issues if other props are missing, but it should match
+    ]
 
     const wrapper = mount(AssetAllocationLegend, {
       props: {

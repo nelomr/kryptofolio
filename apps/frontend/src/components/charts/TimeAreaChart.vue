@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, toRef } from 'vue'
-import { usePerformanceChart } from './composables/usePerformanceChart'
+import { usePerformanceChart, type PerformanceChartPoint } from './composables/usePerformanceChart'
 
 const props = withDefaults(
   defineProps<{
-    data: any[]
+    data: PerformanceChartPoint[]
     isPercent?: boolean
     hideCostBasis?: boolean
     baselineValue?: number

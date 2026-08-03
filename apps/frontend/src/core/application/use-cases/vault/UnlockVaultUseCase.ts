@@ -1,4 +1,4 @@
-import type { IVaultPort } from '@/core/domain/ports/IVaultPort';
+import type { IVaultPort, VaultUnlockResult } from '@/core/domain/ports/IVaultPort';
 
 export class UnlockVaultUseCase {
   private readonly vaultPort: IVaultPort;
@@ -7,7 +7,7 @@ export class UnlockVaultUseCase {
     this.vaultPort = vaultPort;
   }
 
-  async execute(password: string): Promise<any> {
+  async execute(password: string): Promise<VaultUnlockResult> {
     return this.vaultPort.unlockVault(password);
   }
 }

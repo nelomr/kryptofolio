@@ -18,7 +18,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --build --force",
     "release": "semantic-release"
   },
   "dependencies": {

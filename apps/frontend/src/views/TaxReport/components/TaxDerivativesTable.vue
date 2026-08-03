@@ -40,7 +40,7 @@ import {
   formatDate,
 } from "@/composables/useFormatters";
 import CryptoIcon from "@/components/common/CryptoIcon/CryptoIcon.vue";
-import { getDeterministicHue } from "@/lib/utils";
+import { getDeterministicHue, type CSSVars } from "@/lib/utils";
 import TaxPagination from "./TaxPagination.vue";
 import {
   useDerivativesSort,
@@ -267,7 +267,7 @@ const {
                     variant="outline"
                     class="text-[8px] font-black uppercase tracking-widest border transition-colors flex items-center gap-1.5 text-[hsl(var(--badge-hue),75%,35%)] bg-[hsla(var(--badge-hue),80%,50%,0.12)] border-[hsla(var(--badge-hue),80%,50%,0.2)] pointer-events-none"
                     :style="
-                      { '--badge-hue': getDeterministicHue(tx.exchange) } as any
+                      { '--badge-hue': getDeterministicHue(tx.exchange) } as CSSVars
                     "
                   >
                     <CryptoIcon :symbol="tx.exchange" :size="14" colored />

@@ -11,7 +11,32 @@ const getCSSVar = (name: string) => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-export function usePerformanceChart<T extends { timestamp: number }>(
+// Shape shared by the two real data sources this chart renders: PerformancePoint
+// (equity/cost-basis view) and DrawdownPoint (drawdown view) from ICryptoMetricsPort.
+export interface PerformanceChartPoint {
+  timestamp: number
+  valueFiat?: number
+  drawdownPercent?: number
+  costBasisFiat?: number
+}
+
+// lightweight-charts' MouseEventParams types seriesData values as the union of every
+// series data shape it supports; Area/Baseline/Line series all resolve to the
+// SingleValueData branch (`value`), never the OHLC branch (`close`), but we check both
+// so the helper stays correct if a bar/candlestick series is ever added.
+const getSeriesPrice = (
+  seriesData: MouseEventParams['seriesData'],
+  series: ISeriesApi<'Area'> | ISeriesApi<'Baseline'> | ISeriesApi<'Line'> | null
+): number | undefined => {
+  if (!series) return undefined
+  const point = seriesData.get(series)
+  if (!point) return undefined
+  if ('value' in point) return point.value
+  if ('close' in point) return point.close
+  return undefined
+}
+
+export function usePerformanceChart<T extends PerformanceChartPoint>(
   chartContainer: Ref<HTMLElement | null>,
   wrapperContainer: Ref<HTMLElement | null>,
   tooltip: Ref<HTMLElement | null>,
@@ -167,16 +192,14 @@ export function usePerformanceChart<T extends { timestamp: number }>(
         return
       }
 
-      const value = param.seriesData.get(areaSeries!) as any
-      const costValue = costBasisSeries ? (param.seriesData.get(costBasisSeries) as any) : null
+      const price = getSeriesPrice(param.seriesData, areaSeries)
 
-      if (!value) {
+      if (price === undefined) {
         tooltip.value.style.opacity = '0'
         return
       }
 
-      const price = value.value ?? value.close
-      const cost = costValue ? (costValue.value ?? costValue.close) : null
+      const cost = getSeriesPrice(param.seriesData, costBasisSeries) ?? null
 
       // Format tooltip content
       let tooltipHtml = `<div class="text-muted-foreground font-medium mb-1 border-b border-border/50 pb-1">${formatDate(param.time as string)}</div>`
@@ -228,7 +251,7 @@ export function usePerformanceChart<T extends { timestamp: number }>(
 
     const areaData = sortedData.map(p => ({
       time: p.timestamp as UTCTimestamp,
-      value: isPercent ? (p as any).drawdownPercent : (p as any).valueFiat,
+      value: isPercent ? p.drawdownPercent : p.valueFiat,
     }))
 
     areaSeries.setData(areaData)
@@ -236,7 +259,7 @@ export function usePerformanceChart<T extends { timestamp: number }>(
     if (!hideCostBasis && costBasisSeries) {
       const costData = sortedData.map(p => ({
         time: p.timestamp as UTCTimestamp,
-        value: (p as any).costBasisFiat,
+        value: p.costBasisFiat,
       }))
       costBasisSeries.setData(costData)
     }

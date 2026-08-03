@@ -150,15 +150,20 @@ export function usePagination<T>(
 // without duplicating the domain logic.
 // ---------------------------------------------------------------------------
 
-export type EventBadgeVariant = 'gain' | 'loss' | 'exempt' | 'activation'
+export type EventBadgeVariant = 'gain' | 'loss' | 'exempt' | 'activation' | 'unresolved'
 
 /**
  * Derives the visual badge variant from a single audit trail event.
- * Priority: WALLET_ACTIVATION → non-taxable (exempt) → gain / loss by sign.
+ * Priority: WALLET_ACTIVATION → non-taxable (exempt) → unresolved → gain / loss by sign.
+ *
+ * The `null` check is load-bearing, not defensive: `null >= 0` is `true` in JavaScript, so
+ * comparing an unresolved figure directly renders it as a profit. A gain nobody could compute is
+ * neither a gain nor a loss.
  */
 export function getEventVariant(event: TaxLotHistoryEvent): EventBadgeVariant {
   if (event.flag === 'WALLET_ACTIVATION') return 'activation'
   if (!event.isTaxable) return 'exempt'
+  if (event.gainLossEur === null) return 'unresolved'
   return event.gainLossEur >= 0 ? 'gain' : 'loss'
 }
 
@@ -168,6 +173,7 @@ export const BADGE_CLASSES: Record<EventBadgeVariant, string> = {
   loss: 'bg-loss-soft text-loss border-loss/20',
   exempt: 'bg-info-soft text-info border-info/20',
   activation: 'bg-surface-3 text-muted border-border',
+  unresolved: 'bg-surface-3 text-muted-foreground border-border',
 }
 
 /**
@@ -179,10 +185,17 @@ export const BADGE_I18N_KEYS: Record<EventBadgeVariant, string> = {
   loss: 'tax.audit.badge_loss',
   exempt: 'tax.audit.badge_exempt',
   activation: 'tax.audit.badge_activation',
+  unresolved: 'tax.audit.badge_unresolved',
 }
 
-/** Returns a Tailwind text-color class for a numeric gain/loss value. */
-export function gainLossClass(value: number): string {
+/**
+ * Returns a Tailwind text-color class for a gain/loss value.
+ *
+ * `null` means the figure could not be resolved, which is not the same as zero and must not be
+ * coloured as a profit — `null >= 0` is `true` in JavaScript, so an unguarded comparison would.
+ */
+export function gainLossClass(value: number | null): string {
+  if (value === null) return 'text-muted-foreground'
   if (value > 0) return 'text-profit'
   if (value < 0) return 'text-loss'
   return 'text-muted-foreground'
