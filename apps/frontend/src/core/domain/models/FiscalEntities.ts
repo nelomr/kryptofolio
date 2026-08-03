@@ -10,7 +10,15 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
-import type { TransactionId, LotId } from './BrandedTypes'
+import type { TransactionId, LotId, AccountId } from './BrandedTypes'
+import type {
+  TaxLotStatus,
+  DisposalType,
+  FifoQualityFlag,
+  FiscalClassificationFlag,
+  ManualValueProvenance,
+  FlagSeverity,
+} from '@kryptofolio/shared-types'
 
 // ---------------------------------------------------------------------------
 // FuturesTransactionType — operation types specific to futures/derivatives
@@ -115,6 +123,22 @@ export interface TaxTransactionEntity {
 }
 
 // ---------------------------------------------------------------------------
+// LotCustodyLocation — where a lot's quantity currently sits (may differ from
+// the acquiring venue once a non-taxable custody movement has relocated it)
+// ---------------------------------------------------------------------------
+
+export interface LotCustodyLocation {
+  /** Branded account ID — may be a synthetic `ownwallet-<ASSET>` account */
+  accountId: AccountId
+  accountName: string
+  /** True for the synthetic counterparty custody resolves an unrecorded movement to */
+  isSynthetic: boolean
+  parentAccountId: AccountId | null
+  /** Quantity of the lot currently held at this account. Zero-quantity rows are filtered upstream. */
+  qty: number
+}
+
+// ---------------------------------------------------------------------------
 // TaxLotEntity — FIFO tax lot (Level 2)
 // ---------------------------------------------------------------------------
 
@@ -125,7 +149,7 @@ export interface TaxLotEntity {
   symbol: string
   /** Acquisition date as a native Date */
   date: Date
-  /** Exchange or wallet where acquired */
+  /** Exchange or wallet where acquired — the acquiring venue, not necessarily where it sits now */
   exchange: string
   /** Original quantity when lot was opened */
   originalQty: number
@@ -135,8 +159,10 @@ export interface TaxLotEntity {
   unitCost: number
   /** Total remaining cost basis in EUR */
   totalCost: number
-  /** Lot status */
-  status?: 'FULL' | 'PARTIAL' | 'EMPTY'
+  /** Canonical lot status, passed through from the calculation engine unchanged */
+  status: TaxLotStatus
+  /** Present-day custody per account. Empty when nothing has moved and the projection has no row. */
+  currentLocations: LotCustodyLocation[]
 }
 
 // ---------------------------------------------------------------------------
@@ -149,16 +175,22 @@ export interface TaxLotHistoryEvent {
   disposalDate: Date
   /** Quantity disposed from this lot */
   amountFromLot: number
-  /** Sale price per unit in EUR */
-  salePriceEur: number
-  /** Realized gain or loss in EUR */
-  gainLossEur: number
+  /** Sale price per unit in EUR. Null when unresolved — never fabricated as 0. */
+  salePriceEur: number | null
+  /** Realized gain or loss in EUR. Null when unresolved — never fabricated as 0. */
+  gainLossEur: number | null
   /** Fee portion attributable to this disposal in EUR */
   saleFeeEur?: number
   /** Whether this event is subject to IRPF taxation */
   isTaxable: boolean
-  /** Special flags, e.g. internal transfer markers */
-  flag?: 'WALLET_ACTIVATION' | null
+  /** Why the lot was consumed: a network fee is not a sale. */
+  disposalType: DisposalType
+  /** Fiscal classification, e.g. the Tangem wallet-activation audit marker. Orthogonal to qualityFlag. */
+  flag?: FiscalClassificationFlag | null
+  /** Data-quality defect on this event's valuation, if any. Orthogonal to flag — both may be present. */
+  qualityFlag?: FifoQualityFlag | null
+  /** Whether salePriceEur/gainLossEur came from the market or from a manual assignment */
+  valueProvenance?: ManualValueProvenance
   notes?: string
   /** Asset symbol (e.g., BTC) */
   assetSymbol?: string
@@ -202,4 +234,94 @@ export interface TaxReportEntity {
   summary: TaxReportSummary
   /** Detailed per-transaction audit trail for AEAT */
   auditTrail: TaxLotHistoryEvent[]
+}
+
+// ---------------------------------------------------------------------------
+// FiscalIntegrityReportEntity — the pending-review surface (one row per defect)
+// ---------------------------------------------------------------------------
+
+export interface FiscalIntegrityDefectEntity {
+  qualityFlag: FifoQualityFlag
+  severity: FlagSeverity
+  assetId: string | null
+  accountId: string | null
+  txId: string | null
+  occurredAt: string | null
+  /** An i18n key, never prose — the backend emits no user-facing copy. */
+  detailKey: string
+  pendingReview: boolean
+}
+
+export interface FiscalIntegrityGroupEntity {
+  qualityFlag: FifoQualityFlag
+  severity: FlagSeverity
+  count: number
+  pendingReview: number
+  rows: FiscalIntegrityDefectEntity[]
+}
+
+export interface FiscalIntegrityReportEntity {
+  groups: FiscalIntegrityGroupEntity[]
+  totalDefects: number
+  pendingReview: number
+  /** Derived figures are stale until the next rebuild succeeds. */
+  needsRecalculation: boolean
+}
+
+// ---------------------------------------------------------------------------
+// MaterializationSummaryEntity — what a rebuild reconciled, per derived table
+// ---------------------------------------------------------------------------
+
+export interface ReconciliationSummaryEntity {
+  inserted: number
+  updated: number
+  retired: number
+  reactivated: number
+}
+
+export interface MaterializationSummaryEntity {
+  taxLots: ReconciliationSummaryEntity
+  lotHistoryEvents: ReconciliationSummaryEntity
+  custodyEntries: ReconciliationSummaryEntity
+  flagged: number
+  pendingReview: number
+}
+
+export interface RebuildOutcomeEntity {
+  materialized: boolean
+  materialization: MaterializationSummaryEntity | null
+  materializationError: string | null
+  /** Rows a user can resolve by declaring a value or a destination. Zero when no rebuild ran. */
+  pendingReview: number
+}
+
+// ---------------------------------------------------------------------------
+// IngestionOutcomeEntity — the ingestion response, with structured rejections
+// ---------------------------------------------------------------------------
+
+export interface IngestionRejectionEntity {
+  idHash: string
+  timestamp: string
+  txType: string | null
+  reason: string
+}
+
+export interface IngestionOutcomeEntity extends RebuildOutcomeEntity {
+  status: 'success'
+  processedCount: number
+  message: string
+  /** Always present, empty when nothing was refused. */
+  rejected: IngestionRejectionEntity[]
+  /** Rows persisted with a fiat magnitude that could not be resolved. */
+  unresolvedFiat: number
+}
+
+// ---------------------------------------------------------------------------
+// OverrideOutcomeEntity — what an override mutation wrote, and the rebuild that followed
+// ---------------------------------------------------------------------------
+
+export interface OverrideOutcomeEntity {
+  applied: number
+  materialization: MaterializationSummaryEntity | null
+  pendingReview: number
 }

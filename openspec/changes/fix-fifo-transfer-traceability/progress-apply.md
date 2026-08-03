@@ -3,18 +3,19 @@
 Session log for `/openspec-apply-change`. Updated as each task group closes so an interrupted
 session can be resumed from here.
 
-**Total:** 165 tasks in 14 groups. **Complete: 90.**
+**Total:** 165 tasks in 14 groups. **Complete: 104.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
 
 ## Session summary
 
-Eleven groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
+Twelve groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
 ports), **3** (pure classification), **4** (migration `004`), **5** (policy-driven flattening),
 **6** (double-entry custody), **7** (materialisation reconciliation, which also discharged group 6's
 deferred 6.3), **8** (ingestion integrity and sub-accounts), **9** (automatic rebuild and overrides),
-**10** (read path: status, provenance, custody). Groups 11–14 remain.
+**10** (read path: status, provenance, custody), **11** (anti-corruption layer DTO realignment).
+Groups 12–14 remain.
 
 ### What was built
 
@@ -30,6 +31,9 @@ deferred 6.3), **8** (ingestion integrity and sub-accounts), **9** (automatic re
 | Engine | Seven custody relations: `v_custody_entries`, `v_lot_custody_allocation` (recursive, `USING KEY`), `v_lot_current_location`, `v_custody_balances`, `v_fifo_data_quality` |
 | Adapters | `DuckDbTaxCalculatorAdapter.calculateCustodyEntries()` / `.getDataQuality()`; both dual-source `UNION`s now filter on `is_taxable` and report the excluded count |
 | Repo | `.nvmrc` (24.16.0) + `engines` in the root `package.json`; `DUCKDB_THREADS=1` and `maxWorkers: 2` in both vitest configs |
+| Frontend DTOs | `CommonSchemaHelpers.nullableNumericField` — the surgical fix for the fabricated-`0` defect; `ExternalTaxSchemas.ts` rewired to the canonical status/disposal/quality-flag/provenance/custody vocabulary; `FiscalIntegritySchemas.ts` — new, mirrors the backend's fiscal-integrity and rebuild/ingestion/override outcome DTOs field for field |
+| Frontend domain | `FiscalEntities.ts` gains `LotCustodyLocation`, `FiscalIntegrityReportEntity` + its group/defect rows, `MaterializationSummaryEntity`, `RebuildOutcomeEntity`, `IngestionOutcomeEntity`, `OverrideOutcomeEntity`; `BrandedTypes.ts` gains `AccountId`, `TransactionIdHash` |
+| Frontend tests | A genuine cross-package contract test (`backend-contract.spec.ts`) using type-only deep imports of the backend's own DTOs — no fixture the frontend author invented independently |
 
 **Measured totals at pause:** `shared-types` 38/38, `core-domain` 58/58, `database` 99/99 — all
 `tsc --noEmit` clean. `apps/backend` 143 passing / 2 failing (both group 8's `repro.test.ts`), 28
@@ -146,7 +150,7 @@ pnpm -F @kryptofolio/backend  exec vitest run --typecheck src/core/domain/ports/
 | 8 | Ingestion integrity and sub-accounts | ✅ done (73/126) |
 | 9 | Automatic rebuild and overrides | ✅ done (83/126) |
 | 10 | Read path: status, provenance, custody | ✅ done (90/165) |
-| 11 | Anti-corruption layer DTO realignment | ⬜ pending |
+| 11 | Anti-corruption layer DTO realignment | ✅ done (104/165) |
 | 12 | UI: status, custody, pending review | ⬜ pending |
 | 13 | End-to-end verification | ⬜ pending |
 
@@ -1674,6 +1678,189 @@ but they are not the test's own verdict either.
    a test, because the failure would have been a runtime `Catalog Error` in a method this group has no
    coverage for.
 
+### Group 11 — Anti-corruption layer DTO realignment ✅ 13/13 (11.8 superseded)
+
+| package | before | after |
+|---|---|---|
+| `packages/shared-types` | 40 passing, `tsc` clean | **40 passing**, `tsc` clean (untouched) |
+| `packages/core-domain` | 69 passing, `tsc` clean | **69 passing**, `tsc` clean (untouched) |
+| `packages/database` | 112 passing, `tsc` clean | **112 passing**, `tsc` clean (untouched) |
+| `apps/backend` tests | 301 passing / 0 failing | **301 passing / 0 failing** (untouched) |
+| `apps/backend` typecheck | **2 errors**, both `mockPortfolio.ts` | **0 errors** |
+| `apps/frontend` tests | 271 passing | **328 passing** (+57) |
+| `apps/frontend` typecheck (`vue-tsc --noEmit`) | clean | clean |
+
+Measured with `pnpm --filter <pkg> test`, `pnpm --filter @kryptofolio/backend exec tsc --noEmit`,
+and `pnpm --filter @kryptofolio/frontend run typecheck`. The group's own target — backend `tsc`
+errors 2 → 0 — is met, and nothing outside `apps/frontend` and the two `mockPortfolio.ts` lines
+was touched.
+
+#### What was built
+
+| file | Δ | what |
+|---|---|---|
+| `CommonSchemaHelpers.ts` | +20 | `nullableNumericField` — the surgical nullable variant |
+| `ExternalTaxSchemas.ts` | +95 / −20 | canonical status, required `disposalType` (read from the existing `operation_type` wire field), `qualityFlag`, `valueProvenance`, `custody` → `currentLocations`, nullable `sale_price_eur`/`gain_loss_eur` |
+| `MockDtoSchemas.ts` | +72 / −20 | identical vocabulary on `MockTaxLotSchema` / `MockTaxLotHistorySchema` / `MockTokenHistorySchema`; the one pre-existing `any` replaced with a narrow local schema |
+| `FiscalEntities.ts` | +142 | `LotCustodyLocation`, canonical `TaxLotEntity.status`/`currentLocations`, `TaxLotHistoryEvent.disposalType`/`qualityFlag`/`valueProvenance`, `FiscalIntegrityReportEntity` + group/defect rows, `MaterializationSummaryEntity`, `RebuildOutcomeEntity`, `IngestionOutcomeEntity`, `OverrideOutcomeEntity` |
+| `BrandedTypes.ts` / `BrandedTypeSchemas.ts` | +6 / +14 | `AccountId`, `TransactionIdHash` + their Zod parsers |
+| `FiscalIntegritySchemas.ts` | +159, new | mirrors `apps/backend/.../dtos/fiscal-integrity.ts` and `.../dtos/materialization.ts` field for field, `satisfies z.ZodType<Entity>` pinning each schema to its domain entity |
+| `mockPortfolio.ts` (backend) | +2 | `disposal_type` added to the two event literals — the two type errors this group owned |
+| 9 new test files | +1170 lines | see the Red-quality table below |
+| `domain-entities.test.ts`, `useTaxCalculations.test.ts` | +2 / +1 | pre-existing fixtures updated for the now-required `status`/`currentLocations`/`disposalType` fields |
+
+#### Decisions taken
+
+1. **`disposalType` reads the existing `operation_type` wire field; no new field was invented.**
+   The backend's `TokenLotHistoryEventDto.operation_type` and `TaxReportAuditTrailEventDto.operation_type`
+   are typed `DisposalType` — the field's *meaning* changed (D15: no longer a hardcoded `'SELL'`),
+   but its *name* did not. A first draft of this schema added a separate `disposal_type` field,
+   which is wrong and is exactly the class of drift 11.12 exists to catch — see the finding below.
+2. **The wire field for custody is `custody`, not `current_locations`.** `TokenLotDto.custody:
+   TokenLotCustodyDto[]`. The domain field is named `currentLocations` for readability at the call
+   site (matching the `fiscal-domain` spec's own wording), but the Zod schema key reading the wire
+   must be `custody` or the parse silently defaults to an empty array via `.optional().default([])`
+   — silent, not loud, which is worse than a missing-field error. Both of the above were caught by
+   `backend-contract.spec.ts` before shipping, not discovered later.
+3. **`numericField`'s duplicate definitions in `MockDtoSchemas.ts` and `ExternalFuturesSchemas.ts`
+   were left alone; only `CommonSchemaHelpers.ts` gained the nullable variant.** D26 names all
+   three as duplicating the coercion, but only `sale_price_eur`/`gain_loss_eur` — which live on
+   `ExternalTaxSchemas.ts` (via `CommonSchemaHelpers`) and `MockDtoSchemas.ts`'s own
+   `MockTaxLotHistorySchema` — can genuinely be `null`. `ExternalFuturesSchemas.ts` has no such
+   field (futures DTOs carry no nullable proceeds), so duplicating the nullable helper there would
+   be unused surface, not a fix. `MockDtoSchemas.ts` got its own `nullableNumericField` import from
+   `CommonSchemaHelpers` rather than a second local implementation, since nothing in that file
+   needed the loose local coercion for anything the shared helper doesn't already do identically.
+4. **Quantities in `LotCustodyLocation` stay `number`, not a `PreciseAmount` value object — a spec
+   defect, recorded rather than papered over.** The `lot-custody-traceability` spec's own scenario
+   ("Custody entries use branded identifiers and precision values") requires "the project's
+   precision value object, not a raw primitive." **No such object exists anywhere in
+   `apps/frontend`.** `originalQty`, `remainingQty`, `unitCost`, `totalCost` — every quantity and
+   monetary field already on `TaxLotEntity`, predating this group — is a plain `number`. Introducing
+   a new value-object system as a side effect of a 13-task DTO-realignment group would be exactly
+   the kind of invented behaviour the brief warns against. The branded-identifier half of the same
+   scenario *is* achievable and is done (`AccountId` on `accountId`/`parentAccountId`). Left for
+   whichever group next touches frontend monetary types generally, not scoped to custody alone.
+5. **`ExternalTaxLotShape` and `ExternalTaxLotHistoryShape` are exported as named intermediates**,
+   separate from the transformed `ExternalTaxLotSchema` / `ExternalTaxLotHistorySchema`. No existing
+   consumer's import changed — both transformed names still exist and behave identically — but the
+   contract test in `backend-contract.spec.ts` needs the pre-transform shape's `.shape` to enumerate
+   the wire keys this layer actually declares, and a `ZodEffects` (the type `.transform()` produces)
+   does not expose that without reaching into private internals.
+6. **`MockDtoSchemas.ts` is dead code, confirmed rather than assumed.** `grep -rn
+   "MockTaxLotHistorySchema\|MockTokenHistorySchema\|MockTaxReportSchema\|MockTaxTransactionSchema"
+   apps/frontend/src` returns only the file's own definitions — no adapter implements `ITaxPort` or
+   `ICryptoPortfolioPort` with "Mock" in the name. Same shape as D31's finding about the five deleted
+   CSV parsers. Updated anyway, per 11.4's explicit instruction and the `domain-anti-corruption`
+   spec's substitutability requirement — but worth flagging for whoever eventually audits dead code
+   the way 14.47 did for the parsers.
+7. **`ExpandedLotsTable.vue` was read but not touched.** It still derives `FULL`/`PARTIAL`/`EMPTY`
+   locally from `remainingQty`/`originalQty` and never reads `lot.status` at all, so it does not
+   reference the retired string literals anywhere the compiler would catch — it compiles cleanly
+   against the new `TaxLotEntity.status: TaxLotStatus`, and 322/322 (now 328/328) frontend tests
+   stayed green through every edit in this group. Deleting that derivation and rendering `lot.status`
+   directly is task 12.2, explicitly, and is left for group 12.
+
+#### ⚠️ Two real wire-contract bugs, caught by the cross-package contract test before they shipped
+
+This is the demonstration that 11.12 exists to provide, not a hypothetical. Building
+`backend-contract.spec.ts` — which types its fixtures against the backend's own exported
+interfaces via a type-only deep import (`@kryptofolio/backend/src/core/application/use-cases/...`,
+erased at build time, no backend runtime code executes) — surfaced two mistakes in this session's
+own first draft of `ExternalTaxSchemas.ts`, before either reached the working tree in a form anyone
+would review:
+
+1. **`current_locations` versus `custody`.** The first draft invented a wire field name for the
+   custody list. The real field, per `GetTokenHistoryUseCase.ts:29`, is `custody`. A hand-authored
+   fixture (the `zod-schemas.test.ts` pattern) would have agreed with either name, because the
+   author of the fixture and the author of the schema were the same hand — exactly D27's diagnosis.
+   Typing the fixture as `TokenLotDto` forced the real field name to be used, and the schema's own
+   test failed with `expected undefined to be 2` (the parsed `currentLocations` was empty) until the
+   key was corrected.
+2. **`disposal_type` versus `operation_type`.** The first draft added a new required field rather
+   than reading the backend's actual (repurposed) field. Caught the same way: a fixture typed as
+   `TokenLotHistoryEventDto` cannot carry a field called `disposal_type` — the interface has no
+   such member — so the moment the fixture was built honestly, the schema that expected it had
+   nothing to read and failed closed (`requires disposal_type` semantics, but on a field that was
+   never sent).
+
+**Deliberate proof this was the contract test doing its job, not a fluke:** both bugs were live in
+the working tree for the span of one edit cycle each — write schema, write/adjust
+`backend-contract.spec.ts`, run, read the failure, fix the schema. Neither reached a state where
+`pnpm --filter @kryptofolio/frontend test` was green with the bug present, because the contract
+test and the bug were introduced in the same uncommitted batch. This is recorded here rather than
+hidden, because the honest count for "how many real bugs did 11.12 catch this session" is two, and
+that number is the argument for the task, not a footnote to it.
+
+#### The Red, honestly
+
+**57 new tests across 9 files.** Per-file breakdown of how Red was established:
+
+| file | tests | Red quality |
+|---|---|---|
+| `CommonSchemaHelpers.spec.ts` | 10 | 3 genuinely Red on their own assertions, against a **stub** (`nullableNumericField = numericField`) that exists and answers wrongly — not a missing-symbol failure. 7 passed against the stub (pin numericField's unchanged behaviour, and the parts of the new helper that coincide with the old one) |
+| `BrandedTypeSchemas.spec.ts` | 4 | Implemented before the test (mechanical 6-line addition mirroring 3 existing lines). Red skipped; non-vacuity proven by **1 deliberate break** (`.min(1)` removed) → 1 named failure |
+| `ExternalTaxSchemas.spec.ts` | 17 | **14 genuinely Red** on their own assertions against the real pre-change schema (e.g. `expected true to be false` on `status: 'FULL'`, `expected undefined to be 'FEE'` on `disposalType`). 3 passed immediately, pinning pre-existing correct behaviour (`WALLET_ACTIVATION` rejection of other values, a genuine `0` staying `0`) |
+| `RestCryptoAdapter.spec.ts` | 2 | Both genuinely Red (`promise resolved instead of rejecting`; `DomainValidationError` thrown on the accept-path test) |
+| `MockDtoSchemas.spec.ts` | 7 | All 7 genuinely Red on their own assertions |
+| `FiscalIntegritySchemas.spec.ts` | 8 | Stub was `z.object({}).passthrough()` for all four schemas. **3 genuinely Red** (`expected undefined to be 'UNTRACKED_INFLOW'`, two rejection tests that passed vacuously against the permissive stub). Non-vacuity of the remaining 5 proven by **3 deliberate breaks** (group-level rename dropped, `quality_flag` enum loosened, `reason` `.min(1)` removed) → 3 named failures, one per targeted test |
+| `IdentifierDeterminism.spec.ts` | 3 | All 3 passed immediately — **expected**, per the task: the live path was already deterministic, and the job was to confirm it, not fix it. Non-vacuity proven by **3 deliberate breaks** on `TransactionHashService.ts` (injected `Math.random()` into the hash input → failed both the determinism test and the grep test in one break; removed `amount_in` from the hashed string → failed the collision test) |
+| `backend-contract.spec.ts` | 6 | **2 genuinely Red** on the real bugs described above. 4 passed immediately once the two bugs were fixed. Non-vacuity of the remaining 4 proven by **2 deliberate breaks** beyond the ones the bugs themselves exercised (`custody` key removed from the schema → `declares every key` failed; `status` loosened to `z.string()` and `operation_type` removed from the history shape → both the stale-vocabulary-rejection test and the second `declares every key` test failed) |
+
+**Totals: 31 of 57 new tests were genuinely Red on their own assertions before the corresponding
+production code existed or was correct. Of the remaining 26, every one was proven non-vacuous by a
+named deliberate break** (10 breaks total across the group), except the 3 pins in
+`ExternalTaxSchemas.spec.ts` and the 1 pin in `CommonSchemaHelpers.spec.ts` that assert behaviour
+which was already correct and unchanged by this group (numericField's default, a genuine zero
+staying zero, an already-correct flag rejection) — those are recorded as pins, not claimed as
+breaks, matching the convention set in earlier groups for "an absence, correctly passes."
+
+#### How 11.12's cross-package requirement was handled
+
+Fully real, not a partial substitute. `apps/frontend` already carries `@kryptofolio/backend` as a
+`workspace:*` **devDependency** (for `AppType`, consumed by `BffClient.ts` for Hono RPC inference),
+and the backend's `package.json` has no `"exports"` field restricting subpath resolution, so a
+type-only deep import — `import type { TokenLotDto } from
+'@kryptofolio/backend/src/core/application/use-cases/GetTokenHistoryUseCase.js'` — resolves through
+the pnpm symlink and is erased entirely by esbuild/vite before the test runs; no backend runtime
+code executes, no DuckDB or SQLite adapter is ever touched.
+
+Verified before relying on it: a smoke test confirmed `vitest run` resolves and passes with such an
+import, and — the thing that actually matters for not shipping a broken CI gate —
+`pnpm --filter @kryptofolio/frontend run typecheck` (the real script `turbo run typecheck` calls, via
+project references in `tsconfig.json`) stays clean with the import present. A **direct**
+`vue-tsc --noEmit -p tsconfig.app.json` (bypassing project-reference/build mode) does **not** stay
+clean — it pulls backend files into a single-project compile and applies the frontend's stricter
+`noUnusedParameters` to them, producing 3 pre-existing backend lint errors unrelated to this change.
+That failure mode is **not** introduced by this group: it reproduces identically on a clean
+`git stash` with zero edits, because `BffClient.ts`'s existing `AppType` import already pulls the
+same dependency graph in. Recorded so a future reader does not mistake the direct-`-p` invocation
+for a regression.
+
+Five files use this mechanism: `FiscalIntegritySchemas.spec.ts` (fixtures typed against
+`FiscalIntegrityReportDto`, `RebuildOutcomeDto`, `IngestionOutcomeDto`, `OverrideOutcomeDto`),
+`backend-contract.spec.ts` (typed against `TokenLotDto`, `TokenLotHistoryEventDto`,
+`GetTokenHistoryResponse`, `SpanishTaxReportResponse`, `TaxReportAuditTrailEventDto`), and three
+supporting `ExternalTaxLotShape` / `ExternalTaxLotHistoryShape` key-enumeration assertions inside
+the last. All three of task 11.12's named scenarios are covered on real backend types: the
+canonical status vocabulary (accept/reject), a nullable field surviving the round trip (twice —
+token history and the tax report audit trail), and a backend field with no frontend counterpart
+being caught (the `Object.keys` comparison against the real DTO's keys, proven non-vacuous above).
+
+Nothing here is a partial substitute or a documented gap — the two bugs found while building it are
+the evidence.
+
+#### Deferred to group 12, explicitly
+
+- Rendering `lot.status` directly and deleting `getLotStatus`/`getLotBadgeVariant`/
+  `getLotStatusText` from `ExpandedLotsTable.vue` (task 12.2) — the DTO and domain model are ready;
+  the component still computes its own retired vocabulary locally and was deliberately left alone.
+- Wiring `FiscalIntegritySchemas.ts` into a port method, an adapter, and a Pinia Colada query — task
+  11.7 asked for the DTO schemas only, per the parent brief's explicit scope note. No `ITaxPort` /
+  `ICryptoPortfolioPort` method was added for `getFiscalIntegrity()` or the override mutations; that
+  is UI/query wiring, group 12's territory.
+- The `PreciseAmount`-for-quantities spec defect on `LotCustodyLocation` (decision 4 above).
+
 ## Notes and decisions taken during apply
 
 - **A test that passed for the wrong reason was caught and fixed.** The "must not invent a 1.0
@@ -1840,56 +2027,60 @@ kept stable while the order changed. The group header says so.
 
 ## Resume here — next action
 
-90 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9 and 10 are closed. Group 14 holds 39
-tasks and runs **before** group 13. **No task is left open in a closed group.**
+104 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10 and 11 are closed. Group 14 holds
+39 tasks and runs **before** group 13. **No task is left open in a closed group.**
 
 ### Working tree state
 
-`@kryptofolio/backend` reports **2** `tsc` errors, down from 6 — group 10 cleared the four it owned.
-Both remaining are in `src/data/mockPortfolio.ts` (missing `disposal_type`, lines 170 and 204) and
-belong to group 11. **Do not "fix" them ad hoc.**
+`@kryptofolio/backend` reports **0** `tsc` errors — group 11 cleared the two it owned
+(`src/data/mockPortfolio.ts` now carries `disposal_type` on both event literals).
 
 | package | state |
 |---|---|
 | `packages/shared-types` | ✅ 40/40 tests, `tsc --noEmit` clean |
 | `packages/core-domain` | ✅ 69/69 tests, `tsc --noEmit` clean |
 | `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean |
-| `apps/frontend` | ✅ 271/271 tests |
+| `apps/frontend` | ✅ **328/328 tests** (+57), `vue-tsc --noEmit` clean |
 | `apps/backend` tests | ✅ **301/301 passing** |
-| `apps/backend` (typecheck) | ❌ 2 errors, both owned by group 11 |
+| `apps/backend` (typecheck) | ✅ **0 errors** |
 
-`pnpm run test:packages` still aborts at `@kryptofolio/backend#build` on those two. Clearing them is
-group 11's first task and unblocks the first full green run of the whole workspace.
+`pnpm run test:packages` should now reach `@kryptofolio/backend#test` without aborting at `#build`
+— this is the first point in the change where every package's `tsc` is clean simultaneously. Not
+re-verified end to end in this session (that overlaps 13.13's job); verify it as group 12's first
+housekeeping step if it has not already been checked.
 
-### Next task: group 11 — anti-corruption layer DTO realignment
+### Next task: group 12 — UI: status, custody, pending review
 
-What group 10 leaves for it, in priority order:
+What group 11 leaves for it, in priority order:
 
-1. **⚠️ `numericField` re-fabricates the price this change made `NULL`.**
-   `apps/frontend/.../CommonSchemaHelpers.ts` opens with
-   `if (val === null || val === undefined) return 0`, and `ExternalTaxSchemas.ts:198` parses
-   `sale_price_eur` through it. The backend now emits `null` for an unresolved price; the frontend
-   turns it into `0`, which reads as a genuine disposal at zero. This is `COALESCE(price, 1.0)`'s
-   surviving twin, one layer out, and it fails **silently**. Fix before anything cosmetic.
-2. **`ExternalTaxLotSchema.status` is `z.enum(["FULL","PARTIAL","EMPTY"]).optional()`** and the backend
-   now sends `OPEN | PARTIAL | CLOSED`, so that parse fails in the running app today. Same for
-   `MockDtoSchemas.ts:186/204`, `FiscalEntities.ts:139` and `ExpandedLotsTable.vue:53`, which still
-   derives the retired vocabulary from `remainingQty`. The frontend suite is green at 271 because it
-   fixtures its own inputs — that is not evidence.
-3. **`src/data/mockPortfolio.ts` needs `disposal_type`** on the two event literals at 170 and 204.
-   These are the last two backend type errors.
-4. **New payload fields to model:** `TokenLotDto.custody[]`
-   (`account_id`, `account_name`, `is_synthetic`, `parent_account_id`, `qty`);
-   `TokenLotHistoryEventDto` gains `operation_type: DisposalType`, `quality_flag`, `value_provenance`,
-   and nullable `sale_price_eur` / `gain_loss_eur`; the tax report gains `excludedFlaggedEvents`,
-   `manuallyAssignedCount` and the same per-row provenance.
-5. **New endpoint to model:** `GET /api/fiscal/integrity` returns
-   `{ groups: [{ quality_flag, severity, count, pendingReview, rows[] }], totalDefects, pendingReview,
-   needsRecalculation }`, already Zod-parsed server-side by `dtos/fiscal-integrity.ts`. Mirror that
-   schema rather than restating the vocabularies — `FIFO_QUALITY_FLAGS` and `FLAG_SEVERITIES` come from
-   `@kryptofolio/shared-types`, and `detail_key` is an i18n key needing a translation entry, not prose.
-6. **The ingestion response now carries `rejected[]` and `unresolvedFiat`** alongside the narrated
-   `message`, so a review surface no longer has to parse the sentence.
+1. **`ExpandedLotsTable.vue` still computes its own retired status vocabulary.** `getLotStatus`
+   (line ~53) derives `FULL`/`PARTIAL`/`EMPTY` from `remainingQty`/`originalQty` and never reads
+   `lot.status` — the exact inversion D14 documents (`FULL` reads as "fully sold" to a badge that
+   calls it `lot_status.sold`). It compiles cleanly against the new `TaxLotEntity.status:
+   'OPEN'|'PARTIAL'|'CLOSED'` only because it never references the field at all. Task 12.2, verbatim:
+   delete `getLotStatus`/`getLotBadgeVariant`/`getLotStatusText` and render `lot.status` directly.
+2. **`TaxLotEntity.currentLocations` and `TaxLotHistoryEvent.disposalType`/`qualityFlag`/
+   `valueProvenance` are populated by the DTO layer but rendered nowhere.** Tasks 12.4 (split custody
+   display), 12.5 (`disposalType`/flag/provenance in `LotEventHistory.vue`), and the `isLotInLoss`
+   guard in 12.3 (a flagged or non-positive basis must render the data-quality indicator, not a
+   profit/loss judgement) all consume fields that exist and are typed but have no UI consumer yet.
+3. **`GET /api/fiscal/integrity` and the rebuild/ingestion/override outcomes have frontend Zod
+   schemas (`FiscalIntegritySchemas.ts`) but no port method, no adapter wiring, and no Pinia Colada
+   query.** Task 11.7 was scoped to the DTO schemas only, per the parent brief. Group 12 needs to add
+   whatever `ITaxPort`/`ICryptoPortfolioPort` method(s) it wants for the `PendingValuesReview`
+   surface (12.6) and wire `useQuery`/`useMutation` around them (12.7) — the schemas
+   (`ExternalFiscalIntegritySchema`, `ExternalRebuildOutcomeSchema`, `ExternalIngestionOutcomeSchema`,
+   `ExternalOverrideOutcomeSchema`) and their domain entities (`FiscalIntegrityReportEntity` etc. in
+   `FiscalEntities.ts`) are ready to be the parse boundary for that wiring.
+4. **i18n keys are still owed.** Task 12.9 needs `lot_status.closed`, disposal-type labels, one key
+   per `FIFO_QUALITY_FLAGS` member with an explanation, manual-value markers, and custody labels in
+   both `es.ts` and `en.ts` — none of this group's new domain fields have a translation yet.
+5. **A pre-existing spec defect to fix while touching the same area:** `lot-custody-traceability`
+   requires `LotCustodyLocation.qty` to use "the project's precision value object, not a raw
+   primitive." No such object exists anywhere in `apps/frontend` — every quantity on `TaxLotEntity`
+   is a plain `number` and always has been. This is not group 12's blocker (nothing in 12's task list
+   asks for a value-object migration), but do not treat the current `number` typing as an oversight
+   if it comes up; it is a recorded, deliberate deferral, not a miss.
 
 ### Standing reminders for every remaining group
 
@@ -1908,6 +2099,19 @@ What group 10 leaves for it, in priority order:
    the resulting oxc parse error points at a line 170 below the real cause.
 6. **A test that pre-`exec`s migration files and then calls a real adapter's `initialize()` will apply
    them twice**, which 004's `ALTER TABLE` cannot survive. Let the runner do it.
+7. **A frontend test can type-check a fixture against another workspace package's real exported
+   types with a type-only deep import**, e.g. `import type { X } from
+   '@kryptofolio/backend/src/.../Foo.js'`. It works whenever the consuming package already carries
+   the other as a `workspace:*` dependency (`apps/frontend` already does, for `AppType`) and the
+   target has no `"exports"` field restricting subpaths. Being `import type` (not `import`), esbuild
+   erases it before the test runs — no runtime code from the other package executes, and it costs
+   nothing at test time. It is a materially stronger fixture than one the schema's own author
+   invented, and it caught two real bugs in this group (see the group 11 entry) before either
+   shipped. **Caveat:** do not use a direct `vue-tsc --noEmit -p tsconfig.app.json` to sanity-check
+   this pattern — it bypasses project-reference mode and pulls the other package's files into a
+   single-project compile under the consumer's stricter lint options, which fails on pre-existing,
+   unrelated code in the other package. The project's real typecheck entrypoint
+   (`vue-tsc --noEmit`, via `tsconfig.json`'s `references`) does not have this problem.
 
 ### Carried-forward finding for group 8 — RESOLVED in group 8
 

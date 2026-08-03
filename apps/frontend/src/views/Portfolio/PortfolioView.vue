@@ -74,7 +74,7 @@ const {
 
         <!-- Holdings Table -->
         <LotHierarchyTable
-          :data="filteredHoldings as any"
+          :data="filteredHoldings"
           :isLoading="isFetching"
           :onExpand="handleExpandSymbol"
           :detailsMap="expandedDetailsMap"

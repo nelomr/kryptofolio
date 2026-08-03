@@ -17,9 +17,17 @@ import type {
   TaxTransactionType,
   TaxLotHistoryEvent,
   TaxLotEntity,
+  LotCustodyLocation,
 } from "@/core/domain/models/FiscalEntities";
-import { LotIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
-import { numericField, timestampToDate } from "./CommonSchemaHelpers";
+import {
+  TAX_LOT_STATUSES,
+  DISPOSAL_TYPES,
+  FIFO_QUALITY_FLAGS,
+  FISCAL_CLASSIFICATION_FLAGS,
+  MANUAL_VALUE_PROVENANCE,
+} from "@kryptofolio/shared-types";
+import { LotIdSchema, AccountIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
+import { numericField, nullableNumericField, timestampToDate } from "./CommonSchemaHelpers";
 
 // ---------------------------------------------------------------------------
 // ExternalTaxTransactionSchema
@@ -190,30 +198,40 @@ const ExternalTaxReportSummarySchema = z
 // ExternalTaxLotHistorySchema — typed audit trail entry
 // ---------------------------------------------------------------------------
 
-export const ExternalTaxLotHistorySchema = z
-  .object({
+// Named separately from the transformed export so a contract test can enumerate the wire keys
+// this layer actually declares, without reaching into ZodEffects internals.
+export const ExternalTaxLotHistoryShape = z.object({
     id: z.string().min(1),
     disposal_date: timestampToDate,
     amount_from_lot: numericField,
-    sale_price_eur: numericField,
-    gain_loss_eur: numericField,
+    // Null when the backend could not resolve a price. Coercing to 0 here would read
+    // downstream as a genuine disposal at zero — the fabrication this change removes.
+    sale_price_eur: nullableNumericField,
+    gain_loss_eur: nullableNumericField,
     sale_fee_eur: numericField.optional(),
     is_taxable: z.boolean().default(false),
-    flag: z.enum(["WALLET_ACTIVATION"]).nullable().optional(),
+    // Fiscal classification — orthogonal to quality_flag below, both may be present at once.
+    flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
+    // Data-quality defect on this event's own valuation, if any.
+    quality_flag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
+    value_provenance: z.enum(MANUAL_VALUE_PROVENANCE).optional(),
     notes: z.string().optional(),
     asset_symbol: z.string().optional(),
     asset_logo_uri: z.string().optional(),
     exchange_name: z.string().optional(),
     exchange_logo_uri: z.string().optional(),
-    operation_type: z.string().optional(),
-  })
+    // Why the lot was consumed (SELL/SWAP/FEE/SPEND). The wire name is "operation_type"
+    // (TokenLotHistoryEventDto.operation_type in GetTokenHistoryUseCase) — its meaning changed
+    // from a hardcoded 'SELL' to the real disposal type, but the field was never renamed.
+    // Required, and constrained to the canonical vocabulary: the backend always sends one.
+    operation_type: z.enum(DISPOSAL_TYPES),
+});
+
+export const ExternalTaxLotHistorySchema = ExternalTaxLotHistoryShape
   .transform((raw): TaxLotHistoryEvent => {
-    const rawOpType = String(raw.operation_type || "UNKNOWN").toUpperCase();
-    const opType = KNOWN_TYPES.includes(
-      rawOpType as (typeof KNOWN_TYPES)[number],
-    )
-      ? (rawOpType as TaxTransactionType)
-      : "UNKNOWN";
+    // operation_type is already validated against DISPOSAL_TYPES above — a subset of
+    // KNOWN_TYPES — so this always resolves; kept as a cast rather than a re-check.
+    const opType = raw.operation_type as TaxTransactionType;
 
     return {
       id: raw.id,
@@ -223,7 +241,10 @@ export const ExternalTaxLotHistorySchema = z
       gainLossEur: raw.gain_loss_eur,
       saleFeeEur: raw.sale_fee_eur,
       isTaxable: raw.is_taxable,
+      disposalType: raw.operation_type,
       flag: raw.flag ?? null,
+      qualityFlag: raw.quality_flag ?? null,
+      valueProvenance: raw.value_provenance,
       notes: raw.notes,
       assetSymbol: raw.asset_symbol,
       assetLogoUri: raw.asset_logo_uri,
@@ -234,12 +255,38 @@ export const ExternalTaxLotHistorySchema = z
   });
 
 // ---------------------------------------------------------------------------
+// ExternalLotCustodyLocationSchema — where a lot's quantity currently sits
+// ---------------------------------------------------------------------------
+
+const ExternalLotCustodyLocationSchema = z
+  .object({
+    account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
+    account_name: z.string(),
+    is_synthetic: z.boolean(),
+    parent_account_id: z
+      .string()
+      .nullable()
+      .transform((val) => (val === null ? null : AccountIdSchema.parse(val))),
+    qty: numericField,
+  })
+  .transform(
+    (raw): LotCustodyLocation => ({
+      accountId: raw.account_id,
+      accountName: raw.account_name,
+      isSynthetic: raw.is_synthetic,
+      parentAccountId: raw.parent_account_id,
+      qty: raw.qty,
+    }),
+  );
+
+// ---------------------------------------------------------------------------
 // ExternalTaxLotSchema — typed FIFO tax lot
 // ---------------------------------------------------------------------------
 
-export const ExternalTaxLotSchema = z
-  .object({
-    id: z.any().transform((val) => LotIdSchema.parse(String(val))),
+// Named separately from the transformed export so a contract test can enumerate the wire keys
+// this layer actually declares, without reaching into ZodEffects internals.
+export const ExternalTaxLotShape = z.object({
+    id: z.unknown().transform((val) => LotIdSchema.parse(String(val))),
     symbol: z.string().optional().default(""),
     date: timestampToDate,
     exchange: z.string().optional().default(""),
@@ -247,8 +294,15 @@ export const ExternalTaxLotSchema = z
     remaining_qty: numericField,
     unit_cost: numericField,
     total_cost: numericField,
-    status: z.enum(["FULL", "PARTIAL", "EMPTY"]).optional(),
-  })
+    // Canonical OPEN|PARTIAL|CLOSED, passed through unchanged from the calculation engine.
+    // Required: a lot with no status is not a valid lot.
+    status: z.enum(TAX_LOT_STATUSES),
+    // Wire name is "custody" (TokenLotDto.custody in GetTokenHistoryUseCase) — the domain field
+    // is named currentLocations to read clearly at the call site, but the two must not drift.
+    custody: z.array(ExternalLotCustodyLocationSchema).optional().default([]),
+});
+
+export const ExternalTaxLotSchema = ExternalTaxLotShape
   .transform(
     (raw): TaxLotEntity => ({
       id: raw.id,
@@ -260,6 +314,7 @@ export const ExternalTaxLotSchema = z
       unitCost: raw.unit_cost,
       totalCost: raw.total_cost,
       status: raw.status,
+      currentLocations: raw.custody,
     }),
   );
 

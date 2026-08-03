@@ -12,7 +12,7 @@
  */
 
 import { z } from 'zod'
-import type { AssetId, TransactionId, LotId } from '@/core/domain/models/BrandedTypes'
+import type { AssetId, TransactionId, LotId, AccountId, TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 
 // ---------------------------------------------------------------------------
 // Branded ID Schemas — parse + validate + produce branded domain types
@@ -35,3 +35,15 @@ export const LotIdSchema = z
   .string()
   .min(1, 'LotId cannot be empty')
   .transform((val) => val as LotId)
+
+/** Validates and brands a raw string as an AccountId */
+export const AccountIdSchema = z
+  .string()
+  .min(1, 'AccountId cannot be empty')
+  .transform((val) => val as AccountId)
+
+/** Validates and brands a raw string as a TransactionIdHash */
+export const TransactionIdHashSchema = z
+  .string()
+  .min(1, 'TransactionIdHash cannot be empty')
+  .transform((val) => val as TransactionIdHash)

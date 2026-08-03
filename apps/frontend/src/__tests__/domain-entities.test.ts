@@ -190,6 +190,8 @@ describe('TaxLotEntity — fiscal domain shape', () => {
       remainingQty: 0.5,
       unitCost: 45000,
       totalCost: 45000,
+      status: 'PARTIAL',
+      currentLocations: [],
     }
     expect(lot.originalQty).toBe(1.0)
     expect(lot.remainingQty).toBe(0.5)

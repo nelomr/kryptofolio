@@ -33,6 +33,7 @@ const lotEvent = (overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEve
   salePriceEur: 100,
   gainLossEur: 50,
   isTaxable: true,
+  disposalType: 'SELL',
   ...overrides,
 })
 

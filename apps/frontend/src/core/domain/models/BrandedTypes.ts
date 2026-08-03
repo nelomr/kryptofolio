@@ -30,3 +30,9 @@ export type TransactionId = Brand<string, 'TransactionId'>
 
 /** Nominal type for FIFO lot identifiers (e.g. "lot-btc-1") */
 export type LotId = Brand<string, 'LotId'>
+
+/** Nominal type for account identifiers, including synthetic `ownwallet-<ASSET>` accounts */
+export type AccountId = Brand<string, 'AccountId'>
+
+/** Nominal type for the deterministic transaction identity manual overrides key on */
+export type TransactionIdHash = Brand<string, 'TransactionIdHash'>

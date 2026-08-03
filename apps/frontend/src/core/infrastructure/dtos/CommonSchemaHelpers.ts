@@ -27,6 +27,26 @@ export const numericField = z.preprocess((val) => {
 }, z.number({ invalid_type_error: 'Expected number or numeric string' }))
 
 /**
+ * Same coercion as numericField, except an absent value stays absent instead of becoming 0.
+ *
+ * Reserved for fields the backend can genuinely send as `null` because no value could be
+ * resolved (an unpriced disposal, its derived gain). Applying this everywhere numericField is
+ * used today would turn every legitimately-zero field into `null` across the application —
+ * this variant exists so that conversion is opt-in, field by field.
+ */
+export const nullableNumericField = z.preprocess((val) => {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'number') return val
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (trimmed === '') return null
+    const n = Number(trimmed)
+    return isNaN(n) ? val : n
+  }
+  return val
+}, z.number({ invalid_type_error: 'Expected number or numeric string' }).nullable())
+
+/**
  * Normalizes various timestamp formats (ISO 8601 strings, "YYYY-MM-DD HH:MM:SS",
  * or Unix epoch numbers) into native Date objects.
  */

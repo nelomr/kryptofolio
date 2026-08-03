@@ -1,10 +1,19 @@
 import { z } from 'zod';
 import { AssetIdSchema, LotIdSchema, TransactionIdSchema } from './BrandedTypeSchemas';
-import type { 
-  TaxTransactionType, 
+import type {
+  TaxTransactionType,
+  TaxLotEntity,
   TaxLotHistoryEvent,
   FuturesTransactionType,
 } from '@/core/domain/models/FiscalEntities';
+import {
+  TAX_LOT_STATUSES,
+  DISPOSAL_TYPES,
+  FIFO_QUALITY_FLAGS,
+  FISCAL_CLASSIFICATION_FLAGS,
+  MANUAL_VALUE_PROVENANCE,
+} from '@kryptofolio/shared-types';
+import { nullableNumericField } from './CommonSchemaHelpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,20 +80,26 @@ export const MockTaxLotHistorySchema = z.object({
   id: LotIdSchema,
   disposalDate: timestampToDate,
   amountFromLot: numericField,
-  salePriceEur: numericField,
-  gainLossEur: numericField,
+  // Nullable, matching the real schema — a mock representing an unresolved price must be able to
+  // say so, or it is not a substitute for what the real adapter can send.
+  salePriceEur: nullableNumericField,
+  gainLossEur: nullableNumericField,
   saleFeeEur: numericField.optional(),
   isTaxable: z.boolean().default(false),
-  flag: z.enum(['WALLET_ACTIVATION']).nullable().optional(),
+  flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
+  qualityFlag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
+  valueProvenance: z.enum(MANUAL_VALUE_PROVENANCE).optional(),
   notes: z.string().optional(),
   assetSymbol: z.string().optional(),
   assetLogoUri: z.string().optional(),
   exchangeName: z.string().optional(),
   exchangeLogoUri: z.string().optional(),
   operationType: z.string().optional(),
+  disposalType: z.enum(DISPOSAL_TYPES),
 }).transform((raw): TaxLotHistoryEvent => ({
   ...raw,
   flag: raw.flag ?? null,
+  qualityFlag: raw.qualityFlag ?? null,
   operationType: raw.operationType as TaxTransactionType | undefined,
 }));
 
@@ -183,8 +198,8 @@ export const MockTaxLotSchema = z.object({
   remaining_qty: numericField,
   unit_cost: numericField,
   total_cost: numericField,
-  status: z.enum(['FULL', 'PARTIAL', 'EMPTY']).optional(),
-}).transform((raw) => ({
+  status: z.enum(TAX_LOT_STATUSES),
+}).transform((raw): TaxLotEntity => ({
   id: raw.id,
   symbol: raw.symbol,
   date: raw.date,
@@ -194,15 +209,31 @@ export const MockTaxLotSchema = z.object({
   unitCost: raw.unit_cost,
   totalCost: raw.total_cost,
   status: raw.status,
+  // Mocks never model split custody — the real schema's ExternalLotCustodyLocationSchema is
+  // what carries it, and nothing constructs mock custody fixtures today.
+  currentLocations: [],
 }));
+
+// Narrows an individually-parsed raw event without resorting to `any` — this nested shape
+// predates MockTaxLotHistorySchema and still uses the wire's snake_case field names.
+const legacyMockEventSchema = z.object({
+  id: z.string(),
+  disposal_date: z.union([z.string(), z.number(), z.date()]),
+  amount_from_lot: numericField,
+  sale_price_eur: nullableNumericField,
+  gain_loss_eur: nullableNumericField,
+  is_taxable: z.boolean().default(false),
+  flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
+  notes: z.string().optional(),
+});
 
 export const MockTokenHistorySchema = z.object({
   lots: z.array(MockTaxLotSchema).default([]),
   history: z.record(
     z.string(), // lotId
     z.object({
-      status: z.enum(['FULL', 'PARTIAL', 'EMPTY']).optional(),
-      history: z.array(z.any()).default([]), // raw events are any, then we parse them
+      status: z.enum(TAX_LOT_STATUSES).optional(),
+      history: z.array(z.unknown()).default([]), // raw events, parsed individually below
     })
   ).default({}),
 }).transform((raw) => {
@@ -212,16 +243,19 @@ export const MockTokenHistorySchema = z.object({
       Object.entries(raw.history).map(([lotId, record]) => [
         lotId,
         // Transforms snake_case mock data from the BFF into camelCase domain entities
-        record.history.map((evt: any) => ({
-          id: evt.id,
-          disposalDate: timestampToDate.parse(evt.disposal_date),
-          amountFromLot: evt.amount_from_lot,
-          salePriceEur: evt.sale_price_eur,
-          gainLossEur: evt.gain_loss_eur,
-          isTaxable: evt.is_taxable,
-          flag: evt.flag ?? null,
-          notes: evt.notes,
-        }))
+        record.history.map((rawEvt) => {
+          const evt = legacyMockEventSchema.parse(rawEvt);
+          return {
+            id: evt.id,
+            disposalDate: timestampToDate.parse(evt.disposal_date),
+            amountFromLot: evt.amount_from_lot,
+            salePriceEur: evt.sale_price_eur,
+            gainLossEur: evt.gain_loss_eur,
+            isTaxable: evt.is_taxable,
+            flag: evt.flag ?? null,
+            notes: evt.notes,
+          };
+        })
       ])
     )
   };

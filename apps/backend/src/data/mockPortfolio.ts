@@ -177,6 +177,7 @@ const mockPortfolio = {
           sale_price_fiat: "50.00",
           gain_loss_fiat: "3000.00", // (50 - 20) * 100
           is_taxable: true,
+          disposal_type: 'SELL',
           fiat_currency: 'EUR',
         },
       ],
@@ -211,5 +212,6 @@ export const mockNonTaxableEvent: LotHistoryEvent = {
   sale_price_fiat: "22000.00",
   gain_loss_fiat: "0",
   is_taxable: false,
+  disposal_type: 'FEE',
   fiat_currency: 'EUR',
 }
