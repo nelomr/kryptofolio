@@ -40,6 +40,7 @@ import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDail
 import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortfolioSummaryUseCase.js';
 import { GetSpanishTaxReportUseCase } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
 import { GetTokenHistoryUseCase } from '../../application/use-cases/GetTokenHistoryUseCase.js';
+import { GetFiscalIntegrityUseCase } from '../../application/use-cases/GetFiscalIntegrityUseCase.js';
 import { FifoMaterializerService } from '../../application/services/FifoMaterializerService.js';
 import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
 import { SetManualPriceOverrideUseCase } from '../../application/use-cases/overrides/SetManualPriceOverrideUseCase.js';
@@ -117,6 +118,7 @@ export class DIContainer {
   public getPortfolioSummaryUseCase: GetPortfolioSummaryUseCase;
   public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
   public getTokenHistoryUseCase: GetTokenHistoryUseCase;
+  public getFiscalIntegrityUseCase: GetFiscalIntegrityUseCase;
   public fifoMaterializerService: FifoMaterializerService;
   public ingestAndMaterializeUseCase: IngestAndMaterializeUseCase;
   public setManualPriceOverrideUseCase: SetManualPriceOverrideUseCase;
@@ -202,6 +204,11 @@ export class DIContainer {
       this.taxCalculatorPort,
     );
 
+    this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
+    );
+
     this.fifoMaterializerService = new FifoMaterializerService(
       this.ledgerPort,
       this.taxCalculatorPort,
@@ -264,6 +271,11 @@ export class DIContainer {
 
     this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
       this.taxCalculatorPort,
+    );
+
+    this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
+      this.taxCalculatorPort,
+      this.userSettingsPort,
     );
 
     this.fifoMaterializerService = new FifoMaterializerService(

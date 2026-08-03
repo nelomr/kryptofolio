@@ -31,10 +31,27 @@ export const rebuildOutcomeSchema = z.object({
   pendingReview: z.number().int().nonnegative(),
 });
 
+/**
+ * A row the ledger refused, named rather than counted.
+ *
+ * `reason` is required: a rejection without one leaves the user unable to correct the row, which is
+ * indistinguishable from losing it silently.
+ */
+const ingestionRejectionSchema = z.object({
+  idHash: z.string().min(1),
+  timestamp: z.string(),
+  txType: z.string().nullable(),
+  reason: z.string().min(1),
+});
+
 export const ingestionOutcomeSchema = rebuildOutcomeSchema.extend({
   status: z.literal('success'),
   processedCount: z.number().int().nonnegative(),
   message: z.string(),
+  /** Always present, empty when nothing was refused, so a consumer never has to test for absence. */
+  rejected: z.array(ingestionRejectionSchema),
+  /** Rows persisted with a fiat magnitude that could not be resolved, recorded as `0`. */
+  unresolvedFiat: z.number().int().nonnegative(),
 });
 
 /** What an override mutation reports: what it wrote, and the rebuild that followed. */

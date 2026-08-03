@@ -685,3 +685,345 @@ a withdrawal keeps `amount_out = destino` as the net moved, with the fee as `ori
 asset, and drops the IN side. That unifies Bit2Me with the `gross = net + fee` model of D24.
 *Rejected:* compensating in the DuckDB view, which must read an already-normalised ledger — otherwise
 the knowledge that one source duplicates sides is buried in SQL and repeated for the next such source.
+
+### D26 — The fabricated-number defect survives one layer out, in the client
+
+The investigation that opened this change found four independent causes, one of which was
+`COALESCE(price, 1.0)` inventing a plausible price where none existed. Group 5 removed it from SQL,
+group 2 made `sale_price_fiat` and `gain_loss_fiat` nullable so the engine could *say* "unknown", and
+group 10 carried that `NULL` through the port and over HTTP.
+
+The client then converts it back into a number:
+
+```
+CommonSchemaHelpers.ts:18    if (val === null || val === undefined) return 0
+CommonSchemaHelpers.ts:22    if (trimmed === '') return 0
+MockDtoSchemas.ts:21         if (val === null || val === undefined) return 0
+ExternalFuturesSchemas.ts:28 if (val === null || val === undefined) return 0
+```
+
+It is the same defect with the same shape — a fabricated value standing in for missing knowledge —
+and it fails the same way, silently. A disposal whose price could not be resolved renders as a
+zero-value disposal rather than as pending review, which is precisely the outcome the flag vocabulary
+exists to prevent.
+
+**Why the fix must be surgical.** `numericField` is applied at **210 call sites across seven DTO
+modules**. The great majority of those fields legitimately want `0` when the value is missing — a
+holding with no recorded change, a fee that was waived. Changing the shared helper to return `null`
+would convert every absent number in the application into `null` and break rendering across views
+that have nothing to do with fiscal data. The correction is therefore a *separate* nullable variant,
+applied only to the fields the backend can genuinely send as `null`: `sale_price_eur` and
+`gain_loss_eur` today, and whatever 14ζ's nullable magnitudes add later. A global change would trade
+one silent failure for a loud one in unrelated screens.
+
+**A second, louder defect sits beside it.** `ExternalTaxLotSchema.status` is still
+`z.enum(["FULL","PARTIAL","EMPTY"])`, and `MockDtoSchemas` declares the same vocabulary twice. Group
+10 now sends `OPEN | PARTIAL | CLOSED`, so that parse **fails in the running application**. Tasks 11.2
+and 11.4 already own it; it is recorded here because it shares a root cause with the above — the
+client's contract drifted from the server's and nothing compared them.
+
+### D27 — A fixture the schema's author wrote is not evidence
+
+Both defects in D26 were live while the frontend suite reported **271 passing tests**. That is not an
+oversight in any individual test; it is structural. `zod-schemas.test.ts` has 15 tests and constructs
+every one of its own inputs, so the schema and the fixture were written by the same hand against the
+same assumption. They agree with each other regardless of what the backend actually sends.
+
+The same shape of gap has now appeared three times in this change, in three different layers:
+
+| layer | what agreed with itself | what caught it |
+|---|---|---|
+| type-level assertions | `expectTypeOf` compiling to nothing | reading the config, not the suite |
+| source vocabulary | fixtures using idealised labels | reading the real export files |
+| client DTOs | schema and fixture by one author | reading the backend's own DTO |
+
+None was caught by the tests. Each was caught by comparing an artefact against the thing it claims to
+describe. That is what 11.12, 14.18 and 14.27 are: a contract test against the backend's own DTO
+definitions, a label-level net over every real export, and a quantity-level net over every real
+amount. They are not extra coverage of the same kind — they are the kind that was missing.
+
+### D28 — A random identifier defeats idempotency
+
+Three CSV parsers fall back to `Math.random()` when a row carries no source identifier:
+`KrakenSpotCsvParser:126`, `BitvavoCsvParser:69`, `BitUnixCsvParser:61`. Task 11.8 named only the
+first.
+
+This matters more than it looks. The entire rebuild and reconciliation model of D13 rests on a
+transaction resolving to the same identity across ingestions: reconciliation compares a recomputed set
+against a persisted set, and overrides are keyed on transaction identity. A random identifier means
+re-ingesting the same file appends duplicates instead of matching, so the derived tables grow, orphan
+retirement cannot converge, and any manual override silently detaches from the row it was assigned to.
+
+The identifier must be derived from the row's own mapped content, which is deterministic by
+construction and collides only when two rows are genuinely identical in every mapped field.
+
+### D29 — A header-name mapper cannot express a source's conventions, so a third layer is added
+
+Every finding of D20 through D24 has the same shape: the pipeline knows what a column is *called* and
+nothing about what the number in it *means* to the exchange that wrote it. `COLUMN_DICTIONARY` can
+map `Comisión de la operación` onto `fee_amount`. It has no way to state that the number beside it is
+a **EUR valuation of a fee actually paid in HBAR**, and that the real quantity is
+`Cantidad de origen − Cantidad de destino`. That is not a gap in the dictionary's contents; it is
+outside what a `header → field` function can say at all.
+
+The pipeline therefore becomes three layers with one new seam:
+
+```
+  ┌─ 1. READER ───────────────────────────── source-agnostic ────────────┐
+  │  parsers.ts — parseCsv / parseExcel / processRawRows                  │
+  │  bytes → rows of strings. Owns the xlsx precision fix (14.26).        │
+  │  Its ONLY permitted branch is .csv versus .xlsx.                      │
+  └────────────────────────────┬─────────────────────────────────────────┘
+                               ▼
+  ┌─ 2. COLUMN MAPPING ──────────────────── header names → fields ───────┐
+  │  guessColumnMapping + the wizard's user confirmation.  UNCHANGED.    │
+  │  A confirmed mapping is the user's, and nothing may overwrite it.    │
+  └────────────────────────────┬─────────────────────────────────────────┘
+                               ▼
+  ┌─ 3. SOURCE FORMAT PROFILE ─── what layers 1 and 2 cannot say ────────┐
+  │  fee denomination │ fee convention │ directional fill                │
+  │  reference vs category columns │ one optional self-check invariant   │
+  │  Declarative. Reads no file. Returns no entity.                      │
+  └──────────────────────────────────────────────────────────────────────┘
+```
+
+*Why a third layer rather than more dictionary entries:* every attempt to encode a convention as a
+column name produces a lie about a column. `grupo` mapped to `group_id` was exactly that, and it cost
+~99% of the Bit2Me rows.
+
+*Why not per-source code branches in the normalizer:* that is what the five deleted parsers were, and
+their failure mode is documented below in D31. A branch is not inspectable, not exhaustively typed,
+and not assertable by a test that says "every source declares this".
+
+*Alternative rejected — one profile per row shape rather than per source.* Tempting because Bitvavo
+genuinely varies its fee denomination between a `buy` and a `withdrawal`. But that variation is
+already expressible **inside** one dimension: the Bitvavo profile declares
+`NAMED_COLUMN('Fee currency')`, and reading that column per row is what produces `EUR` on one row and
+`XRP` on the next. Splitting the profile per row shape would multiply six profiles into dozens and
+reintroduce a selection problem per row.
+
+*Alternative rejected — infer the conventions from the data.* `gross = net + fee` has two unknowns
+and one equation per row; a file where every fee is `0` — and 40 real rows are — satisfies both
+conventions identically, so inference is undetermined exactly where the data is most abundant. The
+conventions must be declared, and the invariant of D33 is what checks the declaration.
+
+### D30 — The profile is split across two packages, and `fifo-policy.ts` is the precedent that says how
+
+Two questions, two answers:
+
+```
+  @kryptofolio/shared-types        SOURCE_PROFILE_IDS, SourceProfileId,
+   (leaf, no workspace deps)       the ingestion wire field
+        │                          ── vocabulary and contract
+        ▼
+  @kryptofolio/core-domain         SOURCE_FORMAT_PROFILES,
+   (depends on shared-types)       SourceFormatProfile + its unions,
+                                   detectSourceProfile, the pure appliers
+        │                          ── behaviour
+        ├──────────────► apps/frontend   (preview)
+        └──────────────► apps/backend    (persistence)
+```
+
+`fifo-policy.ts`'s own header states the rule being followed: *"This lives in the leaf package on
+purpose: it has no workspace dependencies, so the domain layer, the DuckDB views and the ingestion
+path all read the same constants."* The operative clause is **the DuckDB views**. `packages/database`
+depends on `@kryptofolio/shared-types` and **not** on `@kryptofolio/core-domain`, so anything the
+engine must read has to be in the leaf.
+
+No DuckDB view reads a profile, and that is a consequence of a decision already taken rather than an
+assumption. D25/14.19b settled that a source that writes both directional sides is normalised **in the
+anti-corruption layer**, explicitly rejecting compensation in the view, because the view must read an
+already-normalised ledger. The same holds for every other dimension: by the time a row is a
+`spot_transactions` row, its fee has a denomination and a quantity, its gross/net/fee triple is
+resolved, and it has one directional side. The profile's whole job is over.
+
+So the profile table belongs beside its consumers — `classifyCustodyMovement`,
+`TransactionNormalizer`, `rowAggregator`, all in `core-domain` — which is also where the hexagonal
+rules put it: a pure declaration plus pure functions, no Zod, no Vue, no Axios, checkable by
+`scripts/check-domain-isolation.sh`.
+
+The **identifier** is different, because it crosses the wire. `transactionsBodySchema` in
+`routes/ingestion.ts` validates it with Zod, and shared-types is already where the ingestion schemas
+and `SPOT_TX_TYPES` live. Putting the union there keeps the frontend, the route and the use case
+reading one list, and `Record<SourceProfileId, SourceFormatProfile>` then gives the profile table the
+same compile-time exhaustiveness `Record<SpotTxType, FifoEventPolicy>` gives the event policy — adding
+a source without a profile is a type error, not a silent fallthrough.
+
+*Alternative rejected — everything in `shared-types`.* It would work, and it is what a reflexive
+reading of the `fifo-policy.ts` precedent suggests. Rejected because it inverts the precedent's actual
+reasoning: the leaf is for what the dependency graph forces there, and putting behaviour in it that
+nothing in `packages/database` reads makes the leaf the default home for anything shared by two
+packages. `core-domain` exists to be that home.
+
+*Alternative rejected — the frontend owns the profile and sends resolved values.* The backend would
+then trust client-computed fees, and re-ingesting the same file would depend on the frontend version
+that submitted it — the same objection that moved aggregation behind the ingestion boundary in D25.
+
+*Alternative rejected — the backend detects the profile from the headers itself.* The headers are not
+in the payload; only mapped rows are. Sending the header row so the backend can re-detect would
+duplicate the detection and create a second place for the two to disagree. The identifier is smaller,
+explicit, and — critically — is what the **user confirmed**.
+
+### D31 — `detect(headers)` was the right idea; resolving ambiguity by array order was the defect
+
+The five parsers in `apps/frontend/src/core/infrastructure/csv/` are deleted. Verified unreachable:
+nothing outside that directory and its own `__tests__` imports any of them, and the `MockTaxAdapter`
+that `index.ts` names as the registry's consumer — *"MockTaxAdapter iterates this list via detect() to
+find the right parser"* — does not exist anywhere in the repository.
+
+Deleting them is not only cleanup. Their content contradicts the domain this change establishes:
+
+```
+  KrakenSpotCsvParser._parseSingleRow          the domain, after group 3
+  ─────────────────────────────────────        ────────────────────────────────
+  type === 'deposit'  → 'DEPOSIT'              classifyCustodyMovement: a crypto
+                                               deposit is TRANSFER_IN; only fiat
+                                               is DEPOSIT                (D2, D4)
+  totalEur: 0, priceEur: 0, feeEur: 0          the fee is a disposal under IRPF
+  on every movement                            and is the event this whole change
+                                               exists to record       (D1, 14γ)
+  `kraken-${txid ?? refid ?? Math.random()}`   deterministic identity is what
+                                               reconciliation rests on     (D28)
+```
+
+A second, contradictory ingestion model left in the tree is a trap for the next reader, and this
+change has already been bitten three times by an artefact that agreed with itself (D27).
+
+**What is kept is the one part that was right.** The pipeline is currently format-blind — nothing
+anywhere selects a source — and the profile has to be selected somehow. `detect(headers)` is the
+correct primitive: header names are the only source signature available before any mapping happens.
+
+What is *not* kept is how the registry used it. `index.ts` says so in its own words: *"Order matters
+for detect() — parsers are checked in sequence. Bit2Me should be checked BEFORE Tangem since Tangem is
+a catch-all for simple formats."* An outcome that depends on array position is the same class of
+fragility as the three duplicated `NOT IN` lists of D1 — correct until someone reorders it, and silent
+when they do. `TangemCsvParser` already contained the fix and did not generalise it: its `detect` is
+`REQUIRED_HEADERS.every(...) && !EXCLUDE_IF_PRESENT.some(...)`, so the catch-all needs **negative
+evidence** before it wins.
+
+`detectSourceProfile` therefore takes a signature of required *and* forbidden headers per profile, and
+returns a discriminated result: resolved, ambiguous with every candidate listed, or unrecognised. It
+never picks. An ambiguity is surfaced to the user, who is already confirming the column mapping one
+step later and is the right authority; an unrecognised file falls to the `generic` profile, whose
+undetermined dimensions are reported pending rather than assumed.
+
+### D32 — The wizard's flow is preserved; exactly one contract changes, and it is the submit signature
+
+The user-facing flow — drop a file, confirm the column mapping, preview and validate, submit — is
+load-bearing and stays. The valuable part is specifically the **confirmation**: the profile answers
+questions the mapping cannot, and it must never answer one the mapping already did.
+
+Preserved, and asserted by 14.50:
+
+| artefact | contract held |
+|---|---|
+| `useCsvImportWizard.ts` | `WizardStep = 1 \| 2 \| 3`. No fourth step; the profile lives inside step 1 |
+| `useFileParser.parseFile(file)` | returns `ParseResult { data, headers, errors }`; 14.26 changes cell *values*, not the shape |
+| `useColumnMapper` | `initializeMapping(headers)` and the `mapping` ref unchanged; the user may still change any column |
+| `usePreviewTable` | `generatePreview(rows, mapping)` still callable with two arguments; the profile is an **optional third** parameter, so both existing call sites keep compiling |
+| `DataIngestionWizard.vue`, `DropzoneArea.vue`, `DataGridValidator.vue` | props and emits unchanged |
+| `CsvImportWizardContext` | gains a `sourceProfile` ref — additive; no existing consumer is affected |
+
+**The one deliberate break.** `processAndSubmit(validRows, marketType, accountId)` becomes
+`processAndSubmit(validRows, marketType, accountId, sourceProfileId)`; the mutation body gains
+`sourceProfileId` beside `rows`, `market` and `timezone`; and `transactionsBodySchema` gains the field.
+This is a contract change at three boundaries and is called out as one rather than smuggled in.
+
+The wire field is **required, not optional with a default**. An optional field would mean an omitted
+profile silently becomes some assumed convention — precisely the failure D16 removed when
+`toSpotTxType()` stopped defaulting to `'BUY'`, and D6 removed when `COALESCE(price, 1.0)` stopped
+inventing a plausible price. The frontend always sends a value; when nothing was detected that value
+is `generic`, which *declares its own uncertainty* instead of hiding it. The consequences are real and
+in scope: `useImportProcessor.spec.ts` and `routes/__tests__/ingestion.test.ts` payloads change, and a
+submission missing the field is asserted to be rejected.
+
+*Alternative rejected — a fourth wizard step for source selection.* It makes a correct auto-detection
+cost the user a click on every import, and `WizardStep` is a typed union three components read.
+
+*Alternative rejected — keep the profile entirely client-side and let the preview be the only consumer.*
+The backend is where fees and types are resolved. A client-only profile would leave the preview and the
+stored ledger free to disagree, which is the drift D27 catalogues three instances of.
+
+### D33 — A declared convention needs a check the source's own data can fail
+
+A profile is an assertion about an exchange's export format, and exchanges change their exports. The
+declaration is therefore paired with an optional invariant that the source's own columns can refute.
+
+The running-balance check is not a hypothetical: it is the method that established Kraken's convention
+in the first place. `balance = previous ± amount − fee` reconciled **8 of 8** rows, and Kraken's
+documentation states that formula verbatim. Without it the choice between "amount is net" and "amount
+is gross" would have been a guess, and guessing wrong moves `0.001 SOL` instead of `0.006` while
+leaving `0.005` unaccounted for.
+
+The invariant is a discriminated union with an explicit `NONE` member rather than an optional field,
+so "this source cannot self-check" is a stated fact a reviewer can see, not an omission indistinguishable
+from an oversight. Bit2Me, Bitvavo, Bitunix and Tangem ship no running-balance column and declare
+`NONE`; Kraken spot declares its `balance` column.
+
+**RESOLVED — `NONE` stays, and the criterion is independence, not the presence of a balance column.**
+The proposed universal alternative — asserting the gross/net/fee triple is internally consistent — was
+rejected because for three of the four sources it is a **tautology**. Kraken and Bitunix supply net and
+fee and *derive* gross; Bit2Me supplies gross and net and *derives* the fee. Asserting a relation the
+profile itself computes can never fail, so it would give four profiles the appearance of verification
+and the substance of none. It is not universal either: it is per-source, like everything else here.
+
+The qualifying test is therefore **independence from the profile's own derivation**, and the measured
+sources ship two forms of it, not one:
+
+| form | source | why it is independent |
+|---|---|---|
+| running balance | Kraken spot | `balance` takes no part in the derivation — 8 of 8 rows, formula stated verbatim in Kraken's documentation |
+| over-determined row | **Bitvavo** | `quantity × price + fee = paid` spans four columns, none derived from the others — exact on 12 of 12 rows |
+
+That corrects the paragraph above: **Bitvavo can self-check.** Only Bit2Me, Bitunix and Tangem declare
+none. And the asymmetry is worth stating rather than smoothing over — Bit2Me's convention is caught
+only by 14.27's digit-for-digit net, never by an invariant, so 14.49's break list says so explicitly
+instead of implying coverage the profile does not have.
+
+**RESOLVED — the excluded-header sets are a default-selection tie-breaker, not a correctness
+mechanism.** The question assumed detection had to be right. It does not: the profile is a **required**
+field on the ingestion contract and the user confirms it in step 1, so the backend never infers one.
+A misdetection therefore degrades into a wrong default in a selector the user can change with one
+click, never into wrongly interpreted data. The exclusion lists need not be exhaustive — start from the
+header names unique to each of the other five sources and let a real ambiguity report extend them.
+
+The one rule that does matter: **on an ambiguity, select nothing.** Leave the control unset and require
+the user to choose. A default among equal candidates is the array-order defect of `REGISTERED_PARSERS`
+wearing a different hat.
+
+**What made both questions answerable was reading the wizard.** Step 1 already contains two
+detect-or-choose controls — the account `Select` and the `v-model` on `marketType`, which is populated
+by `detectMarketTypeFromFile`. The profile is a third instance of an established pattern, not a new
+concept, and that is what turns a detection risk into a UI default.
+
+### D34 — Deriving the market from the profile retires a filename guess
+
+`detectMarketTypeFromFile` decides spot versus futures by searching the **file name** for `future`,
+`futuro` or `deriv`. A Kraken futures export saved under any other name is ingested as spot, silently,
+and the user's only clue is a market-type control they have no reason to distrust.
+
+A profile knows its market as a declared fact. The Kraken futures header row carries `funding rate`,
+`realized pnl` and `position uid`; no spot export has any of them. Once the profile resolves, the
+filename adds nothing and can only contradict.
+
+Keeping both would leave two detections able to disagree about one file, and the weaker of the two is
+the one whose reasoning the user cannot inspect. So the profile sets the market type (14.44c) and
+`detectMarketTypeFromFile` is retired or reduced to the unrecognised-profile fallback with that stated
+at its definition (14.44b). The existing control stays editable: an explicit user choice still wins
+over a declaration, exactly as it does today.
+
+**Corrections to the existing record, forced by D31.** Two statements in this document are wrong and
+are repaired by 14.48:
+
+1. **D5b and `fifo-policy.ts:117` say `WALLET_ACTIVATION` is "produced by `TangemCsvParser`".** It is
+   not. That parser is unreachable, so **nothing in the running application produces the flag today**.
+   The reasoning D5b rests on is nonetheless sound and unaffected: the flag is live *production data*
+   — `tangem_activacion_xrp.csv` carries `WALLET_ACTIVATION` in its `Type` column — and it is consumed
+   by `useTaxCalculations.ts:160`, `LotEventHistory.vue:30` and the DTO schemas. What was wrong is only
+   the named producer. Task **14.15** is the producer, and until it lands the flag has no write path,
+   which strengthens rather than weakens the case for keeping `flag` and `quality_flag` separate.
+2. **D28 names `KrakenSpotCsvParser:126`, `BitvavoCsvParser:69` and `BitUnixCsvParser:61` as the three
+   `Math.random()` sites to repair.** All three files are deleted. The premise stands — a random
+   identifier defeats the idempotency reconciliation rests on — but the live identifier path is
+   `generateIdHash` over the mapped record, so what remains is the assertion rather than the repair.
+   Tasks 11.8 and 11.11 are amended accordingly, without renumbering.

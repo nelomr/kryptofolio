@@ -1,4 +1,10 @@
 import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
+import type {
+  DisposalType,
+  FifoQualityFlag,
+  FiscalClassificationFlag,
+  ManualValueProvenance,
+} from '@kryptofolio/shared-types';
 
 export interface GetSpanishTaxReportRequest {
   year: number;
@@ -19,11 +25,20 @@ export interface TaxReportAuditTrailEventDto {
   id: string;
   disposal_date: string;
   amount_from_lot: string;
-  sale_price_eur: string;
-  gain_loss_eur: string;
+  /**
+   * Null when no price could be resolved. A `'0'` here would be read as a genuine disposal at zero,
+   * which is the failure mode the nullable column exists to prevent.
+   */
+  sale_price_eur: string | null;
+  gain_loss_eur: string | null;
   sale_fee_eur: number;
   is_taxable: boolean;
-  flag?: string | null;
+  /** Why the lot was consumed: a network fee is not a sale. */
+  operation_type: DisposalType;
+  flag?: FiscalClassificationFlag | null;
+  /** Present when the row was excluded from the declared base, and why. */
+  quality_flag?: FifoQualityFlag | null;
+  value_provenance?: ManualValueProvenance;
   notes?: string;
   asset_symbol?: string;
   exchange_name?: string;
@@ -36,6 +51,10 @@ export interface SpanishTaxReportResponse {
   savingsBaseYields: string;
   generalBaseAirdrops: string;
   summary: TaxReportSummaryDto;
+  /** Events held out of the totals above, so an incomplete base is never presented as complete. */
+  excludedFlaggedEvents: number;
+  /** Figures the user declared rather than the market supplying. */
+  manuallyAssignedCount: number;
   audit_trail: TaxReportAuditTrailEventDto[];
 }
 
@@ -82,6 +101,10 @@ export class GetSpanishTaxReportUseCase {
       spotCapitalGains: reportBase.spotCapitalGains,
       savingsBaseYields: reportBase.savingsBaseYields,
       generalBaseAirdrops: reportBase.generalBaseAirdrops,
+      excludedFlaggedEvents: reportBase.excludedFlaggedEvents,
+      manuallyAssignedCount: filteredEvents.filter(
+        (evt) => evt.value_provenance === 'MANUAL',
+      ).length,
       summary: {
         capital_gains_eur: capitalGainsEur,
         capital_losses_eur: capitalLossesEur,
@@ -94,11 +117,14 @@ export class GetSpanishTaxReportUseCase {
         id: evt.id || 'evt-unknown',
         disposal_date: evt.disposal_date,
         amount_from_lot: evt.amount_from_lot.toString(),
-        sale_price_eur: evt.sale_price_fiat.toString(),
-        gain_loss_eur: evt.gain_loss_fiat.toString(),
+        sale_price_eur: evt.sale_price_fiat === null ? null : evt.sale_price_fiat.toString(),
+        gain_loss_eur: evt.gain_loss_fiat === null ? null : evt.gain_loss_fiat.toString(),
         sale_fee_eur: 0,
         is_taxable: evt.is_taxable,
+        operation_type: evt.disposal_type,
         flag: evt.flag ?? null,
+        quality_flag: evt.quality_flag ?? null,
+        value_provenance: evt.value_provenance,
         notes: evt.notes ?? undefined,
         asset_symbol: evt.asset_symbol,
         exchange_name: evt.exchange_name,

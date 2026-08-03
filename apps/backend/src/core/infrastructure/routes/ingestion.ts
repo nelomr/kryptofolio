@@ -80,6 +80,10 @@ export function createIngestionApi(container: DIContainer) {
             materialization: outcome.materialization,
             materializationError: outcome.materializationError,
             pendingReview: outcome.materialization?.pendingReview ?? 0,
+            // Structured as well as narrated: the message is for a human reading a toast, this is
+            // what a UI needs to list the refused rows and let the user correct them.
+            rejected: ingestion.rejected,
+            unresolvedFiat: ingestion.unresolvedFiat,
           });
 
           return c.json(body, 201);

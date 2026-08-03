@@ -137,4 +137,15 @@ describe('DuckDbMetricsAdapter', () => {
     const kpis = await adapter.getKpis('EUR');
     expect(kpis.excludedFlaggedLots).toBe(0);
   });
+
+  it('reads the ledger again on a second call rather than a cached snapshot', async () => {
+    const before = await adapter.getKpis('EUR');
+    expect(before.excludedFlaggedLots).toBe(0);
+
+    seedCleanAndFlaggedLots();
+    const after = await adapter.getKpis('EUR');
+
+    expect(after.excludedFlaggedLots).toBe(2);
+    expect(Number(after.totalCostBasis)).toBe(100);
+  });
 });

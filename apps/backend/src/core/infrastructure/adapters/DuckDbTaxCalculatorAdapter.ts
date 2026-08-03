@@ -3,6 +3,7 @@ import type {
   CustodyEntryRow,
   FifoDataQualityRow,
   ITaxCalculatorPort,
+  LotCustodyLocationRow,
   SpanishTaxBaseReport,
 } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
@@ -74,6 +75,39 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
     query += ` ORDER BY occurred_at, spot_transaction_id, account_id, tax_lot_id`;
 
     return (await this.db.queryMany(query, params)) as CustodyEntryRow[];
+  }
+
+  /**
+   * The net position the custody legs add up to, per lot and account.
+   *
+   * `is_synthetic` is cast to BOOLEAN and `qty` to VARCHAR at the boundary: the underlying columns
+   * are a SQLite integer and a DECIMAL, and the port asks for a flag and a decimal string.
+   */
+  public async getLotCustodyLocations(
+    accountId?: string,
+  ): Promise<LotCustodyLocationRow[]> {
+    let query = `
+      SELECT
+          tax_lot_id,
+          asset_id,
+          account_id,
+          account_name,
+          CAST(is_synthetic AS BOOLEAN) AS is_synthetic,
+          parent_account_id,
+          CAST(qty AS VARCHAR) AS qty
+      FROM v_lot_current_location
+    `;
+    const params: unknown[] = [];
+
+    if (accountId) {
+      params.push(accountId);
+      // $1 is safe — DuckDB parameterized binding, not interpolation
+      query += ` WHERE account_id = $1`;
+    }
+
+    query += ` ORDER BY tax_lot_id, account_id`;
+
+    return (await this.db.queryMany(query, params)) as LotCustodyLocationRow[];
   }
 
   /**

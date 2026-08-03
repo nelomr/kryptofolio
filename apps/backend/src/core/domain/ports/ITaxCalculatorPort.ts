@@ -42,6 +42,24 @@ export interface CustodyEntryRow {
 }
 
 /**
+ * Where each portion of a lot's quantity currently sits.
+ *
+ * A lot is never split, re-dated or relocated, so this is a projection over its movements rather
+ * than a property of the lot: `TaxLotType.exchange_location` keeps naming the acquiring venue no
+ * matter how many accounts the quantity has passed through.
+ */
+export interface LotCustodyLocationRow {
+  tax_lot_id: string;
+  asset_id: string;
+  account_id: string;
+  account_name: string;
+  /** True for an `ownwallet-<ASSET>` account: custody arithmetic only, never a user selection. */
+  is_synthetic: boolean;
+  parent_account_id: string | null;
+  qty: string;
+}
+
+/**
  * A single data-quality defect. Advisory: flags are counted and reported, never blocking.
  *
  * `detail_key` is an i18n key rather than prose, so the backend emits no user-facing copy.
@@ -74,6 +92,14 @@ export interface ITaxCalculatorPort {
    * independent of, and has no effect on, the global per-asset FIFO used for taxation.
    */
   calculateCustodyEntries(accountId?: string): Promise<CustodyEntryRow[]>;
+
+  /**
+   * The current holder of each portion of each lot, resolved through every movement.
+   *
+   * Separate from `calculateCustodyEntries()`: that returns the individual legs, this returns the
+   * net position they add up to, which is what a read path can display without re-summing them.
+   */
+  getLotCustodyLocations(accountId?: string): Promise<LotCustodyLocationRow[]>;
 
   /** Defects are data, never an error condition. */
   getDataQuality(accountId?: string): Promise<FifoDataQualityRow[]>;

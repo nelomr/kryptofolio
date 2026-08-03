@@ -185,9 +185,80 @@ describe("POST /ingestion/transactions", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { processedCount: number; message: string };
+    const body = (await res.json()) as {
+      processedCount: number;
+      message: string;
+      rejected: Array<{
+        idHash: string;
+        timestamp: string;
+        txType: string | null;
+        reason: string;
+      }>;
+      unresolvedFiat: number;
+    };
     expect(body.processedCount).toBe(1);
     expect(body.message).toContain("LIQUIDATION_TRANSFER");
+    expect(body.rejected).toEqual([
+      {
+        idHash: "hash-bad",
+        timestamp: "2023-01-15T10:00:00Z",
+        txType: "LIQUIDATION_TRANSFER",
+        reason:
+          "Unmapped transaction type 'LIQUIDATION_TRANSFER' in row at 2023-01-15T10:00:00Z",
+      },
+    ]);
+    expect(body.unresolvedFiat).toBe(0);
+  });
+
+  it("reports an empty rejection list rather than omitting the field", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { rejected: unknown[] };
+    expect(body.rejected).toEqual([]);
+  });
+
+  it("reports how many persisted rows carry an unresolved fiat magnitude", async () => {
+    orchestrator(container).mockResolvedValueOnce({
+      ingestion: { persisted: 2, rejected: [], unresolvedFiat: 2 },
+      materialization: SUMMARY,
+      materialized: true,
+      materializationError: null,
+    });
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    const body = (await res.json()) as { unresolvedFiat: number };
+    expect(body.unresolvedFiat).toBe(2);
+  });
+
+  it("refuses to emit a rejection that lost its reason", async () => {
+    orchestrator(container).mockResolvedValueOnce({
+      ingestion: {
+        persisted: 0,
+        rejected: [{ idHash: "hash-bad", timestamp: "2023-01-15T10:00:00Z", txType: null }],
+        unresolvedFiat: 0,
+      },
+      materialization: SUMMARY,
+      materialized: true,
+      materializationError: null,
+    });
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    expect(res.status).toBe(500);
   });
 
   it("returns 500 when the orchestrator throws", async () => {

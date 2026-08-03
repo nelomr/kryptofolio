@@ -33,8 +33,35 @@ const OPEN_LOTS_WITH_QUALITY = `
     WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
 `;
 
+/** The dual-source event set, identical wherever realized PnL is summed. */
+const REALIZED_EVENTS = `
+    SELECT gain_loss_fiat FROM ledger.lot_history_events
+    UNION ALL
+    SELECT gain_loss_fiat FROM v_calculated_lot_history_events
+    WHERE (SELECT COUNT(*) FROM ledger.lot_history_events) = 0
+`;
+
+/**
+ * The three shared sources, pinned into temp tables once per call.
+ *
+ * Measured on an empty ledger: eleven statements each re-planning and re-executing the FIFO chain
+ * cost ~1390 ms; pinning the shared sources first brings the same eleven statements to ~910 ms.
+ * Collapsing them into a single statement was tried instead and measured 1.5x WORSE — the cost is
+ * per-statement work over a deep view chain, not one expensive scan, so the fix is to make the chain
+ * run once, not to make the plan bigger.
+ *
+ * Refreshed on every call: a cached table would report figures from before the last rebuild.
+ */
+const PINNED_SOURCES: ReadonlyArray<readonly [string, string]> = [
+  ['kpi_open_lots', OPEN_LOTS_WITH_QUALITY],
+  ['kpi_valuation', 'SELECT * FROM v_portfolio_daily_valuation'],
+  ['kpi_events', REALIZED_EVENTS],
+  // Read by both the volatility and the Sharpe statement, so pinning it pays for itself once.
+  ['kpi_returns_volatility', 'SELECT * FROM v_portfolio_returns_volatility'],
+];
+
 const TRUSTWORTHY_OPEN_LOTS = `
-    SELECT * FROM (${OPEN_LOTS_WITH_QUALITY})
+    SELECT * FROM kpi_open_lots
     WHERE status IN ('OPEN', 'PARTIAL')
       AND COALESCE(quality_flag, '') NOT IN ${UNTRUSTWORTHY_BASIS_FLAGS}
 `;
@@ -47,13 +74,17 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
   }
 
   public async getKpis(targetCurrency?: string): Promise<MetricsKpis> {
+    for (const [table, source] of PINNED_SOURCES) {
+      await this.db.execute(`CREATE OR REPLACE TEMP TABLE ${table} AS ${source}`);
+    }
+
     const valuation = await this.db.queryOne<{
       total_equity: string;
     }>(`
       SELECT
           CAST(COALESCE(SUM(daily_value), 0.0) AS VARCHAR) AS total_equity
-      FROM v_portfolio_daily_valuation
-      WHERE date = (SELECT MAX(date) FROM v_portfolio_daily_valuation)
+      FROM kpi_valuation
+      WHERE date = (SELECT MAX(date) FROM kpi_valuation)
     `);
 
     const costRes = await this.db.queryOne<{
@@ -69,7 +100,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       flagged_lots: number;
     }>(`
       SELECT CAST(COUNT(*) AS INTEGER) AS flagged_lots
-      FROM (${OPEN_LOTS_WITH_QUALITY})
+      FROM kpi_open_lots
       WHERE status IN ('OPEN', 'PARTIAL')
         AND COALESCE(quality_flag, '') IN ${UNTRUSTWORTHY_BASIS_FLAGS}
     `);
@@ -79,7 +110,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
     }>(`
       WITH daily_totals AS (
           SELECT date, SUM(daily_value) AS portfolio_value
-          FROM v_portfolio_daily_valuation
+          FROM kpi_valuation
           GROUP BY date
           ORDER BY date DESC
           LIMIT 2
@@ -115,19 +146,14 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
 
     const vol = await this.db.queryOne<{ vol: string }>(`
       SELECT CAST(COALESCE(annualized_volatility_all, 0.0) AS VARCHAR) AS vol
-      FROM v_portfolio_returns_volatility
+      FROM kpi_returns_volatility
       ORDER BY date DESC
       LIMIT 1
     `);
 
     const spotPnlRes = await this.db.queryOne<{ spot_pnl: string }>(`
       SELECT CAST(COALESCE(SUM(CAST(gain_loss_fiat AS DECIMAL(38,18))), 0.0) AS VARCHAR) AS spot_pnl
-      FROM (
-        SELECT gain_loss_fiat FROM ledger.lot_history_events
-        UNION ALL
-        SELECT gain_loss_fiat FROM v_calculated_lot_history_events
-        WHERE (SELECT COUNT(*) FROM ledger.lot_history_events) = 0
-      )
+      FROM kpi_events
     `);
 
     const futuresPnlRes = await this.db.queryOne<{ futures_pnl: string }>(`
@@ -144,7 +170,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
             ELSE 0.0
           END AS VARCHAR
         ) AS sharpe
-      FROM v_portfolio_returns_volatility
+      FROM kpi_returns_volatility
       ORDER BY date DESC
       LIMIT 1
     `);
@@ -157,12 +183,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       average_r: number;
     }>(`
       WITH all_trades AS (
-          SELECT CAST(gain_loss_fiat AS DOUBLE) AS pnl
-          FROM ledger.lot_history_events
-          UNION ALL
-          SELECT CAST(gain_loss_fiat AS DOUBLE) AS pnl
-          FROM v_calculated_lot_history_events
-          WHERE (SELECT COUNT(*) FROM ledger.lot_history_events) = 0
+          SELECT CAST(gain_loss_fiat AS DOUBLE) AS pnl FROM kpi_events
           UNION ALL
           SELECT CAST(pnl_fiat AS DOUBLE) - CAST(fee_fiat AS DOUBLE) AS pnl
           FROM v_futures_realized_pnl

@@ -11,6 +11,7 @@ import {
   transferDestinationBatchSchema,
 } from '../dtos/overrides.js';
 import { overrideOutcomeSchema } from '../dtos/materialization.js';
+import { fiscalIntegrityReportSchema } from '../dtos/fiscal-integrity.js';
 
 /**
  * Fiscal API — the user's calculation inputs.
@@ -48,6 +49,11 @@ function errorBody(error: unknown): {
 
 export function createFiscalApi(container: DIContainer) {
   return new Hono()
+    .get('/integrity', async (c) => {
+      const accountId = c.req.query('accountId');
+      const report = await container.getFiscalIntegrityUseCase.execute({ accountId });
+      return c.json(fiscalIntegrityReportSchema.parse(report), 200);
+    })
     .put('/overrides/prices', zValidator('json', manualPriceOverrideBatchSchema), async (c) => {
       const { overrides } = c.req.valid('json');
       try {

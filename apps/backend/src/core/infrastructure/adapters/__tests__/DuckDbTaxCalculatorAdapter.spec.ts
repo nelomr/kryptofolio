@@ -211,6 +211,46 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     expect(survived.n).toBe(1);
   });
 
+  it('reports where each portion of a lot currently sits', async () => {
+    seedCustodyMovement();
+    const rows = await adapter.getLotCustodyLocations();
+
+    const held = rows.filter((row) => Number(row.qty) !== 0);
+    expect(held.map((row) => row.account_id).sort()).toEqual(['acc-1', 'ownwallet-BTC']);
+
+    const source = held.find((row) => row.account_id === 'acc-1');
+    expect(Number(source?.qty)).toBeCloseTo(6, 9);
+    expect(typeof source?.qty).toBe('string');
+    expect(source?.asset_id).toBe('BTC');
+    expect(source?.account_name).toBe('Exchange A');
+    expect(source?.is_synthetic).toBe(false);
+    expect(source?.tax_lot_id).toBeTruthy();
+
+    const destination = held.find((row) => row.account_id === 'ownwallet-BTC');
+    expect(Number(destination?.qty)).toBeCloseTo(4, 9);
+    expect(destination?.is_synthetic).toBe(true);
+    expect(destination?.tax_lot_id).toBe(source?.tax_lot_id);
+  });
+
+  it('scopes custody locations to the requested account', async () => {
+    seedCustodyMovement();
+    const rows = await adapter.getLotCustodyLocations('acc-1');
+
+    expect(rows.every((row) => row.account_id === 'acc-1')).toBe(true);
+    expect(rows.length).toBe(1);
+  });
+
+  it('[SQL Injection] getLotCustodyLocations with a malicious accountId returns no rows safely', async () => {
+    seedCustodyMovement();
+    const rows = await adapter.getLotCustodyLocations("'; DROP TABLE tax_lots; --");
+
+    expect(rows).toEqual([]);
+    const survived = sqliteDb
+      .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'tax_lots'")
+      .get() as { n: number };
+    expect(survived.n).toBe(1);
+  });
+
   it('returns data-quality defects with a canonical severity and an i18n detail key', async () => {
     sqliteDb.exec(`
       INSERT INTO assets (id, symbol, is_fiat) VALUES ('BTC', 'BTC', 0);

@@ -3,18 +3,18 @@
 Session log for `/openspec-apply-change`. Updated as each task group closes so an interrupted
 session can be resumed from here.
 
-**Total:** 126 tasks in 14 groups. **Complete: 83.**
+**Total:** 165 tasks in 14 groups. **Complete: 90.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
 
 ## Session summary
 
-Ten groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
+Eleven groups closed: **1** (baseline + Red fixture), **2** (canonical contracts), **2b** (domain
 ports), **3** (pure classification), **4** (migration `004`), **5** (policy-driven flattening),
 **6** (double-entry custody), **7** (materialisation reconciliation, which also discharged group 6's
-deferred 6.3), **8** (ingestion integrity and sub-accounts), **9** (automatic rebuild and overrides).
-Groups 10–14 remain.
+deferred 6.3), **8** (ingestion integrity and sub-accounts), **9** (automatic rebuild and overrides),
+**10** (read path: status, provenance, custody). Groups 11–14 remain.
 
 ### What was built
 
@@ -145,7 +145,7 @@ pnpm -F @kryptofolio/backend  exec vitest run --typecheck src/core/domain/ports/
 | 7 | Materialisation reconciliation | ✅ done (66/126) |
 | 8 | Ingestion integrity and sub-accounts | ✅ done (73/126) |
 | 9 | Automatic rebuild and overrides | ✅ done (83/126) |
-| 10 | Read path: status, provenance, custody | ⬜ pending |
+| 10 | Read path: status, provenance, custody | ✅ done (90/165) |
 | 11 | Anti-corruption layer DTO realignment | ⬜ pending |
 | 12 | UI: status, custody, pending review | ⬜ pending |
 | 13 | End-to-end verification | ⬜ pending |
@@ -1485,6 +1485,195 @@ that is how the XRP finding surfaced).
    is unchanged at 271.
 
 
+### Group 10 — Read path: canonical status, provenance, custody ✅ 7/7
+
+| package | before | after |
+|---|---|---|
+| `packages/shared-types` | 40 passing, `tsc` clean | **40 passing**, `tsc` clean (untouched) |
+| `packages/core-domain` | 69 passing, `tsc` clean | **69 passing**, `tsc` clean (untouched) |
+| `packages/database` | 112 passing, `tsc` clean | **112 passing**, `tsc` clean (untouched) |
+| `apps/frontend` | 271 passing | **271 passing** (untouched) |
+| `apps/backend` tests | 263 passing / 0 failing | **301 passing / 0 failing** |
+| `apps/backend` typecheck | 6 errors | **2 errors**, both `mockPortfolio.ts` (group 11) |
+
+Measured with `pnpm --filter <pkg> test` and `tsc --noEmit` (`tsconfig.typecheck.json` for the three
+packages). The four type errors this group owned are gone: `GetSpanishTaxReportUseCase.ts` ×2 (nullable
+proceeds) and the two `ITaxCalculatorPort` mocks. `pnpm run test:packages` still aborts at
+`backend#build` on the remaining two.
+
+#### What was built
+
+| layer | artefact |
+|---|---|
+| Ports | `ITaxCalculatorPort.getLotCustodyLocations()` + `LotCustodyLocationRow` — the net position per lot and account, distinct from `calculateCustodyEntries()`'s individual legs |
+| Application | `GetTokenHistoryUseCase` — status passed through, `operation_type` from `disposal_type`, `quality_flag` / `value_provenance` exposed, nullable proceeds, `custody[]` per lot |
+| Application | `GetSpanishTaxReportUseCase` — nullable proceeds, per-row provenance, `excludedFlaggedEvents` and `manuallyAssignedCount` on the response |
+| Application | `GetFiscalIntegrityUseCase` — defects grouped by flag, ranked by the canonical severity, with the pending-review count and the pending-recalculation marker |
+| Adapters | `DuckDbTaxCalculatorAdapter.getLotCustodyLocations()` over `v_lot_current_location` |
+| Infrastructure | `dtos/fiscal-integrity.ts` and `GET /api/fiscal/integrity` |
+| Infrastructure | `ingestionOutcomeSchema` gains structured `rejected[]` and `unresolvedFiat` |
+| Performance | `DuckDbMetricsAdapter.getKpis()` pins four shared sources as temp tables: **1390 ms → ~782 ms** |
+| DI | `getFiscalIntegrityUseCase` registered in both constructor paths |
+
+#### Decisions taken
+
+1. **The view's `status` is authoritative, and the test that proves it is the one that contradicts the
+   quantities.** A lot whose quantity was *moved* rather than sold keeps every unit and stays `OPEN`
+   while holding a zero balance at its acquiring account — so `remaining_qty = 0, status = 'OPEN'` is a
+   legitimate state, and any quantity-derived status reports it as consumed. That case is the first
+   assertion in the group, because it is the one a recomputation cannot satisfy by coincidence.
+2. **Unresolved proceeds surface as `null`, not as `0`.** `TokenLotHistoryEventDto.sale_price_eur` and
+   `gain_loss_eur`, and the tax report's `audit_trail` equivalents, are now `number | null` /
+   `string | null`. Coercing them was how the two `tsc` errors were "avoidable" — and coercing to `0`
+   reads downstream as a genuine disposal at zero, which is D6's whole objection one layer out.
+3. **A zero-quantity custody row is not a location.** `v_lot_current_location` emits a row per account
+   that ever touched the lot, including one summing to zero once the account has sent everything on.
+   Filtered in the use case rather than in SQL: `v_custody_balances` sums the same view and a zero term
+   changes no total, so the filter is a presentation concern and belongs where presentation is decided.
+4. **Group severity is read from `FLAG_SEVERITY`, not from the row.** The view already emits a severity
+   from the seeded vocabulary, so the two normally agree — but if they ever diverge the endpoint reports
+   the shared vocabulary's ranking. A test asserts an `UNTRACKED_INFLOW` row arriving marked `low` is
+   reported `high`. Restating the ranking in the DTO was avoided the same way: the Zod schema enumerates
+   `FLAG_SEVERITIES` and `FIFO_QUALITY_FLAGS` and asserts nothing about which maps to which.
+5. **`needsRecalculation` travels with the defects.** One read, one payload. Two endpoints would let the
+   UI render a clean integrity report over figures known to be stale — and `fiscal-integrity`'s "Pending
+   recalculation is indicated" scenario asks the IntegrityCard to show both. A test asserts the read
+   never writes the marker.
+6. **The ingestion response now carries `rejected[]` and `unresolvedFiat` as data, and keeps the
+   narrated `message`.** Group 9 left this deliberately; the two serve different consumers — a toast
+   reads the sentence, a review table needs the rows. `reason` is `min(1)` in the schema, so a rejection
+   that lost its explanation fails on the way out rather than reaching a user who cannot act on it.
+7. **`getKpis()` pins its shared sources as temp tables rather than as `MATERIALIZED` CTEs.** A CTE
+   cannot span statements, and the eleven figures are eleven statements. See the measurement below.
+
+#### The measured `getKpis()` fix, and why the earlier attempt failed
+
+Per-statement timing on an **empty** ledger, obtained by wrapping the adapter's `queryOne`/`queryMany`:
+
+| statement | before | after |
+|---|---|---|
+| total equity (`v_portfolio_daily_valuation`) | 209 | 3 |
+| total cost (open lots) | 140 | 1 |
+| flagged lots | 137 | 1 |
+| 24 h delta | 106 | 3 |
+| ATH / drawdown | 216 | **249** |
+| annualized volatility | 110 | 1 |
+| spot realized PnL | 99 | 1 |
+| futures PnL | 15 | 15 |
+| Sharpe | 107 | 1 |
+| win rate | 116 | 17 |
+| asset performance | 149 | 37 |
+| **wall clock, 5 consecutive calls** | **1395, 1383, 1411, 1376, 1390** | **750, 834, 775, 782, 804** |
+
+**1390 → ~782 ms, 1.77×.** The distribution is the finding: with no rows anywhere, eleven statements
+each cost 99–216 ms. That is per-statement planning and execution over a deep view chain, not data
+volume — which is exactly why group 6's attempt to collapse them into one statement measured 1.5×
+*worse* (one plan of eleven times the size, still executed once). Pinning four shared sources
+(`kpi_open_lots`, `kpi_valuation`, `kpi_events`, `kpi_returns_volatility`) makes the chain run once and
+drops eight of the eleven statements to 1–17 ms.
+
+What is left is honest: `v_portfolio_ath_drawdown` is read by exactly one statement, so pinning it
+would pay its own cost and save nothing; and the four `CREATE OR REPLACE TEMP TABLE` statements
+account for the ~460 ms the eleven measured statements do not. Getting below that means changing the
+valuation view definitions in `packages/database`, which is not this group's surface.
+
+**The correctness risk was pinned by a test, not by inspection.** The tables are rebuilt on *every*
+call, because a cached snapshot would report figures from before the last rebuild — and that is a
+silent wrong answer, which is worse than the 600 ms. `reads the ledger again on a second call rather
+than a cached snapshot` fails when a `pinned` guard is introduced. Recorded trade-off: two concurrent
+`getKpis()` calls on one connection share the temp tables, so a rebuild landing between them could tear
+a read across sources. The eleven statements were already non-atomic against a changing ledger, so this
+narrows the window rather than opening one.
+
+#### ⚠️ Spec defect: the frontend DTO turns this group's `NULL` straight back into a fabricated `0`
+
+Found while checking what the new payload does downstream, and it is the same defect class the change
+exists to remove — not a group-11 refactor note.
+
+`apps/frontend/.../CommonSchemaHelpers.ts`'s `numericField` begins
+`if (val === null || val === undefined) return 0`, and `ExternalTaxSchemas.ts:198` parses
+`sale_price_eur` through it. So the unresolved price that D6 made `NULL` in SQL, kept `NULL` through
+the port, and now emits as `null` over HTTP becomes **`0`** at the anti-corruption layer — read
+downstream as a genuine disposal at zero. The `COALESCE(price, 1.0)` this change deleted has a
+surviving twin one layer out.
+
+Second, smaller, and certain to be noticed first: `ExternalTaxLotSchema.status` is
+`z.enum(["FULL","PARTIAL","EMPTY"]).optional()`, so `'OPEN'` and `'CLOSED'` now **fail that parse** in
+the running app. The frontend suite is unaffected at 271 because it fixtures its own inputs — which is
+worth stating plainly, since a green suite is not evidence here.
+
+Neither is repaired in this group: `fifo-data-quality-flags` places the typed frontend model in 11.x
+and the specs assign both files to group 11. Both are listed in the handover below. The `numericField`
+one is the higher risk of the two, because it fails *quietly*.
+
+#### The Red, honestly
+
+**32 of the 38 new tests failed before the code existed, and 27 of those on their own assertions.**
+
+| file | new | Red | how |
+|---|---|---|---|
+| `GetTokenHistoryUseCase.spec.ts` | 12 | 11 | port method and DTO fields declared, use case left recomputing status, hardcoding `'SELL'` and returning `custody: []` — every failure read `expected 'EMPTY' to be 'OPEN'`, `expected 'SELL' to be 'FEE'`, `expected [] to deeply equal […]` |
+| `DuckDbTaxCalculatorAdapter.spec.ts` | 3 | 2 | adapter method present, body `return []` |
+| `GetFiscalIntegrityUseCase.spec.ts` | 9 | 5 | stub that grouped nothing (one group per row), counted no pending rows and never read the marker |
+| `fiscal.test.ts` | 5 | 5 | route absent — these five failed on the response (404/500 vs expected), not on a missing import |
+| `ingestion.test.ts` | 3 (+1 extended) | 4 | field absent from the DTO: `expected undefined to deeply equal [ … ]` |
+| `GetSpanishTaxReportUseCase.spec.ts` | 5 | 5 | 2 on assertions; **3 crashed** with `TypeError: Cannot read properties of null (reading 'toString')` at `GetSpanishTaxReportUseCase.ts:97` |
+| `DuckDbMetricsAdapter.spec.ts` | 1 | 0 | written after the optimisation; pinned by a break instead |
+
+The three `TypeError`s are recorded as crashes rather than claimed as assertion failures. They are not
+a weak Red — that line *is* the defect the two `tsc` errors were reporting, and the test reaches it —
+but they are not the test's own verdict either.
+
+**Nine deliberate breaks, nine named failures**, each applied to shipped code, suite run, reverted:
+
+| break | tests it turned Red |
+|---|---|
+| `group.rows.push(row)` removed | 1 (`carries each row through`) |
+| pending marker hardcoded `true` | 1 (`healthy report for a clean ledger`) |
+| `getDataQuality()` called without the account | 1 (`scopes the query`) |
+| a `setSetting` call added to the read | 1 (`never writes a setting while reporting`) |
+| severity read from the row instead of `FLAG_SEVERITY` | 1 (`canonical severity even when the row disagrees`) |
+| adapter pointed at `v_custody_balances` instead of `v_lot_current_location` | 1 (`where each portion of a lot currently sits`) |
+| zero-quantity locations kept | 1 (`omits an account that no longer holds any part`) |
+| `rejected: []` while the message still names the row | 2 (`names the rejected ones`, `lost its reason`) |
+| temp sources pinned once and cached | 1 (`reads the ledger again on a second call`) |
+
+**Three assertions are not covered by a break, and are recorded rather than claimed:**
+
+1. `returns an empty custody list for a lot the projection knows nothing about` — an absence, and it
+   passed against the `custody: []` stub. Every break that would fail it also fails a sibling.
+2. `[SQL Injection] getLotCustodyLocations with a malicious accountId returns no rows safely` — passed
+   against `return []`. It follows the pattern of the three injection tests already in that file and
+   asserts the table survives, so it is not vacuous, but it is not independently pinned either.
+3. `scopes custody locations to the requested account` — the `v_custody_balances` break did **not**
+   turn it Red, because that view also yields exactly one `acc-1` row for this fixture. It is pinned
+   only by the sibling that names the two accounts.
+
+#### Pre-existing tests changed, deliberately
+
+1. **`GetTokenHistoryUseCase.spec.ts` fixtures are now typed `TaxLotType` / `TaxLotEventType`.** They
+   previously built lots with `new Decimal(...)` inside an untyped `vi.fn().mockResolvedValue`, which
+   type-checked because nothing checked it — `preciseAmountSchema` is a **string**. Typing the fixtures
+   produced 15 `TS2322`s and they were fixed by using decimal strings, so the doubles now carry what
+   the adapter actually returns. The retired `status: 'FULL'` value went with them.
+2. **`GetSpanishTaxReportUseCase.spec.ts`** gained a typed `BASE_EVENT` and a `makePort` helper; the
+   original assertion set is unchanged.
+3. **`ingestion.test.ts`'s "names the rejected ones"** now also asserts the structured field. No
+   existing assertion was weakened.
+
+#### Two smaller findings
+
+1. **A measurement harness was written and then deleted on purpose.** `kpi-perf.bench.spec.ts` timed
+   `getKpis()` and asserted nothing; keeping it would have added a permanently green test that verifies
+   no behaviour — the exact shape of the five vacuous-pass traps this log already records. The figures
+   live in the table above and the correctness of the change is held by
+   `reads the ledger again on a second call`.
+2. **`v_portfolio_returns_volatility` is read in five places in `DuckDbMetricsAdapter`, only two of
+   them inside `getKpis()`.** A whole-file replacement pointed `getRiskMetrics()` at a temp table that
+   does not exist in its scope. Caught by a pre-write assertion on the occurrence count rather than by
+   a test, because the failure would have been a runtime `Catalog Error` in a method this group has no
+   coverage for.
+
 ## Notes and decisions taken during apply
 
 - **A test that passed for the wrong reason was caught and fixed.** The "must not invent a 1.0
@@ -1651,14 +1840,14 @@ kept stable while the order changed. The group header says so.
 
 ## Resume here — next action
 
-83 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8 and 9 are closed. Group 14 holds 39 tasks
-and runs **before** group 13. **No task is left open in a closed group.**
+90 of 165 tasks complete; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9 and 10 are closed. Group 14 holds 39
+tasks and runs **before** group 13. **No task is left open in a closed group.**
 
 ### Working tree state
 
-`@kryptofolio/backend` still does not compile: **6** `tsc` errors, unchanged by group 9 (it briefly
-introduced 6 more via constructor parameter properties, which `erasableSyntaxOnly` rejects; fixed).
-Every one belongs to a group that has not run yet. **Do not "fix" them ad hoc.**
+`@kryptofolio/backend` reports **2** `tsc` errors, down from 6 — group 10 cleared the four it owned.
+Both remaining are in `src/data/mockPortfolio.ts` (missing `disposal_type`, lines 170 and 204) and
+belong to group 11. **Do not "fix" them ad hoc.**
 
 | package | state |
 |---|---|
@@ -1666,34 +1855,41 @@ Every one belongs to a group that has not run yet. **Do not "fix" them ad hoc.**
 | `packages/core-domain` | ✅ 69/69 tests, `tsc --noEmit` clean |
 | `packages/database` | ✅ 112/112 tests, `tsc --noEmit` clean |
 | `apps/frontend` | ✅ 271/271 tests |
-| `apps/backend` tests | ✅ **263/263 passing** |
-| `apps/backend` (typecheck) | ❌ 6 errors, all owned by groups 10 and 11 |
+| `apps/backend` tests | ✅ **301/301 passing** |
+| `apps/backend` (typecheck) | ❌ 2 errors, both owned by group 11 |
 
-Remaining `tsc` errors by file: `GetSpanishTaxReportUseCase.ts` (2, nullable proceeds — group 10),
-`GetSpanishTaxReportUseCase.spec.ts` (1) and `GetTokenHistoryUseCase.spec.ts` (1) — both
-`ITaxCalculatorPort` mocks missing `calculateCustodyEntries` / `getDataQuality` (group 10) — and
-`mockPortfolio.ts` (2, missing `disposal_type` — group 11).
+`pnpm run test:packages` still aborts at `@kryptofolio/backend#build` on those two. Clearing them is
+group 11's first task and unblocks the first full green run of the whole workspace.
 
-### Next task: group 10 — read path: canonical status, provenance, custody
+### Next task: group 11 — anti-corruption layer DTO realignment
 
-What group 9 leaves for it:
+What group 10 leaves for it, in priority order:
 
-1. **The four remaining backend type errors in group 10's files are now the only thing between
-   `pnpm run test:packages` and a full green run** (with `mockPortfolio.ts`, which is group 11's).
-2. **`IngestAndMaterializeUseCase` returns `{ ingestion, materialization, materialized,
-   materializationError }`**, and the HTTP shapes are already Zod-parsed in
-   `infrastructure/dtos/materialization.ts` (`rebuildOutcomeSchema`, `ingestionOutcomeSchema`,
-   `overrideOutcomeSchema`). Group 11's frontend DTOs should mirror these three rather than restate
-   them.
-3. **The ingestion response still lacks a structured `rejected` field** — 10.6 / 11.7 own it. The
-   reasons are currently concatenated into `message`, together with the rebuild failure reason.
-4. **New routes to cover in the read path and the UI:**
-   `PUT`/`DELETE /api/fiscal/overrides/prices` and `.../destinations`, all batched, all returning
-   `{ applied, materialization, pendingReview }`. `POST /api/portfolio/rebuild` now returns the
-   rebuild outcome instead of `{ success: true }`; the frontend adapter ignores the body today, so
-   group 12 can start reading it.
-5. **`getKpis()` at ~1450 ms on an empty ledger is still the open performance decision** recorded at
-   the end of this file, and it is group 10's read path.
+1. **⚠️ `numericField` re-fabricates the price this change made `NULL`.**
+   `apps/frontend/.../CommonSchemaHelpers.ts` opens with
+   `if (val === null || val === undefined) return 0`, and `ExternalTaxSchemas.ts:198` parses
+   `sale_price_eur` through it. The backend now emits `null` for an unresolved price; the frontend
+   turns it into `0`, which reads as a genuine disposal at zero. This is `COALESCE(price, 1.0)`'s
+   surviving twin, one layer out, and it fails **silently**. Fix before anything cosmetic.
+2. **`ExternalTaxLotSchema.status` is `z.enum(["FULL","PARTIAL","EMPTY"]).optional()`** and the backend
+   now sends `OPEN | PARTIAL | CLOSED`, so that parse fails in the running app today. Same for
+   `MockDtoSchemas.ts:186/204`, `FiscalEntities.ts:139` and `ExpandedLotsTable.vue:53`, which still
+   derives the retired vocabulary from `remainingQty`. The frontend suite is green at 271 because it
+   fixtures its own inputs — that is not evidence.
+3. **`src/data/mockPortfolio.ts` needs `disposal_type`** on the two event literals at 170 and 204.
+   These are the last two backend type errors.
+4. **New payload fields to model:** `TokenLotDto.custody[]`
+   (`account_id`, `account_name`, `is_synthetic`, `parent_account_id`, `qty`);
+   `TokenLotHistoryEventDto` gains `operation_type: DisposalType`, `quality_flag`, `value_provenance`,
+   and nullable `sale_price_eur` / `gain_loss_eur`; the tax report gains `excludedFlaggedEvents`,
+   `manuallyAssignedCount` and the same per-row provenance.
+5. **New endpoint to model:** `GET /api/fiscal/integrity` returns
+   `{ groups: [{ quality_flag, severity, count, pendingReview, rows[] }], totalDefects, pendingReview,
+   needsRecalculation }`, already Zod-parsed server-side by `dtos/fiscal-integrity.ts`. Mirror that
+   schema rather than restating the vocabularies — `FIFO_QUALITY_FLAGS` and `FLAG_SEVERITIES` come from
+   `@kryptofolio/shared-types`, and `detail_key` is an i18n key needing a translation entry, not prose.
+6. **The ingestion response now carries `rejected[]` and `unresolvedFiat`** alongside the narrated
+   `message`, so a review surface no longer has to parse the sentence.
 
 ### Standing reminders for every remaining group
 
@@ -1859,6 +2055,10 @@ The groups 1–6 commit was made with `--no-verify` for that reason, on a featur
   observable guarantees (a failed run leaves the flag `'true'`; a successful one clears it) and put the
   write last inside the transaction callback. Either move the flag onto `ILedgerPort` or amend the
   scenario — but resolve the duplicate table either way.
+
+- ~~**Open decision (non-blocking), for group 10:**~~ **CLOSED in group 10.** The temp-table fix was
+  applied and measured: **1390 ms → ~782 ms (1.77x)** on an empty ledger, with per-statement figures and
+  the residual cost recorded in the group 10 entry. Original text follows.
 
 - **Open decision (non-blocking), for group 10:** `DuckDbMetricsAdapter.getKpis()` costs **~1450 ms
   against an empty ledger** — eleven statements, most of which re-execute the FIFO chain through

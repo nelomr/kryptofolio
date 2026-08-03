@@ -20,9 +20,36 @@ const SUMMARY = {
   pendingReview: 1,
 };
 
+const INTEGRITY_ROW = {
+  quality_flag: 'MISSING_PRICE',
+  severity: 'medium',
+  asset_id: 'XRP',
+  account_id: 'acc-1',
+  tx_id: 'tx-1',
+  occurred_at: '2024-01-01T00:00:00.000Z',
+  detail_key: 'fifo_quality.missing_price',
+  pending_review: true,
+};
+
+const INTEGRITY_REPORT = {
+  groups: [
+    {
+      quality_flag: 'MISSING_PRICE',
+      severity: 'medium',
+      count: 1,
+      pendingReview: 1,
+      rows: [INTEGRITY_ROW],
+    },
+  ],
+  totalDefects: 1,
+  pendingReview: 1,
+  needsRecalculation: true,
+};
+
 function makeContainer(): DIContainer {
   const result = { applied: 1, materialization: SUMMARY };
   return {
+    getFiscalIntegrityUseCase: { execute: vi.fn(async () => INTEGRITY_REPORT) },
     setManualPriceOverrideUseCase: { execute: vi.fn(async () => result) },
     removeManualPriceOverrideUseCase: { execute: vi.fn(async () => result) },
     setTransferDestinationUseCase: { execute: vi.fn(async () => result) },
@@ -176,5 +203,63 @@ describe('fiscal override routes', () => {
 
     expect(res.status).toBe(400);
     expect(call(container, 'removeManualPriceOverrideUseCase')).not.toHaveBeenCalled();
+  });
+
+  it('returns the data-quality groups, counts and the pending marker', async () => {
+    const res = await app.request('/fiscal/integrity');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(INTEGRITY_REPORT);
+  });
+
+  it('scopes the integrity report to the requested account', async () => {
+    await app.request('/fiscal/integrity?accountId=acc-9');
+
+    expect(call(container, 'getFiscalIntegrityUseCase')).toHaveBeenCalledWith({
+      accountId: 'acc-9',
+    });
+  });
+
+  it('refuses to emit a report that lost a field on its way out', async () => {
+    call(container, 'getFiscalIntegrityUseCase').mockResolvedValueOnce({
+      groups: [{ quality_flag: 'MISSING_PRICE', severity: 'medium', rows: [INTEGRITY_ROW] }],
+      totalDefects: 1,
+      pendingReview: 1,
+      needsRecalculation: false,
+    });
+
+    const res = await app.request('/fiscal/integrity');
+
+    expect(res.status).toBe(500);
+  });
+
+  it('refuses a severity outside the canonical vocabulary', async () => {
+    call(container, 'getFiscalIntegrityUseCase').mockResolvedValueOnce({
+      ...INTEGRITY_REPORT,
+      groups: [{ ...INTEGRITY_REPORT.groups[0], severity: 'critical' }],
+    });
+
+    const res = await app.request('/fiscal/integrity');
+
+    expect(res.status).toBe(500);
+  });
+
+  it('reports a clean ledger as an empty group list', async () => {
+    call(container, 'getFiscalIntegrityUseCase').mockResolvedValueOnce({
+      groups: [],
+      totalDefects: 0,
+      pendingReview: 0,
+      needsRecalculation: false,
+    });
+
+    const res = await app.request('/fiscal/integrity');
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      groups: [],
+      totalDefects: 0,
+      pendingReview: 0,
+      needsRecalculation: false,
+    });
   });
 });
