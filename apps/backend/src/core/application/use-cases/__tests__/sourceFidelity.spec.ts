@@ -41,7 +41,7 @@ function prepared(
 ): Partial<TransactionMappedData> {
   const [row] = prepareIngestionRows(
     [{ id: '1', originalData: {}, errors: [], hasError: false as const, mappedData: data }],
-    SOURCE_FORMAT_PROFILES[profileId],
+    SOURCE_FORMAT_PROFILES[profileId], 'UTC',
   );
   return row.mappedData;
 }
@@ -81,7 +81,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
     const result = await useCase.execute(
       [toIngestible(KRAKEN_SOL_WITHDRAWAL)],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     expect(result.rejected).toEqual([]);
@@ -156,7 +156,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
         }),
       ],
       'spot',
-      'generic',
+      'generic', 'UTC',
     );
 
     expect(result.rejected).toEqual([]);

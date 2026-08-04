@@ -15,6 +15,8 @@ export interface IngestAndMaterializeInput {
   market: 'spot' | 'futures';
   /** Which source wrote the file. Required: no default can stand in for a measurement. */
   sourceProfileId: SourceProfileId;
+  /** The zone the file's wall-clock times were written in. */
+  timezone: string;
 }
 
 /**
@@ -55,7 +57,12 @@ export class IngestAndMaterializeUseCase {
   }
 
   async execute(input: IngestAndMaterializeInput): Promise<IngestAndMaterializeResult> {
-    const ingestion = await this.ingestion.execute(input.rows, input.market, input.sourceProfileId);
+    const ingestion = await this.ingestion.execute(
+      input.rows,
+      input.market,
+      input.sourceProfileId,
+      input.timezone,
+    );
 
     // Nothing persisted means the derived tables cannot have moved, so a full recompute would cost
     // a pass over the whole ledger to produce the set it already holds.

@@ -1,5 +1,6 @@
 import type { TransactionMappedData } from "@kryptofolio/shared-types";
 import { normalizeMetadataKeys } from "./normalizer/metadataNormalizer";
+import { normalizeToUtcIso } from "./normalizer/dateNormalizer";
 import { transactionHandlers } from "./normalizer/handlers";
 import type { FiscalClassificationFlag } from "@kryptofolio/shared-types";
 
@@ -34,35 +35,33 @@ const MOVEMENT_LABELS: ReadonlySet<string> = new Set([
  * The backend inference engine is responsible for all calculations.
  */
 export function normalizeTransactionDirection(
-  mappedData: TransactionMappedData
+  mappedData: TransactionMappedData,
+  /** The zone the file was written in, for the rows that do not name one themselves. */
+  timezone: string,
 ): TransactionMappedData {
   const normalized = { ...mappedData };
   
   // 1. Normalize metadata keys
   normalized.metadata = normalizeMetadataKeys(normalized.metadata || {});
 
-  // 2. Normalize Timestamp (Combine Date and Time to UTC ISO 8601)
+  /**
+   * 2. The instant, converted from the zone the file was written in.
+   *
+   * Appending `Z` to the source's wall-clock text was not a conversion but an assertion that every
+   * export is UTC. For a file exported in `Europe/Madrid` it moved every row one or two hours into the
+   * future, which reorders trades within a day — and FIFO is an ordering — and moves an operation on
+   * the night of 31 December into the wrong tax year.
+   *
+   * A row may name its own zone, which wins: one file can mix them, and the request-level choice is
+   * the answer for the rows that state nothing.
+   */
   if (normalized.date) {
-    let dateStr = normalized.date.trim();
-    
-    // If the date string already contains a space (e.g. "2023-01-01 12:00:00"), replace it with T
-    if (dateStr.includes(" ")) {
-      dateStr = dateStr.replace(" ", "T");
-    }
-    
-    // If no time component is present, add the provided time or default to midnight
-    if (!dateStr.includes("T")) {
-      const timeStr = normalized.time ? `T${normalized.time.trim()}` : "T00:00:00";
-      dateStr = `${dateStr}${timeStr}`;
-    }
+    normalized.timestamp = normalizeToUtcIso(
+      normalized.date,
+      normalized.time ?? null,
+      normalized.timezone || timezone,
+    );
 
-    // Ensure it is explicitly marked as UTC
-    if (!dateStr.endsWith("Z")) {
-      dateStr = `${dateStr}Z`;
-    }
-    
-    normalized.timestamp = dateStr;
-    
     // Remove the temporary raw fields
     delete normalized.date;
     delete normalized.time;
@@ -95,10 +94,13 @@ export function normalizeTransactionDirection(
     compra: "BUY",
     sell: "SELL",
     venta: "SELL",
-    trade: "BUY",
-    
+
     // Movements are absent from this map on purpose: the label alone does not say whether 500 EUR
     // was funded or 179 XRP was moved between wallets. `classifyCustodyMovement` owns their type.
+    //
+    // A bare `trade` is absent for the same reason, and it is the same word for a purchase and a
+    // sale. Its direction is which side each leg landed on, which is only legible once the legs are
+    // one record, so `resolveTradeDirection` owns it after aggregation.
 
     /**
      * A wallet activation locks crypto that arrives with no purchase record, so it behaves as an

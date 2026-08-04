@@ -43,7 +43,7 @@ describe('a spreadsheet cell keeps the source digits all the way to the ledger c
       fee_amount: String(row['Comisión de la operación']),
       fee_currency: String(row['Moneda de la comisión']),
       metadata: { subclass: 'crypto' },
-    })
+    }, 'UTC')
 
     expect(normalized.tx_type).toBe('TRANSFER_OUT')
     expect(normalized.fee_amount).toBe('0.157429818')

@@ -1,5 +1,4 @@
 import { ref } from "vue";
-import { normalizeToUtcIso } from "@kryptofolio/core-domain";
 import type { SourceProfileId, ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
 
@@ -36,28 +35,17 @@ export function useImportProcessor() {
     processingErrors.value = [];
 
     try {
-      const rowsWithTimestamp = await Promise.all(
-        validRows.map(async (row) => {
-          const rowTimezone = row.mappedData.timezone || timezone.value;
-          const timestamp = normalizeToUtcIso(
-            row.mappedData.date ?? null,
-            row.mappedData.time ?? null,
-            rowTimezone,
-          );
-          row.mappedData.timestamp = timestamp;
-          return row;
-        })
-      );
-
       /**
-       * The rows go out as the source wrote them, with only the account and the instant added.
+       * The rows go out as the source wrote them, with only the account added.
        *
-       * Classification, aggregation and the identifier all live behind the ingestion boundary now.
-       * Merging here was why the backend never received two legs of a movement, it made re-ingesting
-       * one file depend on the client version that submitted it, and it computed the idempotency key
-       * over a record the client had already restructured.
+       * Classification, aggregation, the identifier and the instant all live behind the ingestion
+       * boundary now. Merging here was why the backend never received two legs of a movement, it made
+       * re-ingesting one file depend on the client version that submitted it, and it computed the
+       * idempotency key over a record the client had already restructured. Converting the instant here
+       * was the same mistake in its last remaining corner: the rows still carried `date` and `time`, so
+       * whatever ran behind the boundary converted them a second time and won.
        */
-      const rows = rowsWithTimestamp.map((row) => ({
+      const rows = validRows.map((row) => ({
         ...row,
         mappedData: { ...row.mappedData, account_id: accountId },
       }));

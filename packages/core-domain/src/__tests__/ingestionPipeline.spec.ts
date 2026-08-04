@@ -39,7 +39,7 @@ describe("prepareIngestionRows — direction is resolved before anything is grou
         leg("a", { tx_type: "transfer", amount: "-100", asset: "XRP" }),
         leg("b", { tx_type: "transfer", amount: "100", asset: "XRP" }),
       ],
-      KRAKEN,
+      KRAKEN, 'UTC',
     );
 
     expect(rows).toHaveLength(2);
@@ -57,7 +57,7 @@ describe("prepareIngestionRows — direction is resolved before anything is grou
         leg("a", { tx_type: "transfer", amount: "-100", asset: "XRP" }),
         leg("b", { tx_type: "transfer", amount: "100", asset: "XRP" }),
       ],
-      KRAKEN,
+      KRAKEN, 'UTC',
     );
 
     // A raw label surviving to the ledger mapper is how a refusal to classify is reported. None of
@@ -73,7 +73,7 @@ describe("prepareIngestionRows — direction is resolved before anything is grou
         leg("c", { tx_type: "trade", group_id: "REF-TRADE", amount: "-300", asset: "EUR" }),
         leg("d", { tx_type: "trade", group_id: "REF-TRADE", amount: "247.10551", asset: "XRP" }),
       ],
-      KRAKEN,
+      KRAKEN, 'UTC',
     );
 
     expect(rows).toHaveLength(1);
@@ -95,7 +95,7 @@ describe("prepareIngestionRows — direction is resolved before anything is grou
         }),
         leg("b", { tx_type: "deposit", amount: "179.11", asset: "XRP", group_id: null }),
       ],
-      KRAKEN,
+      KRAKEN, 'UTC',
     );
 
     expect(rows.map((r) => r.mappedData.tx_type).sort()).toEqual(["DEPOSIT", "TRANSFER_IN"]);
@@ -107,7 +107,7 @@ describe("prepareIngestionRows — direction is resolved before anything is grou
         leg("a", { tx_type: "trade", group_id: "REF-FEE", amount: "-50", asset: "EUR", fee_amount: "0.05" }),
         leg("b", { tx_type: "trade", group_id: "REF-FEE", amount: "7704.16", asset: "PUMP", fee_amount: "17.720" }),
       ],
-      KRAKEN,
+      KRAKEN, 'UTC',
     );
 
     expect(rows).toHaveLength(1);

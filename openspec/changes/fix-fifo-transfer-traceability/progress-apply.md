@@ -3544,9 +3544,52 @@ earlier in this change. Fixing it properly needs a decision about a row with no 
 written up as **14.36c** in 14η beside the other boundary work rather than patched mid-verification.
 The file was restored; the tree is clean and green.
 
+### 14δb — the three findings 14δ raised and deferred
+
+All three are fixed. They were deferred as "needs a decision, not a mid-phase edit"; the decision was
+taken and they are implemented together, because two of them are the same seam.
+
+Counts: core-domain 199 → **208**, backend 388 → **390**, frontend 437, shared-types 46, database 126.
+All five typechecks 0.
+
+**A sale was recorded as a purchase.** `TYPE_MAP` answered `BUY` for the word `trade`, which Kraken
+writes on both legs of both a purchase and a sale. The real `ENA 957.64750 out / EUR 448.7536 in` group
+persisted as an acquisition and the whole file produced zero `SELL`. The word is now absent from the map
+for exactly the reason movements are, and `resolveTradeDirection` reads the direction after aggregation,
+which is the first moment both sides of a trade exist. Money out and asset in is `BUY`; asset out and
+money in is `SELL`; asset for asset is `SWAP`; money for money resolves to nothing, because no member of
+the vocabulary means a currency exchange. What cannot be read keeps the source's word and is rejected by
+name.
+
+Measured before relying on the refusal: all 20 `trade` rows of the real export form 10 complete pairs,
+none unpaired, so no real row is rejected by it. `typeLabelCoverage` submits one row per label and now
+expects a lone `trade` leg to be refused — its premise, that every label reaches an accepted type, is
+false for a word whose type lives in its pair.
+
+**The timezone select worked and was then overwritten.** The wizard computed a correct instant; the rows
+still carried `date` and `time`; and 14.3 moved the normalizer behind the boundary, where it rebuilt the
+timestamp as `date + time + 'Z'` and won. That is not a conversion but an assertion that every export is
+UTC — a `Europe/Madrid` file moved one or two hours into the future, and FIFO is an ordering. The
+conversion now happens once, behind the boundary, from the `timezone` the request already carried and the
+route was destructuring away. A row naming its own zone still wins. The frontend no longer computes
+instants at all, which is the same correction 14.3 made for identity and classification.
+
+**The ledger reformatted every quantity.** `new Decimal(text).abs().toString()` was dropping a sign and
+returning the same number at a different scale: `7704.160` → `7704.16`, `1.0` → `1`. Not a money error, a
+fidelity one, and 14.27 promises a digit-for-digit net. `sourceMagnitude` strips the sign as text;
+Decimal still decides whether the text is a number. Two existing assertions had baked the reformatting in
+and were corrected — one of them carried a comment stating that the ledger normalises scale, which is no
+longer true.
+
+**Breaks: 4 applied, 4 red — after one that was not.** Guessing `BUY` for any trade → 2 red. Reformatting
+the scale again → 4 red. Ignoring the chosen zone → 3 red. The fourth, aimed at "guess a direction from
+one side", **stayed green**: it had been applied to a `return null` that the one-sided case never reaches.
+Re-aimed at the guard that case actually passes through, it went red. A break that does not fail is not
+evidence until it is shown to be reaching the code it claims to test.
+
 ## Resume here — next action
 
-**167 checked boxes in `tasks.md`, 34 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**170 checked boxes in `tasks.md`, 34 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
 14γ and 14δ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
 group 13. **No task is left open in a closed group.**

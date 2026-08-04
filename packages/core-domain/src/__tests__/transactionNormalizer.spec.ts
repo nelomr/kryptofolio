@@ -17,7 +17,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         },
       };
 
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
 
       expect(result.tx_type).toBe("BUY");
       expect(result.amount_in).toBe("1.5");
@@ -40,7 +40,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         fiat_currency: "EUR",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.amount_in).toBe("2");
       expect(result.total_fiat).toBe("3000");
     });
@@ -56,7 +56,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "BTC",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("SELL");
       expect(result.amount_out).toBe("0.5");
       expect(result.asset_out).toBe("BTC");
@@ -77,7 +77,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "XRP",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("TRANSFER_IN");
       expect(result.amount_in).toBe("100");
       expect(result.asset_in).toBe("XRP");
@@ -95,7 +95,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "B2M",
         metadata: { Grupo: "earn" },
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.metadata?.wallet).toBe("earn");
     });
 
@@ -110,7 +110,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "ADA",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("TRANSFER_OUT");
       expect(result.amount_out).toBe("546.844684");
       expect(result.asset_out).toBe("ADA");
@@ -125,7 +125,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "ADA",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("TRANSFER_OUT");
       expect(result.amount_out).toBe("50");
       expect(result.asset_out).toBe("ADA");
@@ -141,7 +141,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "EUR",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("DEPOSIT");
       expect(result.asset_in).toBe("EUR");
     });
@@ -156,7 +156,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         amount: "100",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("deposit");
     });
 
@@ -169,7 +169,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "CHF",
         metadata: { subclass: "crypto" },
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.tx_type).toBe("TRANSFER_OUT");
     });
 
@@ -182,7 +182,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "USDT",
         metadata: {},
       };
-      const resultIn = normalizeTransactionDirection(dataIn);
+      const resultIn = normalizeTransactionDirection(dataIn, 'UTC');
       expect(resultIn.tx_type).toBe("TRANSFER_IN");
       expect(resultIn.amount_in).toBe("100");
 
@@ -194,7 +194,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "USDT",
         metadata: {},
       };
-      const resultOut = normalizeTransactionDirection(dataOut);
+      const resultOut = normalizeTransactionDirection(dataOut, 'UTC');
       expect(resultOut.tx_type).toBe("TRANSFER_OUT");
       expect(resultOut.amount_out).toBe("100"); // Note: absolute value
     });
@@ -210,7 +210,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         asset: "SOL",
         metadata: {},
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.amount_in).toBe("5");
       expect(result.asset_in).toBe("SOL");
     });
@@ -228,7 +228,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
           account: "My Main Account",
         },
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.metadata.network).toBe("Ethereum");
       expect(result.metadata.status).toBe("Completed");
       expect(result.metadata.account_id).toBe("My Main Account");
@@ -245,7 +245,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
           account: "My Main Account",
         },
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.metadata.wallet).toBe("earn");
       expect(result.metadata.account_id).toBe("My Main Account");
     });
@@ -257,7 +257,7 @@ describe("Transaction Normalizer (Dumb Pipe - Zero Math)", () => {
         tx_type: "transfer",
         metadata: { cartera: "spot / main" },
       };
-      const result = normalizeTransactionDirection(data);
+      const result = normalizeTransactionDirection(data, 'UTC');
       expect(result.metadata.wallet).toBe("spot / main");
       expect(result.metadata.cartera).toBeUndefined();
     });

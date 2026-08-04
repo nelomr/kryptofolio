@@ -60,7 +60,7 @@ export function createIngestionApi(container: DIContainer) {
       '/transactions',
       zValidator('json', transactionsBodySchema),
       async (c) => {
-        const { rows, market, sourceProfileId } = c.req.valid('json');
+        const { rows, market, sourceProfileId, timezone } = c.req.valid('json');
 
         try {
           // One call: the route states what happened, never in which order it has to happen.
@@ -71,6 +71,7 @@ export function createIngestionApi(container: DIContainer) {
             })) as IngestAndMaterializeRows,
             market,
             sourceProfileId,
+            timezone,
           });
 
           const { ingestion } = outcome;

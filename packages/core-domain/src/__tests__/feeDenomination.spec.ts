@@ -16,7 +16,7 @@ const KRAKEN = SOURCE_FORMAT_PROFILES["kraken-spot"];
 function normalized(data: TransactionMappedData): Partial<TransactionMappedData> {
   const [row] = prepareIngestionRows(
     [{ id: "1", originalData: {}, errors: [], hasError: false as const, mappedData: data }],
-    KRAKEN,
+    KRAKEN, 'UTC',
   );
   return row.mappedData;
 }

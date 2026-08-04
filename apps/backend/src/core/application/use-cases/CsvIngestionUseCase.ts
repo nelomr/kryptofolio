@@ -93,6 +93,20 @@ class UnmappedTransactionTypeError extends Error {
   }
 }
 
+/**
+ * The magnitude a source wrote, as it wrote it.
+ *
+ * `new Decimal(text).abs().toString()` returns the same number at a different scale — `7704.160`
+ * becomes `7704.16` — so using Decimal to drop a sign also reformatted every quantity on its way to
+ * the ledger. Decimal still decides whether the text is a number at all; it just no longer decides how
+ * many digits the number has.
+ */
+function sourceMagnitude(text: string): string {
+  if (!new Decimal(text).isFinite()) throw new RangeError(`not a finite quantity: '${text}'`);
+  const trimmed = text.trim();
+  return trimmed.startsWith('-') || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed;
+}
+
 function toSpotTxType(raw: string | null | undefined, timestamp: string): SpotTxType {
   const upper = (raw ?? '').toUpperCase() as SpotTxType;
   if (SPOT_TX_TYPES.includes(upper)) return upper;
@@ -189,6 +203,11 @@ export class CsvIngestionUseCase {
     submitted: SubmittedTransaction[],
     market: 'spot' | 'futures',
     sourceProfileId: SourceProfileId,
+    /**
+     * The zone the file's wall-clock times were written in. Required, because the alternative is
+     * asserting every export is UTC — which silently reorders a day's trades, and FIFO is an ordering.
+     */
+    timezone: string,
   ): Promise<IngestionResult> {
     const profile = SOURCE_FORMAT_PROFILES[sourceProfileId];
     const baseCurrency = (await this.userSettingsPort.getSetting('base_currency')) || 'USD';
@@ -204,7 +223,7 @@ export class CsvIngestionUseCase {
      */
     const invariant = checkProfileInvariant(profile, submitted);
 
-    const { rows, refused } = await this.prepare(submitted, profile, market);
+    const { rows, refused } = await this.prepare(submitted, profile, market, timezone);
     rejected.push(...refused);
 
     for (const rawRow of rows) {
@@ -265,9 +284,9 @@ export class CsvIngestionUseCase {
           account_id: accountId,
           timestamp: normalizeIsoTimestamp(row.timestamp),
           tx_type: resolvedType.txType,
-          amount_in: row.amount_in ? toPreciseAmount(new Decimal(row.amount_in).abs().toString()) : undefined,
+          amount_in: row.amount_in ? toPreciseAmount(sourceMagnitude(row.amount_in)) : undefined,
           asset_in_id: row.asset_in || undefined,
-          amount_out: row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
+          amount_out: row.amount_out ? toPreciseAmount(sourceMagnitude(row.amount_out)) : undefined,
           asset_out_id: row.asset_out || undefined,
           fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
           fee_asset_id: fee.assetId,
@@ -304,7 +323,7 @@ export class CsvIngestionUseCase {
           timestamp: normalizeIsoTimestamp(row.timestamp),
           tx_type: resolvedType.txType,
           symbol: row.symbol ?? row.asset_in ?? row.asset_out ?? 'UNKNOWN',
-          amount: row.amount_in ? toPreciseAmount(new Decimal(row.amount_in).abs().toString()) : row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
+          amount: row.amount_in ? toPreciseAmount(sourceMagnitude(row.amount_in)) : row.amount_out ? toPreciseAmount(sourceMagnitude(row.amount_out)) : undefined,
           realized_pnl: row.realized_pnl ? toPreciseAmount(row.realized_pnl) : undefined,
           funding_amount: row.funding_amount ? toPreciseAmount(row.funding_amount) : undefined,
           fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
@@ -340,6 +359,7 @@ export class CsvIngestionUseCase {
     submitted: SubmittedTransaction[],
     profile: SourceFormatProfile,
     market: 'spot' | 'futures',
+    timezone: string,
   ): Promise<{ rows: IngestibleTransaction[]; refused: IngestionRejection[] }> {
     const asRows = submitted.map((mappedData, index) => ({
       id: String(index),
@@ -355,7 +375,7 @@ export class CsvIngestionUseCase {
      * through it yields `BUY`, a type the futures side has no member for. A position event has no
      * second leg to reunite either.
      */
-    const prepared = market === 'spot' ? prepareIngestionRows(asRows, profile) : asRows;
+    const prepared = market === 'spot' ? prepareIngestionRows(asRows, profile, timezone) : asRows;
 
     const rows: IngestibleTransaction[] = [];
     const refused: IngestionRejection[] = [];

@@ -93,17 +93,17 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
         krakenLeg({ tx_id: 'TXB', tx_type: 'trade', group_id: 'TTE7DJ', amount: '7704.160', asset: 'PUMP', fee_amount: '17.720' }),
       ],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     expect(result.persisted).toBe(1);
     const [tx] = persisted(ledgerPort);
     expect(tx.asset_out_id).toBe('EUR');
-    expect(tx.amount_out).toBe('50');
+    expect(tx.amount_out).toBe('50.0000');
     expect(tx.asset_in_id).toBe('PUMP');
-    // `7704.160` and `17.720` in the file: the aggregator keeps both verbatim and the ledger mapping
-    // normalises the scale of every quantity it writes, through `Decimal`.
-    expect(tx.amount_in).toBe('7704.16');
+    // `-50.0000`, `7704.160` and `17.720` in the file: only the sign is dropped, and the sign is what
+    // the direction was read from. The scale a source wrote a quantity at reaches the ledger intact.
+    expect(tx.amount_in).toBe('7704.160');
     expect(tx.fee_amount).toBe('17.72');
     expect(tx.fee_asset_id).toBe('PUMP');
   });
@@ -113,11 +113,11 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
       krakenLeg({ tx_type: 'deposit', amount: '179.11', asset: 'XRP' }),
     ];
 
-    await useCase.execute(batch(), 'spot', 'kraken-spot');
+    await useCase.execute(batch(), 'spot', 'kraken-spot', 'UTC');
     const first = persisted(ledgerPort)[0].id_hash;
 
     ledgerPort.saveSpotTransaction.mockClear();
-    await useCase.execute(batch(), 'spot', 'kraken-spot');
+    await useCase.execute(batch(), 'spot', 'kraken-spot', 'UTC');
     const second = persisted(ledgerPort)[0].id_hash;
 
     expect(first).toHaveLength(64);
@@ -131,7 +131,7 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
         krakenLeg({ tx_type: 'deposit', amount: '179.12', asset: 'XRP' }),
       ],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     const hashes = persisted(ledgerPort).map((tx) => tx.id_hash);
@@ -145,7 +145,7 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
         krakenLeg({ tx_type: 'trade', group_id: 'REF-FEE', amount: '7704.16', asset: 'PUMP', fee_amount: '17.720' }),
       ],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     expect(result.persisted).toBe(0);
@@ -172,7 +172,7 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
         }),
       ],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     const [tx] = persisted(ledgerPort);
@@ -189,7 +189,7 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
     const result = await useCase.execute(
       [krakenLeg({ tx_type: 'transfer', amount: '-179.11', asset: 'XRP', group_id: null })],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     expect(result.rejected).toHaveLength(0);
@@ -230,7 +230,7 @@ describe('a two-row same-asset Kraken group survives to the ledger as two legs',
         }),
       ],
       'spot',
-      'kraken-spot',
+      'kraken-spot', 'UTC',
     );
 
     expect(result.persisted).toBe(2);
@@ -294,7 +294,7 @@ describe('a two-row same-asset Kraken group survives to the ledger as two legs',
           }),
         ],
         'spot',
-        'kraken-spot',
+        'kraken-spot', 'UTC',
       );
 
       expect(result.rejected).toEqual([]);

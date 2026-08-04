@@ -28,7 +28,7 @@ function through(rows: TransactionMappedData[]): Partial<TransactionMappedData>[
     hasError: false,
     mappedData,
   }));
-  return prepareIngestionRows(wrapped, BIT2ME).map((row) => row.mappedData);
+  return prepareIngestionRows(wrapped, BIT2ME, 'UTC').map((row) => row.mappedData);
 }
 
 const depositRows = mapped(BIT2ME_CRYPTO_DEPOSIT_ROWS);

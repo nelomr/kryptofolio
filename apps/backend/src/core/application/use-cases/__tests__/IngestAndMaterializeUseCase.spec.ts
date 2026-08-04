@@ -89,7 +89,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(ingestion.execute).toHaveBeenCalledOnce();
     expect(materializer.recalculate).toHaveBeenCalledOnce();
@@ -111,7 +111,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(ingestion.execute).toHaveBeenCalledOnce();
     expect(materializer.recalculate).toHaveBeenCalledOnce();
@@ -126,7 +126,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(materializer.recalculate).toHaveBeenCalledTimes(1);
   });
@@ -139,7 +139,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows: [], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(materializer.recalculate).not.toHaveBeenCalled();
     expect(result.materialized).toBe(false);
@@ -170,7 +170,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(materializer.recalculate).not.toHaveBeenCalled();
     expect(result.ingestion.rejected).toHaveLength(1);
@@ -185,7 +185,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(result.materialized).toBe(false);
     expect(result.materializationError).toContain('v_custody_entries');
@@ -201,7 +201,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(await settings.getSetting(RECALC_KEY)).toBe('true');
   });
@@ -214,7 +214,7 @@ describe('IngestAndMaterializeUseCase', () => {
       ingestion.double,
       materializer.double,
       settings,
-    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(result.materialization?.pendingReview).toBe(30);
     expect(result.materialized).toBe(true);
@@ -235,7 +235,7 @@ describe('IngestAndMaterializeUseCase', () => {
       { execute: ingestionExecute } as unknown as CsvIngestionUseCase,
       { recalculate } as unknown as FifoMaterializerService,
       settings,
-    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot' });
+    ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(order).toEqual(['ingest', 'materialise']);
   });

@@ -2,6 +2,7 @@ import type { TransactionRow, ValidTransactionRow } from "@kryptofolio/shared-ty
 
 import { normalizeTransactionDirection } from "../TransactionNormalizer";
 import { aggregateRows } from "./rowAggregator";
+import { resolveTradeDirection } from "./tradeDirection";
 import { applyProfileToRow } from "../sourceProfile/appliers";
 import type { SourceFormatProfile } from "../sourceProfile/types";
 
@@ -21,8 +22,11 @@ import type { SourceFormatProfile } from "../sourceProfile/types";
  * for every source alike — a global default that quietly answered for the two sources whose files mix
  * a fiat fee and an asset fee, and that the profile exists to replace.
  *
- * Aggregation last, over legs whose direction and denomination are established — which is also what
+ * Aggregation next, over legs whose direction and denomination are established — which is also what
  * lets it tell a trade from a movement, because the distinction is which side each leg is on.
+ *
+ * A trade's own direction is read last, from the merged record, because that is the first point at
+ * which both of its sides exist: `trade` is the same word for a purchase and a sale.
  *
  * Pure, and therefore callable from either side of the ingestion boundary. It runs on the backend, so
  * re-ingesting one file is deterministic in the server rather than dependent on the client version
@@ -31,11 +35,15 @@ import type { SourceFormatProfile } from "../sourceProfile/types";
 export function prepareIngestionRows(
   rows: readonly ValidTransactionRow[],
   profile: SourceFormatProfile,
+  timezone: string,
 ): TransactionRow[] {
   const classified = rows.map((row) => ({
     ...row,
-    mappedData: applyProfileToRow(profile, normalizeTransactionDirection(row.mappedData)),
+    mappedData: applyProfileToRow(
+      profile,
+      normalizeTransactionDirection(row.mappedData, timezone),
+    ),
   }));
 
-  return aggregateRows(classified, profile);
+  return aggregateRows(classified, profile).map(resolveTradeDirection);
 }

@@ -130,7 +130,7 @@ function previewRow(raw: Record<string, unknown>): TransactionMappedData {
 /** What the wizard submits: the previewed row, direction-normalised, with an account and a hash. */
 function submittable(row: TransactionMappedData, idHash: string): IngestibleTransaction {
   return {
-    ...normalizeTransactionDirection(row),
+    ...normalizeTransactionDirection(row, 'UTC'),
     account_id: ACCOUNT,
     id_hash: idHash,
   } as IngestibleTransaction;
@@ -141,7 +141,7 @@ function unprofiled(raw: Record<string, unknown>, idHash: string): IngestibleTra
   const mapping = guessColumnMapping(BIT2ME_HEADERS);
   const mapped = mapToEntity(raw, mapping, 0, 'SPOT').mappedData as TransactionMappedData;
   return {
-    ...normalizeTransactionDirection(mapped),
+    ...normalizeTransactionDirection(mapped, 'UTC'),
     account_id: ACCOUNT,
     id_hash: idHash,
   } as IngestibleTransaction;
@@ -173,7 +173,7 @@ describe('a Bit2Me file is read the same way on both sides of the ingestion boun
     const result = await useCase.execute(
       [unprofiled(HBAR_WITHDRAWAL, 'hash-hbar-unprofiled')],
       'spot',
-      'bit2me-spot',
+      'bit2me-spot', 'UTC',
     );
 
     expect(result.rejected).toEqual([]);
@@ -190,7 +190,7 @@ describe('a Bit2Me file is read the same way on both sides of the ingestion boun
     await useCase.execute(
       [unprofiled(HBAR_WITHDRAWAL, 'hash-a'), submittable(previewRow(HBAR_WITHDRAWAL), 'hash-b')],
       'spot',
-      'bit2me-spot',
+      'bit2me-spot', 'UTC',
     );
 
     const [fresh, alreadyApplied] = saved();
@@ -204,7 +204,7 @@ describe('a Bit2Me file is read the same way on both sides of the ingestion boun
     expect(previewed.amount_in).toBe('57.05766322');
     expect(previewed.amount_out).toBeUndefined();
 
-    await useCase.execute([unprofiled(USDC_DEPOSIT, 'hash-usdc')], 'spot', 'bit2me-spot');
+    await useCase.execute([unprofiled(USDC_DEPOSIT, 'hash-usdc')], 'spot', 'bit2me-spot', 'UTC');
 
     const tx = saved()[0];
     expect(tx.amount_in).toBe('57.05766322');
@@ -214,7 +214,7 @@ describe('a Bit2Me file is read the same way on both sides of the ingestion boun
 
   it('leaves a row untouched under a profile that declares no such rule', async () => {
     // The same file read as an unrecognised source: nothing is derived, so the gross figure stands.
-    await useCase.execute([unprofiled(HBAR_WITHDRAWAL, 'hash-generic')], 'spot', 'generic');
+    await useCase.execute([unprofiled(HBAR_WITHDRAWAL, 'hash-generic')], 'spot', 'generic', 'UTC');
 
     const tx = saved()[0];
     expect(tx.amount_out).toBe('2.236429');

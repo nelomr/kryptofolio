@@ -13,7 +13,7 @@ function tangemActivationRow() {
     amount: '1.0',
     fee_amount: '0.0',
     metadata: { notes: 'Tangem Base Reserve' },
-  });
+  }, 'UTC');
 }
 
 describe('a Tangem wallet activation is ingestible and keeps its fiscal classification', () => {
@@ -38,7 +38,7 @@ describe('a Tangem wallet activation is ingestible and keeps its fiscal classifi
       asset: 'XRP',
       amount: '1.0',
       metadata: {},
-    });
+    }, 'UTC');
     expect(buy.fiscal_flag).toBeUndefined();
   });
 });
@@ -54,7 +54,7 @@ describe("Bitvavo's promotional credit becomes its own canonical type", () => {
       amount: '10',
       fiat_currency: 'EUR',
       metadata: {},
-    });
+    }, 'UTC');
   }
 
   it('maps the campaign label to PROMOTION rather than leaving it unmapped', () => {

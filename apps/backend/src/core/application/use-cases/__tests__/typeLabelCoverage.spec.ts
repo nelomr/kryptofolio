@@ -35,6 +35,17 @@ const ACCOUNT = '10000000-0000-0000-0000-000000000001';
  */
 const DEFERRED_FUTURES_LABELS = ['conversion', 'cross-exchange transfer'] as const;
 
+/**
+ * Labels whose direction is not in the label. This net submits one sample row per label, and a lone
+ * `trade` leg has no second side to read a direction from — Kraken writes the same word on the leg
+ * that spent and the leg that received. Rejecting it by name is the designed refusal; guessing is what
+ * recorded every sale in the corpus as a purchase.
+ *
+ * Measured on the real export: all 20 `trade` rows form 10 pairs and none is left unpaired, so no real
+ * row reaches the ledger this way. `tradeDirection.spec.ts` covers the paired path.
+ */
+const PAIRED_SPOT_LABELS = ['trade'] as const;
+
 function makeLedgerPort(): Mocked<ILedgerPort> {
   return {
     initialize: vi.fn().mockResolvedValue(undefined),
@@ -80,7 +91,7 @@ function ingestibleFor(vocabulary: SourceVocabulary, label: string): IngestibleT
       ...mapped,
       tx_type: mapped.tx_type ?? sample.row[vocabulary.typeColumn] ?? null,
       metadata: mapped.metadata ?? {},
-    }),
+    }, 'UTC'),
     account_id: ACCOUNT,
     id_hash: `hash-${vocabulary.source}-${label}`,
   };
@@ -119,14 +130,16 @@ describe('every type label in every real export reaches a type the ledger accept
     describe(vocabulary.source, () => {
       for (const sample of vocabulary.labels) {
         const deferred =
-          vocabulary.market === 'futures' &&
-          (DEFERRED_FUTURES_LABELS as readonly string[]).includes(sample.label);
+          (vocabulary.market === 'futures' &&
+            (DEFERRED_FUTURES_LABELS as readonly string[]).includes(sample.label)) ||
+          (vocabulary.market === 'spot' &&
+            (PAIRED_SPOT_LABELS as readonly string[]).includes(sample.label));
 
         it(`${deferred ? 'rejects by decision' : 'accepts'} '${sample.label}' (${sample.count} rows)`, async () => {
           const result = await useCase.execute(
             [ingestibleFor(vocabulary, sample.label)],
             vocabulary.market,
-            profileIdFor(vocabulary),
+            profileIdFor(vocabulary), 'UTC',
           );
 
           if (deferred) {

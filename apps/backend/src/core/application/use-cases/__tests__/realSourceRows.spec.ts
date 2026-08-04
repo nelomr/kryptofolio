@@ -74,7 +74,7 @@ describe('the real rows that the ingestion mapper used to reject', () => {
 
   function ingestible(row: Record<string, string> & { tx_type: string }): IngestibleTransaction {
     return {
-      ...normalizeTransactionDirection({ metadata: {}, ...row }),
+      ...normalizeTransactionDirection({ metadata: {}, ...row }, 'UTC'),
       account_id: ACCOUNT,
       id_hash: `hash-${row.tx_type}`,
     };
@@ -91,20 +91,21 @@ describe('the real rows that the ingestion mapper used to reject', () => {
     });
 
   it('persists the Tangem activation instead of rejecting the whole file', async () => {
-    const result = await useCase.execute([tangemActivation()], 'spot', 'tangem');
+    const result = await useCase.execute([tangemActivation()], 'spot', 'tangem', 'UTC');
     expect(result.rejected).toEqual([]);
     expect(result.persisted).toBe(1);
   });
 
   it('records the activation as an acquisition of the reserved asset', async () => {
-    await useCase.execute([tangemActivation()], 'spot', 'tangem');
+    await useCase.execute([tangemActivation()], 'spot', 'tangem', 'UTC');
     expect(saved().tx_type).toBe('BUY');
     expect(saved().asset_in_id).toBe('XRP');
-    expect(saved().amount_in).toBe('1');
+    // The file states `1.0`, and that is what the ledger records.
+    expect(saved().amount_in).toBe('1.0');
   });
 
   it('carries the fiscal classification onto the ledger transaction', async () => {
-    await useCase.execute([tangemActivation()], 'spot', 'tangem');
+    await useCase.execute([tangemActivation()], 'spot', 'tangem', 'UTC');
     expect(saved().flag).toBe('WALLET_ACTIVATION');
   });
 
@@ -112,7 +113,7 @@ describe('the real rows that the ingestion mapper used to reject', () => {
     await useCase.execute(
       [ingestible({ date: '2025-06-03', tx_type: 'buy', asset: 'XRP', amount: '1.0' })],
       'spot',
-      'bitvavo-spot',
+      'bitvavo-spot', 'UTC',
     );
     expect(saved().flag).toBeUndefined();
   });
@@ -129,19 +130,19 @@ describe('the real rows that the ingestion mapper used to reject', () => {
     });
 
   it('persists the promotional credit under its own type', async () => {
-    const result = await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot');
+    const result = await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot', 'UTC');
     expect(result.rejected).toEqual([]);
     expect(saved().tx_type).toBe('PROMOTION');
   });
 
   it('records the credit at its face value, since the asset is the reporting currency itself', async () => {
-    await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot');
+    await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot', 'UTC');
     expect(saved().total_fiat).toBe('10');
     expect(saved().price_fiat).toBe('1');
   });
 
   it('does not report the credit as an unresolved magnitude', async () => {
-    const result = await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot');
+    const result = await useCase.execute([bitvavoPromotion()], 'spot', 'bitvavo-spot', 'UTC');
     expect(result.unresolvedFiat).toBe(0);
   });
 
@@ -162,7 +163,7 @@ describe('the real rows that the ingestion mapper used to reject', () => {
     });
 
   it('keeps a negative fee negative, so the basis is credited and not charged twice', async () => {
-    await useCase.execute([bitvavoNegativeFeeBuy()], 'spot', 'bitvavo-spot');
+    await useCase.execute([bitvavoNegativeFeeBuy()], 'spot', 'bitvavo-spot', 'UTC');
     expect(saved().fee_amount).toBe('-0.00543739');
     expect(saved().fee_asset_id).toBe('EUR');
   });
@@ -184,7 +185,7 @@ describe('the real rows that the ingestion mapper used to reject', () => {
         }),
       ],
       'spot',
-      'bitvavo-spot',
+      'bitvavo-spot', 'UTC',
     );
     expect(saved().fee_amount).toBe('0.7499');
   });

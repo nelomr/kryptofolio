@@ -32,9 +32,10 @@ describe('useImportProcessor', () => {
     expect(processingErrors.value).toEqual([])
     
     /**
-     * The row goes out as the source wrote it, plus the account and the instant. Classification,
-     * aggregation and the identifier all happen behind the ingestion boundary now, so the payload
-     * still carries `date` and `time` and carries no `id_hash`.
+     * The row goes out as the source wrote it, plus the account. Classification, aggregation, the
+     * identifier and the instant all happen behind the ingestion boundary now, so the payload still
+     * carries `date` and `time` and carries neither `id_hash` nor `timestamp` — converting here and
+     * again behind the boundary is how the chosen timezone was lost.
      */
     expect(mockMutateAsync).toHaveBeenCalledWith({
       market: 'spot',
@@ -49,7 +50,6 @@ describe('useImportProcessor', () => {
             date: '2023-01-01',
             time: '00:00:00',
             account_id: '10000000-0000-0000-0000-000000000001',
-            timestamp: '2023-01-01T00:00:00.000Z',
             metadata: {},
           },
         }
