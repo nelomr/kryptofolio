@@ -45,7 +45,6 @@ const orchestrator = (container: DIContainer) =>
   container.ingestAndMaterializeUseCase.execute as ReturnType<typeof vi.fn>;
 
 const VALID_ROW = {
-  id_hash: "hash-ingestion-test",
   account_id: "00000000-0000-0000-0000-000000000001",
   tx_type: "BUY",
   timestamp: "2023-01-15T10:00:00Z",
@@ -90,9 +89,10 @@ describe("POST /ingestion/transactions", () => {
     expect(body.processedCount).toBe(1);
     expect(orchestrator(container)).toHaveBeenCalledOnce();
 
-    // Verify the row was passed through with id_hash and account_id intact
+    // The row reaches the orchestrator as submitted, account and all, and with no identifier: the
+    // use case derives that from the row it persists.
     const [{ rows, market }] = orchestrator(container).mock.calls[0];
-    expect(rows[0].id_hash).toBe("hash-ingestion-test");
+    expect(rows[0].id_hash).toBeUndefined();
     expect(rows[0].account_id).toBe("00000000-0000-0000-0000-000000000001");
     expect(market).toBe("spot");
   });
@@ -179,7 +179,7 @@ describe("POST /ingestion/transactions", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        rows: [VALID_ROW, { ...VALID_ROW, id_hash: "hash-bad", tx_type: "LIQUIDATION_TRANSFER" }],
+        rows: [VALID_ROW, { ...VALID_ROW, tx_type: "LIQUIDATION_TRANSFER" }],
         market: "spot",
         timezone: "UTC",
         sourceProfileId: "kraken-spot",
@@ -283,8 +283,13 @@ describe("POST /ingestion/transactions", () => {
     expect(body.message).toContain("FK constraint failed");
   });
 
-  it("returns 400 when id_hash is missing (zValidator guard)", async () => {
-    const rowWithoutHash = { ...VALID_ROW, id_hash: undefined };
+  /**
+   * The contract carries no identifier: it is derived behind this boundary, from the row that is
+   * persisted, which is not the row a client could hash — the legs of one operation are reunited on
+   * this side now.
+   */
+  it("accepts a row that carries no identifier, and asks for none", async () => {
+    const rowWithoutHash = { ...VALID_ROW };
 
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
@@ -297,9 +302,8 @@ describe("POST /ingestion/transactions", () => {
       }),
     });
 
-    expect(res.status).toBe(400);
-    // execute should never be called if validation fails
-    expect(orchestrator(container)).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(orchestrator(container)).toHaveBeenCalled();
   });
 
   it("returns 400 when account_id is empty", async () => {
@@ -342,8 +346,7 @@ describe("POST /ingestion/transactions", () => {
   it("accepts futures market type", async () => {
     const futuresRow = {
       ...VALID_ROW,
-      id_hash: "hash-futures-test",
-      tx_type: "TRADE",
+          tx_type: "TRADE",
       symbol: "BTCUSDT",
     };
 

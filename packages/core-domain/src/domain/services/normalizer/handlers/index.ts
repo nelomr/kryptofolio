@@ -1,5 +1,5 @@
 import type { NormalizerHandler } from "./types";
-import { handleBuy, handleSell } from "./trade";
+import { handleBuy, handleSell, handleTrade } from "./trade";
 import { handleDeposit, handleWithdrawal, handleTransfer } from "./transfer";
 import { handleCryptoIncome, handleCryptoExpense } from "./crypto";
 
@@ -9,7 +9,8 @@ export const transactionHandlers: Record<string, NormalizerHandler> = {
   compra: handleBuy,
   sell: handleSell,
   venta: handleSell,
-  trade: handleBuy, // Fallback if positive amount implies buy, though aggregator splits it
+  // A bare `trade` carries no direction of its own; the sign of its amount does.
+  trade: handleTrade,
   
   // Transfer
   deposit: handleDeposit,

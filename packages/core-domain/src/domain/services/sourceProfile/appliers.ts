@@ -112,6 +112,17 @@ function declaredDenomination(
   const denomination = profile.feeDenomination;
   switch (denomination.kind) {
     case "ROW_ASSET": {
+      /**
+       * A denomination already on the row wins over re-deriving one.
+       *
+       * The source names no fee currency, so anything in that field was resolved from the leg the fee
+       * was actually charged on — which is knowledge this function cannot recover once two legs are one
+       * record. A Kraken trade merges a EUR leg and a PUMP leg, and the fee belongs to whichever leg
+       * carried it; re-deriving picks the outbound asset and would relabel a PUMP fee as euros.
+       */
+      const stated = firstNonEmpty(row.fee_currency);
+      if (stated !== undefined) return { kind: "ASSET_QUANTITY", asset: stated };
+
       const asset = rowAsset(row);
       if (asset === undefined) {
         return {

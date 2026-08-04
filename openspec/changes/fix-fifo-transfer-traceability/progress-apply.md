@@ -3376,35 +3376,193 @@ Also corrected while here: the spec's Bit2Me row said `Moneda de la comisión` i
 Measured — it is the **acquired asset on 98 of 118 trade rows** and `EUR` on the 45 movement rows, so
 two sources mix a fiat fee and an asset fee inside one file, not one.
 
+## Group 14, phase 14δ — leg integrity — COMPLETE (14.1, 14.2, 14.19b, 14.3, 14.4, 14.5)
+
+**Measured before:** shared-types 46, core-domain 186, database 126, backend 380, frontend 436; all five
+typechecks 0 errors, `HEAD = 96e2bed`, tree clean.
+**Measured after:** shared-types 46, core-domain **199**, database 126, backend **388**, frontend 437;
+all five typechecks **0 errors**.
+
+### What the phase actually changed
+
+Aggregation moved behind the ingestion boundary and the pipeline gained one composition point,
+`prepareIngestionRows(rows, profile)` in `core-domain`: **classify → apply the profile per leg →
+aggregate**. `CsvIngestionUseCase` calls it and then derives the identifier itself. Three consequences,
+each of which was a defect before:
+
+1. **`classifyCustodyMovement` now reads each leg's own signed amount.** It could not before: merging
+   redistributed `amount` into the directional fields and dropped it, so the classifier answered
+   `UNCLASSIFIED` for the one case it exists to resolve.
+2. **A same-asset opposing-sign group is refused, not merged.** `aggregateRows` computes each leg's side
+   through one helper (`sidesOf`, directional fields first, the sign of the generic amount as the
+   fallback) and refuses any group naming one asset on both sides. Both legs persist as written.
+3. **The identifier is derived server-side**, from the row that is persisted. `id_hash` is gone from the
+   wire contract (`rowSchema`), from `IngestAndMaterializeInput`, and from the frontend: the client
+   submits rows as the source wrote them plus the account and the instant.
+
+`SubmittedTransaction` (no identifier) is now the input type and `IngestibleTransaction` the prepared
+one, so the boundary is visible in the types rather than in a runtime `if (!row.id_hash) throw`.
+
+### Four things that were wrong and only became reachable once the code moved
+
+None of these are regressions — each behaved identically at `96e2bed`, in the client, where nothing
+enforced the ledger's constraints.
+
+- **`handleBuy` broke the ledger's fee/asset pair invariant.** It folded `asset_out` into
+  `fiat_currency` and deleted it while leaving `amount_out` in place, so the row violated
+  `CHECK ((amount_out IS NULL) = (asset_out_id IS NULL))`. Two E2E tests failed with that exact
+  constraint the moment the normalizer ran behind the boundary. Both fields now move together, and only
+  when the side is fiat: `20000 USDT` paid for BTC is a quantity of an asset, and recording it as a fiat
+  total invented a currency and lost the disposal.
+- **`fillImplicitFeeDenomination` was a global fee default.** Profile-blind, it filled an absent
+  denomination from the row's asset for every source, which pre-empted the profile's refusal for the
+  two sources whose files mix a fiat fee and an asset fee. **Deleted**; `applyProfileToRow` is the
+  single filler, and 14.30c's suite was retargeted from the normalizer to the pipeline under Kraken's
+  real profile — a stronger test, not a weaker one.
+- **`ROW_ASSET` relabelled a fee it could not re-derive.** For a merged Kraken trade `rowAsset()` picks
+  the outbound asset, so a fee charged on the PUMP leg was persisted as `EUR`. A denomination already on
+  the row now wins: for a source that names no fee currency, a value in that field can only have come
+  from the pipeline resolving it per leg. The dimension's distinguishability test was rewritten to
+  separate `ROW_ASSET` from `NAMED_COLUMN` on a row that states **no** currency — where they differ by
+  kind, not merely by asset — because the row it used (a Bit2Me row under a hypothetical `ROW_ASSET`
+  profile) is a case that cannot occur.
+- **`trade` had to stop being read as a purchase per leg.** `handleBuy` put `-50` into `amount_in`, which
+  only ever worked because merging ran first and redistributed it. `handleTrade` reads the sign where it
+  is written, and strips it as text: `new Decimal("7704.160").toString()` is `7704.16`, and the scale a
+  source wrote a quantity at is the scale its figure is exact at. `applyMovement`'s `Number`/`Math.abs`
+  went the same way.
+
+**A branch on market was necessary and is not a workaround.** Only spot rows are prepared: both steps
+are spot-shaped — the classifier resolves custody and funding, and `TYPE_MAP` is the spot vocabulary, so
+a futures `trade` came out as `BUY`, a type the futures side has no member for. A position event has no
+second leg to reunite either.
+
+### 14.19b — measured on the real files, and the deposit half was the part still owed
+
+Driving all three real Bit2Me exports through the real `processRawRows` + `guessColumnMapping`:
+
+| | measured |
+|---|---|
+| rows | **706** (709 raw lines; the header scan finds the real header row) |
+| `Deposit` rows | **42**, every one writing the same asset **and** the same amount on both sides |
+| of those, crypto | **8** — HBAR ×4, USDC, XRP, ETH, ADA |
+| of those, EUR | 34, harmless: both legs are dropped as fiat |
+
+The task's claim held exactly. The **rule** was already built and called in 14γ
+(`reduceDirectionalSides` + `BOTH_SIDES_WRITTEN`), and the withdrawal half was already pinned; what 14δ
+owed was the deposit half, which is now driven from all eight real rows in
+`packages/core-domain/src/__tests__/duplicatedDirectionalSides.spec.ts` — verbatim in the fixture,
+through the real mapper and the real pipeline: one inbound side, no outbound side, `TRANSFER_IN`, and no
+fee derived from a subtraction of zero.
+
+**Also measured, and it makes 14.2 latent rather than live:** the real corpus contains **zero**
+same-asset opposing-sign groups. Kraken's 10 multi-row `refid` groups are all genuine two-asset trades
+(listed in the scratch measurement); Bit2Me and Bitvavo produce **no** keyed multi-row groups at all now
+that `grupo` is not a `group_id`. 14.5's regression test is therefore synthetic by necessity — a
+`spot → earn` HBAR move of `1405.18513` — and it is driven end to end against the real SQLite schema so
+the CHECK constraints and the row identities are the storage layer's verdict, not a mock's.
+
+### Deliberate breaks — 10 applied, 10 red
+
+Applied one at a time from a script with literal paths, each confirmed present in the file by grep
+before the run and confirmed restored from a copy afterwards (standing reminders 8 and 10).
+
+| break | result |
+|---|---|
+| B1 same-asset guard always returns false | 4 failed / 12 passed |
+| B2 `sidesOf` ignores a leg's resolved inbound side | 2 failed / 14 |
+| B3 pipeline aggregates before it classifies | 1 failed / 4 — *"still merges the two legs of a genuine trade"*, `expected undefined to be 'EUR'` |
+| B4 both-sides reduction disabled | 1 failed / 3 |
+| B5 identifier is `randomUUID()` rather than derived | 1 failed / 5 |
+| B6 a trade leg read as a purchase regardless of sign | 1 failed / 5 |
+| B7 a refused group dropped instead of reported | 1 failed / 5 |
+| B8 futures rows put through the spot pipeline | 1 failed / 48 |
+| B9 `ROW_ASSET` re-derives a stated denomination | 1 failed / 5 |
+| B10 the fiat fold moves the asset without the amount | **first attempt stayed green** |
+
+**B10 is the honest one.** It went green because the only test exercising that path supplied
+`total_fiat`, so the fold returned early and the break was unreachable: the pair invariant had no
+coverage on this path at all. A test was added for it (`never leaves an amount without its asset when it
+folds a fiat side into the total`), B10 re-applied, and it then failed — `expected false to be true`.
+Without re-running the break, this phase would have shipped one unproven behaviour.
+
+### Findings recorded rather than fixed — none belongs to 14δ
+
+1. **Every merged Kraken trade is recorded as `BUY`, including the sales.** `TYPE_MAP` maps
+   `trade → BUY` and the merged record inherits the first leg's type, so `ENA -957.64750 / EUR 448.7536`
+   — a genuine sale in the real file — is persisted as a purchase. This is `baseline.md`'s
+   "`SELL`/`SWAP` count (expect 0)" and it is **unchanged by this phase**: the same value is produced at
+   `96e2bed`. The clean fix is to derive a merged record's type from its legs (fiat out + crypto in =
+   `BUY`, crypto out + fiat in = `SELL`, crypto out + crypto in = `SWAP`) and drop `trade → BUY`, which
+   would then leave an unresolvable `trade` to be rejected as D16b requires. It changes the fiscal
+   classification of real rows, no task in 14δ asks for it, and inventing it mid-implementation is
+   exactly what this change's process exists to prevent — so it wants a `D` number. A characterisation
+   test names it in place (`records a bare 'trade' as a purchase — a guess this phase exposes and does
+   not fix`), so nobody can change it silently.
+2. **The user's timezone choice is still discarded.** `normalizeTransactionDirection` recomputes
+   `timestamp` from `date` as naive UTC whenever `date` is present, overwriting the
+   `normalizeToUtcIso(…, timezone)` value the client computed — and the route accepts a `timezone` field
+   nothing reads. Unchanged from `96e2bed` (the clobbering merely moved with the normalizer). The fix is
+   one condition, *"do not overwrite a timestamp that is already set"*, but it shifts the instant of
+   ingested rows and therefore FIFO ordering, so it is not a mid-phase edit.
+3. **The ledger mapping normalises the scale of every quantity it writes.** `7704.160` is stored as
+   `7704.16` and `17.720` as `17.72`, through `new Decimal(...).toString()` in the row mapping —
+   on every path into it, not one introduced here. The aggregator keeps the source's digits verbatim, so
+   the loss is entirely at the last hop. 14.27's digit-for-digit net will meet this; it is the first
+   thing that phase should decide about.
+4. **Kraken's `RUNNING_BALANCE` invariant became genuinely checkable, as a side effect.** The client used
+   to normalise before submitting, which deleted the `amount` the check reads, so
+   `checkProfileInvariant` could only ever return `COULD_NOT_VERIFY` on the live path. It now runs over
+   the batch as submitted, with `amount` and `balance` both present.
+
+### Left as it stands, deliberately
+
+- `useImportProcessor` no longer stops a batch, because it no longer aggregates and has nothing to
+  refuse. The refusal is reachable in the one place it can now happen: the use case reports the group in
+  `IngestionResult.rejected`, which the route already surfaces, and the rest of the batch still
+  persists — which is better than the previous all-or-nothing stop. Asserted on both sides.
+- `transfer_group_id` is still written by nothing. That is 14ε (14.7/14.8), and it is now *reachable*:
+  the backend receives both legs of a same-asset group, which is what this phase existed to deliver.
+
 ## Resume here — next action
 
-**161 checked boxes in `tasks.md`, 39 open** (the "of 176" figure earlier entries used predates the
-tasks added since; the measured totals are these); groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
-**12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb
-and 14γ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
+**167 checked boxes in `tasks.md`, 33 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
+14γ and 14δ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
 group 13. **No task is left open in a closed group.**
 
-### Start here next session — group 14, phase 14δ
+Measured state: shared-types 46, core-domain **199**, database 126, backend **388**, frontend 437; all
+five typechecks 0 errors.
 
-Next is **14δ — leg integrity: a movement's two sides survive to the domain** (14.3, 14.19b and the
-tasks listed under it in `tasks.md`). It is ordered after the fee model for two reasons that are now
-concrete rather than anticipated:
+### Start here next session — group 14, phase 14ε
 
-- **`14.19b`'s rule is already half-built and half-called.** `reduceDirectionalSides` and
-  `BOTH_SIDES_WRITTEN` exist and run through `applyProfileToRow` on both sides of the boundary; 14γ
-  measured that this dimension — not the fee convention — is what derives Bit2Me's fee, and pinned all
-  43 differing withdrawals to it (finding 2 of the 14γ entry). What 14δ owes is the **deposit** half:
-  the 8 crypto `Deposit` rows that write both sides and net to zero in `v_custody_movements`.
-- **`14.3` changes what `mergeRows` receives, and `mergeRows` was rewritten in 14γ.** Its signature is
-  now `aggregateRows(rows, profile)` and its return type is `TransactionRow[]`, because a group whose
-  legs carry fees in two different units is **refused** rather than merged. Anything 14δ adds must keep
-  that refusal reachable, and `useImportProcessor` is where a refused group stops the batch.
-- **Two nets catch a regression within one edit.**
-  `apps/backend/.../__tests__/sourceProfileParity.spec.ts` compares the preview and the ledger digit
-  for digit on real Bit2Me rows; `packages/core-domain/src/__tests__/feeModel.spec.ts` drives the whole
-  43-row withdrawal corpus through the real mapper and the real appliers.
-- **Do not trust `vitest` alone for anything that changes a signature.** 14γ's typecheck caught a union
-  narrowing error and eight result-shape errors behind fully green suites.
+Next is **14ε — the recorded-counterparty tier stops being unreachable** (14.6, 14.7, 14.8, 14.9). Its
+precondition is now met and measured: 14δ moved aggregation behind the ingestion boundary and refuses a
+same-asset group, so **the backend receives both legs of a movement** and `v_custody_movements`'s
+`recorded_counterparty` tier has rows that can enter it. Four things to carry:
+
+- **`prepareIngestionRows(rows, profile)` is where 14ε's work goes.** It is the single composition point
+  — classify, apply the profile per leg, aggregate — and `CsvIngestionUseCase.prepare` derives the
+  identifier straight after it. `transfer_group_id` is a per-leg field, so it is populated in that pass,
+  not in the aggregator.
+- **The guard 14.8 asks for has a precedent to copy.** `aggregateRows` already keys on identifier **and
+  instant** and already refuses a group naming one asset on both sides; "same instant, at most two legs"
+  is the same shape of check over the same grouping, and D20's measurement (`grupo` holding 499 rows) is
+  why it exists.
+- **Which column is a reference is already declared.** `profile.columnRoles.references` and
+  `isMergeKey` exist; Kraken's is `refid` and Bit2Me's set is deliberately empty. 14.8 needs no new
+  dimension, only to read that one.
+- **Three tests will move within one edit of anything on this path**: `ingestionBoundary.spec.ts` (the
+  boundary and the same-asset group, including one end-to-end case against the real SQLite schema),
+  `sourceProfileParity.spec.ts` (preview versus ledger, digit for digit, on real Bit2Me rows) and
+  `feeModel.spec.ts` (the whole 43-row withdrawal corpus). And **typecheck separately** — 14δ's own
+  signature change produced four type errors behind five fully green suites.
+
+**Two findings 14δ measured and deliberately did not fix — read them before touching the type mapping
+or the timestamps.** Every merged Kraken trade is recorded as `BUY`, sales included (that is
+`baseline.md`'s `SELL`/`SWAP` = 0, and it wants a `D` number rather than a mid-phase edit); and the
+user's timezone choice is still overwritten by the normalizer. Both are written up in full in the 14δ
+entry above, and the first has a characterisation test naming it so it cannot change silently.
 
 ### Superseded — the 14βb start-here notes
 

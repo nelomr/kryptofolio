@@ -112,6 +112,14 @@ Three ways of resolving a denomination were measured across five real exports, a
 
 The distinction decides quantity versus basis: a fee paid in the asset is a disposal that reduces the quantity remaining in a lot, and a fee paid in fiat adjusts the basis and must leave every quantity untouched. Whether a *fiat* figure is the amount charged or only a **valuation** of a fee charged in the asset is not a property of the column, and SHALL NOT be declared as one: it follows from the source writing both directional sides in the same asset, where the fee that actually moved is the difference between them. A separate declared member asserting "this column holds a valuation" was implemented and then removed, because it could not change any outcome the named-column member did not already produce, and the one real row that would have distinguished it is a sale whose euro fee is a genuine cost.
 
+A source declared as naming no fee currency has none in its files, so a value in that field on one of its rows can only have been resolved by the pipeline — from the leg the fee was actually charged on, which is knowledge no re-derivation over a merged record can recover. Both declarations therefore honour a denomination the row already carries; what they decide is what an **absent** one means. Until this was settled, the normalizer filled an absent denomination from the row's asset for every source alike — a global default with none of the profile's per-source knowledge, and the rule this requirement exists to replace. It is deleted, and the profile applier is the single filler.
+
+#### Scenario: A denomination resolved per leg survives the merge
+
+- **WHEN** a Kraken trade merges a `EUR` leg and a `PUMP` leg and the fee was charged on the `PUMP` leg
+- **THEN** the merged record's fee MUST stay denominated in `PUMP`
+- **AND** it MUST NOT be re-derived from the merged record's own assets, which name two
+
 #### Scenario: A source with no fee-currency column resolves to the row's asset
 
 - **WHEN** a Kraken spot row carries `asset = PUMP` and `fee = 17.720`

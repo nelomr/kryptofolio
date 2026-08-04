@@ -1395,3 +1395,120 @@ export const BIT2ME_ROWS = [
   }
 ] as const;
 
+
+
+/**
+ * Every crypto `Deposit` row of the three real Bit2Me exports.
+ *
+ * All 42 of that file's deposits write the same asset **and** the same amount onto both the origin and
+ * the destination columns. 34 are EUR and harmless — both legs are dropped as fiat — and these 8 are
+ * not: HBAR four times, plus USDC, XRP, ETH and ADA. The custody view unions the two directional sides
+ * into legs, so each of these produced two legs on one account netting to exactly zero, which leaves no
+ * imbalance for anything to flag: the deposit landed nowhere, silently.
+ */
+export const BIT2ME_CRYPTO_DEPOSIT_ROWS = [
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "57.05766322",
+    "Moneda de destino": "USDC",
+    "Cantidad de origen": "57.05766322",
+    "Moneda de origen": "USDC",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 805fb527-2697-4052-97ae-51c13462b273 tx_hash:0x166381dd5f9a35212d402599c39bc9e9103f2c01485b2277601602b309a8d2c4",
+    "Fecha": "2025-01-30 16:42"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "0.0001",
+    "Moneda de destino": "XRP",
+    "Cantidad de origen": "0.0001",
+    "Moneda de origen": "XRP",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 08bcaa07-287c-4114-bde3-f902b4ea9014 tx_hash:01661B81236919692B05AEFF1FBA1C8E51C715A36559D62300989023688A6DF6",
+    "Fecha": "2025-03-06 10:11"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "0.09036248",
+    "Moneda de destino": "ETH",
+    "Cantidad de origen": "0.09036248",
+    "Moneda de origen": "ETH",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 2c4f4ee8-7b93-4c2c-86ba-34078ef41750 tx_hash:0x7d658e9337571c2558b57a8e15e52d5a901912e7c36bd9e8116668fde3a5b896",
+    "Fecha": "2025-07-14 13:03"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "10",
+    "Moneda de destino": "HBAR",
+    "Cantidad de origen": "10",
+    "Moneda de origen": "HBAR",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 7fb4d77c-caca-4321-8d1d-bf58ce7128c9 tx_hash:0.0.8046187-1755272995-185358286",
+    "Fecha": "2025-08-15 18:04"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "11",
+    "Moneda de destino": "HBAR",
+    "Cantidad de origen": "11",
+    "Moneda de origen": "HBAR",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 988324e5-674b-4274-bfa7-89369b64964b tx_hash:0.0.8046187-1755274284-284944892",
+    "Fecha": "2025-08-15 18:05"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "20",
+    "Moneda de destino": "HBAR",
+    "Cantidad de origen": "20",
+    "Moneda de origen": "HBAR",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet cc7d20fd-030e-45e8-a0d1-1c9905dee47e tx_hash:0.0.8046187-1755284140-866444349",
+    "Fecha": "2025-08-15 18:56"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "3591.350248",
+    "Moneda de destino": "HBAR",
+    "Cantidad de origen": "3591.350248",
+    "Moneda de origen": "HBAR",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 4055110a-2dce-48b1-ad44-5e17116d3075 tx_hash:0.0.8046187-1755284222-692931771",
+    "Fecha": "2025-08-15 18:57"
+  },
+  {
+    "Tipo de operación": "Deposit",
+    "Cantidad de destino": "248.844684",
+    "Moneda de destino": "ADA",
+    "Cantidad de origen": "248.844684",
+    "Moneda de origen": "ADA",
+    "Comisión de la operación": "0",
+    "Moneda de la comisión": "EUR",
+    "Exchange": "Bit2Me",
+    "Grupo": "blockchain",
+    "Descripción": "wallet 85974074-23e1-479b-aacc-912f3b30162a tx_hash:33f8c90a97d0368d753c105588193f63816a0be3cd8af568ebd6d2a5a312eb36",
+    "Fecha": "2025-08-17 17:49"
+  }
+] as const;

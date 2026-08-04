@@ -1,7 +1,7 @@
 import type {
   CsvIngestionUseCase,
-  IngestibleTransaction,
   IngestionResult,
+  SubmittedTransaction,
 } from './CsvIngestionUseCase.js';
 import type {
   FifoMaterializerService,
@@ -11,7 +11,7 @@ import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js'
 import type { SourceProfileId } from '@kryptofolio/shared-types';
 
 export interface IngestAndMaterializeInput {
-  rows: IngestibleTransaction[];
+  rows: SubmittedTransaction[];
   market: 'spot' | 'futures';
   /** Which source wrote the file. Required: no default can stand in for a measurement. */
   sourceProfileId: SourceProfileId;

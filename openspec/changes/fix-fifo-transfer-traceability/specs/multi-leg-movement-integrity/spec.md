@@ -24,7 +24,9 @@ Aggregation exists to reunite the two halves of a trade — fiat out, crypto in.
 
 ### Requirement: Direction Is Resolved Before Aggregation, Not After
 
-The ingestion pipeline SHALL classify each source row's direction before any grouping or merging step. `aggregateRows()` currently runs before `normalizeTransactionDirection()`, which removes the per-leg `amount` that `classifyCustodyMovement` reads, so the classifier receives a record it cannot classify and the backend mapper substitutes a direction the domain had refused to determine.
+The ingestion pipeline SHALL classify each source row's direction before any grouping or merging step, and both steps SHALL run behind the ingestion boundary. `aggregateRows()` ran before `normalizeTransactionDirection()`, and in a frontend composable: merging removes the per-leg `amount` that `classifyCustodyMovement` reads, so the classifier received a record it could not classify, and the backend never received two legs of anything.
+
+The order is now fixed by one function, `prepareIngestionRows(rows, profile)` — classify, apply the profile per leg, then aggregate — called by `CsvIngestionUseCase`. The transaction identifier is derived there too, from the row that is persisted: a client-computed key keys a record the client has already restructured, and makes re-ingesting one file depend on the client version that submitted it.
 
 #### Scenario: The classifier sees the per-leg amount
 

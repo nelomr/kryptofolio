@@ -183,11 +183,100 @@ describe("Row Aggregator — a shared group is not enough to merge", () => {
 
     const result = aggregateRows(rows, KRAKEN);
 
+    expect(result).toHaveLength(2);
     for (const r of result) {
       const { asset_in, asset_out } = r.mappedData;
       const collapsed = asset_in !== undefined && asset_in === asset_out;
       expect(collapsed).toBe(false);
     }
+  });
+});
+
+/**
+ * A shared reference plus one instant is a trade only when the two legs name two different assets.
+ * The same asset leaving one account and arriving in another is a movement, and the custody engine
+ * depends on seeing it as two legs: merged, it becomes one record that both spends and receives the
+ * same asset, which is not an operation any exchange performs.
+ */
+describe("Row Aggregator — a same-asset pair is a movement, not a trade", () => {
+  const leg = (
+    id: string,
+    over: Partial<ValidTransactionRow["mappedData"]>
+  ): ValidTransactionRow => ({
+    id,
+    originalData: {},
+    errors: [],
+    hasError: false,
+    mappedData: {
+      timestamp: "2025-10-07T23:40:26Z",
+      tx_type: "transfer",
+      group_id: "TKU627-44BLQ-5CPE3L",
+      exchange: null,
+      description: null,
+      metadata: {},
+      ...over,
+    },
+  });
+
+  it("keeps both legs of an opposing-sign same-asset group", () => {
+    const rows = [
+      leg("a", { amount: "-100", asset: "XRP" }),
+      leg("b", { amount: "100", asset: "XRP" }),
+    ];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.id).sort()).toEqual(["a", "b"]);
+    expect(result.map((r) => r.mappedData.amount).sort()).toEqual(["-100", "100"]);
+  });
+
+  it("produces no record whose inbound and outbound asset are the same", () => {
+    const rows = [
+      leg("a", { amount: "-100", asset: "XRP" }),
+      leg("b", { amount: "100", asset: "XRP" }),
+      leg("c", { group_id: "REF-TRADE", amount: "-300", asset: "EUR" }),
+      leg("d", { group_id: "REF-TRADE", amount: "247.10551", asset: "XRP" }),
+    ];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    for (const r of result) {
+      const { asset_in, asset_out } = r.mappedData;
+      expect(asset_in === undefined || asset_in !== asset_out).toBe(true);
+    }
+  });
+
+  it("still merges a genuine two-asset trade sharing the same reference and instant", () => {
+    const rows = [
+      leg("c", { group_id: "REF-TRADE", amount: "-300", asset: "EUR" }),
+      leg("d", { group_id: "REF-TRADE", amount: "247.10551", asset: "XRP" }),
+    ];
+
+    const [merged, ...rest] = aggregateRows(rows, KRAKEN);
+
+    expect(rest).toHaveLength(0);
+    expect(merged.mappedData.asset_out).toBe("EUR");
+    expect(merged.mappedData.amount_out).toBe("300");
+    expect(merged.mappedData.asset_in).toBe("XRP");
+    expect(merged.mappedData.amount_in).toBe("247.10551");
+  });
+
+  it("refuses a same-asset group whose legs were already resolved into directional sides", () => {
+    // The legs reach aggregation with their direction already established, which is the whole point
+    // of resolving it first: the field the refusal reads is one no later step removes.
+    const rows = [
+      leg("a", { tx_type: "TRANSFER_OUT", amount_out: "100", asset_out: "XRP" }),
+      leg("b", { tx_type: "TRANSFER_IN", amount_in: "100", asset_in: "XRP" }),
+    ];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.mappedData.tx_type).sort()).toEqual([
+      "TRANSFER_IN",
+      "TRANSFER_OUT",
+    ]);
   });
 });
 

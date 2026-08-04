@@ -7,14 +7,6 @@ vi.mock('@/composables/queries/useTaxMutations', () => ({
   useSubmitIngestionMutation: vi.fn()
 }))
 
-vi.mock('@kryptofolio/core-domain', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@kryptofolio/core-domain')>()
-  return {
-    ...actual,
-    generateIdHash: vi.fn().mockResolvedValue('mocked-hash-123')
-  }
-})
-
 describe('useImportProcessor', () => {
   it('should process and submit rows correctly', async () => {
     const mockMutateAsync = vi.fn().mockResolvedValue(true)
@@ -39,6 +31,11 @@ describe('useImportProcessor', () => {
     expect(isProcessing.value).toBe(false)
     expect(processingErrors.value).toEqual([])
     
+    /**
+     * The row goes out as the source wrote it, plus the account and the instant. Classification,
+     * aggregation and the identifier all happen behind the ingestion boundary now, so the payload
+     * still carries `date` and `time` and carries no `id_hash`.
+     */
     expect(mockMutateAsync).toHaveBeenCalledWith({
       market: 'spot',
       rows: [
@@ -47,8 +44,14 @@ describe('useImportProcessor', () => {
           originalData: {},
           errors: [],
           hasError: false,
-          mappedData: { tx_type: null, account_id: '10000000-0000-0000-0000-000000000001', timestamp: '2023-01-01T00:00:00Z', metadata: {} },
-          id_hash: 'mocked-hash-123'
+          mappedData: {
+            tx_type: null,
+            date: '2023-01-01',
+            time: '00:00:00',
+            account_id: '10000000-0000-0000-0000-000000000001',
+            timestamp: '2023-01-01T00:00:00.000Z',
+            metadata: {},
+          },
         }
       ],
       timezone: 'UTC',
@@ -67,10 +70,12 @@ describe('useImportProcessor', () => {
 
   /**
    * A group whose legs carry fees in two different units cannot be merged into a shape that holds one
-   * fee, so the aggregator refuses it. Submitting it anyway would send a figure recorded in a unit it
-   * was never charged in.
+   * fee, and the aggregator refuses it. It refuses it behind the ingestion boundary now, so what this
+   * side owes is to submit both legs unchanged: the refusal is reported back as a rejected row, and the
+   * rest of the batch is still persisted rather than stopped. The refusal itself is asserted in
+   * `apps/backend/.../__tests__/ingestionBoundary.spec.ts`.
    */
-  it('does not submit a group the aggregator refused to merge, and says why', async () => {
+  it('submits the legs of a conflicting group as written, leaving the refusal to the backend', async () => {
     const mockMutateAsync = vi.fn().mockResolvedValue(true)
     vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
       mutateAsync: mockMutateAsync
@@ -103,9 +108,10 @@ describe('useImportProcessor', () => {
       'kraken-spot',
     )
 
-    expect(result).toBe(false)
-    expect(processingErrors.value.join(' ')).toContain('fee_denomination_conflict')
-    expect(mockMutateAsync).not.toHaveBeenCalled()
+    expect(result).toBe(true)
+    expect(processingErrors.value).toEqual([])
+    const [{ rows }] = mockMutateAsync.mock.calls[0] as [{ rows: Array<{ id: string }> }]
+    expect(rows.map((r) => r.id)).toEqual(['a', 'b'])
   })
 
   it('should handle submission errors gracefully', async () => {

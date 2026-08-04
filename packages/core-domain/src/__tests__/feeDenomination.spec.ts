@@ -1,6 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTransactionDirection } from "../domain/services/TransactionNormalizer";
 import type { TransactionMappedData } from "@kryptofolio/shared-types";
+import { prepareIngestionRows } from "../domain/services/normalizer/ingestionPipeline";
+import { SOURCE_FORMAT_PROFILES } from "../domain/services/sourceProfile/profiles";
+
+const KRAKEN = SOURCE_FORMAT_PROFILES["kraken-spot"];
+
+/**
+ * Drives one row through the real ingestion pipeline under Kraken's real profile.
+ *
+ * The denomination used to be filled by the normalizer, from the row's asset, for every source alike.
+ * That is a global default, and two of the measured exports mix a fiat fee and an asset fee inside one
+ * file — so what an omitted fee currency means is now the profile's declaration, and the assertions
+ * below are about the source that declares `ROW_ASSET` rather than about all of them.
+ */
+function normalized(data: TransactionMappedData): Partial<TransactionMappedData> {
+  const [row] = prepareIngestionRows(
+    [{ id: "1", originalData: {}, errors: [], hasError: false as const, mappedData: data }],
+    KRAKEN,
+  );
+  return row.mappedData;
+}
 
 /**
  * Row shapes taken from `kraken_spot.csv`, whose export has no fee-currency column at all: the fee is
@@ -19,7 +38,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "crypto" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.tx_type).toBe("TRANSFER_OUT");
     expect(result.amount_out).toBe("0.006");
@@ -37,7 +56,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "crypto" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.tx_type).toBe("TRANSFER_IN");
     expect(result.fee_amount).toBe("0");
@@ -54,7 +73,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "fiat" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.fee_amount).toBe("-0.00543739");
     expect(result.fee_currency).toBe("EUR");
@@ -71,7 +90,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "crypto" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.fee_currency).toBe("EUR");
   });
@@ -85,7 +104,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "crypto" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.fee_amount).toBeUndefined();
     expect(result.fee_currency).toBeUndefined();
@@ -101,7 +120,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: { subclass: "crypto" },
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.fee_currency ?? undefined).toBeUndefined();
   });
@@ -116,7 +135,7 @@ describe("fee denomination on a single-leg row", () => {
       metadata: {},
     };
 
-    const result = normalizeTransactionDirection(data);
+    const result = normalized(data);
 
     expect(result.tx_type).toBe("BUY");
     expect(result.fee_currency).toBe("PUMP");

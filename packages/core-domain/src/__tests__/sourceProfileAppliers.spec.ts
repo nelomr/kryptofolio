@@ -161,11 +161,22 @@ describe("every declared fee denomination is behaviourally distinguishable", () 
       kind: "ASSET_QUANTITY",
       asset: "JASMY",
     });
-    // The row moves EUR out, so reading the row's asset would name the funding currency instead.
-    expect(resolveFeeDenomination(withDenomination("ROW_ASSET"), jasmyTrade!)).toEqual({
+
+    /**
+     * They are separated on a row that states no fee currency, which is the only row on which the
+     * declaration decides anything: a source declared `ROW_ASSET` has no such column, so a value in
+     * that field on one of its rows was resolved by the pipeline from the leg the fee was charged on,
+     * and both declarations then honour it. What differs is what each does in its absence — one reads
+     * the row's asset, the other has nothing to read and says so.
+     */
+    const noStatedCurrency: TransactionMappedData = { ...jasmyTrade!, fee_currency: "" };
+    expect(resolveFeeDenomination(withDenomination("ROW_ASSET"), noStatedCurrency)).toEqual({
       kind: "ASSET_QUANTITY",
       asset: "EUR",
     });
+    expect(resolveFeeDenomination(withDenomination("NAMED_COLUMN"), noStatedCurrency).kind).toBe(
+      "PENDING_REVIEW",
+    );
   });
 
   it("separates the named column from the collateral currency", () => {

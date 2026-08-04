@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Mocked } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { normalizeTransactionDirection } from '@kryptofolio/core-domain';
+import { prepareIngestionRows, SOURCE_FORMAT_PROFILES } from '@kryptofolio/core-domain';
 import type { TransactionMappedData } from '@kryptofolio/shared-types';
-import { CsvIngestionUseCase, type IngestibleTransaction } from '../CsvIngestionUseCase.js';
+import { CsvIngestionUseCase, type SubmittedTransaction } from '../CsvIngestionUseCase.js';
 import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedgerAdapter';
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
@@ -24,26 +24,39 @@ function makeMockUserSettingsPort(): Mocked<IUserSettingsPort> {
   } as unknown as Mocked<IUserSettingsPort>;
 }
 
+/** The Kraken row's own digits, as the export writes them: one leg, no fee-currency column. */
+const KRAKEN_SOL_WITHDRAWAL: TransactionMappedData = {
+  date: '2025-11-10 15:48:07',
+  tx_type: 'withdrawal',
+  amount: '-0.0060000000',
+  asset: 'SOL',
+  fee_amount: '0.0050000000',
+  metadata: { subclass: 'crypto' },
+};
+
+/** What the pipeline makes of a source row, under the profile of the source that wrote it. */
+function prepared(
+  data: TransactionMappedData,
+  profileId: 'kraken-spot' | 'generic',
+): Partial<TransactionMappedData> {
+  const [row] = prepareIngestionRows(
+    [{ id: '1', originalData: {}, errors: [], hasError: false as const, mappedData: data }],
+    SOURCE_FORMAT_PROFILES[profileId],
+  );
+  return row.mappedData;
+}
+
 /**
- * Turns a normalised row into the ingestion payload, so the test drives the same two stages a real
- * import does rather than hand-writing the shape the use case wants.
+ * Turns a source row into the ingestion payload: the account, a fiat magnitude where the row states
+ * none, and nothing else. Classification and the identifier belong to the use case.
  */
-function toIngestible(normalized: TransactionMappedData, idHash: string): IngestibleTransaction {
+function toIngestible(data: TransactionMappedData): SubmittedTransaction {
   return {
-    id_hash: idHash,
+    ...data,
     account_id: VENUE,
-    tx_type: normalized.tx_type ?? '',
-    timestamp: normalized.timestamp ?? '',
-    asset_in: normalized.asset_in ?? undefined,
-    amount_in: normalized.amount_in ?? undefined,
-    asset_out: normalized.asset_out ?? undefined,
-    amount_out: normalized.amount_out ?? undefined,
-    fee_currency: normalized.fee_currency ?? undefined,
-    fee_amount: normalized.fee_amount ?? undefined,
-    total_fiat: normalized.total_fiat ?? '1',
-    price_fiat: normalized.price_fiat ?? '1',
-    metadata: normalized.metadata ?? {},
-  } as IngestibleTransaction;
+    total_fiat: data.total_fiat ?? '1',
+    price_fiat: data.price_fiat ?? '1',
+  } as SubmittedTransaction;
 }
 
 describe('source fidelity from the normalizer to the ledger', () => {
@@ -65,16 +78,11 @@ describe('source fidelity from the normalizer to the ledger', () => {
 
   /** The row is `kraken_spot.csv`'s SOL withdrawal, whose export carries no fee-currency column. */
   it('persists a Kraken fee whose denomination the source left implicit', async () => {
-    const normalized = normalizeTransactionDirection({
-      date: '2025-11-10 15:48:07',
-      tx_type: 'withdrawal',
-      amount: '-0.0060000000',
-      asset: 'SOL',
-      fee_amount: '0.0050000000',
-      metadata: { subclass: 'crypto' },
-    });
-
-    const result = await useCase.execute([toIngestible(normalized, 'kraken-sol-withdrawal')], 'spot', 'generic');
+    const result = await useCase.execute(
+      [toIngestible(KRAKEN_SOL_WITHDRAWAL)],
+      'spot',
+      'kraken-spot',
+    );
 
     expect(result.rejected).toEqual([]);
     const saved = await adapter.getSpotTransactions(VENUE);
@@ -85,24 +93,22 @@ describe('source fidelity from the normalizer to the ledger', () => {
   });
 
   /**
-   * `CsvIngestionUseCase` also falls back to the row's asset, so the previous test would pass with an
-   * undenominated fee too. This asserts the invariant holds where the row is still a source row —
-   * otherwise every future consumer of the normalizer inherits the gap and only this one path covers it.
+   * Asserted on the pipeline's output rather than deeper inside the ledger call, so the invariant holds
+   * where the row is still a source row: otherwise only this one path covers it and every other
+   * consumer inherits the gap.
+   *
+   * Which unit an omitted fee currency means is the profile's declaration. Under the source that
+   * declares its fee is charged in the row's own asset the pair is complete; under a source that names
+   * a fee-currency column and left it empty it stays unresolved, and is reported rather than guessed.
    */
-  it('leaves the normalizer output already satisfying the ledger fee-pair invariant', () => {
-    const normalized = normalizeTransactionDirection({
-      date: '2025-11-10 15:48:07',
-      tx_type: 'withdrawal',
-      amount: '-0.0060000000',
-      asset: 'SOL',
-      fee_amount: '0.0050000000',
-      metadata: { subclass: 'crypto' },
-    });
+  it('leaves the pipeline output already satisfying the ledger fee-pair invariant', () => {
+    const underKraken = prepared(KRAKEN_SOL_WITHDRAWAL, 'kraken-spot');
 
-    const hasAmount = normalized.fee_amount !== undefined && normalized.fee_amount !== null;
-    const hasDenomination = normalized.fee_currency !== undefined && normalized.fee_currency !== null;
+    const hasAmount = underKraken.fee_amount !== undefined && underKraken.fee_amount !== null;
+    const hasDenomination =
+      underKraken.fee_currency !== undefined && underKraken.fee_currency !== null;
     expect(hasAmount).toBe(hasDenomination);
-    expect(normalized.fee_currency).toBe('SOL');
+    expect(underKraken.fee_currency).toBe('SOL');
   });
 
   it('rejects an undenominated fee at the storage layer, which is what makes the pair an invariant', () => {
@@ -137,17 +143,21 @@ describe('source fidelity from the normalizer to the ledger', () => {
    * pinned in the frontend's `parseExcel.precision.spec.ts`; this asserts the digits survive storage.
    */
   it('stores a spreadsheet amount with the digits the source displays', async () => {
-    const normalized = normalizeTransactionDirection({
-      date: '2025-02-03 06:41:00',
-      tx_type: 'withdrawal',
-      amount: '-99.3',
-      asset: 'HBAR',
-      fee_amount: '0.157429818',
-      fee_currency: 'HBAR',
-      metadata: { subclass: 'crypto' },
-    });
-
-    const result = await useCase.execute([toIngestible(normalized, 'bit2me-hbar-withdrawal')], 'spot', 'generic');
+    const result = await useCase.execute(
+      [
+        toIngestible({
+          date: '2025-02-03 06:41:00',
+          tx_type: 'withdrawal',
+          amount: '-99.3',
+          asset: 'HBAR',
+          fee_amount: '0.157429818',
+          fee_currency: 'HBAR',
+          metadata: { subclass: 'crypto' },
+        }),
+      ],
+      'spot',
+      'generic',
+    );
 
     expect(result.rejected).toEqual([]);
     const saved = await adapter.getSpotTransactions(VENUE);

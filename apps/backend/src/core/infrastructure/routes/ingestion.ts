@@ -17,8 +17,12 @@ type IngestAndMaterializeRows = Parameters<
  * so that TypeScript can infer the route types for AppType and the Hono RPC client.
  */
 
+/**
+ * A row as the source wrote it. No identifier: the use case derives one from the row it persists,
+ * which is not the row a client could hash — grouping the legs of one operation happens behind this
+ * boundary, so the client has no merged record to key.
+ */
 const rowSchema = z.object({
-  id_hash: z.string().min(1, 'id_hash is required — generate with core-domain generateIdHash'),
   account_id: z.string().uuid(),
   timestamp: z.string().optional(),
   tx_type: z.string().optional(),
@@ -64,7 +68,6 @@ export function createIngestionApi(container: DIContainer) {
             rows: rows.map(row => ({
               ...row,
               account_id: row.account_id,
-              id_hash: row.id_hash,
             })) as IngestAndMaterializeRows,
             market,
             sourceProfileId,

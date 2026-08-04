@@ -1,12 +1,14 @@
 /**
  * Identifier determinism on the live ingestion path.
  *
- * Three CSV parsers (`KrakenSpotCsvParser`, `BitvavoCsvParser`, `BitUnixCsvParser`) fall back to
- * `Math.random()` when a row carries no source identifier — but all three are unreachable
- * (deleted in a later group; nothing imports them outside their own tests). The identifier every
- * real submission actually gets is `generateIdHash` over the mapped record, called from
- * `useImportProcessor.processAndSubmit`. This file proves — rather than assumes — that the live
- * path is already deterministic, using the real `generateIdHash`, not a mock.
+ * The identifier is no longer computed here. It is derived behind the ingestion boundary, from the row
+ * that is actually persisted, because the legs of one operation are reunited on that side: a key the
+ * client computed would key a record the client had already restructured, and would make re-ingesting
+ * one file depend on the client version that submitted it. The derivation itself is exercised in
+ * `apps/backend/.../__tests__/ingestionBoundary.spec.ts` against the real `generateIdHash`.
+ *
+ * What this file covers is the client's half of that guarantee: the payload it submits for one file is
+ * itself deterministic, since a server-derived key over a varying payload would vary with it.
  *
  * @see openspec/changes/fix-fifo-transfer-traceability/specs/domain-anti-corruption/spec.md
  */
@@ -20,98 +22,83 @@ vi.mock('@/composables/queries/useTaxMutations', () => ({
   useSubmitIngestionMutation: vi.fn(),
 }))
 
-// Deliberately NOT mocking '@kryptofolio/core-domain' — the real generateIdHash is what this
-// file exists to exercise.
+// Deliberately NOT mocking '@kryptofolio/core-domain': the timestamp normalisation the payload
+// carries is real, and it is the one thing here the identifier is derived over.
 
-function submittedIdHash(mockMutateAsync: ReturnType<typeof vi.fn>, callIndex: number): string {
-  const call = mockMutateAsync.mock.calls[callIndex][0] as { rows: Array<{ id_hash: string }> }
-  return call.rows[0].id_hash
+function submittedRows(mockMutateAsync: ReturnType<typeof vi.fn>, callIndex: number): unknown {
+  return (mockMutateAsync.mock.calls[callIndex][0] as { rows: unknown }).rows
+}
+
+function mutation(): ReturnType<typeof vi.fn> {
+  const mockMutateAsync = vi.fn().mockResolvedValue(true)
+  vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
+    mutateAsync: mockMutateAsync,
+  } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
+  return mockMutateAsync
+}
+
+const ACCOUNT = '10000000-0000-0000-0000-000000000001'
+
+function rows(amountIn: string): Parameters<ReturnType<typeof useImportProcessor>['processAndSubmit']>[0] {
+  return [
+    {
+      id: '1',
+      mappedData: {
+        date: '2024-06-01',
+        time: '10:00:00',
+        tx_type: 'BUY',
+        amount_in: amountIn,
+        asset_in: 'ETH',
+      },
+    },
+  ] as unknown as Parameters<ReturnType<typeof useImportProcessor>['processAndSubmit']>[0]
 }
 
 describe('Identifier determinism — the live ingestion path', () => {
-  it('ingesting the same row twice yields the same id_hash', async () => {
-    const mockMutateAsync = vi.fn().mockResolvedValue(true)
-    vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
-      mutateAsync: mockMutateAsync,
-    } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
-
+  it('submits the identical payload for the same row twice', async () => {
+    const mockMutateAsync = mutation()
     const { processAndSubmit } = useImportProcessor()
-    const accountId = '10000000-0000-0000-0000-000000000001'
-    const row = () => [
-      {
-        id: '1',
-        mappedData: {
-          date: '2024-06-01',
-          time: '10:00:00',
-          tx_type: 'BUY',
-          amount_in: '500',
-          asset_in: 'ETH',
-        },
-      },
-    ] as unknown as Parameters<typeof processAndSubmit>[0]
 
-    await processAndSubmit(row(), 'spot', accountId, 'kraken-spot')
-    await processAndSubmit(row(), 'spot', accountId, 'kraken-spot')
+    await processAndSubmit(rows('500'), 'spot', ACCOUNT, 'kraken-spot')
+    await processAndSubmit(rows('500'), 'spot', ACCOUNT, 'kraken-spot')
 
-    const firstHash = submittedIdHash(mockMutateAsync, 0)
-    const secondHash = submittedIdHash(mockMutateAsync, 1)
-
-    expect(firstHash).toBeTruthy()
-    expect(secondHash).toBe(firstHash)
+    expect(submittedRows(mockMutateAsync, 0)).toEqual(submittedRows(mockMutateAsync, 1))
   })
 
-  it('two rows differing in a mapped field never collide', async () => {
-    const mockMutateAsync = vi.fn().mockResolvedValue(true)
-    vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
-      mutateAsync: mockMutateAsync,
-    } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
-
+  it('submits a distinguishable payload for two rows differing in a mapped field', async () => {
+    const mockMutateAsync = mutation()
     const { processAndSubmit } = useImportProcessor()
-    const accountId = '10000000-0000-0000-0000-000000000001'
 
-    await processAndSubmit(
-      [
-        {
-          id: '1',
-          mappedData: { date: '2024-06-01', time: '10:00:00', tx_type: 'BUY', amount_in: '500', asset_in: 'ETH' },
-        },
-      ] as unknown as Parameters<typeof processAndSubmit>[0],
-      'spot',
-      accountId,
-      'kraken-spot',
-    )
-    await processAndSubmit(
-      [
-        {
-          id: '2',
-          mappedData: { date: '2024-06-01', time: '10:00:00', tx_type: 'BUY', amount_in: '501', asset_in: 'ETH' },
-        },
-      ] as unknown as Parameters<typeof processAndSubmit>[0],
-      'spot',
-      accountId,
-      'kraken-spot',
-    )
+    await processAndSubmit(rows('500'), 'spot', ACCOUNT, 'kraken-spot')
+    await processAndSubmit(rows('501'), 'spot', ACCOUNT, 'kraken-spot')
 
-    const firstHash = submittedIdHash(mockMutateAsync, 0)
-    const secondHash = submittedIdHash(mockMutateAsync, 1)
+    expect(submittedRows(mockMutateAsync, 0)).not.toEqual(submittedRows(mockMutateAsync, 1))
+  })
 
-    expect(firstHash).not.toBe(secondHash)
+  it('carries no identifier of its own, so nothing downstream can prefer a client-supplied one', async () => {
+    const mockMutateAsync = mutation()
+    const { processAndSubmit } = useImportProcessor()
+
+    await processAndSubmit(rows('500'), 'spot', ACCOUNT, 'kraken-spot')
+
+    const submitted = submittedRows(mockMutateAsync, 0) as Array<Record<string, unknown>>
+    expect(submitted[0].id_hash).toBeUndefined()
   })
 })
 
 describe('No random fallback on the live identifier path', () => {
-  it('TransactionHashService and useImportProcessor contain no Math.random()', () => {
+  it('the hash service, the pipeline and the submitting composable contain no Math.random()', () => {
     // Resolved from the frontend package root — the cwd vitest runs this suite from.
-    const hashServicePath = resolve(
-      process.cwd(),
-      '../../packages/core-domain/src/domain/services/TransactionHashService.ts',
-    )
-    const importProcessorPath = resolve(
-      process.cwd(),
-      'src/modules/data-ingestion/composables/useImportProcessor.ts',
-    )
+    const paths = [
+      resolve(process.cwd(), '../../packages/core-domain/src/domain/services/TransactionHashService.ts'),
+      resolve(
+        process.cwd(),
+        '../../packages/core-domain/src/domain/services/normalizer/ingestionPipeline.ts',
+      ),
+      resolve(process.cwd(), 'src/modules/data-ingestion/composables/useImportProcessor.ts'),
+    ]
 
-    for (const path of [hashServicePath, importProcessorPath]) {
+    for (const path of paths) {
       const source = readFileSync(path, 'utf-8')
       expect(source).not.toContain('Math.random()')
     }

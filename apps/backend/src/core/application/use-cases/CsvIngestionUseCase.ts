@@ -6,6 +6,8 @@ import {
   SOURCE_FORMAT_PROFILES,
   applyProfileToRow,
   checkProfileInvariant,
+  generateIdHash,
+  prepareIngestionRows,
   resolveFeeDenomination,
   resolveGrossNetFee,
   routeFee,
@@ -18,9 +20,20 @@ import type { IPriceProviderPort } from '../../domain/ports/IPriceProviderPort.j
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
-export type IngestibleTransaction = TransactionMappedData & {
+/**
+ * A row as the source wrote it, plus the account the user is importing into.
+ *
+ * Deliberately without an identifier. The identifier is derived here, from the row this use case is
+ * about to persist — which is not the row a client could have hashed, because grouping the legs of a
+ * trade happens on this side of the boundary now. A client-supplied key would also make re-ingesting
+ * one file depend on the client version that submitted it.
+ */
+export type SubmittedTransaction = TransactionMappedData & {
   account_id: string;
-  /** REQUIRED: deterministic hash from @kryptofolio/core-domain generateIdHash — never optional */
+};
+
+/** A prepared row: classified, grouped, and identified by its own content. */
+export type IngestibleTransaction = SubmittedTransaction & {
   id_hash: string;
 };
 
@@ -173,7 +186,7 @@ export class CsvIngestionUseCase {
    * and the applier is the same pure function the preview calls, so the two cannot disagree.
    */
   async execute(
-    rows: IngestibleTransaction[],
+    submitted: SubmittedTransaction[],
     market: 'spot' | 'futures',
     sourceProfileId: SourceProfileId,
   ): Promise<IngestionResult> {
@@ -185,10 +198,14 @@ export class CsvIngestionUseCase {
     let unresolvedFiat = 0;
 
     /**
-     * Checked over the batch as submitted, before anything is written. A running balance is a chain,
-     * so a row left out would report a break the file does not contain.
+     * Checked over the batch as submitted, before anything is written or restructured. A running
+     * balance is a chain, so a row left out — or a row whose `amount` a later step redistributed —
+     * would report a break the file does not contain.
      */
-    const invariant = checkProfileInvariant(profile, rows);
+    const invariant = checkProfileInvariant(profile, submitted);
+
+    const { rows, refused } = await this.prepare(submitted, profile, market);
+    rejected.push(...refused);
 
     for (const rawRow of rows) {
       // Idempotent, so a row the wizard already applied it to reaches the identical figures.
@@ -197,14 +214,6 @@ export class CsvIngestionUseCase {
       const venueAccountId = row.account_id;
       if (!venueAccountId) {
         throw new Error('Account ID is required for ingestion. The frontend MUST inject it before calling this use case.');
-      }
-
-      // C-7 fix: id_hash MUST come from the frontend's generateIdHash. It is never optional.
-      if (!row.id_hash) {
-        throw new Error(
-          `id_hash is required for idempotent ingestion (tx at ${row.timestamp}). ` +
-          'The frontend must call generateIdHash() before submitting rows.'
-        );
       }
 
       // The type is resolved before any foreign key is created, so a rejected row leaves nothing
@@ -313,6 +322,60 @@ export class CsvIngestionUseCase {
     }
 
     return { persisted, rejected, unresolvedFiat, pendingFeeReview, invariant };
+  }
+
+  /**
+   * Resolves each row's direction, groups the legs of one operation, and identifies what results.
+   *
+   * All three steps sit behind the boundary on purpose. Direction first, because
+   * `classifyCustodyMovement` reads the sign of a leg's own amount and grouping redistributes it;
+   * grouping second, because the distinction between a trade and a movement is which side each leg is
+   * on; the identifier last, because it must identify the row that is actually persisted.
+   *
+   * A group the aggregator refused carries fees in two units and no single figure can stand for both.
+   * It is reported as a rejection rather than dropped: the batch continues, and the user is told which
+   * operation was left out and why.
+   */
+  private async prepare(
+    submitted: SubmittedTransaction[],
+    profile: SourceFormatProfile,
+    market: 'spot' | 'futures',
+  ): Promise<{ rows: IngestibleTransaction[]; refused: IngestionRejection[] }> {
+    const asRows = submitted.map((mappedData, index) => ({
+      id: String(index),
+      originalData: {},
+      errors: [],
+      hasError: false as const,
+      mappedData,
+    }));
+
+    /**
+     * Only spot rows are prepared. Both steps are spot-shaped: the classifier resolves custody and
+     * funding, and the label map it belongs to is the spot vocabulary — putting a futures `trade`
+     * through it yields `BUY`, a type the futures side has no member for. A position event has no
+     * second leg to reunite either.
+     */
+    const prepared = market === 'spot' ? prepareIngestionRows(asRows, profile) : asRows;
+
+    const rows: IngestibleTransaction[] = [];
+    const refused: IngestionRejection[] = [];
+
+    for (const row of prepared) {
+      const mappedData = row.mappedData as SubmittedTransaction;
+      const id_hash = await generateIdHash(mappedData);
+      if (row.hasError) {
+        refused.push({
+          idHash: id_hash,
+          timestamp: mappedData.timestamp ?? '',
+          txType: mappedData.tx_type ?? null,
+          reason: row.errors.join('; '),
+        });
+        continue;
+      }
+      rows.push({ ...mappedData, id_hash });
+    }
+
+    return { rows, refused };
   }
 
   /**

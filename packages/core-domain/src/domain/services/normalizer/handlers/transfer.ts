@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 import type { NormalizerHandler } from "./types";
 import { classifyCustodyMovement } from "../../custodyClassifier";
 
@@ -17,6 +19,16 @@ function readSubclass(
 ): "crypto" | "fiat" | undefined {
   const raw = (metadata?.subtype ?? metadata?.subclass)?.trim().toLowerCase();
   return raw === "crypto" || raw === "fiat" ? raw : undefined;
+}
+
+/** `null` for anything that is not a number, so an unreadable cell fills no directional field. */
+function magnitudeOf(amount: string): string | null {
+  try {
+    const value = new Decimal(amount);
+    return value.isFinite() ? value.abs().toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 function firstPresent(...values: (string | null | undefined)[]): string | null {
@@ -54,9 +66,10 @@ const applyMovement: NormalizerHandler = (normalized) => {
   const isInbound =
     classification.txType === "TRANSFER_IN" || classification.txType === "DEPOSIT";
 
-  // Direction lives in `tx_type` and the directional asset fields, never in the sign.
-  const numeric = amount === null ? Number.NaN : Number(amount);
-  const magnitude = Number.isFinite(numeric) ? String(Math.abs(numeric)) : null;
+  // Direction lives in `tx_type` and the directional asset fields, never in the sign. The magnitude
+  // is taken through `Decimal` rather than `Number`: a satoshi-scale quantity renders as `1e-8` and a
+  // long one loses its last digits, and both figures are quantities of an asset a lot still holds.
+  const magnitude = amount === null ? null : magnitudeOf(amount);
 
   if (isInbound) {
     if (magnitude !== null && !normalized.amount_in) normalized.amount_in = magnitude;

@@ -1,11 +1,5 @@
 import { ref } from "vue";
-import {
-  generateIdHash,
-  normalizeTransactionDirection,
-  aggregateRows,
-  normalizeToUtcIso,
-  SOURCE_FORMAT_PROFILES,
-} from "@kryptofolio/core-domain";
+import { normalizeToUtcIso } from "@kryptofolio/core-domain";
 import type { SourceProfileId, ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
 
@@ -55,45 +49,21 @@ export function useImportProcessor() {
         })
       );
 
-      // --- NEW AGGREGATION PHASE ---
-      const aggregatedRows = aggregateRows(
-        rowsWithTimestamp,
-        SOURCE_FORMAT_PROFILES[sourceProfileId],
-      );
-
       /**
-       * A group the aggregator refused carries fees in two units and no single figure can stand for
-       * both. Submitting the batch without it would drop an operation silently, so the whole batch
-       * stops and names the conflict.
+       * The rows go out as the source wrote them, with only the account and the instant added.
+       *
+       * Classification, aggregation and the identifier all live behind the ingestion boundary now.
+       * Merging here was why the backend never received two legs of a movement, it made re-ingesting
+       * one file depend on the client version that submitted it, and it computed the idempotency key
+       * over a record the client had already restructured.
        */
-      const refused = aggregatedRows.filter((row) => row.hasError);
-      if (refused.length > 0) {
-        processingErrors.value = refused.flatMap((row) => row.errors);
-        return false;
-      }
-
-      const rowsWithHash = await Promise.all(
-        (aggregatedRows as ValidTransactionRow[]).map(async (row) => {
-          const normalizedMappedData = normalizeTransactionDirection(row.mappedData);
-
-          // Inject account ID before hash generation
-          normalizedMappedData.account_id = accountId;
-
-          const id_hash = await generateIdHash(normalizedMappedData);
-          return { ...row, mappedData: normalizedMappedData, id_hash };
-        }),
-      );
-
-      // FIXME: Temporary console logs until backend is fully implemented
-      console.log("🚀 [Data Ingestion] Payload ready to be sent:", {
-        market: marketType,
-        totalRows: rowsWithHash.length,
-        timezone: timezone.value
-      });
-      console.table(rowsWithHash.map((r) => ({ ...r.mappedData, id_hash: r.id_hash })));
+      const rows = rowsWithTimestamp.map((row) => ({
+        ...row,
+        mappedData: { ...row.mappedData, account_id: accountId },
+      }));
 
       await submitIngestion.mutateAsync({
-        rows: rowsWithHash,
+        rows,
         market: marketType,
         timezone: timezone.value,
         sourceProfileId
