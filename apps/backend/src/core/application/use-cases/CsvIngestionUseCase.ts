@@ -189,7 +189,14 @@ export class CsvIngestionUseCase {
         const fiat = await this.resolveFiatMagnitudes(row, fiatCurrency);
         if (!fiat.resolved) unresolvedFiat += 1;
 
-        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount).abs() : new Decimal(0);
+        /**
+         * The sign survives, unlike every other magnitude here. A negative fee is a rebate the
+         * venue credited — Bitvavo's promotional row cancels its own `quantity × price` with one —
+         * and taking its absolute value would charge the user for a discount. No export in the
+         * corpus writes a *charged* fee as negative, so the sign carries no direction to normalise
+         * away.
+         */
+        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount) : new Decimal(0);
         const hasFee = !feeAmountDec.isZero();
         const feeAssetId = hasFee ? (row.fee_currency || row.asset_in || row.asset_out || undefined) : undefined;
 
@@ -212,6 +219,7 @@ export class CsvIngestionUseCase {
           total_fiat: toPreciseAmount(fiat.total.toString()),
           price_fiat: toPreciseAmount(fiat.unitPrice.toString()),
           fiat_currency: fiatCurrency,
+          flag: row.fiscal_flag ?? undefined,
           status: 'COMPLETED',
         };
         await this.ledgerPort.saveSpotTransaction(tx);
@@ -269,6 +277,12 @@ export class CsvIngestionUseCase {
 
     if (total.isZero() && unitPrice.isZero()) {
       const primaryAsset = row.asset_in || row.asset_out;
+      // A movement denominated in the reporting currency needs no price series: the quantity is
+      // already the fiat magnitude. Without this a 10 € promotional credit resolves to 0 and the
+      // income disappears from the general base it belongs to.
+      if (primaryAsset && primaryAsset.toUpperCase() === fiatCurrency.toUpperCase()) {
+        return { total: quantity, unitPrice: new Decimal(1), resolved: true };
+      }
       if (primaryAsset) {
         unitPrice = await this.fetchUnitPrice(primaryAsset, fiatCurrency, row.timestamp);
       }

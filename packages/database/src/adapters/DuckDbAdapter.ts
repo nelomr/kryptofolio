@@ -196,7 +196,9 @@ function sanitizeFilePath(filePath: string): string {
             timestamp,
             SUBSTR(CAST(timestamp AS VARCHAR), 1, 4) AS year
         FROM ledger.spot_transactions
-        WHERE tx_type IN ('AIRDROP', 'MINING')
+        -- A promotional credit is income in the general base like an airdrop, and unlike a deposit
+        -- of the user's own money. Its own type is what keeps the two distinguishable.
+        WHERE tx_type IN ('AIRDROP', 'MINING', 'PROMOTION')
           AND status = 'COMPLETED'
           AND deleted_at IS NULL;
       `);
@@ -364,6 +366,11 @@ function sanitizeFilePath(filePath: string): string {
                   AND fee_asset_id IS NOT NULL
                   AND fee_asset_id <> fiat_currency
                   AND NOT fee_asset_is_fiat
+                  -- A negative fee is a rebate the venue credited, and nothing was disposed of. It
+                  -- reduces the acquisition basis above; emitting it here would be a disposal of a
+                  -- negative quantity, which matches no lot and silently *adds* to the daily
+                  -- balances that subtract disposals.
+                  AND qty_fee > 0
             ) c
             ASOF LEFT JOIN historical_prices hp_fee
               ON hp_fee.symbol = c.fee_asset_id AND hp_fee.date <= c.tx_date
@@ -650,7 +657,10 @@ function sanitizeFilePath(filePath: string): string {
             m.disposal_type,
             m.quality_flag,
             m.value_provenance,
-            CAST(NULL AS VARCHAR) AS flag,
+            -- The fiscal classification the source stated on the operation this event derives from.
+            -- Read from the transaction rather than recomputed, so there is one producer of the
+            -- value and the AEAT audit trail survives materialisation.
+            dis_tx.flag AS flag,
             CAST(NULL AS VARCHAR) AS notes,
             m.disposal_date,
             COALESCE(ast.symbol, m.asset_id) AS asset_symbol,

@@ -7,7 +7,7 @@
  * without an import cycle.
  */
 
-import { SPOT_TX_TYPES, type SpotTxType } from './ledger.js';
+import { SPOT_TX_TYPES, type SpotTxType } from './spot-tx-types.js';
 
 // ---------------------------------------------------------------------------
 // FIFO event policy
@@ -77,6 +77,11 @@ export const FIFO_EVENT_POLICY: Record<SpotTxType, FifoEventPolicy> = {
   REWARD: ACQUISITION_ONLY,
   MINING: ACQUISITION_ONLY,
 
+  // A promotional credit is income at the value received. When it is fiat no lot follows, because
+  // an acquisition requires a non-fiat asset in — the type is what keeps the amount visible as
+  // income instead of as the user's own funds.
+  PROMOTION: ACQUISITION_ONLY,
+
   // DEPOSIT and WITHDRAWAL are ambiguous by nature — a fiat DEPOSIT is funding, a crypto DEPOSIT is
   // custody — so that distinction is resolved from `assets.is_fiat`, not here.
   DEPOSIT: CUSTODY_MOVEMENT,
@@ -115,9 +120,8 @@ export type DisposalType = (typeof DISPOSAL_TYPES)[number];
  * Fiscal classification: what kind of event this is.
  *
  * `WALLET_ACTIVATION` is load-bearing — it is consumed for the AEAT audit trail and must never be
- * folded into the data-quality vocabulary below. It currently has **no producer** in the running
- * application: the only code that ever emitted it is reachable from tests alone. The source-format
- * profiles are what will emit it.
+ * folded into the data-quality vocabulary below. Its single producer is the normalizer, which reads it
+ * from the source label and states it on the transaction; the derived events inherit it from there.
  */
 export const FISCAL_CLASSIFICATION_FLAGS = ['WALLET_ACTIVATION'] as const;
 export type FiscalClassificationFlag = (typeof FISCAL_CLASSIFICATION_FLAGS)[number];

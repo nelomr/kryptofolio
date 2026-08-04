@@ -34,6 +34,11 @@ export const transactionHandlers: Record<string, NormalizerHandler> = {
   gift: handleCryptoIncome,
   regalo: handleCryptoIncome,
   present: handleCryptoIncome,
+  // Both arrive as a single credited amount in the generic columns, like every other income label.
+  // What they receive is fiat in one case and crypto in the other, which changes nothing here: the
+  // in-side is where an acquisition is read from either way.
+  wallet_activation: handleCryptoIncome,
+  campaign_new_user_incentive: handleCryptoIncome,
 
   // Crypto Native Expenses
   fee: handleCryptoExpense,

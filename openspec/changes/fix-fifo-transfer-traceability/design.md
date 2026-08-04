@@ -1027,3 +1027,45 @@ are repaired by 14.48:
    identifier defeats the idempotency reconciliation rests on — but the live identifier path is
    `generateIdHash` over the mapped record, so what remains is the assertion rather than the repair.
    Tasks 11.8 and 11.11 are amended accordingly, without renumbering.
+
+### D35 — What phase 14β settled while implementing 14.15, 14.16, 14.17 and 14.31
+
+**14.15 — the canonical type for a wallet activation is `BUY`, and the classification rides beside it,
+not inside it.** D5b models `WALLET_ACTIVATION` as a fiscal classification rather than a `tx_type`, so
+the label has to resolve to an existing acquisition type. Of the six, five fabricate income the user
+never earned: `AIRDROP` and `MINING` report the reserve in the general base, `STAKING` and `REWARD` in
+the savings base, and `SWAP` invents a disposal. `BUY` is the only one that opens a lot valued at the
+market price of the moment — which is the correct treatment for crypto that appears with no purchase
+record — and routes into no income view. *Rejected:* `DEPOSIT`, which is what the deleted
+`TangemCsvParser` used: as a custody movement it creates no lot at all, so the 1 XRP would exist in no
+basis and the classification would have nothing to travel on.
+
+**The flag needed a column on `spot_transactions` to travel at all, and that is a defect this phase
+closed rather than a design choice it made.** `v_calculated_lot_history_events` hard-coded
+`CAST(NULL AS VARCHAR) AS flag`: no ingestion path, however correct, could have populated it. The flag
+is now stated on the transaction — where the source states it — and every derived event inherits it
+from the transaction it derives from, which is a single producer and a single reader.
+
+**A limitation of that chain, stated rather than left to be discovered.** `lot_history_events` holds
+disposal matches only, so an acquisition-shaped operation produces an event solely through its *fee*
+disposal. The real Tangem row carries `Fee 0.0`, so it yields a lot and no event: its classification
+lives on `spot_transactions.flag` and reaches the event table only for a flagged operation that
+disposes of something. The scenario "a Tangem wallet-activation operation is ingested and derived →
+its event MUST retain `flag = 'WALLET_ACTIVATION'`" in `fifo-data-quality-flags` is therefore
+satisfiable in general and vacuous for that particular row. Nothing is lost — the classification is
+persisted and queryable — but the spec's wording implies an event that the materialisation model does
+not produce, and a later change that wants one must decide whether acquisitions belong in the event
+history at all.
+
+**14.31 — the guard is a sign, in two places.** Ingestion stops taking the absolute value of the fee,
+because no export in the corpus writes a *charged* fee as negative and Bitvavo writes a credited one
+that way; the sign therefore carries information, not direction. The fee-disposal branch then requires
+`qty_fee > 0`. Both are load-bearing: a negative fee disposal matches no lot, so it is invisible in the
+event history while still reaching `v_daily_running_balances`, which subtracts disposals and would have
+*added* the rebate to the user's holdings.
+
+**14.17 — the deferral is now a change.** `openspec/changes/add-futures-collateral-ledger` holds the
+collateral table (account, movement type, currency, signed amount, spread, instant) and the
+per-currency balance view, with the scope boundary written into its proposal: spot and futures never
+mix, futures never holds the asset, only the currency movements and the PnL matter. The 315 rows stay
+rejected here, and no crypto FIFO figure depends on them.

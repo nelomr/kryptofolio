@@ -7,6 +7,42 @@ export interface ParseResult {
   errors: string[]
 }
 
+/** What the anti-corruption layer's `preciseAmountSchema` accepts. */
+const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/
+
+/**
+ * Rewrites JavaScript's exponential rendering as a plain decimal. `String(0.00000001)` is `"1e-8"`,
+ * which every downstream amount schema rejects, and satoshi- and gwei-scale quantities are ordinary.
+ */
+function toPlainDecimalString(value: number): string {
+  const text = String(value)
+  const parts = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text)
+  if (!parts) return text
+
+  const [, sign, integerDigits, fractionDigits = '', exponentText] = parts
+  const digits = integerDigits + fractionDigits
+  const pointIndex = integerDigits.length + Number(exponentText)
+
+  if (pointIndex <= 0) return `${sign}0.${'0'.repeat(-pointIndex)}${digits}`
+  if (pointIndex >= digits.length) return `${sign}${digits}${'0'.repeat(pointIndex - digits.length)}`
+  return `${sign}${digits.slice(0, pointIndex)}.${digits.slice(pointIndex)}`
+}
+
+/**
+ * Chooses between the number a spreadsheet stores and the text it displays.
+ *
+ * A workbook stores float64, so a figure written as `0.157429818` is held as `0.15742981799999997` and
+ * the displayed text is the only place the source's own digits still exist. The displayed text is
+ * preferred only when it is already a plain decimal: cell formatting can also abbreviate (`1.23457E+14`
+ * for a fifteen-digit integer) or decorate (a thousands separator, a currency symbol, a date), and in
+ * all of those the stored number is the more faithful reading.
+ */
+function preferDisplayedDigits(storedValue: unknown, displayedText: unknown): unknown {
+  if (typeof storedValue !== 'number' || !Number.isFinite(storedValue)) return storedValue
+  if (typeof displayedText === 'string' && PLAIN_DECIMAL.test(displayedText)) return displayedText
+  return toPlainDecimalString(storedValue)
+}
+
 /**
  * Processes a raw 2D array of strings/mixed values into an array of objects based on a detected header row.
  * Scans the first 20 rows to find the row with the most columns, assuming that is the header.
@@ -112,8 +148,21 @@ export function parseExcel(file: File): Promise<ParseResult> {
         const worksheet = workbook.Sheets[firstSheetName]
         
         // Use header: 1 to extract an array of arrays
-        const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
-        
+        const storedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+        const displayedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+          header: 1,
+          defval: '',
+          raw: false,
+        })
+
+        const rawRows = storedRows.map((row, rowIndex) =>
+          Array.isArray(row)
+            ? row.map((cell, cellIndex) =>
+                preferDisplayedDigits(cell, displayedRows[rowIndex]?.[cellIndex]),
+              )
+            : row,
+        )
+
         if (!rawRows || rawRows.length === 0) {
           return resolve({ data: [], headers: [], errors: ['ingestion.errors.file_empty'] })
         }

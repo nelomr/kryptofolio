@@ -102,7 +102,7 @@ CREATE TABLE spot_transactions (
     id TEXT PRIMARY KEY,
     id_hash TEXT UNIQUE NOT NULL,
     account_id TEXT NOT NULL REFERENCES accounts(id),
-    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL', 'SWAP', 'DEPOSIT', 'WITHDRAWAL', 'STAKING', 'AIRDROP', 'REWARD', 'MINING', 'SPEND', 'FEE', 'TRANSFER_IN', 'TRANSFER_OUT', 'MIGRATION_SWAP')),
+    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL', 'SWAP', 'DEPOSIT', 'WITHDRAWAL', 'STAKING', 'AIRDROP', 'REWARD', 'MINING', 'SPEND', 'FEE', 'TRANSFER_IN', 'TRANSFER_OUT', 'MIGRATION_SWAP', 'PROMOTION')),
     asset_in_id TEXT REFERENCES assets(id),
     amount_in TEXT CHECK (amount_in IS NULL OR (amount_in GLOB '*[0-9]*' AND amount_in NOT GLOB '*[^-0-9.]*')),
     asset_out_id TEXT REFERENCES assets(id),
@@ -119,6 +119,10 @@ CREATE TABLE spot_transactions (
     fiat_currency TEXT NOT NULL DEFAULT 'USD',
     -- Links the two legs of one physical custody movement once a counterparty is resolved.
     transfer_group_id TEXT,
+    -- Fiscal classification of the operation, in the same vocabulary as `lot_history_events.flag`.
+    -- It lives on the transaction because that is where the source states it; every derived event
+    -- inherits it, which is what keeps the AEAT audit trail from being lost at materialisation.
+    flag TEXT CHECK (flag IS NULL OR flag IN ('WALLET_ACTIVATION')),
     timestamp TEXT NOT NULL, -- ISO-8601
     status TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'utc')),

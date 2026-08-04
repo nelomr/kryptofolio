@@ -19,6 +19,13 @@ function readSubclass(
   return raw === "crypto" || raw === "fiat" ? raw : undefined;
 }
 
+function firstPresent(...values: (string | null | undefined)[]): string | null {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value.trim() !== "") return value;
+  }
+  return null;
+}
+
 /**
  * Applies the classifier, then moves the generic `amount` / `asset` fields into their directional
  * counterparts.
@@ -27,8 +34,11 @@ function readSubclass(
  * reject the row by name rather than receive a fabricated acquisition.
  */
 const applyMovement: NormalizerHandler = (normalized) => {
-  const assetSymbol = normalized.asset ?? normalized.asset_in ?? normalized.asset_out ?? "";
-  const amount = normalized.amount ?? normalized.amount_in ?? normalized.amount_out ?? null;
+  // First *non-empty* value, not first non-nullish: the column mapper writes "" for a cell the source
+  // left blank, and a withdrawal's inbound columns are blank. Stopping at "" told the classifier the
+  // movement had no asset, which rejected the row for want of information that was in the next field.
+  const assetSymbol = firstPresent(normalized.asset, normalized.asset_in, normalized.asset_out) ?? "";
+  const amount = firstPresent(normalized.amount, normalized.amount_in, normalized.amount_out);
 
   const classification = classifyCustodyMovement({
     rawType: normalized.tx_type ?? "",

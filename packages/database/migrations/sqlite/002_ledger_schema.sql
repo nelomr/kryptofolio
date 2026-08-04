@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS spot_transactions (
     id TEXT PRIMARY KEY,
     id_hash TEXT UNIQUE NOT NULL,
     account_id TEXT NOT NULL REFERENCES accounts(id),
-    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL', 'SWAP', 'DEPOSIT', 'WITHDRAWAL', 'STAKING', 'AIRDROP', 'REWARD', 'MINING', 'SPEND', 'FEE', 'TRANSFER_IN', 'TRANSFER_OUT', 'MIGRATION_SWAP')),
+    tx_type TEXT NOT NULL CHECK (tx_type IN ('BUY', 'SELL', 'SWAP', 'DEPOSIT', 'WITHDRAWAL', 'STAKING', 'AIRDROP', 'REWARD', 'MINING', 'SPEND', 'FEE', 'TRANSFER_IN', 'TRANSFER_OUT', 'MIGRATION_SWAP', 'PROMOTION')),
     asset_in_id TEXT REFERENCES assets(id),
     amount_in TEXT CHECK (amount_in IS NULL OR (amount_in GLOB '*[0-9]*' AND amount_in NOT GLOB '*[^-0-9.]*')),
     asset_out_id TEXT REFERENCES assets(id),

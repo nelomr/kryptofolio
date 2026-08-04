@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FISCAL_CLASSIFICATION_FLAGS } from '../schemas/fifo-policy.js';
 
 export const BaseTransactionMappedDataSchema = z.object({
   // Identifiers & Grouping
@@ -73,6 +74,16 @@ export const BaseTransactionMappedDataSchema = z.object({
     .optional(),
   funding_currency: z.string().nullable().optional(),
   
+  /**
+   * Fiscal classification the canonical `tx_type` cannot express, resolved from the source label.
+   *
+   * Separate from `tx_type` because the two answer different questions: `tx_type` says what the
+   * engine must do with the amounts, this says what kind of operation the user performed. A wallet
+   * activation acquires an asset like any other acquisition and still has to be reportable as an
+   * activation.
+   */
+  fiscal_flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
+
   // Preserved Extra Metadata
   metadata: z.record(z.string(), z.string()).optional().default({}),
 });

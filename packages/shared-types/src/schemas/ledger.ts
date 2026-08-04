@@ -6,30 +6,14 @@ import {
   FISCAL_CLASSIFICATION_FLAGS,
   MANUAL_VALUE_PROVENANCE,
 } from "./fifo-policy.js";
+import { SPOT_TX_TYPES, type SpotTxType } from './spot-tx-types.js';
 
 // ---------------------------------------------------------------------------
 // Canonical Enums — Single Source of Truth for all tx_type values.
 // These MUST match the SQL CHECK constraints in 002_ledger_schema.sql exactly.
 // ---------------------------------------------------------------------------
 
-export const SPOT_TX_TYPES = [
-  'BUY',
-  'SELL',
-  'SWAP',
-  'DEPOSIT',
-  'WITHDRAWAL',
-  'STAKING',
-  'AIRDROP',
-  'REWARD',
-  'MINING',
-  'SPEND',
-  'FEE',
-  'TRANSFER_IN',
-  'TRANSFER_OUT',
-  'MIGRATION_SWAP',
-] as const;
-
-export type SpotTxType = typeof SPOT_TX_TYPES[number];
+export { SPOT_TX_TYPES, type SpotTxType };
 
 export const FUTURES_TX_TYPES = [
   'TRADE',

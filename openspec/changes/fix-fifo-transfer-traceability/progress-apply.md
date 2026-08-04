@@ -2641,32 +2641,354 @@ and this file, so the next reader inherits the reasoning and not only the result
 Task IDs are deliberately **not sequential** now: `design.md` and this file cite them, so they were
 kept stable while the order changed. The group header says so.
 
+## Group 14, phase 14α — foundations — COMPLETE (14.20, 14.26, 14.30c, 14.34)
+
+Four tasks. All three defects had a measurable wrong answer today, so all three took a genuine Red
+against real code rather than against a missing symbol.
+
+**14.20 — the import cycle was worse than recorded.** `ledger.ts` read four flag vocabularies from
+`fifo-policy.ts` while `fifo-policy.ts` read `SPOT_TX_TYPES` back. The task described this as failing
+"under tsx's CJS transform"; measured, it fails under the **plain ESM loader too** whenever the package
+is entered through its own `index.ts`, because `index.ts` exports `fifo-policy.js` before `ledger.js`
+and that entry order puts `FIFO_QUALITY_FLAGS` in its temporal dead zone. Only vitest's Vite resolution
+hid it, which is exactly why 40 tests passed over a broken entry point.
+
+Resolved by giving the shared vocabulary its own owner: new `src/schemas/spot-tx-types.ts` (28 lines,
+no imports) holds `SPOT_TX_TYPES` and `SpotTxType`; `ledger.ts` imports and re-exports them so every
+existing import path is unchanged; `fifo-policy.ts` reads the new leaf. Nothing moved into
+`core-domain` — `packages/database` depends on `shared-types` and not on `core-domain`, and D30 makes
+that asymmetry load-bearing.
+
+The Red is a real Node process, not a mock: `tests/fixtures/cjsImportProbe.ts` imports the package entry
+and prints three counts, and `tests/schemas/no-import-cycle.spec.ts` runs it through the repo's own
+`tsx`. Red was `ReferenceError: Cannot access 'FIFO_QUALITY_FLAGS' before initialization`. Afterwards
+`packages/database`'s real `seed:ecb-rates` script runs to completion under tsx, which it could not do
+before.
+
+**14.26 — `raw: false` alone would have introduced a second defect.** The measured artefacts are real
+and are *in the files*: `bit2me_spot_2025.xlsx` literally stores `<v>0.15742981799999997</v>` for a
+figure Excel displays as `0.157429818`. But reading every cell as formatted text is not safe — General
+formatting abbreviates a fifteen-digit integer to `1.23457E+14`, which destroys digits the float64 value
+still holds, and it decorates dates and currencies.
+
+So the reader now takes **both** projections of the sheet and chooses per cell: the displayed text wins
+only when it is already a plain decimal, otherwise the stored number wins, expanded out of exponential
+notation by a new `toPlainDecimalString`. That is strictly better than the old behaviour everywhere and
+worse nowhere — a date serial or a `€1.234,56` cell resolves exactly as it did before. No source-specific
+branch was added; the only branch in `parsers.ts` is still `.csv` versus `.xlsx`.
+
+Measured after the fix, driving the shipped logic over all three real workbooks: **1618 numeric cells,
+0 still carrying more than 12 digits, 0 in exponential notation.**
+
+**Count correction:** D23 and the task text say 13 artefact cells. Scanning the three workbooks with
+`openpyxl` for float cells whose fractional part exceeds 10 digits finds **18**, all in column F
+(`Comisión de la operación`) of the 2025 file. The two figures are almost certainly different thresholds
+on the same phenomenon; 18 is the number the fix was verified against.
+
+**14.30c — the fix is right, but its stated consequence is not reproducible.** New
+`normalizer/feeDenomination.ts` fills `fee_currency` from `asset ?? asset_out ?? asset_in` when an
+amount is present and no denomination was stated. It runs from `normalizeTransactionDirection` beside
+the label handlers rather than inside them: the rule is indifferent to the label — a trade, a deposit
+and a withdrawal all need it — so putting it in one handler would leave the others uncovered and putting
+it in five would duplicate it. The row's own asset is in scope either way, which is the property the
+aggregator lacks. Guards, all Red-proven: an explicit `'0'` is denominated (D24 — zero is a value), a
+negative rebate keeps its sign, an empty cell stays absent, and a denomination the source stated is never
+overwritten even when it differs from the asset.
+
+**Finding — D24's first defect claim is wrong on both of its two counts.** It states the undenominated
+pair "is rejected by both the Zod refine and the SQL CHECK, so 14 real rows cannot be persisted", and
+that ingestion is what 13.3 is blocked on. Measured:
+
+- `SpotTransactionSchema` — the schema carrying the `fee_amount`/`fee_asset_id` refine — is imported by
+  **no production module at all**, only by two spec files. The refine cannot reject anything today.
+- The SQL CHECK is real and does reject the pair (proved with a deliberate break, below), but it never
+  sees one: `CsvIngestionUseCase` has its own fallback,
+  `row.fee_currency || row.asset_in || row.asset_out`, at lines 194 and 221.
+
+Verified directly: with `resolveFeeDenomination` removed, the Kraken SOL withdrawal still persists
+end-to-end with `fee_asset_id = 'SOL'`. So **14.30c did not unblock 13.3, because 13.3 was not blocked**
+by this. The fix remains correct and worth keeping — it moves the invariant to the layer that owns the
+source row instead of leaving it to a fallback inside one use case — but the group-14 ordering rationale
+that put 14.30c in 14α rests on a claim that does not hold. Two follow-ups fall out of this and are
+**not** done here:
+
+- **For 14.30b:** `CsvIngestionUseCase` computes `hasFee = !feeAmountDec.isZero()` and drops
+  `fee_amount` to `undefined` when it is zero. That collapses an explicit `'0'` into absence at exactly
+  the layer D24 claims preserves the distinction — 22 Kraken rows and 18 Bitvavo rows. 14.30b's own text
+  already says to audit for this shape; this is the site.
+- **For whoever owns the ledger contract:** either wire `SpotTransactionSchema` into the persistence
+  path or record that it is a documentation-only artefact. As it stands, three refines that design
+  decisions cite as enforcement are dead code.
+
+**14.34 — verification, split across the three layers it spans**, because no single package can hold it:
+`parseExcel` is frontend-only and the SQL CHECK is backend-only.
+
+| assertion | where | discriminating? |
+|---|---|---|
+| a tsx script imports `shared-types` without throwing | `packages/shared-types/tests/schemas/no-import-cycle.spec.ts` | yes — B7 |
+| a Bit2Me cell's digits survive reader → normalizer → `preciseAmountSchema` | `apps/frontend/.../__tests__/sourceFidelityChain.spec.ts` | yes — B8 |
+| the same digits survive storage in real SQLite | `apps/backend/.../__tests__/sourceFidelity.spec.ts` | yes — B4/B5 upstream |
+| a Kraken row with a fee persists | same file | **no** — passes without the fix, see above |
+| the normalizer's own output satisfies the fee-pair invariant | same file | yes — B1 |
+| the SQL CHECK rejects an undenominated fee | same file | yes — B6 |
+
+### Red quality
+
+| task | Red | evidence |
+|---|---|---|
+| 14.20 | real | `ReferenceError: Cannot access 'FIFO_QUALITY_FLAGS' before initialization`, from the shipped module |
+| 14.26 | real | `expected [ '0.15742981799999997', …(2) ] to deeply equal [ '0.157429818', … ]` and `expected [ '1e-8', '1e-12', '1.5e-8' ] to deeply equal [ '0.00000001', … ]` |
+| 14.30c | real | 4 of 7 failed on their own assertions (`expected undefined to be 'SOL'`, `'HBAR'`, `'EUR'`, `'PUMP'`); the other 3 are negative controls that passed from the start and are pinned by B2/B3 |
+| 14.34 | green from the start | 6 assertions, 5 pinned by a deliberate break; the sixth is reported above as non-discriminating |
+
+**Eight deliberate breaks, every one with a literal test path and a printed test count** (reminder 8):
+
+| # | break | result |
+|---|---|---|
+| B1 | remove the `resolveFeeDenomination` call | core-domain 4 failed / 3 passed; backend 1 failed / 3 passed |
+| B2 | treat an empty fee cell as a present fee | 1 failed / 6 passed |
+| B3 | overwrite a denomination the source stated | 1 failed / 6 passed |
+| B4 | always trust the displayed text | 2 failed / 2 passed (`expected '1.23457E+14' to be '123456789012345'`) |
+| B5 | drop the exponential expansion | 1 failed / 3 passed |
+| B6 | denominate the row the CHECK should reject | 1 failed / 3 passed (`expected [Function] to throw an error`) |
+| B7 | reinstate the import cycle | 1 failed, with the original `ReferenceError` |
+| B8 | reinstate the float64 reading | 1 failed (`expected '0.15742981799999997' to be '0.157429818'`) |
+
+**Reminder 8 bit twice in this phase, and both were caught only by checking the file and the count.**
+The first B4 attempt used a `perl` pattern that silently matched nothing, and the run reported `4 passed`
+— indistinguishable from a fix that works. The first B6 attempt passed a repo-root-relative path to a
+package-filtered vitest, which printed **no test-count line at all**. Both were redone. The rule that
+saved them: read back the edited line, and refuse to believe a break that does not print a count.
+
+**Reminder 1 bit once.** The SQL-CHECK test initially threw `UNIQUE constraint failed: accounts.id`,
+because migration `002` already seeds the venue account — a green `toThrow()` for entirely the wrong
+reason. It now seeds nothing it does not need and asserts the *paired* insert succeeds first, so a
+malformed fixture cannot masquerade as an enforced invariant.
+
+### Files touched
+
+| file | delta |
+|---|---|
+| `packages/shared-types/src/schemas/spot-tx-types.ts` | +28 new |
+| `packages/shared-types/src/schemas/ledger.ts` | −18/+2 |
+| `packages/shared-types/src/schemas/fifo-policy.ts` | 1 line |
+| `packages/shared-types/tests/fixtures/cjsImportProbe.ts` | +15 new |
+| `packages/shared-types/tests/schemas/no-import-cycle.spec.ts` | +29 new |
+| `apps/frontend/src/modules/data-ingestion/utils/parsers.ts` | +52/−1 |
+| `apps/frontend/.../__tests__/parseExcel.precision.spec.ts` | +85 new |
+| `apps/frontend/.../__tests__/sourceFidelityChain.spec.ts` | +55 new |
+| `packages/core-domain/src/domain/services/normalizer/feeDenomination.ts` | +28 new |
+| `packages/core-domain/src/domain/services/TransactionNormalizer.ts` | +3 |
+| `packages/core-domain/src/__tests__/feeDenomination.spec.ts` | +125 new |
+| `apps/backend/.../__tests__/sourceFidelity.spec.ts` | +157 new |
+
+### Measured state after 14α
+
+| gate | before | after |
+|---|---|---|
+| `shared-types` tests | 40/40 | **41/41** |
+| `core-domain` tests | 69/69 | **76/76** |
+| `database` tests | 112/112 | **112/112** |
+| `apps/frontend` tests | 477/477 | **482/482** |
+| `apps/backend` tests | 314/314 | **318/318** |
+| `apps/backend` `tsc --noEmit` | 0 | **0** |
+| `apps/frontend` `vue-tsc --build --force` | 0 | **0**, and made to fail on purpose first |
+| `shared-types` / `core-domain` / `database` typecheck | 0 | **0** |
+| `any` in `apps/frontend/src` and `packages/*/src` | 0 | **0** |
+
+The frontend checker was proved by appending `const deliberateTypeError: number = "not a number"` to
+`parsers.ts` and watching `vue-tsc --build --force` report `TS2322` at that line, then reverting.
+`core-domain`'s checker proved itself unasked: it caught a missing `metadata` property in the new spec
+that `vitest run` had happily executed — the `tsconfig.typecheck.json` work from the cross-cutting
+cleanup earning its keep.
+
+Nothing committed. Nothing deferred inside 14α; the two follow-ups above are recorded against 14.30b
+and the ledger contract, not left implicit.
+
+## Group 14, phase 14β — every real file becomes ingestible — COMPLETE (14.15, 14.16, 14.17, 14.18, 14.31)
+
+Five tasks; `14.31` was pulled forward from 14γ because it is the same Bitvavo row as `14.16`.
+
+**14.15 — the flag had no write path *and* no read path.** Mapping the label was the smaller half.
+`v_calculated_lot_history_events` hard-coded `CAST(NULL AS VARCHAR) AS flag`, so no ingestion path could
+have populated it. `WALLET_ACTIVATION` now resolves in the normalizer to `tx_type = 'BUY'` plus
+`fiscal_flag`, rides on a new nullable `spot_transactions.flag` (same vocabulary and CHECK as
+`lot_history_events.flag`), and every derived event inherits it from the transaction it derives from.
+`BUY` is the only acquisition type that fabricates no income — the four crypto-income types would report
+the 1 XRP reserve in the general or savings base — and `DEPOSIT`, which the deleted `TangemCsvParser`
+used, creates no lot at all. Reasoning and the rejected alternatives are recorded as **D35**.
+
+**Limitation, stated rather than left to be found (D35).** `lot_history_events` holds disposal matches
+only, so an acquisition-shaped operation reaches it solely through a *fee* disposal. The real Tangem row
+carries `Fee 0.0`, so it yields a lot and no event: its classification is persisted on
+`spot_transactions.flag` and is queryable, but the `fifo-data-quality-flags` scenario "a Tangem
+wallet-activation operation is ingested and derived → its event MUST retain
+`flag = 'WALLET_ACTIVATION'`" is **satisfiable in general and vacuous for that row**. The chain is
+proved end to end on a flagged operation that does dispose of something.
+
+**14.16 — `PROMOTION` added, and one more thing was needed than the task listed.** Enum member, policy
+entry (`ACQUISITION_ONLY`, forced by 2.1's key-parity test), `TYPE_MAP` entry and the
+`general_base_airdrops` predicate — plus two the task did not name: the SQL `tx_type` CHECK in `002` and
+`004`, without which no `PROMOTION` row is insertable, and a magnitude rule. `resolveFiatMagnitudes`
+resolved the 10 € credit to `total_fiat = 0` (its asset *is* the reporting currency, so the price
+provider was asked for the price of EUR in EUR), which would have made the income vanish from the very
+view the decision put it in. A movement denominated in the reporting currency now takes its quantity as
+its fiat magnitude.
+
+**14.31 — the guard is a sign, in two places.** Ingestion stopped taking `.abs()` of the fee: no export
+in the corpus writes a *charged* fee as negative and Bitvavo writes a credited one that way, so the sign
+carries information rather than direction. The fee-disposal branch now requires `qty_fee > 0`. The second
+half is not cosmetic — a negative fee disposal matches no lot, so it is invisible in the event history
+while still reaching `v_daily_running_balances`, which subtracts disposals and would have *added* the
+rebate to the user's holdings. Measured before the fix: `amount = -0.050000000000000000` in
+`v_flattened_fifo_events`.
+
+**14.17 — recorded and opened.** The 315 rows stay rejected. Deferral recorded in D35; follow-up change
+created at `openspec/changes/add-futures-collateral-ledger` (proposal, design, spec, 12 tasks), with the
+scope boundary written into the proposal: spot and futures never mix, futures never holds the asset, only
+the currency movements and PnL matter. `openspec list` sees it.
+
+**14.18 — the net found two real defects on its first run, which is the whole reason it exists.** Its
+fixture was generated by reading the six real files (`csv` + `openpyxl`); the 22 labels and their counts
+reproduce the measured vocabularies exactly. Each label's verbatim row is driven through
+`guessColumnMapping` → `mapToEntity` → `normalizeTransactionDirection` → `CsvIngestionUseCase.execute`.
+
+1. **Any Title-Case label skipped `TYPE_MAP` entirely.** The mapping applied only when `tx_type` was
+   exactly the raw or the uppercased label, so Bit2Me's `Trade` (**118 rows**) and Bitunix's `Withdraw`
+   were never mapped and were rejected as unmapped types. `Staking`, `Airdrop` and `Swap` survived only
+   because `toSpotTxType` uppercases and those uppercase forms happen to be canonical — the bug was
+   masked by three labels out of six. The condition now asks whether a handler resolved the type.
+2. **An empty directional cell defeated the custody classifier.** `applyMovement` read
+   `asset ?? asset_in ?? asset_out`, and the column mapper writes `''` for a blank cell, so a Bitunix
+   withdrawal (whose inbound columns are blank) was classified `UNCLASSIFIED` for want of an asset that
+   was in the next field. It now takes the first *non-empty* value.
+
+Both are label-shaped defects that no test written outward from the canonical vocabulary could see.
+
+### Red quality
+
+| task | Red | evidence |
+|---|---|---|
+| 14.15 | real | `expected 'WALLET_ACTIVATION' to be 'BUY'`, `expected undefined to be 'WALLET_ACTIVATION'` (normalizer), then `expected null to be 'WALLET_ACTIVATION'` twice from the engine |
+| 14.16 | real | `expected 'CAMPAIGN_NEW_USER_INCENTIVE' to be 'PROMOTION'`, `expected '0' to be '10'`, `expected [] to deeply equal [ 'tx-promotion' ]` |
+| 14.31 | real | `expected '0.00543739' to be '-0.00543739'` and `[{ amount: '-0.050000000000000000', event_type: 'DISPOSAL' }]` where `[]` was required |
+| 14.17 | n/a | documentation and a follow-up change; no code |
+| 14.18 | real, and unplanned | two production defects on the first run: `Unmapped transaction type 'Trade'` and `'Withdraw'` |
+
+One Red was **not** the intended assertion and was redone: the engine spec first failed with
+`table spot_transactions has no column named flag` — a setup failure, not the property under test. The
+migration column was added and the run repeated before anything was implemented.
+
+**Nine deliberate breaks, each with the edit's grep count checked and a printed test count** (reminder 8):
+
+| # | break | result |
+|---|---|---|
+| B1 | drop `PROMOTION` from `general_base_airdrops` | 1 failed / 10 passed |
+| B2 | add `PROMOTION` to `savings_base_yields` too | 1 failed / 10 passed |
+| B3 | emit a constant `'WALLET_ACTIVATION'` on every event | 1 failed / 10 passed |
+| B4 | fee branch requires `qty_fee > 1000` (pins the paired success case) | 4 failed / 7 passed |
+| B5 | state the flag on every ingested row | 1 failed / 37 passed |
+| B6 | restore `.abs()` on the fee | 1 failed / 37 passed |
+| B7 | remove `wallet_activation` from `TYPE_MAP` | 4 failed / 34 passed |
+| B8 | restore the `??` chain that stops at an empty cell | 1 failed / 37 passed |
+| B9 | restore the raw/uppercase-only mapping condition | 1 failed / 37 passed |
+
+**Not covered by a discriminating break:** the co-occurrence case "a classification does not displace a
+data-quality defect" — its fixture prices the fee, so the quality column is null either way, and B3 does
+not fail it. It asserts the two columns are read independently, which B3 covers for the classification
+side only. The 14.18 accept-assertions need no break: two of them failed on real defects.
+
+### Reminder 1, and a new one earned the hard way
+
+Reminder 1 held: the engine spec asserts the *paired success* first — the fee disposal exists and is
+unflagged — so a fixture that produced no event at all could not masquerade as a propagated flag. B4
+proves that guard works.
+
+**New standing reminder, added below as 10: never `git checkout -- <file>` in this tree.** Reverting the
+deliberate frontend type error with `git checkout` discarded 14α's uncommitted `parsers.ts` fix along
+with it. Recovered from a stray copy at `/tmp/b.p` and verified by the 14α tests themselves (14 in
+`utils/__tests__`, then 482 frontend, then `vue-tsc --build --force` clean). Nothing was lost, and only
+because a backup happened to exist. Copy the file first, or edit and undo the edit.
+
+### Files touched
+
+| file | delta |
+|---|---|
+| `packages/shared-types/src/schemas/spot-tx-types.ts` | +8 |
+| `packages/shared-types/src/schemas/fifo-policy.ts` | +6/−4 |
+| `packages/shared-types/src/ingestion/TransactionMappedData.ts` | +12 |
+| `packages/shared-types/tests/schemas/no-import-cycle.spec.ts` | +7/−4 |
+| `packages/core-domain/src/domain/services/TransactionNormalizer.ts` | +26/−7 |
+| `packages/core-domain/src/domain/services/normalizer/handlers/index.ts` | +5 |
+| `packages/core-domain/src/domain/services/normalizer/handlers/transfer.ts` | +11/−2 |
+| `packages/core-domain/src/__tests__/fiscalClassification.spec.ts` | +75 new |
+| `packages/database/migrations/sqlite/002_ledger_schema.sql` | 1 line |
+| `packages/database/migrations/sqlite/004_fifo_traceability.sql` | +5/−1 |
+| `packages/database/src/adapters/DuckDbAdapter.ts` | +12/−2 |
+| `packages/database/tests/integration/fiscal_flag_and_fee_routing.spec.ts` | +253 new |
+| `apps/backend/src/core/domain/ports/ILedgerPort.ts` | +6 |
+| `apps/backend/src/core/infrastructure/adapters/SQLiteLedgerAdapter.ts` | +4/−2 |
+| `apps/backend/src/core/application/use-cases/CsvIngestionUseCase.ts` | +17/−2 |
+| `apps/backend/.../__tests__/realSourceRows.spec.ts` | +190 new |
+| `apps/backend/.../__tests__/typeLabelCoverage.spec.ts` | +156 new |
+| `apps/backend/.../__tests__/fixtures/sourceTypeVocabularies.ts` | +578 new (generated) |
+| `openspec/changes/fix-fifo-transfer-traceability/design.md` | +38 (D35) |
+| `openspec/changes/add-futures-collateral-ledger/**` | +4 files new |
+
+### Measured state after 14β
+
+| gate | before | after |
+|---|---|---|
+| `shared-types` tests | 41/41 | **41/41** |
+| `core-domain` tests | 76/76 | **83/83** |
+| `database` tests | 112/112 | **123/123** |
+| `apps/backend` tests | 318/318 | **356/356** |
+| `apps/frontend` tests | 482/482 | **482/482** |
+| all five type-checkers | 0 | **0** |
+| `any` in `apps/frontend/src` and `packages/*/src` | 0 | **0** |
+
+The frontend checker was made to fail on purpose first: `const deliberateTypeError: number = "not a
+number"` appended to `parsers.ts` produced `TS2322` at line 193 under `vue-tsc --build --force`.
+
+### Findings carried out of 14β
+
+1. **The frontend's own transaction vocabulary is narrower than the canonical one, and now visibly so.**
+   `TaxTransactionType` and `KNOWN_TYPES` in `ExternalTaxSchemas.ts` omit `STAKING`, `MINING`, `SPEND`
+   and now `PROMOTION`, so such a row renders as `UNKNOWN` in the tax transactions table. Pre-existing
+   and not created here — the fiscal routing is server-side and correct — but a real 10 € credit
+   displaying as `UNKNOWN` is the class of untruth this change exists to remove. Not fixed in 14β to
+   keep the phase to ingestibility; it belongs with the other frontend alignment work.
+2. **`004` was edited rather than a new migration added.** The clean-slate rebuild is explicitly
+   authorised, `004` already rebuilds `spot_transactions`, and `005` is reserved by 14.11/14.13.
+3. Nothing else deferred.
+
 ## Resume here — next action
 
-**125 of 176 tasks complete**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and **12 in full,
+**134 of 176 tasks complete**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and **12 in full,
 including the 12.11–12.21 addendum** are closed. Group 14 holds 39 tasks and runs **before** group 13.
 **No task is left open in a closed group.**
 
-### Start here next session — group 14, phase 14α, in this order
+### Start here next session — group 14, phase 14βb
 
-Everything below is already decided and written up; none of it needs re-litigating. The six open
-decisions of group 14 were settled in D25 before implementation, and the two the source-profile
-exploration raised were settled in D33/D34. **There are zero open decisions.**
+Phases **14α and 14β are closed** — see their entries above. Everything remaining in group 14 is
+already decided and written up; none of it needs re-litigating. The six open decisions of group 14 were
+settled in D25 before implementation, the two the source-profile exploration raised in D33/D34, and what
+14β settled while implementing is D35. **There are zero open decisions.**
 
-Phase **14α** exists because its three tasks block measurement everywhere else — do them first and in
-any order among themselves:
+Next is **14βb — source format profiles**, the seam 14γ has nowhere to live without. Nothing in 14β
+touched it: the per-source rules 14γ needs to declare still have no home.
 
-1. **14.26** — the xlsx reader routes numeric cells through float64 and then `String()`. 13 cells in
-   the real Bit2Me workbooks already carry artefacts (`0.15742981799999997` for `0.157429818`), and
-   anything below `1e-6` becomes exponential notation that `preciseAmountSchema` rejects outright.
-   Blocks every Bit2Me task, because deriving a fee as `origen − destino` is meaningless while both
-   operands carry noise.
-2. **14.30c** — a Kraken fee reaches the ledger with no denomination, which both the Zod refine and
-   the SQL `CHECK` reject. 14 real rows cannot be persisted. Blocks **13.3**.
-3. **14.20** — the circular import between `shared-types`' `ledger.ts` and `fifo-policy.ts` throws
-   under tsx, so it blocks any fixture or measurement script that runs outside vitest.
+Three things 14α and 14β learned that 14βb should carry:
 
-Then **14.34** verifies those three before anything downstream is trusted.
+- **14.26's fix is available to lean on.** `parseExcel` yields the source's own digits, so a Bit2Me
+  quantity can be asserted digit for digit and `origen − destino` is a meaningful subtraction.
+- **A claim in D24 did not survive measurement** (details in the 14α entry): `SpotTransactionSchema`'s
+  refines are not wired into any production path, and `CsvIngestionUseCase` supplies its own fee-asset
+  fallback. Before treating any "this is rejected by layer X" statement in `design.md` as a blocker,
+  check that layer X actually runs. 14β hit the same shape: the `flag` column the spec relies on was
+  hard-coded `NULL` in the view, so no ingestion path could have populated it.
+- **The label-level net (14.18) is now live and cheap to extend.** Its fixture is the real vocabulary of
+  all six exports; a profile that changes how a source's rows are read should be visible there.
 
 Two things worth knowing before starting, both learned the hard way in this change:
 
@@ -2687,8 +3009,9 @@ Two things worth knowing before starting, both learned the hard way in this chan
 
 ### Working tree state
 
-Measured at the end of the group 12 addendum. Every package's type-checker is clean simultaneously,
-and the frontend's was made to fail on purpose first.
+Superseded by the "Measured state after 14α" table in the 14α entry above; the figures below are the
+group 12 baseline that 14α's deltas are measured against. Every package's type-checker is clean
+simultaneously, and the frontend's was made to fail on purpose first, in both passes.
 
 | package | state |
 |---|---|
@@ -2708,19 +3031,9 @@ each package was measured individually with `pnpm --filter <pkg> exec vitest run
 
 ### Next task: group 14 — source fidelity and multi-leg integrity
 
-**Group 14 runs BEFORE group 13.** Start at phase **14α**, whose three tasks block work everywhere
-else, and execute top to bottom **by phase, not by number** — the IDs are deliberately not sequential
-because `design.md` cites them.
-
-1. **14.20** — break the circular import between `shared-types`'s `ledger.ts` and `fifo-policy.ts`.
-   Blocks any fixture or measurement script running under tsx.
-2. **14.26** — the xlsx reader loses precision before validation sees the value. Blocks every Bit2Me
-   task and 14.27's digit-for-digit net.
-3. **14.30c** — Kraken fee amounts reach the ledger with no denomination, failing 14 real rows at two
-   layers. Blocks 13.3.
-4. **14.34** — verify the three above.
-
-Then 14β (every real file becomes ingestible), 14βb (source format profiles), 14γ (the fee model),
+**Group 14 runs BEFORE group 13.** Phase **14α is done** (14.20, 14.26, 14.30c, 14.34). Continue top to
+bottom **by phase, not by number** — the IDs are deliberately not sequential because `design.md` cites
+them: 14β (every real file becomes ingestible), 14βb (source format profiles), 14γ (the fee model),
 14δ, 14ε, 14ζ, 14η.
 
 **Two changes to group 14's own plan, from the addendum:**
@@ -2794,6 +3107,10 @@ the DESIGN.md rule 3 violation (rule 3 given an operational definition, the over
 9. **A brand-token count over `views/` cannot see brand delivered by a Shadcn variant default.** The
    tooltip primitive's own class list was `bg-primary`, so every tooltip in the app was a brand moment
    that no view-directory count would ever report. Recorded beside DESIGN.md rule 3.
+10. **Never `git checkout -- <file>` while this tree carries uncommitted work.** Reverting a deliberate
+    one-line break that way discarded phase 14α's uncommitted `parsers.ts` fix in 14β. It was recovered
+    only because a stray copy happened to exist at `/tmp/b.p`, and verified by re-running 14α's own
+    tests. Copy the file to a temporary path first, or undo the edit instead of reverting the file.
 
 ### Carried-forward finding for group 8 — RESOLVED in group 8
 

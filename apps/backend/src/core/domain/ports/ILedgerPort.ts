@@ -37,6 +37,11 @@ export interface LedgerSpotTransaction {
   price_fiat: PreciseAmount;
   /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
   fiat_currency: string;
+  /**
+   * Fiscal classification of the operation, when the canonical `tx_type` cannot express it. The
+   * derived events inherit it, which is how the AEAT audit trail survives materialisation.
+   */
+  flag?: FiscalClassificationFlag | null;
   timestamp: string; // ISO-8601
   status: string;
 }
