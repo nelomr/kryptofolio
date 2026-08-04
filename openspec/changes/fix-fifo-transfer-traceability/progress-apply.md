@@ -3524,9 +3524,29 @@ Without re-running the break, this phase would have shipped one unproven behavio
 - `transfer_group_id` is still written by nothing. That is 14ε (14.7/14.8), and it is now *reachable*:
   the backend receives both legs of a same-asset group, which is what this phase existed to deliver.
 
+### Verifying 14δ's report — one loose end, recorded as 14.36c
+
+The phase's claims were checked rather than read, and they held: `rowSchema` and
+`IngestAndMaterializeInput` really do carry no identifier, `fillImplicitFeeDenomination` is gone from
+the tree, the six tasks are marked, no `any` was introduced (grepped including `, any>`), and the
+counts reproduce exactly — 46 / 199 / 126 / 388 / 437 with all five typechecks at 0.
+
+What the report missed is the **caller**. `RestTaxAdapter.importTransactions` still sends
+`id_hash: row.id_hash ?? ''`, which `rowSchema` now strips, and still passes `payload as never`. That
+cast disables the typed client at the single place the wire contract is used, so the contract change
+14.3 made is checked nowhere on the sending side.
+
+Removing the cast produces one real error, which is why this is a finding and not a tidy-up:
+`TransactionMappedData` permits `tx_type: string | null` and an absent `account_id`, while `rowSchema`
+demands a uuid `account_id` and `string | undefined`. The cast never removed that mismatch — it
+removed the report of it, exactly as the `as any[]` did for the sqlite/DuckDB parameter difference
+earlier in this change. Fixing it properly needs a decision about a row with no `account_id`, so it is
+written up as **14.36c** in 14η beside the other boundary work rather than patched mid-verification.
+The file was restored; the tree is clean and green.
+
 ## Resume here — next action
 
-**167 checked boxes in `tasks.md`, 33 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**167 checked boxes in `tasks.md`, 34 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
 14γ and 14δ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
 group 13. **No task is left open in a closed group.**
