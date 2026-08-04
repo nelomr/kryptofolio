@@ -485,6 +485,14 @@ export const en: I18nDictionary = {
   "ingestion.wizard.new_account_placeholder": "New Account Name",
   "ingestion.wizard.add_btn": "Add",
   "ingestion.wizard.cancel_btn": "Cancel",
+  "ingestion.profile.label": "Source Format",
+  "ingestion.profile.placeholder": "Select the source of this file...",
+  "ingestion.profile.ambiguous": "This header row matches more than one source; choose one before continuing:",
+  "ingestion.profile.invariant.verified": "The source’s own running total reconciles on rows checked:",
+  "ingestion.profile.invariant.not_declared": "This source ships no independent check, so its convention cannot be confirmed from the file.",
+  "ingestion.profile.invariant.could_not_verify": "No row in this file carries the values the check needs, so nothing was confirmed.",
+  "ingestion.profile.invariant.failed": "The source’s own totals do not reconcile under this format. Check the selection before importing.",
+  "ingestion.profile.invariant.profile_not_chosen": "Choose a source format to check this file against.",
   "ingestion.wizard.account_exists": "Account already exists",
 
   // Dropzone Area

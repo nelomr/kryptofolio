@@ -8,10 +8,13 @@ import type {
   MaterializationSummary,
 } from '../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { SourceProfileId } from '@kryptofolio/shared-types';
 
 export interface IngestAndMaterializeInput {
   rows: IngestibleTransaction[];
   market: 'spot' | 'futures';
+  /** Which source wrote the file. Required: no default can stand in for a measurement. */
+  sourceProfileId: SourceProfileId;
 }
 
 /**
@@ -52,7 +55,7 @@ export class IngestAndMaterializeUseCase {
   }
 
   async execute(input: IngestAndMaterializeInput): Promise<IngestAndMaterializeResult> {
-    const ingestion = await this.ingestion.execute(input.rows, input.market);
+    const ingestion = await this.ingestion.execute(input.rows, input.market, input.sourceProfileId);
 
     // Nothing persisted means the derived tables cannot have moved, so a full recompute would cost
     // a pass over the whole ledger to produce the set it already holds.

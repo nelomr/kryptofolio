@@ -266,17 +266,17 @@ props and emits. **One contract does change, deliberately:**
 `sourceProfileId`, and `transactionsBodySchema` in `routes/ingestion.ts` gains a required field —
 called out in 14.44 and 14.45.
 
-- [ ] 14.37 Write the vocabulary tests: `Object.keys(SOURCE_FORMAT_PROFILES)` equals
+- [x] 14.37 Write the vocabulary tests: `Object.keys(SOURCE_FORMAT_PROFILES)` equals
   `SOURCE_PROFILE_IDS` exactly with no missing and no extra key; removing an id from the profile table
   is a **type** error, asserted in a `spec-d.ts` under a path the `typecheck` script actually covers
   (the audit after group 8 proved `packages/shared-types/tests/` and `packages/database/tests/` are
   invisible to `tsc` without `tsconfig.typecheck.json`, and that `vitest run` never type-checks); and
   every profile's declared dimensions are discriminated unions, asserted by exhaustive `switch` over
   each `kind` with no `default` arm
-- [ ] 14.38 Add `SOURCE_PROFILE_IDS` and the `SourceProfileId` union to `@kryptofolio/shared-types`
+- [x] 14.38 Add `SOURCE_PROFILE_IDS` and the `SourceProfileId` union to `@kryptofolio/shared-types`
   covering the six real sources plus a `generic` member, and extend the ingestion row/body schema with
   the identifier field. Vocabulary only — no behaviour, no profile data, no import of `core-domain`
-- [ ] 14.39 Write the detection tests **from the real header rows**, verbatim, one per source:
+- [x] 14.39 Write the detection tests **from the real header rows**, verbatim, one per source:
   `txid,refid,time,type,subtype,aclass,subclass,asset,wallet,amount,fee,balance` → Kraken spot;
   `Tipo de operación,Cantidad de destino,Moneda de destino,Cantidad de origen,Moneda de origen,Comisión de la operación,Moneda de la comisión,Exchange,Grupo,Descripción,Fecha`
   → Bit2Me; `Timezone,Date,Time,Type,Currency,Amount,Quote Currency,Quote Price,Received / Paid Currency,Received / Paid Amount,Fee currency,Fee amount,Status,Transaction ID,Address`
@@ -285,7 +285,7 @@ called out in 14.44 and 14.45.
   `uid,dateTime,account,type,symbol,…` row → Kraken futures. Plus: a header row satisfying two
   signatures reports **both** candidates and picks neither; an unknown header row reports
   `UNRECOGNISED`. Read the files to build these rather than retyping them from this task
-- [ ] 14.40 Add the profile types to `@kryptofolio/core-domain/src/domain/services/sourceProfile/` as
+- [x] 14.40 Add the profile types to `@kryptofolio/core-domain/src/domain/services/sourceProfile/` as
   discriminated unions — fee denomination (row asset / named column / fiat valuation / collateral
   currency), fee convention (net+fee / gross+net / fee-inside-total / undetermined), directional fill
   (one-sided / both-sides-written), reference-versus-category columns, invariant (**none /
@@ -294,14 +294,14 @@ called out in 14.44 and 14.45.
   profile's own derivation**: `gross = net + fee` is a tautology for Kraken, Bitunix and Bit2Me because
   the third value is derived, so it must not be accepted as one. No `any`, no optional-flag bags, no
   Zod, no Vue, no Axios; `scripts/check-domain-isolation.sh` must pass
-- [ ] 14.41 Add `SOURCE_FORMAT_PROFILES: Record<SourceProfileId, SourceFormatProfile>` with the six
+- [x] 14.41 Add `SOURCE_FORMAT_PROFILES: Record<SourceProfileId, SourceFormatProfile>` with the six
   measured profiles and the `generic` one. `generic` declares its fee convention **undetermined**, so
   a non-zero fee on an unrecognised file is reported pending rather than assumed — a zero fee stays
   fully determined per D24. Bit2Me declares zero reference columns and `Grupo` as a category label.
   Invariants: **Kraken spot** declares its running balance; **Bitvavo** declares an over-determined row,
   `quantity × price + fee = paid`, measured exact on 12 of 12 — four columns none of which is derived
   from the others; **Bit2Me, Bitunix and Tangem declare none**, having no independent redundancy
-- [ ] 14.42 Add `detectSourceProfile(headers)` returning a discriminated result — resolved / ambiguous
+- [x] 14.42 Add `detectSourceProfile(headers)` returning a discriminated result — resolved / ambiguous
   with every candidate / unrecognised. It MUST NOT resolve ambiguity by declaration order: the
   deleted `REGISTERED_PARSERS` says in its own comment that order mattered, and that is the defect,
   while `TangemCsvParser`'s required-plus-excluded signature is the shape being kept. **The excluded
@@ -311,12 +311,12 @@ called out in 14.44 and 14.45.
   names unique to each of the other five sources and let a real ambiguity report extend them. Tangem's
   `Date,Type,Asset,Amount,Fee,Notes` is a genuine subset of what a minimal export elsewhere could
   produce, and six files cannot settle the correct exclusions
-- [ ] 14.43 Write the application tests, then add the pure appliers that 14γ and 14δ call:
+- [x] 14.43 Write the application tests, then add the pure appliers that 14γ and 14δ call:
   `resolveFeeDenomination(profile, row)`, `resolveGrossNetFee(profile, row)`,
   `reduceDirectionalSides(profile, row)`, `isMergeKey(profile, column)`,
   `checkProfileInvariant(profile, rows)`. Every one is a pure function of `(profile, row)` with
   `PreciseAmount` arithmetic and no `number` on a monetary or quantity path
-- [ ] 14.44 **Wizard, non-breaking half.** Add a `sourceProfile` ref to `CsvImportWizardContext` and
+- [x] 14.44 **Wizard, non-breaking half.** Add a `sourceProfile` ref to `CsvImportWizardContext` and
   call `detectSourceProfile(result.headers)` inside `handleFileUpload` after `parseFile`, before
   `initializeMapping`. Surface the detected profile with a user override **inside step 1** — no fourth
   step. `WizardStep` stays `1 | 2 | 3`; `parseFile`'s `ParseResult` shape, `initializeMapping(headers)`
@@ -333,13 +333,13 @@ called out in 14.44 and 14.45.
   **unset** and require a choice before advancing, since a default among equals is the array-order
   defect renamed; **(c)** set `marketType` from the resolved profile's declared market instead of from
   `detectMarketTypeFromFile`, keeping the existing control editable so an explicit user choice still wins
-- [ ] 14.44b Retire `detectMarketTypeFromFile` once 14.44(c) is in place, or reduce it to the
+- [x] 14.44b Retire `detectMarketTypeFromFile` once 14.44(c) is in place, or reduce it to the
   unrecognised-profile fallback and say so at its definition. It decides spot versus futures by
   searching the **file name** for `future` / `futuro` / `deriv`, so a Kraken futures export saved under
   any other name is ingested as spot. Leaving both mechanisms live means two detections that can
   disagree about one file, and the filename guess is the one whose reasoning the user cannot see.
   Update `marketDetector.spec.ts` accordingly
-- [ ] 14.45 **Wizard, the deliberate contract change.** `processAndSubmit(validRows, marketType,
+- [x] 14.45 **Wizard, the deliberate contract change.** `processAndSubmit(validRows, marketType,
   accountId)` becomes `processAndSubmit(validRows, marketType, accountId, sourceProfileId)`; the
   `useSubmitIngestionMutation` body gains `sourceProfileId` beside `rows`, `market` and `timezone`;
   and `transactionsBodySchema` in `apps/backend/src/core/infrastructure/routes/ingestion.ts` gains the
@@ -348,12 +348,12 @@ called out in 14.44 and 14.45.
   Consequences to discharge in the same task: `submitImport()` passes the ref;
   `useImportProcessor.spec.ts` and `routes/__tests__/ingestion.test.ts` payloads are updated; and a
   submission with a missing or unknown identifier is asserted to be **rejected**
-- [ ] 14.46 Thread the profile through the backend so preview and persistence cannot disagree:
+- [x] 14.46 Thread the profile through the backend so preview and persistence cannot disagree:
   `IngestAndMaterializeUseCase` and `CsvIngestionUseCase` accept the identifier and resolve the
   profile from `SOURCE_FORMAT_PROFILES`, and the pure appliers of 14.43 are the single implementation
   both sides call. Assert the same rows previewed and persisted yield identical quantities, fees and
   fee denominations, digit for digit
-- [ ] 14.47 **Delete the five unreachable parsers and their port**: `KrakenSpotCsvParser`,
+- [x] 14.47 **Delete the five unreachable parsers and their port**: `KrakenSpotCsvParser`,
   `BitvavoCsvParser`, `BitUnixCsvParser`, `Bit2MeXlsxParser`, `TangemCsvParser`,
   `apps/frontend/src/core/infrastructure/csv/index.ts` with `REGISTERED_PARSERS`,
   `apps/frontend/src/core/domain/ports/ICsvIngestionPort.ts`, and the `csv/__tests__` directory.
@@ -363,12 +363,11 @@ called out in 14.44 and 14.45.
   deposit to `TRANSFER_IN`, and returns `totalEur: 0, priceEur: 0, feeEur: 0`, discarding the fee that
   is the very disposal this change exists to record. Assert the frontend suite passes with only those
   tests removed, and that no remaining test needs a substitute
-- [ ] 14.48 **Correct the record on `WALLET_ACTIVATION`'s producer.** `fifo-policy.ts:117` and design
-  D5b both state that the flag is "produced by `TangemCsvParser`". It is not and never was: that
-  parser is unreachable, so nothing in the running application produces the flag today. Fix both
-  statements and name 14.15's ingestion path as the single producer. Do this in the same commit as
-  14.47 so the tree never contains a comment pointing at a deleted file
-- [ ] 14.49 Verify 14.37, 14.39 and 14.43 pass; then take four deliberate breaks and record the named
+- [x] 14.48 ~~**Correct the record on `WALLET_ACTIVATION`'s producer.**~~ — **superseded by 12.13**, which pulled the correction forward so the tree never asserted a falsehood. `fifo-policy.ts` no longer names the parser; D5b's remaining sentence was corrected here when 14.47 deleted the file, and it now names 14.15's ingestion path as the single producer.
+  ~~`fifo-policy.ts:117` and design D5b both state that the flag is "produced by `TangemCsvParser`".
+  Fix both statements and name 14.15's ingestion path as the single producer. Do this in the same
+  commit as 14.47 so the tree never contains a comment pointing at a deleted file~~
+- [x] 14.49 Verify 14.37, 14.39 and 14.43 pass; then take four deliberate breaks and record the named
   failure for each — invert **Kraken's** fee convention (its running-balance invariant must fail, and
   Bit2Me's must not, since Bit2Me has no independent check and that asymmetry is the point); invert
   Bitvavo's convention (its over-determined-row invariant must fail); make detection pick the first
@@ -376,7 +375,7 @@ called out in 14.44 and 14.45.
   inverting Bit2Me's convention can only be caught by 14.27's digit-for-digit net, not by an invariant —
   record that explicitly rather than claiming coverage the profile does not have. A test failing only
   because a module does not yet exist is not a valid Red for any task in this phase
-- [ ] 14.50 Assert the wizard contract held: `WizardStep` is still `1 | 2 | 3`; `parseFile` still
+- [x] 14.50 Assert the wizard contract held: `WizardStep` is still `1 | 2 | 3`; `parseFile` still
   returns `{ data, headers, errors }`; `initializeMapping(headers)` and the mapping ref are unchanged;
   `generatePreview` still accepts two arguments; the three components' props and emits are unchanged;
   and the only changed signature in the module is `processAndSubmit`, with the change reflected in the

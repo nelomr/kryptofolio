@@ -22,6 +22,8 @@ import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPor
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
 import { SOURCE_VOCABULARIES, type SourceVocabulary } from './fixtures/sourceTypeVocabularies.js';
+import { detectSourceProfile } from '@kryptofolio/core-domain';
+import type { SourceProfileId } from '@kryptofolio/shared-types';
 
 const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
 const ACCOUNT = '10000000-0000-0000-0000-000000000001';
@@ -84,6 +86,19 @@ function ingestibleFor(vocabulary: SourceVocabulary, label: string): IngestibleT
   };
 }
 
+/**
+ * The profile each source's own header row resolves to, by the same call the wizard makes. Naming the
+ * identifier by hand would let the net pass under a profile that no real file would ever be read
+ * under; a header row that stops resolving to exactly one profile fails here instead.
+ */
+function profileIdFor(vocabulary: SourceVocabulary): SourceProfileId {
+  const detection = detectSourceProfile([...vocabulary.headers]);
+  if (detection.kind !== 'RESOLVED') {
+    throw new Error(`${vocabulary.source} resolved to ${detection.kind}, not to one profile`);
+  }
+  return detection.profileId;
+}
+
 describe('every type label in every real export reaches a type the ledger accepts', () => {
   let useCase: CsvIngestionUseCase;
   let ledgerPort: Mocked<ILedgerPort>;
@@ -111,6 +126,7 @@ describe('every type label in every real export reaches a type the ledger accept
           const result = await useCase.execute(
             [ingestibleFor(vocabulary, sample.label)],
             vocabulary.market,
+            profileIdFor(vocabulary),
           );
 
           if (deferred) {

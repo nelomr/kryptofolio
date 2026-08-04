@@ -137,7 +137,7 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
       },
     ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
 
-    await adapter.importTransactions(rows, 'spot', 'UTC')
+    await adapter.importTransactions(rows, 'spot', 'UTC', 'kraken-spot')
 
     // @ts-ignore
     expect(bffClient.api.ingestion.transactions.$post).toHaveBeenCalledOnce()
@@ -157,7 +157,7 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
       },
     ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
 
-    await adapter.importTransactions(rows, 'spot', 'Europe/Madrid')
+    await adapter.importTransactions(rows, 'spot', 'Europe/Madrid', 'kraken-spot')
 
     // @ts-ignore
     const call = bffClient.api.ingestion.transactions.$post.mock.lastCall[0]
@@ -172,7 +172,7 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
     bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
 
     const adapter = new RestTaxAdapter()
-    await expect(adapter.importTransactions([], 'futures', 'UTC')).resolves.toBeUndefined()
+    await expect(adapter.importTransactions([], 'futures', 'UTC', 'kraken-futures')).resolves.toBeUndefined()
   })
 })
 
@@ -184,7 +184,7 @@ describe('RestTaxAdapter.importTransactions() — error path', () => {
 
     const adapter = new RestTaxAdapter()
 
-    await expect(adapter.importTransactions([], 'spot', 'UTC')).rejects.toThrow(TaxOperationError)
-    await expect(adapter.importTransactions([], 'spot', 'UTC')).rejects.toMatchObject({ code: 'IMPORT_FAILED' })
+    await expect(adapter.importTransactions([], 'spot', 'UTC', 'kraken-spot')).rejects.toThrow(TaxOperationError)
+    await expect(adapter.importTransactions([], 'spot', 'UTC', 'kraken-spot')).rejects.toMatchObject({ code: 'IMPORT_FAILED' })
   })
 })

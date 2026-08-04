@@ -91,7 +91,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
     expect(userSettingsPort.setSetting).toHaveBeenCalledWith('needs_recalculation', 'true');
   });
 
@@ -111,7 +111,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith({ assetId: 'BTC', symbol: 'BTC', isFiat: false });
     expect(ledgerPort.ensureAssetExists).toHaveBeenCalledWith({ assetId: 'USDT', symbol: 'USDT', isFiat: false });
@@ -135,7 +135,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     expect(ledgerPort.saveSpotTransaction).toHaveBeenCalledWith(expect.objectContaining({
       id_hash: 'custom-hash',
@@ -154,7 +154,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }] as IngestibleTransaction[];
 
-    await expect(useCase.execute(rows, 'spot')).rejects.toThrow(/id_hash is required/);
+    await expect(useCase.execute(rows, 'spot', 'generic')).rejects.toThrow(/id_hash is required/);
   });
 
   it('throws if account_id is missing', async () => {
@@ -167,7 +167,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }] as IngestibleTransaction[];
 
-    await expect(useCase.execute(rows, 'spot')).rejects.toThrow(/Account ID is required/);
+    await expect(useCase.execute(rows, 'spot', 'generic')).rejects.toThrow(/Account ID is required/);
   });
 
   it('maps STAKING tx_type correctly (was missing from old Zod schema)', async () => {
@@ -182,7 +182,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     expect(ledgerPort.saveSpotTransaction).toHaveBeenCalledWith(expect.objectContaining({
       tx_type: 'STAKING',
@@ -201,7 +201,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'futures');
+    await useCase.execute(rows, 'futures', 'generic');
 
     expect(ledgerPort.saveFuturesTransaction).toHaveBeenCalledWith(expect.objectContaining({
       tx_type: 'SETTLEMENT',
@@ -256,6 +256,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase().execute(
         [row({ total_fiat: '-299.70', price_fiat: '1.2128', fiat_currency: 'EUR' })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().total_fiat).toBe('299.7');
@@ -267,6 +268,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase().execute(
         [row({ total_fiat: '299.70', price_fiat: '-1.2128', fiat_currency: 'EUR' })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().price_fiat).toBe('1.2128');
@@ -277,6 +279,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase().execute(
         [row({ total_fiat: '-1234567890123456789.123456789', price_fiat: '0.5', fiat_currency: 'EUR' })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().total_fiat).toBe('1234567890123456789.123456789');
@@ -286,6 +289,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase('1').execute(
         [row({ tx_type: 'withdrawal', asset_in: undefined, amount_in: undefined, asset_out: 'XRP', amount_out: '-439.55' })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().total_fiat).toBe('439.55');
@@ -297,6 +301,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'LIQUIDATION_TRANSFER', total_fiat: '100', price_fiat: '1' })],
         'spot',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -309,6 +314,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase().execute(
         [row({ tx_type: 'LIQUIDATION_TRANSFER', total_fiat: '100', price_fiat: '1' })],
         'spot',
+        'generic',
       );
 
       expect(ledgerPort.saveSpotTransaction).not.toHaveBeenCalled();
@@ -321,6 +327,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           row({ id_hash: 'hash-good', tx_type: 'sell', total_fiat: '100', price_fiat: '1' }),
         ],
         'spot',
+        'generic',
       );
 
       expect(result.persisted).toBe(1);
@@ -340,6 +347,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'transfer', total_fiat: '100', price_fiat: '1' })],
         'spot',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -351,6 +359,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'trade', total_fiat: '100', price_fiat: '1' })],
         'spot',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -365,6 +374,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           row({ id_hash: 'h-out', tx_type: 'transfer_out', total_fiat: '100', price_fiat: '1' }),
         ],
         'spot',
+        'generic',
       );
 
       expect(result.persisted).toBe(2);
@@ -380,6 +390,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           row({ id_hash: 'k3', tx_type: 'FUNDING RATE CHANGE', total_fiat: '1', price_fiat: '1' }),
         ],
         'futures',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(0);
@@ -391,6 +402,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'CONVERSION', total_fiat: '1', price_fiat: '1' })],
         'futures',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -401,6 +413,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'ADL_ASSIGNMENT', total_fiat: '100', price_fiat: '1' })],
         'futures',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -413,6 +426,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'transfer', total_fiat: '100', price_fiat: '1' })],
         'futures',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(1);
@@ -428,6 +442,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           row({ id_hash: 'f4', tx_type: 'liquidation', total_fiat: '1', price_fiat: '1' }),
         ],
         'futures',
+        'generic',
       );
 
       expect(result.rejected).toHaveLength(0);
@@ -440,6 +455,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase('0').execute(
         [row({ tx_type: 'staking', total_fiat: '', price_fiat: '' })],
         'spot',
+        'generic',
       );
 
       expect(result.persisted).toBe(1);
@@ -453,6 +469,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       const result = await makeUseCase('2').execute(
         [row({ tx_type: 'staking', total_fiat: '', price_fiat: '' })],
         'spot',
+        'generic',
       );
 
       expect(result.unresolvedFiat).toBe(0);
@@ -468,6 +485,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           row({ id_hash: 'h3', tx_type: 'buy', total_fiat: '100', price_fiat: '1' }),
         ],
         'spot',
+        'generic',
       );
 
       expect(result.persisted).toBe(3);
@@ -478,6 +496,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       await makeUseCase('999').execute(
         [row({ total_fiat: '-299.70', price_fiat: '', fiat_currency: 'EUR' })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().total_fiat).toBe('299.7');
@@ -495,6 +514,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
           fee_amount: '5',
         })],
         'spot',
+        'generic',
       );
 
       expect(savedSpot().fee_asset_id).toBe('USDT');
@@ -543,7 +563,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     const saved = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000002');
     expect(saved).toHaveLength(1);
@@ -567,7 +587,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: { wallet: 'earn' },
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     const child = deriveSubAccountId(venue, 'earn');
     const saved = await adapter.getSpotTransactions(child);
@@ -596,7 +616,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     expect(await adapter.getSpotTransactions(venue)).toHaveLength(1);
     const accounts = await adapter.getAccounts();
@@ -617,8 +637,8 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: { wallet: 'spot / main' },
     };
 
-    await useCase.execute([row], 'spot');
-    await useCase.execute([row], 'spot');
+    await useCase.execute([row], 'spot', 'generic');
+    await useCase.execute([row], 'spot', 'generic');
 
     const accounts = await adapter.getAccounts();
     const children = accounts.filter((a) => a.parentAccountId === venue);
@@ -644,7 +664,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: {},
     }];
 
-    await useCase.execute(rows, 'spot');
+    await useCase.execute(rows, 'spot', 'generic');
 
     const rowsOut = db
       .prepare("SELECT id, is_fiat FROM assets WHERE id IN ('BTC', 'EUR', 'USDT') ORDER BY id")
@@ -670,8 +690,8 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
       metadata: {},
     };
 
-    await useCase.execute([row], 'spot');
-    await useCase.execute([row], 'spot'); // duplicate
+    await useCase.execute([row], 'spot', 'generic');
+    await useCase.execute([row], 'spot', 'generic'); // duplicate
 
     const saved = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000002');
     expect(saved).toHaveLength(1);

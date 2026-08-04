@@ -2962,13 +2962,222 @@ number"` appended to `parsers.ts` produced `TS2322` at line 193 under `vue-tsc -
    authorised, `004` already rebuilds `spot_transactions`, and `005` is reserved by 14.11/14.13.
 3. Nothing else deferred.
 
+## Group 14, phase 14βb — source format profiles — COMPLETE (14.37–14.50, 14.48 superseded)
+
+**Interrupted and resumed.** A first agent was killed mid-phase by a session limit; a second finished
+it. Neither committed anything.
+
+- **First agent:** 14.37–14.43 in full (the vocabulary, the profile types, the table, detection and
+  the five pure appliers), plus roughly half of 14.44 — the wizard's refs, its computeds and its
+  entire spec file. It left the tree with **every vitest suite green and the frontend type-checker
+  red on three real errors**, because `useCsvImportWizard.ts` already called `generatePreview` with
+  three arguments and `processAndSubmit` with four while neither collaborator had grown a parameter.
+  That is worth recording as its own lesson: a green suite is not a green tree, and this phase's
+  hand-off looked complete on the strength of the suite alone.
+- **Second agent:** finished 14.44, then 14.44b, 14.45, 14.46, 14.47, 14.49 and 14.50; marked 14.48
+  superseded; verified 14.37/14.39/14.43 by running them.
+
+**14.44 — three real gaps behind the inherited half.**
+
+1. **`goToNextStep` regenerated the preview without the profile**, and `DropzoneArea` calls it
+   immediately after every upload — so the profile-applied rows were overwritten before the user saw
+   them. The applied preview existed for one tick and never reached the screen. `resolvedProfile()`
+   is now passed at both call sites.
+2. **The invariant could not read a row the mapper rejected.** `checkProfileInvariant` took
+   `TransactionMappedData` and the preview holds `Partial<…>` for an invalid row. Filtering to valid
+   rows would splice the running-balance chain and report a break the file does not contain, so the
+   read-only appliers now take a `MappedRowView` (`Partial<TransactionMappedData>`) and
+   `applyProfileToRow` is generic in its row type, preserving the caller's own shape on both sides of
+   the boundary.
+3. **The `delete` in `applyProfileToRow`** could not survive the generic signature; it assigns
+   `undefined` instead, which `toEqual` treats identically and which the ledger reads the same way.
+
+The UI is a new `SourceProfileSelector.vue` (90 lines, presentational, props and one emit). It appears
+**in step 1 only when an ambiguity is unresolved** — which is what `goToNextStep`'s guard needs, since
+the dropzone advances the step itself — and **in step 2 beside the account, market and timezone
+controls**, which is where this wizard's two existing detect-or-choose controls actually live. No
+fourth step. `isReadyToSubmit` now also requires a chosen profile. Eight i18n keys in both
+dictionaries. Rule 2 honoured: the verified row count carries `font-mono`, asserted. No brand token
+spent — the status line uses `text-profit`, `text-loss` and `text-muted`.
+
+**14.44b — reduced, not deleted.** `detectMarketTypeFromFile` survives as the fallback for `generic`,
+the only profile declaring no market, and its doc comment now says so and says why the guess is
+wrong. Three new assertions pin the scope: the guess is *demonstrably* wrong about a real futures
+export named `enero-movimientos.csv`; six of the seven profiles declare a market so only `generic`
+can reach it; and the wizard contains exactly **one** call to it.
+
+**14.45 — the one deliberate contract change, and it cost five hops.** `processAndSubmit` gained a
+fourth parameter, and the field had to be threaded through `useSubmitIngestionMutation` →
+`ImportTransactionsUseCase` → `ITaxPort` → `RestTaxAdapter` → the Hono RPC body.
+`transactionsBodySchema` validates it against `sourceProfileIdSchema` — **required, no default**, and
+a break proved the difference. A missing identifier and an unknown one are both 400 and neither
+reaches the orchestrator; `generic` is accepted, because naming the uncertainty is the point of that
+member.
+
+**14.46 — and the finding that made it non-trivial.** `CsvIngestionUseCase.execute` now takes the
+identifier, resolves the profile itself rather than trusting the client, and calls **14.43's
+`applyProfileToRow`** — the same function the preview calls. Verified digit for digit on the real
+`bit2me_spot_2025.xlsx` HBAR withdrawal: `2.236429` gross, `1.536429` net, and the fee resolves to
+`0.7 HBAR` — never to the `0.210620368` the file states, which is a **euro valuation**. Idempotence
+is asserted rather than assumed: a row the wizard already applied the profile to and a raw row
+submitted by anything else reach identical figures.
+
+The 40 existing ingestion call sites had to name a profile. Two choices worth recording:
+`typeLabelCoverage.spec.ts` now derives its identifier by calling **`detectSourceProfile` on each
+source's own header row**, so a header row that stops resolving to exactly one profile fails the label
+net; and `realSourceRows.spec.ts` names `tangem` and `bitvavo-spot` rather than `generic`, since those
+rows are those sources'.
+
+**14.47 — deleted, 84 tests removed and no substitute needed.** Five parsers, `REGISTERED_PARSERS`,
+`ICsvIngestionPort` and the `csv/__tests__` directory: **1 588 lines gone.** Confirmed unreachable
+first — nothing outside `csv/` imported them and `MockTaxAdapter` exists only in comments. The suite
+went 503 → 419 and both counts are accounted for.
+
+**14.49 — the four breaks needed a fix first, and that is the substantive finding of this phase.**
+
+> **The invariants did not test the convention they were supposed to test.** `checkRunningBalance`
+> hard-coded `previous + amount − fee` and `checkOverDeterminedRow` hard-coded
+> `quantity × price + fee = paid`. Both reconcile Kraken's and Bitvavo's real rows *whatever the
+> profile declares* — so a profile with an inverted convention, reading every row in the file wrongly,
+> would have been reported **VERIFIED**. That is precisely the appearance-of-a-check the invariant
+> dimension exists to avoid. The expected figure is now derived from the declared convention via
+> `feeEffectOnBalance`, `UNDETERMINED` yields `COULD_NOT_VERIFY` instead of a silent expectation, and
+> B1/B2 below are the proof. Without this, 14.49 as written would have been four no-ops.
+
+### Red quality
+
+| task | Red | evidence |
+|---|---|---|
+| 14.44 (finish) | real, on values | `expected '220' to be undefined` — the profile was not applied to the reviewed rows at all |
+| 14.44 (invariant over partials) | **green from the start**; its only Red was the type error | pinned by B5, which fails it 1/18 |
+| 14.44 (UI) | module-missing only, which is not a valid Red for this phase | the five value assertions are pinned by nothing yet; stated rather than dressed up |
+| 14.44b | green from the start | assertions about scope, not behaviour; the wrong answer it records (`enero-movimientos.csv` → `SPOT`) is measured |
+| 14.45 | real | `expected undefined to be 'kraken-spot'`, `expected 201 to be 400` twice, and the mutation body diff missing `sourceProfileId` |
+| 14.46 | real | `expected '1.536429' to be '2.236429'`, `expected '57.05766322' to be undefined`, 3 failed / 1 passed — the 1 passing is the `generic` negative control (reminder 1) |
+| 14.47 | n/a | a deletion; the assertion is the suite's own arithmetic |
+| 14.49 (convention-aware) | real | `expected FAILED, got VERIFIED` twice, `expected 'VERIFIED' to be 'COULD_NOT_VERIFY'` |
+| 14.50 | one real | `expected [Function] to have a length of 2 but got 3` — my own assertion was wrong (`Function.length` counts an optional parameter with no default), corrected to assert the optionality where it is declared |
+
+**Seven deliberate breaks plus two gate proofs, every one with a literal path and a printed count**
+(reminder 8):
+
+| # | break | result |
+|---|---|---|
+| B1 | invert **Kraken's** fee convention to `FEE_INSIDE_TOTAL` | 5 failed / 37 passed — the running-balance invariant among them |
+| B1b | invert **Bit2Me's** convention to `NET_PLUS_FEE` | 2 failed / 40 passed, **and neither is the invariant** — both are `resolveGrossNetFee` derivations |
+| B2 | invert **Bitvavo's** convention to `NET_PLUS_FEE` | 3 failed / 39 passed — the over-determined-row invariant among them |
+| B3 | make detection pick `candidates[0]` on an ambiguity | core-domain 2 failed / 14 passed; frontend 3 failed / 15 passed |
+| B4 | drop the wire field to `.optional().default('generic')` | 1 failed / 17 passed |
+| B5 | compute the invariant over `validRows` only | 1 failed / 17 passed |
+| B6 | stop calling `applyProfileToRow` in the backend | 3 failed / 1 passed |
+| B7 | drop the profile from `goToNextStep` | 1 failed / 17 passed |
+| G1 | `const deliberateTypeError: number = "not a number"` in the wizard | `vue-tsc --build --force` reports `TS2322` at line 220 |
+| G2 | rename `tangem` to `tangemREMOVED` in the profile table | `tsc` reports `TS2353` — 14.37's type-level claim proven live |
+
+**The Bit2Me asymmetry, stated rather than implied.** B1b is the recorded evidence that **inverting
+Bit2Me's convention cannot be caught by any invariant**: gross, net and fee are three columns of which
+the profile derives one, so every relation among them is a tautology. `checkProfileInvariant(BIT2ME,
+…)` returns `NOT_DECLARED` under both the real and the inverted convention. The only net that catches
+it is 14.27's digit-for-digit comparison, and B1b's two failures come from exactly there. The profile
+does not have invariant coverage of that source and this document does not claim it does.
+
+**Every break was reverted by re-editing and confirmed with `diff -q` against a copy taken first**
+(reminder 10). No `git checkout --` was run at any point; the phase's whole 14.37–14.43 body was
+uncommitted throughout.
+
+### Files touched
+
+| file | delta |
+|---|---|
+| `packages/shared-types/src/ingestion/sourceProfileIds.ts` | +31 new (first agent) |
+| `packages/shared-types/tests/schemas/source-profile-ids.spec.ts` | +47 new (first agent) |
+| `packages/core-domain/src/domain/services/sourceProfile/{types,profiles,detectSourceProfile,appliers,index}.ts` | +1 072 new (first agent), then appliers +58/−12 |
+| `packages/core-domain/src/__tests__/sourceProfile{Vocabulary,Appliers}.spec.ts`, `detectSourceProfile.spec.ts`, `sourceProfile.spec-d.ts` | +802 new, then appliers spec +57 |
+| `packages/core-domain/src/__tests__/fixtures/{realHeaderRows,realSourceRows}.ts` | +1 368 new (generated from the six real files) |
+| `apps/frontend/.../composables/useCsvImportWizard.ts` | +113/−7 |
+| `apps/frontend/.../composables/usePreviewTable.ts` | +23/−4 |
+| `apps/frontend/.../composables/useImportProcessor.ts` | +13/−3 |
+| `apps/frontend/.../composables/__tests__/useCsvImportWizard.sourceProfile.spec.ts` | +374 new |
+| `apps/frontend/.../composables/__tests__/wizardContract.spec.ts` | +137 new |
+| `apps/frontend/.../components/SourceProfileSelector.vue` | +90 new |
+| `apps/frontend/.../components/__tests__/SourceProfileSelector.spec.ts` | +104 new |
+| `apps/frontend/.../components/DataIngestionWizard.vue` | +32/−5 |
+| `apps/frontend/.../utils/marketDetector.ts` | +11/−4 |
+| `apps/frontend/.../utils/__tests__/marketDetector.spec.ts` | +37 |
+| `apps/frontend/src/i18n/dictionaries/{en,es}.ts` | +8 each |
+| `apps/frontend/src/{composables/queries/useTaxMutations,core/application/use-cases/ImportTransactionsUseCase,core/domain/ports/ITaxPort,core/infrastructure/adapters/RestTaxAdapter}.ts` | +27/−11 across four |
+| `apps/frontend/src/core/infrastructure/csv/**`, `core/domain/ports/ICsvIngestionPort.ts` | **−1 588, deleted** |
+| `apps/backend/src/core/infrastructure/routes/ingestion.ts` | +10/−2 |
+| `apps/backend/src/core/application/use-cases/CsvIngestionUseCase.ts` | +20/−3 |
+| `apps/backend/src/core/application/use-cases/IngestAndMaterializeUseCase.ts` | +7/−1 |
+| `apps/backend/.../__tests__/sourceProfileParity.spec.ts` | +222 new |
+| `apps/backend/.../__tests__/{ingestion.test,CsvIngestionUseCase.spec,IngestAndMaterializeUseCase.spec,realSourceRows.spec,typeLabelCoverage.spec,sourceFidelity.spec,repro.test}.ts` | +160/−45 across seven |
+| `openspec/changes/fix-fifo-transfer-traceability/design.md` | 1 paragraph (D5b's producer) |
+
+### Measured state after 14βb
+
+| gate | before (the first agent's own baseline) | after |
+|---|---|---|
+| `shared-types` tests | 46/46 | **46/46** |
+| `core-domain` tests | 151/151 | **157/157** |
+| `database` tests | 123/123 | **123/123** |
+| `apps/backend` tests | 356/356 | **364/364** |
+| `apps/frontend` tests | 498/498 | **435/435** (+21 written, −84 deleted with 14.47) |
+| `apps/frontend` `vue-tsc --build --force` | **3 errors** | **0**, and made to fail on purpose |
+| `apps/backend` `tsc --noEmit` | 0 | **0** |
+| `shared-types` / `core-domain` / `database` typecheck | 0 | **0** |
+| `check-domain-isolation.sh` (both apps) | pass | **pass** |
+
+### Findings carried out of 14βb
+
+1. **The invariants were not testing what they claimed** — see 14.49 above. Both are now derived from
+   the declared convention. This is the one behavioural defect this phase found in its own inherited
+   work, and it is the kind D24 and 14β's `flag` column already taught: check that the layer named as
+   the enforcement actually enforces.
+2. **A green vitest run hid three type errors for a whole phase.** The interruption is what exposed
+   it — the resuming agent ran `typecheck` before writing code. Reminder 0 already says to distrust a
+   gate; this adds that a *suite* is not a gate for a contract change, because vitest never
+   type-checks.
+3. **`packages/core-domain/src/application/use-cases/AutoMapColumnsUseCase.ts:113` holds
+   `Record<string, any>`.** Pre-existing at `7fe875b` and not introduced here, but this document's
+   "zero `any` in `packages/*/src`" line has been counting patterns like `: any` and `as any` and
+   misses it. One real `any` remains in the package sources.
+4. **`apps/frontend/src/__tests__/__verify14a.spec.ts`** is a leftover verification file from 14α
+   sitting in the shipped test tree. Not touched here; it should be removed or given a real name.
+5. Nothing deferred from 14βb itself.
+
 ## Resume here — next action
 
-**134 of 176 tasks complete**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and **12 in full,
-including the 12.11–12.21 addendum** are closed. Group 14 holds 39 tasks and runs **before** group 13.
-**No task is left open in a closed group.**
+**149 checked boxes in `tasks.md`, 48 open** (the "of 176" figure earlier entries used predates the tasks added since; the measured totals are these); groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and **12 in full,
+including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β and 14βb** are
+closed. Group 14 runs **before** group 13. **No task is left open in a closed group.**
 
-### Start here next session — group 14, phase 14βb
+### Start here next session — group 14, phase 14γ
+
+Next is **14γ — the fee model: denomination, convention, and precision as one surface** (14.23, 14.29,
+14.24, 14.30, 14.19, 14.30b, 14.30d, 14.25, 14.32, 14.27 and the tasks listed under it in `tasks.md`).
+Every rule it has to declare now has a home, which is the whole reason 14βb ran first:
+
+- **The declarations already exist.** `SOURCE_FORMAT_PROFILES` holds all seven profiles, and each 14γ
+  task's own text names which dimension it reads. 14γ writes behaviour against those declarations; it
+  should not need to add a dimension, and adding one is a signal to check `design.md` D30 first.
+- **The appliers already exist and are already called from both sides.**
+  `resolveFeeDenomination`, `resolveGrossNetFee`, `reduceDirectionalSides`, `isMergeKey`,
+  `checkProfileInvariant` and `applyProfileToRow` are in
+  `packages/core-domain/src/domain/services/sourceProfile/appliers.ts`, and `CsvIngestionUseCase`
+  plus `usePreviewTable` both go through `applyProfileToRow`. **14γ's fee work belongs inside those
+  functions, not beside them** — a second implementation is the drift this seam removed.
+- **Two nets will catch a regression within one edit.**
+  `apps/backend/.../__tests__/sourceProfileParity.spec.ts` compares the preview and the ledger digit
+  for digit on real Bit2Me rows; `typeLabelCoverage.spec.ts` drives all six real vocabularies through
+  the real profile each header row resolves to.
+- **Do not trust `vitest` alone for anything that changes a signature.** This phase inherited three
+  type errors behind five green suites — finding 2 above.
+- **14.30b's site is already located:** `CsvIngestionUseCase` computes `hasFee =
+  !feeAmountDec.isZero()` and drops an explicit `'0'` to `undefined`, collapsing 22 Kraken and 18
+  Bitvavo rows at the layer D24 says preserves the distinction. Recorded in the 14α entry.
+
+### Superseded — the 14βb start-here notes
 
 Phases **14α and 14β are closed** — see their entries above. Everything remaining in group 14 is
 already decided and written up; none of it needs re-litigating. The six open decisions of group 14 were

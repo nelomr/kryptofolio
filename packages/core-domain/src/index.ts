@@ -6,3 +6,4 @@ export * from "./domain/services/normalizer/dateNormalizer";
 export * from "./application/CurrencyConverter";
 export * from "./domain/models/MoneyEntities";
 export * from "./value-objects/Money";
+export * from "./domain/services/sourceProfile";

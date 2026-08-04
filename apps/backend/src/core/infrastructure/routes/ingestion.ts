@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import { sourceProfileIdSchema } from '@kryptofolio/shared-types';
 import type { DIContainer } from '../di/container.js';
 import { ingestionOutcomeSchema } from '../dtos/materialization.js';
 
@@ -38,6 +39,12 @@ const transactionsBodySchema = z.object({
   rows: z.array(rowSchema),
   market: z.enum(['spot', 'futures']),
   timezone: z.string().default('UTC'),
+  /**
+   * Required, with no default. Which source wrote a file decides how its fee column is read, and a
+   * default would let an unmeasured export be interpreted under someone else's convention while the
+   * response still said success — the same silent fallback that was removed from `toSpotTxType()`.
+   */
+  sourceProfileId: sourceProfileIdSchema,
 });
 
 export function createIngestionApi(container: DIContainer) {
@@ -49,7 +56,7 @@ export function createIngestionApi(container: DIContainer) {
       '/transactions',
       zValidator('json', transactionsBodySchema),
       async (c) => {
-        const { rows, market } = c.req.valid('json');
+        const { rows, market, sourceProfileId } = c.req.valid('json');
 
         try {
           // One call: the route states what happened, never in which order it has to happen.
@@ -60,6 +67,7 @@ export function createIngestionApi(container: DIContainer) {
               id_hash: row.id_hash,
             })) as IngestAndMaterializeRows,
             market,
+            sourceProfileId,
           });
 
           const { ingestion } = outcome;

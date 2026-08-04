@@ -33,7 +33,7 @@ describe('useImportProcessor', () => {
         hasError: false,
       }
     ]
-    const result = await processAndSubmit(rows, 'spot', '10000000-0000-0000-0000-000000000001')
+    const result = await processAndSubmit(rows, 'spot', '10000000-0000-0000-0000-000000000001', 'kraken-spot')
 
     expect(result).toBe(true)
     expect(isProcessing.value).toBe(false)
@@ -51,14 +51,15 @@ describe('useImportProcessor', () => {
           id_hash: 'mocked-hash-123'
         }
       ],
-      timezone: 'UTC'
+      timezone: 'UTC',
+      sourceProfileId: 'kraken-spot'
     })
   })
 
   it('should return error if no rows provided', async () => {
     const { processAndSubmit, processingErrors } = useImportProcessor()
 
-    const result = await processAndSubmit([], 'spot', '10000000-0000-0000-0000-000000000001')
+    const result = await processAndSubmit([], 'spot', '10000000-0000-0000-0000-000000000001', 'kraken-spot')
     
     expect(result).toBe(false)
     expect(processingErrors.value).toContain('ingestion.errors.no_valid_rows_to_import')
@@ -79,7 +80,7 @@ describe('useImportProcessor', () => {
       errors: [],
       hasError: false,
     }
-    const result = await processAndSubmit([errorRow], 'spot', '10000000-0000-0000-0000-000000000001')
+    const result = await processAndSubmit([errorRow], 'spot', '10000000-0000-0000-0000-000000000001', 'kraken-spot')
 
     expect(result).toBe(false)
     expect(isProcessing.value).toBe(false)

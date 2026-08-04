@@ -56,7 +56,7 @@ describe('Constraint Repro', () => {
       timestamp: '2026-02-07T00:00:00Z', total_fiat: '',
     };
 
-    const result = await uc.execute([payload], 'spot');
+    const result = await uc.execute([payload], 'spot', 'generic');
 
     expect(result.persisted).toBe(1);
     expect(await persistedFiat()).toEqual([{ total: '439.55', price: '1' }]);
@@ -73,7 +73,7 @@ describe('Constraint Repro', () => {
       timestamp: '2026-02-05T00:00:00Z', total_fiat: '', timezone: 'Europe/Madrid',
     };
 
-    const result = await uc.execute([payload], 'spot');
+    const result = await uc.execute([payload], 'spot', 'generic');
 
     expect(result.persisted).toBe(1);
     expect(await persistedFiat()).toEqual([{ total: '500', price: '1' }]);
@@ -90,7 +90,7 @@ describe('Constraint Repro', () => {
       timestamp: '2026-02-05T00:00:00Z', total_fiat: '-499.81', timezone: 'Europe/Madrid',
     };
 
-    const result = await uc.execute([payload], 'spot');
+    const result = await uc.execute([payload], 'spot', 'generic');
 
     expect(result.persisted).toBe(1);
     expect(await persistedFiat()).toEqual([{ total: '499.81', price: '1645' }]);

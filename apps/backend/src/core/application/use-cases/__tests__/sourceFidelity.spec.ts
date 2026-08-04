@@ -74,7 +74,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
       metadata: { subclass: 'crypto' },
     });
 
-    const result = await useCase.execute([toIngestible(normalized, 'kraken-sol-withdrawal')], 'spot');
+    const result = await useCase.execute([toIngestible(normalized, 'kraken-sol-withdrawal')], 'spot', 'generic');
 
     expect(result.rejected).toEqual([]);
     const saved = await adapter.getSpotTransactions(VENUE);
@@ -147,7 +147,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
       metadata: { subclass: 'crypto' },
     });
 
-    const result = await useCase.execute([toIngestible(normalized, 'bit2me-hbar-withdrawal')], 'spot');
+    const result = await useCase.execute([toIngestible(normalized, 'bit2me-hbar-withdrawal')], 'spot', 'generic');
 
     expect(result.rejected).toEqual([]);
     const saved = await adapter.getSpotTransactions(VENUE);

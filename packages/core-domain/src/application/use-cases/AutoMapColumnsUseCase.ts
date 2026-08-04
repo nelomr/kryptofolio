@@ -13,7 +13,9 @@ export const COLUMN_DICTIONARY: Record<string, string[]> = {
   date: ["date", "fecha", "timestamp", "utc_time", "datetime", "date (utc)", "time"], // Separated from time
   time: ["hora"],
   timezone: ["timezone", "tz", "zona horaria", "time zone"],
-  tx_type: ["type", "tipo", "tipo de operación", "action", "acción", "operation", "ordertype", "side"],
+  // `label` is Bitunix's own name for the type column. Without it the row reaches ingestion with no
+  // type at all and is rejected outright, so the whole export was unpersistable.
+  tx_type: ["type", "tipo", "tipo de operación", "action", "acción", "operation", "ordertype", "side", "label"],
   exchange: ["exchange", "platform", "venue"],
   description: ["description", "descripción", "notes", "memo", "remark2", "misc", "comment"],
   status: ["status", "estado", "state"],

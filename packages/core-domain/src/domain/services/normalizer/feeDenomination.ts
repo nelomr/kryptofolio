@@ -13,7 +13,7 @@ import type { TransactionMappedData } from "@kryptofolio/shared-types";
  * the row's own asset is still in scope. Row aggregation, which fills the denomination for merged
  * groups, never sees a single-leg row, which is why those rows had none.
  */
-export function resolveFeeDenomination(normalized: TransactionMappedData): void {
+export function fillImplicitFeeDenomination(normalized: TransactionMappedData): void {
   // An empty cell is an absent fee, and absence must stay distinguishable from an explicit zero.
   const feeAmount = normalized.fee_amount
   if (feeAmount === undefined || feeAmount === null || feeAmount.trim() === "") return;

@@ -1,16 +1,35 @@
 import { ref, computed, type Ref } from "vue";
-import { mapToEntity, validateRow } from "@kryptofolio/core-domain";
+import {
+  applyProfileToRow,
+  mapToEntity,
+  validateRow,
+  type SourceFormatProfile,
+} from "@kryptofolio/core-domain";
 import type { TransactionRow, ValidTransactionRow, InvalidTransactionRow } from "@kryptofolio/shared-types";
 import type { MarketType } from "../utils/marketDetector";
 
 export function usePreviewTable(marketType: Ref<MarketType>) {
   const rows = ref<TransactionRow[]>([]);
 
+  /**
+   * The profile is the optional third argument on purpose: every existing caller passes two, and the
+   * facts a profile carries are ones no mapping can express. When one is given the preview shows the
+   * rows the ledger will actually receive, because the applier here is the same function the backend
+   * calls — two implementations would be two chances for the preview and the ledger to disagree.
+   */
   const generatePreview = (
     rawRows: Record<string, unknown>[],
     mapping: Record<string, string | null>,
+    profile?: SourceFormatProfile,
   ) => {
-    rows.value = rawRows.map((raw, index) => mapToEntity(raw, mapping, index, marketType.value));
+    rows.value = rawRows.map((raw, index) => {
+      const row = mapToEntity(raw, mapping, index, marketType.value);
+      if (!profile) return row;
+      return validateRow(
+        { ...row, mappedData: applyProfileToRow(profile, row.mappedData) } as TransactionRow,
+        marketType.value,
+      );
+    });
   };
 
   const updateRowField = (rowId: string, field: string, value: string) => {

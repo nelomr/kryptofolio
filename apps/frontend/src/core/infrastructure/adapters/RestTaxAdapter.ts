@@ -34,6 +34,7 @@ import { DomainValidationError } from './RestCryptoAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { bffClient } from '../http/BffClient'
 import type { TransactionRow } from '@/modules/data-ingestion/types'
+import type { SourceProfileId } from '@kryptofolio/shared-types'
 
 function parseOrFail<T>(
   schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -200,14 +201,14 @@ export class RestTaxAdapter implements ITaxPort {
     }
   }
 
-  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string): Promise<void> {
+  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string, sourceProfileId: SourceProfileId): Promise<void> {
     try {
       const payload = rows.map((row) => ({
         ...(row as { mappedData: Record<string, unknown>; id_hash?: string }).mappedData,
         id_hash: (row as { id_hash?: string }).id_hash ?? '',
       }));
       await bffClient.api.ingestion.transactions.$post({
-        json: { rows: payload as never, market, timezone },
+        json: { rows: payload as never, market, timezone, sourceProfileId },
       });
     } catch (err) {
       throw new TaxOperationError('IMPORT_FAILED', `Transactions import failed: ${(err as Error).message}`)

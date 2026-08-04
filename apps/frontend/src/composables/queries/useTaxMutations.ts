@@ -34,6 +34,7 @@ import { DeleteAllTransactionsUseCase } from '@/core/application/use-cases/Delet
 import { DownloadTaxReportUseCase } from '@/core/application/use-cases/DownloadTaxReportUseCase'
 import { ImportTransactionsUseCase } from '@/core/application/use-cases/ImportTransactionsUseCase'
 import type { TransactionRow } from '@/modules/data-ingestion/types'
+import type { SourceProfileId } from '@kryptofolio/shared-types'
 
 // ---------------------------------------------------------------------------
 // useUploadTaxFileMutation
@@ -66,7 +67,8 @@ export function useSubmitIngestionMutation() {
   const useCase = new ImportTransactionsUseCase(port)
 
   return useMutation({
-    mutation: (args: { rows: TransactionRow[], market: 'spot' | 'futures', timezone: string }) => useCase.execute(args.rows, args.market, args.timezone),
+    mutation: (args: { rows: TransactionRow[], market: 'spot' | 'futures', timezone: string, sourceProfileId: SourceProfileId }) =>
+      useCase.execute(args.rows, args.market, args.timezone, args.sourceProfileId),
     onSuccess: (_, args) => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(args.market) })
     },

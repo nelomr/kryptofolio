@@ -20,6 +20,7 @@ import type {
 } from '@/core/domain/models/FiscalEntities'
 import type { AccountId, TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 import type { TransactionRow } from '@/modules/data-ingestion/types'
+import type { SourceProfileId } from '@kryptofolio/shared-types'
 
 /**
  * A price the user declares for an operation whose market value could not be resolved.
@@ -112,7 +113,12 @@ export interface ITaxPort {
    * @param rows - The array of validated TransactionRow objects.
    * @param market - Target market context ('spot' | 'futures')
    */
-  importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string): Promise<void>
+  importTransactions(
+    rows: TransactionRow[],
+    market: 'spot' | 'futures',
+    timezone: string,
+    sourceProfileId: SourceProfileId,
+  ): Promise<void>
 
   /**
    * Delete all transactions — bulk state reset.

@@ -3,6 +3,7 @@ import { onUnmounted, computed, ref } from "vue";
 import { useCsvImportWizardProvider } from "../composables/useCsvImportWizard";
 import DropzoneArea from "./DropzoneArea.vue";
 import DataGridValidator from "./DataGridValidator.vue";
+import SourceProfileSelector from "./SourceProfileSelector.vue";
 import BaseSelect from "@/components/ui/select/BaseSelect.vue";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, FileUp, CheckCircle2, X, Loader2 } from "lucide-vue-next";
@@ -104,12 +105,17 @@ const globalErrors = computed(() => [
   ...wizard.fileParser.parseErrors.value,
   ...wizard.importProcessor.processingErrors.value,
 ]);
+const invariantRowsChecked = computed(() => {
+  const outcome = wizard.invariantOutcome.value;
+  return outcome?.kind === "VERIFIED" ? outcome.rowsChecked : null;
+});
 const isReadyToSubmit = computed(
   () =>
     errorCount.value === 0 &&
     wizard.previewTable.rows.value.length > 0 &&
     !isProcessing.value &&
-    wizard.selectedAccountId.value !== "",
+    wizard.selectedAccountId.value !== "" &&
+    wizard.sourceProfile.value !== "",
 );
 </script>
 
@@ -180,7 +186,19 @@ const isReadyToSubmit = computed(
         </AlertDescription>
       </Alert>
 
-      <div v-if="wizard.step.value === 1">
+      <div v-if="wizard.step.value === 1" class="space-y-4">
+        <!-- Two signatures matched, so the file cannot advance until the user settles which. -->
+        <div
+          v-if="wizard.requiresProfileChoice.value"
+          class="rounded-xl border border-border bg-surface-2 p-4"
+        >
+          <SourceProfileSelector
+            v-model="wizard.sourceProfile.value"
+            :detection="wizard.sourceProfileDetection.value"
+            :invariant-status="wizard.invariantStatus.value"
+            :rows-checked="invariantRowsChecked"
+          />
+        </div>
         <DropzoneArea v-if="!isParsing" />
         <div
           v-else
@@ -194,7 +212,7 @@ const isReadyToSubmit = computed(
       </div>
 
       <div v-else-if="wizard.step.value === 2" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <!-- Account Selector -->
           <div class="flex flex-col gap-1">
             <BaseSelect
@@ -244,6 +262,14 @@ const isReadyToSubmit = computed(
               { value: 'SPOT', label: t('ingestion.wizard.market_spot') },
               { value: 'FUTURES', label: t('ingestion.wizard.market_futures') },
             ]"
+          />
+
+          <!-- Source Format: detected, and correctable like the two controls above it -->
+          <SourceProfileSelector
+            v-model="wizard.sourceProfile.value"
+            :detection="wizard.sourceProfileDetection.value"
+            :invariant-status="wizard.invariantStatus.value"
+            :rows-checked="invariantRowsChecked"
           />
 
           <!-- Timezone Selector -->

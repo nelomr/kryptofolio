@@ -77,6 +77,7 @@ describe("POST /ingestion/transactions", () => {
         rows: [VALID_ROW],
         market: "spot",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -100,7 +101,7 @@ describe("POST /ingestion/transactions", () => {
     await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     expect(container.csvIngestionUseCase.execute).not.toHaveBeenCalled();
@@ -112,7 +113,7 @@ describe("POST /ingestion/transactions", () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     const body = (await res.json()) as {
@@ -136,7 +137,7 @@ describe("POST /ingestion/transactions", () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     expect(res.status).toBe(201);
@@ -181,6 +182,7 @@ describe("POST /ingestion/transactions", () => {
         rows: [VALID_ROW, { ...VALID_ROW, id_hash: "hash-bad", tx_type: "LIQUIDATION_TRANSFER" }],
         market: "spot",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -214,7 +216,7 @@ describe("POST /ingestion/transactions", () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     expect(res.status).toBe(201);
@@ -233,7 +235,7 @@ describe("POST /ingestion/transactions", () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     const body = (await res.json()) as { unresolvedFiat: number };
@@ -255,7 +257,7 @@ describe("POST /ingestion/transactions", () => {
     const res = await app.request("/ingestion/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
     });
 
     expect(res.status).toBe(500);
@@ -271,6 +273,7 @@ describe("POST /ingestion/transactions", () => {
         rows: [VALID_ROW],
         market: "spot",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -290,6 +293,7 @@ describe("POST /ingestion/transactions", () => {
         rows: [rowWithoutHash],
         market: "spot",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -311,6 +315,7 @@ describe("POST /ingestion/transactions", () => {
         ],
         market: "spot",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -326,6 +331,7 @@ describe("POST /ingestion/transactions", () => {
         rows: [VALID_ROW],
         market: "options",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
@@ -348,12 +354,88 @@ describe("POST /ingestion/transactions", () => {
         rows: [futuresRow],
         market: "futures",
         timezone: "UTC",
+        sourceProfileId: "kraken-spot",
       }),
     });
 
     expect(res.status).toBe(201);
     const [{ market }] = orchestrator(container).mock.calls[0];
     expect(market).toBe("futures");
+  });
+});
+
+/**
+ * The identifier is required rather than defaulted. A default would put the pipeline back where D16
+ * left `toSpotTxType()`: reading a source it was never told about under a convention nobody measured,
+ * and reporting success.
+ */
+describe("POST /ingestion/transactions — the source profile is part of the contract", () => {
+  let container: DIContainer;
+  let app: Hono;
+
+  beforeEach(() => {
+    container = makeMockContainer();
+    app = new Hono().route("/ingestion", createIngestionApi(container));
+    vi.clearAllMocks();
+  });
+
+  it("hands the identifier to the orchestrator", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [VALID_ROW],
+        market: "spot",
+        timezone: "UTC",
+        sourceProfileId: "kraken-spot",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const [{ sourceProfileId }] = orchestrator(container).mock.calls[0];
+    expect(sourceProfileId).toBe("kraken-spot");
+  });
+
+  it("rejects a submission that names no source profile", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC" }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(orchestrator(container)).not.toHaveBeenCalled();
+  });
+
+  it("rejects an identifier outside the measured vocabulary", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [VALID_ROW],
+        market: "spot",
+        timezone: "UTC",
+        sourceProfileId: "coinbase-spot",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(orchestrator(container)).not.toHaveBeenCalled();
+  });
+
+  it("accepts the fallback identifier, which names the uncertainty rather than hiding it", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [VALID_ROW],
+        market: "spot",
+        timezone: "UTC",
+        sourceProfileId: "generic",
+      }),
+    });
+
+    expect(res.status).toBe(201);
   });
 });
 

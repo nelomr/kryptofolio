@@ -50,8 +50,8 @@ describe('Identifier determinism — the live ingestion path', () => {
       },
     ] as unknown as Parameters<typeof processAndSubmit>[0]
 
-    await processAndSubmit(row(), 'spot', accountId)
-    await processAndSubmit(row(), 'spot', accountId)
+    await processAndSubmit(row(), 'spot', accountId, 'kraken-spot')
+    await processAndSubmit(row(), 'spot', accountId, 'kraken-spot')
 
     const firstHash = submittedIdHash(mockMutateAsync, 0)
     const secondHash = submittedIdHash(mockMutateAsync, 1)
@@ -78,6 +78,7 @@ describe('Identifier determinism — the live ingestion path', () => {
       ] as unknown as Parameters<typeof processAndSubmit>[0],
       'spot',
       accountId,
+      'kraken-spot',
     )
     await processAndSubmit(
       [
@@ -88,6 +89,7 @@ describe('Identifier determinism — the live ingestion path', () => {
       ] as unknown as Parameters<typeof processAndSubmit>[0],
       'spot',
       accountId,
+      'kraken-spot',
     )
 
     const firstHash = submittedIdHash(mockMutateAsync, 0)

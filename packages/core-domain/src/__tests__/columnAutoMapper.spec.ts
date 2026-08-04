@@ -222,4 +222,31 @@ describe('dateNormalizer', () => {
       expect(guessColumnMapping(['refid'])['refid']).toBe('group_id')
     })
   })
+
+  /**
+   * Bitunix names its transaction-type column `Label`, and no other export in the corpus uses that
+   * header for anything else. Falling through to metadata leaves the row with no type at all, which
+   * ingestion rejects — the row is not merely mistyped, it is unpersistable.
+   */
+  describe("Bitunix's `Label` column is its transaction type", () => {
+    it('maps Label to tx_type', () => {
+      expect(guessColumnMapping(['Label'])['Label']).toBe('tx_type')
+    })
+
+    it("maps every column of Bitunix's real header row, leaving its type reachable", () => {
+      const headers = [
+        'Date (UTC)', 'Label', 'Outgoing Asset', 'Outgoing Amount', 'Incoming Asset',
+        'Incoming Amount', 'Fee Asset', 'Fee Amount', 'Trx. ID', 'Comment',
+      ]
+      const mapping = guessColumnMapping(headers)
+      expect(mapping['Label']).toBe('tx_type')
+      expect(mapping['Fee Asset']).toBe('fee_currency')
+      expect(mapping['Outgoing Amount']).toBe('amount_out')
+    })
+
+    it("does not displace another source's own type column", () => {
+      expect(guessColumnMapping(['Type', 'Label'])['Type']).toBe('tx_type')
+      expect(guessColumnMapping(['Tipo de operación', 'Label'])['Tipo de operación']).toBe('tx_type')
+    })
+  })
 })

@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { generateIdHash, normalizeTransactionDirection, aggregateRows, normalizeToUtcIso } from "@kryptofolio/core-domain";
-import type { ValidTransactionRow } from "@kryptofolio/shared-types";
+import type { SourceProfileId, ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
 
 
@@ -11,10 +11,16 @@ export function useImportProcessor() {
 
   const submitIngestion = useSubmitIngestionMutation();
 
+  /**
+   * `sourceProfileId` is required rather than defaulted: which source wrote the file decides how its
+   * fee column is read, and a default would let an unmeasured export be ingested under someone
+   * else's convention with nothing reporting it.
+   */
   const processAndSubmit = async (
     validRows: ValidTransactionRow[],
     marketType: "spot" | "futures",
-    accountId: string
+    accountId: string,
+    sourceProfileId: SourceProfileId
   ) => {
     if (validRows.length === 0) {
       processingErrors.value = ["ingestion.errors.no_valid_rows_to_import"];
@@ -69,7 +75,8 @@ export function useImportProcessor() {
       await submitIngestion.mutateAsync({
         rows: rowsWithHash,
         market: marketType,
-        timezone: timezone.value
+        timezone: timezone.value,
+        sourceProfileId
       });
 
       return true;

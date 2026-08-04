@@ -491,6 +491,14 @@ export const es: I18nDictionary = {
   "ingestion.wizard.new_account_placeholder": "Nombre de la nueva cuenta",
   "ingestion.wizard.add_btn": "Añadir",
   "ingestion.wizard.cancel_btn": "Cancelar",
+  "ingestion.profile.label": "Formato de origen",
+  "ingestion.profile.placeholder": "Selecciona el origen de este archivo...",
+  "ingestion.profile.ambiguous": "Esta fila de cabeceras coincide con más de un origen; elige uno antes de continuar:",
+  "ingestion.profile.invariant.verified": "El saldo acumulado del propio origen cuadra en filas comprobadas:",
+  "ingestion.profile.invariant.not_declared": "Este origen no aporta ninguna comprobación independiente, así que su convención no puede confirmarse desde el archivo.",
+  "ingestion.profile.invariant.could_not_verify": "Ninguna fila de este archivo contiene los valores que la comprobación necesita, así que no se ha confirmado nada.",
+  "ingestion.profile.invariant.failed": "Los totales del propio origen no cuadran con este formato. Revisa la selección antes de importar.",
+  "ingestion.profile.invariant.profile_not_chosen": "Elige un formato de origen para comprobar este archivo.",
   "ingestion.wizard.account_exists": "La cuenta ya existe",
 
   // Dropzone Area

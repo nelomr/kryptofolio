@@ -2,6 +2,8 @@ import type { ILedgerPort, LedgerSpotTransaction, LedgerFuturesTransaction } fro
 import type { TransactionMappedData } from '@kryptofolio/shared-types';
 import type { SpotTxType, FuturesTxType } from '@kryptofolio/shared-types';
 import { SPOT_TX_TYPES, FUTURES_TX_TYPES, isFiatCurrencyCode } from '@kryptofolio/shared-types';
+import { SOURCE_FORMAT_PROFILES, applyProfileToRow } from '@kryptofolio/core-domain';
+import type { SourceProfileId } from '@kryptofolio/shared-types';
 import Decimal from 'decimal.js';
 import crypto from 'node:crypto';
 import type { IPriceProviderPort } from '../../domain/ports/IPriceProviderPort.js';
@@ -136,13 +138,26 @@ export class CsvIngestionUseCase {
     this.userSettingsPort = userSettingsPort;
   }
 
-  async execute(rows: IngestibleTransaction[], market: 'spot' | 'futures'): Promise<IngestionResult> {
+  /**
+   * `sourceProfileId` is required rather than defaulted, because which source wrote a file decides
+   * how its fee column is read. The profile is resolved here rather than trusted from the client: a
+   * row submitted by anything other than the wizard would otherwise be read under no profile at all,
+   * and the applier is the same pure function the preview calls, so the two cannot disagree.
+   */
+  async execute(
+    rows: IngestibleTransaction[],
+    market: 'spot' | 'futures',
+    sourceProfileId: SourceProfileId,
+  ): Promise<IngestionResult> {
+    const profile = SOURCE_FORMAT_PROFILES[sourceProfileId];
     const baseCurrency = (await this.userSettingsPort.getSetting('base_currency')) || 'USD';
     const rejected: IngestionRejection[] = [];
     let persisted = 0;
     let unresolvedFiat = 0;
 
-    for (const row of rows) {
+    for (const rawRow of rows) {
+      // Idempotent, so a row the wizard already applied it to reaches the identical figures.
+      const row = applyProfileToRow(profile, rawRow);
       // 4.2 Orchestrate resolution of Asset and Account foreign keys.
       const venueAccountId = row.account_id;
       if (!venueAccountId) {

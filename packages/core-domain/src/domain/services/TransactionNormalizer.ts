@@ -1,7 +1,7 @@
 import type { TransactionMappedData } from "@kryptofolio/shared-types";
 import { normalizeMetadataKeys } from "./normalizer/metadataNormalizer";
 import { transactionHandlers } from "./normalizer/handlers";
-import { resolveFeeDenomination } from "./normalizer/feeDenomination";
+import { fillImplicitFeeDenomination } from "./normalizer/feeDenomination";
 import type { FiscalClassificationFlag } from "@kryptofolio/shared-types";
 
 /**
@@ -85,7 +85,7 @@ export function normalizeTransactionDirection(
     handler(normalized);
   }
 
-  resolveFeeDenomination(normalized);
+  fillImplicitFeeDenomination(normalized);
 
   const fiscalFlag = FISCAL_FLAG_BY_LABEL[tx_type];
   if (fiscalFlag) {
