@@ -94,6 +94,21 @@ export function resolveFeeDenomination(
   }
   if (fee.isZero()) return { kind: "ZERO" };
 
+  return declaredDenomination(profile, row);
+}
+
+/**
+ * The unit the profile says a fee is charged in, independently of how much was charged.
+ *
+ * Split out because an explicit zero needs no *convention* — `gross = net + 0` either way — while it
+ * does still need a unit: the ledger and the SQL CHECK both require an amount and an asset to be
+ * present or absent together, so a stated zero with no unit cannot be written down at all, and
+ * dropping it would erase the difference between "no fee was charged" and "the source said nothing".
+ */
+function declaredDenomination(
+  profile: SourceFormatProfile,
+  row: MappedRowView,
+): FeeDenominationResolution {
   const denomination = profile.feeDenomination;
   switch (denomination.kind) {
     case "ROW_ASSET": {
@@ -312,6 +327,84 @@ export function resolveGrossNetFee(
       };
     }
   }
+}
+
+export type FeeRouting =
+  /**
+   * `stated` carries the one distinction the rest of the pipeline cannot recover: a source that wrote
+   * `0` said no fee was charged, and a source that left the cell empty said nothing at all.
+   */
+  | { readonly kind: "NO_FEE"; readonly stated: boolean }
+  /** A quantity of an asset left the wallet, so a lot holds that much less and disposed of it. */
+  | { readonly kind: "ASSET_DISPOSAL"; readonly asset: string; readonly quantity: string }
+  /**
+   * A cost in money. `netTotal` is the fiat magnitude to record when the source's reported total
+   * already contained the fee: recording the reported total *and* adding the fee inflates the basis
+   * by the fee, which understates every later gain on the lot.
+   */
+  | {
+      readonly kind: "BASIS_ADJUSTMENT";
+      readonly currency: string;
+      readonly amount: string;
+      readonly netTotal: string | null;
+    }
+  | { readonly kind: "PENDING_REVIEW"; readonly reason: string };
+
+/**
+ * Decides what a consumer must do with a fee, from the two resolutions and nothing else.
+ *
+ * It reads no profile and no row, so no source name can reach it: everything per-source was already
+ * decided by the two arguments. That is deliberate — the moment this function could tell Kraken from
+ * Bitvavo it would start to accumulate the per-source conditionals the profile table replaced.
+ */
+export function routeFee(
+  denomination: FeeDenominationResolution,
+  convention: GrossNetFeeResolution,
+): FeeRouting {
+  if (denomination.kind === "ABSENT") return { kind: "NO_FEE", stated: false };
+  if (denomination.kind === "ZERO") return { kind: "NO_FEE", stated: true };
+  if (denomination.kind === "PENDING_REVIEW") {
+    return { kind: "PENDING_REVIEW", reason: denomination.reason };
+  }
+  if (convention.kind === "PENDING_REVIEW") {
+    return { kind: "PENDING_REVIEW", reason: convention.reason };
+  }
+  if (convention.kind === "NO_FEE") {
+    // The denomination saw a non-zero fee and the convention did not, so the two disagree about what
+    // the row says. Nothing here is entitled to pick one.
+    return {
+      kind: "PENDING_REVIEW",
+      reason: "the fee's denomination and its convention disagree about whether a fee was charged",
+    };
+  }
+
+  const fee = new Decimal(convention.fee);
+  // A fee the source stated without netting anything against it leaves the reported total alone.
+  const netTotal =
+    convention.kind === "RESOLVED" && convention.magnitude === "FIAT_TOTAL" ? convention.net : null;
+
+  /**
+   * A fee in money is a cost and a fee in an asset is a disposal, whichever way the denomination
+   * arrived at its unit. `FIAT_VALUATION` is one way; the other is a fee charged in the very currency
+   * the row is denominated in, which the denomination resolves as a quantity because that is what it
+   * is — a quantity of money.
+   */
+  if (denomination.kind === "FIAT_VALUATION" || isFiatCurrencyCode(denomination.asset)) {
+    const currency =
+      denomination.kind === "FIAT_VALUATION" ? denomination.currency : denomination.asset;
+    return { kind: "BASIS_ADJUSTMENT", currency, amount: fee.toString(), netTotal };
+  }
+
+  if (fee.isNegative()) {
+    // A rebate paid in an asset is an acquisition, not a disposal of a negative quantity. No export
+    // in the corpus writes one, and inventing an acquisition is worse than reporting it.
+    return {
+      kind: "PENDING_REVIEW",
+      reason: `a credited fee of ${convention.fee} ${denomination.asset} is not a disposal`,
+    };
+  }
+
+  return { kind: "ASSET_DISPOSAL", asset: denomination.asset, quantity: fee.toString() };
 }
 
 export type DirectionalReduction =
@@ -653,14 +746,22 @@ export function applyProfileToRow<Row extends MappedRowView>(
     }
   }
 
-  // A fee with no denomination is rejected by the ledger schema and by the SQL CHECK alike, and the
-  // profile is the only thing that can say what an omitted fee currency means.
-  const denomination = resolveFeeDenomination(profile, applied);
-  if (
-    denomination.kind === "ASSET_QUANTITY" &&
-    firstNonEmpty(applied.fee_currency) === undefined
-  ) {
-    applied.fee_currency = denomination.asset;
+  /**
+   * A fee with no denomination is rejected by the ledger schema and by the SQL CHECK alike, and the
+   * profile is the only thing that can say what an omitted fee currency means.
+   *
+   * A stated zero is denominated too, and for the same reason: the pair invariant admits no row with
+   * an amount and no asset, so leaving a `0` undenominated forces it to be stored as `NULL` — which is
+   * the state the source uses for a fee it never mentioned. 40 real rows say `0` explicitly.
+   */
+  if (firstNonEmpty(applied.fee_amount) !== undefined) {
+    const denomination = declaredDenomination(profile, applied);
+    if (
+      denomination.kind === "ASSET_QUANTITY" &&
+      firstNonEmpty(applied.fee_currency) === undefined
+    ) {
+      applied.fee_currency = denomination.asset;
+    }
   }
 
   return applied;

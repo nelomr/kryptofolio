@@ -2,7 +2,15 @@ import type { ILedgerPort, LedgerSpotTransaction, LedgerFuturesTransaction } fro
 import type { TransactionMappedData } from '@kryptofolio/shared-types';
 import type { SpotTxType, FuturesTxType } from '@kryptofolio/shared-types';
 import { SPOT_TX_TYPES, FUTURES_TX_TYPES, isFiatCurrencyCode } from '@kryptofolio/shared-types';
-import { SOURCE_FORMAT_PROFILES, applyProfileToRow } from '@kryptofolio/core-domain';
+import {
+  SOURCE_FORMAT_PROFILES,
+  applyProfileToRow,
+  checkProfileInvariant,
+  resolveFeeDenomination,
+  resolveGrossNetFee,
+  routeFee,
+} from '@kryptofolio/core-domain';
+import type { InvariantOutcome, SourceFormatProfile } from '@kryptofolio/core-domain';
 import type { SourceProfileId } from '@kryptofolio/shared-types';
 import Decimal from 'decimal.js';
 import crypto from 'node:crypto';
@@ -24,6 +32,18 @@ export interface IngestionRejection {
   readonly reason: string;
 }
 
+/**
+ * A row whose fee could not be resolved, reported rather than treated under a guessed convention.
+ *
+ * A *zero* fee never appears here: `gross = net + 0` under either convention, so the 40 real rows
+ * that state an explicit zero are fully determined and have nothing for a user to decide.
+ */
+export interface FeePendingReview {
+  readonly idHash: string;
+  readonly timestamp: string;
+  readonly reason: string;
+}
+
 export interface IngestionResult {
   readonly persisted: number;
   readonly rejected: readonly IngestionRejection[];
@@ -36,6 +56,14 @@ export interface IngestionResult {
    * derived rows `MISSING_PRICE`.
    */
   readonly unresolvedFiat: number;
+  /** Rows persisted with a fee the source's profile could not resolve. */
+  readonly pendingFeeReview: readonly FeePendingReview[];
+  /**
+   * The outcome of whatever redundancy the source ships independently of the profile's own
+   * derivation. `NOT_DECLARED` is a stated fact, not an omission: a reviewer can see that the source
+   * cannot check itself, which is what stops the absence of a check from looking like a passing one.
+   */
+  readonly invariant: InvariantOutcome;
 }
 
 /**
@@ -152,8 +180,15 @@ export class CsvIngestionUseCase {
     const profile = SOURCE_FORMAT_PROFILES[sourceProfileId];
     const baseCurrency = (await this.userSettingsPort.getSetting('base_currency')) || 'USD';
     const rejected: IngestionRejection[] = [];
+    const pendingFeeReview: FeePendingReview[] = [];
     let persisted = 0;
     let unresolvedFiat = 0;
+
+    /**
+     * Checked over the batch as submitted, before anything is written. A running balance is a chain,
+     * so a row left out would report a break the file does not contain.
+     */
+    const invariant = checkProfileInvariant(profile, rows);
 
     for (const rawRow of rows) {
       // Idempotent, so a row the wizard already applied it to reaches the identical figures.
@@ -204,20 +239,16 @@ export class CsvIngestionUseCase {
         const fiat = await this.resolveFiatMagnitudes(row, fiatCurrency);
         if (!fiat.resolved) unresolvedFiat += 1;
 
-        /**
-         * The sign survives, unlike every other magnitude here. A negative fee is a rebate the
-         * venue credited — Bitvavo's promotional row cancels its own `quantity × price` with one —
-         * and taking its absolute value would charge the user for a discount. No export in the
-         * corpus writes a *charged* fee as negative, so the sign carries no direction to normalise
-         * away.
-         */
-        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount) : new Decimal(0);
-        const hasFee = !feeAmountDec.isZero();
-        const feeAssetId = hasFee ? (row.fee_currency || row.asset_in || row.asset_out || undefined) : undefined;
-
-        if (hasFee && !feeAssetId) {
-          throw new Error(`Transaction at ${row.timestamp} has a fee amount but no fee currency or asset could be determined.`);
+        const fee = this.resolveFee(profile, row);
+        if (fee.pending !== null) {
+          pendingFeeReview.push({
+            idHash: row.id_hash,
+            timestamp: row.timestamp ?? '',
+            reason: fee.pending,
+          });
         }
+        // A fee the source's reported total already contained is not added to it a second time.
+        const total = fee.netTotal ?? fiat.total;
 
         const tx: LedgerSpotTransaction = {
           id,
@@ -229,9 +260,9 @@ export class CsvIngestionUseCase {
           asset_in_id: row.asset_in || undefined,
           amount_out: row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
           asset_out_id: row.asset_out || undefined,
-          fee_amount: hasFee ? toPreciseAmount(feeAmountDec.toString()) : undefined,
-          fee_asset_id: feeAssetId,
-          total_fiat: toPreciseAmount(fiat.total.toString()),
+          fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
+          fee_asset_id: fee.assetId,
+          total_fiat: toPreciseAmount(total.toString()),
           price_fiat: toPreciseAmount(fiat.unitPrice.toString()),
           fiat_currency: fiatCurrency,
           flag: row.fiscal_flag ?? undefined,
@@ -272,7 +303,84 @@ export class CsvIngestionUseCase {
       await this.userSettingsPort.setSetting('needs_recalculation', 'true');
     }
 
-    return { persisted, rejected, unresolvedFiat };
+    return { persisted, rejected, unresolvedFiat, pendingFeeReview, invariant };
+  }
+
+  /**
+   * Turns the profile's two resolutions into what the ledger row must carry.
+   *
+   * Nothing here reads the source's name or a column of its own: the whole per-source decision was
+   * already made by `resolveFeeDenomination` and `resolveGrossNetFee`, and the earlier fallback here
+   * (`fee_currency || asset_in || asset_out`) is deleted rather than kept as a backstop — a global
+   * default to the row's own asset is exactly the rule Bitvavo disproves, since one of its files mixes
+   * a euro fee on a buy with an asset fee on a withdrawal.
+   *
+   * `amount` is a decimal string rather than a `number`; every figure on this path is monetary or a
+   * quantity, and the sign survives because a negative fee is a rebate the venue credited.
+   */
+  private resolveFee(
+    profile: SourceFormatProfile,
+    row: IngestibleTransaction,
+  ): {
+    amount: string | null;
+    assetId: string | undefined;
+    /** The fiat magnitude to record when the source's total already contained the fee. */
+    netTotal: Decimal | null;
+    pending: string | null;
+  } {
+    const routing = routeFee(
+      resolveFeeDenomination(profile, row),
+      resolveGrossNetFee(profile, row),
+    );
+
+    switch (routing.kind) {
+      case 'NO_FEE':
+        // A stated zero keeps its denomination: the ledger's pair invariant admits no amount without
+        // an asset, so an undenominated zero could only be stored as the NULL that means "unknown".
+        return routing.stated && row.fee_currency
+          ? { amount: '0', assetId: row.fee_currency, netTotal: null, pending: null }
+          : { amount: null, assetId: undefined, netTotal: null, pending: null };
+
+      case 'ASSET_DISPOSAL':
+        return {
+          amount: routing.quantity,
+          assetId: routing.asset,
+          netTotal: null,
+          pending: null,
+        };
+
+      case 'BASIS_ADJUSTMENT':
+        return {
+          amount: routing.amount,
+          assetId: routing.currency,
+          netTotal: routing.netTotal === null ? null : new Decimal(routing.netTotal),
+          pending: null,
+        };
+
+      case 'PENDING_REVIEW': {
+        /**
+         * The movement is persisted either way — dropping a real transfer to express doubt about its
+         * fee would lose more than it protects. What the fee can carry depends on which half is
+         * unresolved: a stated denomination is kept as written, and an unresolved one cannot be
+         * written at all without inventing a unit.
+         */
+        const denomination = resolveFeeDenomination(profile, row);
+        const statedUnit =
+          denomination.kind === 'ASSET_QUANTITY'
+            ? denomination.asset
+            : denomination.kind === 'FIAT_VALUATION'
+              ? denomination.currency
+              : undefined;
+        return statedUnit === undefined || !row.fee_amount
+          ? { amount: null, assetId: undefined, netTotal: null, pending: routing.reason }
+          : {
+              amount: new Decimal(row.fee_amount).toString(),
+              assetId: statedUnit,
+              netTotal: null,
+              pending: routing.reason,
+            };
+      }
+    }
   }
 
   /**

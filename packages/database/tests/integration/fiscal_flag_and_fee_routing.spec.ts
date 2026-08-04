@@ -54,6 +54,7 @@ async function harness(label: string, specs: readonly TxSpec[]): Promise<Harness
 
   const asset = sqliteDb.prepare('INSERT INTO assets (id, symbol, is_fiat) VALUES (?, ?, ?)');
   asset.run('XRP', 'XRP', 0);
+  asset.run('ETH', 'ETH', 0);
   asset.run('EUR', 'EUR', 1);
   sqliteDb
     .prepare('INSERT INTO accounts (id, name, type) VALUES (?, ?, ?)')
@@ -276,5 +277,69 @@ describe('a credited fee is never a disposal', () => {
         WHERE event_type = 'DISPOSAL'`
     )) as { tx_id: string; amount: string }[];
     expect(rows.filter((r) => Number(r.amount) <= 0)).toEqual([]);
+  });
+});
+
+/**
+ * Where a fee lands, seen from the end of the pipeline.
+ *
+ * The engine adds a fee denominated in the ledger's own currency to the basis, and disposes of one
+ * denominated in an asset. That makes what ingestion records load-bearing: a source whose reported
+ * total already contains its fee must be stored net of it, or the basis is inflated by the fee and
+ * every later gain on the lot is understated.
+ */
+describe('a fee reaches the basis or a disposal, according to what it is denominated in', () => {
+  let h: Harness;
+  afterEach(() => h?.cleanup());
+
+  const acquisition = (over: Partial<TxSpec> = {}): TxSpec => ({
+    id: 'tx-buy-eth',
+    tx_type: 'BUY',
+    timestamp: '2025-06-02T09:00:00.000Z',
+    asset_in_id: 'ETH',
+    amount_in: '0.30338',
+    // Net of the fee: 0.30338 × 1645 = 499.0601, and the source reported 499.81 as paid.
+    total_fiat: '499.0601',
+    price_fiat: '1645',
+    fee_asset_id: 'EUR',
+    fee_amount: '0.7499',
+    ...over,
+  });
+
+  const basisOf = async (txId: string): Promise<string> => {
+    const rows = (await h.duckDb.queryMany(
+      `SELECT CAST(total_fiat AS VARCHAR) AS total_fiat
+         FROM v_flattened_fifo_events
+        WHERE tx_id = '${txId}' AND event_type = 'ACQUISITION'`
+    )) as { total_fiat: string }[];
+    expect(rows).toHaveLength(1);
+    return rows[0].total_fiat;
+  };
+
+  it('reaches exactly the total the buyer paid, and not that total plus the fee again', async () => {
+    h = await harness('basis-not-inflated', [acquisition()]);
+    expect(Number(await basisOf('tx-buy-eth'))).toBeCloseTo(499.81, 4);
+    expect(Number(await basisOf('tx-buy-eth'))).not.toBeCloseTo(500.5599, 4);
+  });
+
+  it('adds a fiat fee to the basis rather than disposing of a quantity of money', async () => {
+    h = await harness('fiat-fee-no-disposal', [acquisition()]);
+    const disposals = (await events(h)).filter((e) => e.spot_transaction_id === 'tx-buy-eth');
+    expect(disposals).toEqual([]);
+  });
+
+  it('disposes of a fee denominated in an asset instead of adding it to the basis', async () => {
+    h = await harness('asset-fee-disposes', [
+      EARLIER_BUY,
+      activation({ flag: undefined, fee_asset_id: 'XRP', fee_amount: '0.05', total_fiat: '2' }),
+    ]);
+
+    const fees = (await events(h)).filter((e) => e.spot_transaction_id === 'tx-activation');
+    expect(fees).toHaveLength(1);
+    expect(fees[0].disposal_type).toBe('FEE');
+    // The fee's own value still enters the acquired lot's basis — 0.05 XRP at 2 EUR — because it was
+    // a cost of acquiring. What distinguishes it from a fee in money is the disposal above: the
+    // quantity really left an earlier lot, and that is a taxable event of its own.
+    expect(Number(await basisOf('tx-activation'))).toBeCloseTo(2.1, 4);
   });
 });

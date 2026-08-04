@@ -82,7 +82,7 @@ describe('IngestAndMaterializeUseCase', () => {
 
   it('materialises exactly once for a 97-row batch', async () => {
     const rows = Array.from({ length: 97 }, (_, i) => row(`hash-${i}`, 'kraken_spot.csv'));
-    const ingestion = ingestionDouble({ persisted: 97, rejected: [], unresolvedFiat: 0 });
+    const ingestion = ingestionDouble({ persisted: 97, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
@@ -104,7 +104,7 @@ describe('IngestAndMaterializeUseCase', () => {
       row('hash-b', 'bitvavo_spot.csv'),
       row('hash-c', 'bitunix_spot.csv'),
     ];
-    const ingestion = ingestionDouble({ persisted: 3, rejected: [], unresolvedFiat: 0 });
+    const ingestion = ingestionDouble({ persisted: 3, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(SUMMARY);
 
     await new IngestAndMaterializeUseCase(
@@ -119,7 +119,7 @@ describe('IngestAndMaterializeUseCase', () => {
 
   it('never recomputes per row', async () => {
     const rows = Array.from({ length: 12 }, (_, i) => row(`hash-${i}`, 'kraken_spot.csv'));
-    const ingestion = ingestionDouble({ persisted: 12, rejected: [], unresolvedFiat: 0 });
+    const ingestion = ingestionDouble({ persisted: 12, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(SUMMARY);
 
     await new IngestAndMaterializeUseCase(
@@ -132,7 +132,7 @@ describe('IngestAndMaterializeUseCase', () => {
   });
 
   it('does not materialise an empty batch, and sets no pending flag', async () => {
-    const ingestion = ingestionDouble({ persisted: 0, rejected: [], unresolvedFiat: 0 });
+    const ingestion = ingestionDouble({ persisted: 0, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
@@ -161,6 +161,8 @@ describe('IngestAndMaterializeUseCase', () => {
         },
       ],
       unresolvedFiat: 0,
+      pendingFeeReview: [],
+      invariant: { kind: 'NOT_DECLARED' },
     });
     const materializer = materializerDouble(SUMMARY);
 
@@ -175,7 +177,7 @@ describe('IngestAndMaterializeUseCase', () => {
   });
 
   it('reports a failed rebuild without discarding the persisted rows', async () => {
-    const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 1 });
+    const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 1, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(new Error('Catalog Error: v_custody_entries'));
     await settings.setSetting(RECALC_KEY, 'true');
 
@@ -192,7 +194,7 @@ describe('IngestAndMaterializeUseCase', () => {
   });
 
   it('leaves the pending flag set when the rebuild throws before the materialiser could clear it', async () => {
-    const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 0 });
+    const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(new Error('disk I/O error'));
 
     await new IngestAndMaterializeUseCase(
@@ -205,7 +207,7 @@ describe('IngestAndMaterializeUseCase', () => {
   });
 
   it('carries the pending-review count through to its own result', async () => {
-    const ingestion = ingestionDouble({ persisted: 30, rejected: [], unresolvedFiat: 30 });
+    const ingestion = ingestionDouble({ persisted: 30, rejected: [], unresolvedFiat: 30, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
     const materializer = materializerDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
@@ -222,7 +224,7 @@ describe('IngestAndMaterializeUseCase', () => {
     const order: string[] = [];
     const ingestionExecute = vi.fn(async () => {
       order.push('ingest');
-      return { persisted: 1, rejected: [], unresolvedFiat: 0 };
+      return { persisted: 1, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } };
     });
     const recalculate = vi.fn(async () => {
       order.push('materialise');

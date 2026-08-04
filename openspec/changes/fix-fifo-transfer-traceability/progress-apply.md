@@ -4,7 +4,7 @@ Session log for `/openspec-apply-change`. Updated as each task group closes so a
 session can be resumed from here.
 
 **Total:** 176 tasks in 14 groups (12.11–12.21 were added by group 12's own audit).
-**Complete: 125.**
+**Complete: 159.**
 **Test command:** per-package `vitest run` (project config: `strict_tdd: true`).
 
 ---
@@ -3146,36 +3146,221 @@ uncommitted throughout.
    sitting in the shipped test tree. Not touched here; it should be removed or given a real name.
 5. Nothing deferred from 14βb itself.
 
+## Group 14, phase 14γ — the fee model — COMPLETE (14.30b, 14.23, 14.29, 14.24, 14.30, 14.19, 14.30d, 14.25, 14.32, 14.33)
+
+Ten tasks, in the order the task list gives them. `14.31` was already closed in 14β. Every rule this
+phase implements is read from a source format profile: **no source name appears in any routing logic,
+and no per-source conditional was added outside `profiles.ts`.**
+
+### What was built
+
+**One new pure applier, `routeFee(denomination, convention)`** (14.25). It takes the two resolutions
+and *nothing else* — no profile, no row — so it structurally cannot read a source name. Its four
+outcomes are `NO_FEE { stated }`, `ASSET_DISPOSAL`, `BASIS_ADJUSTMENT { currency, amount, netTotal }`
+and `PENDING_REVIEW`. Two decisions inside it are worth recording:
+
+- **The quantity-versus-money test is `isFiatCurrencyCode`, not the profile.** `FIAT_VALUATION` is one
+  route to "this is money"; the other is a fee charged in the unit the row itself is denominated in,
+  which `resolveFeeDenomination` reports as `ASSET_QUANTITY` because that is what a quantity of euros
+  is. Both must reach the basis, and the test that unifies them is a global fact about currency codes,
+  not a per-source rule. Measured consequence: a Kraken **futures** fee in `usd` routes to the basis,
+  while the identical declaration on a crypto-margined account routes to a disposal — asserted both
+  ways.
+- **A negative fee is never a disposal.** A credited fee in money reaches `BASIS_ADJUSTMENT` with its
+  sign intact (Bitvavo's promotional row: `netTotal 0.00543739` + `amount −0.00543739` = the `0.00`
+  really paid). A credited fee *in an asset* is an acquisition nobody has measured, so it is reported
+  rather than invented.
+
+**`gross = net + fee` now reaches the ledger** (14.29/14.25). Under `FEE_INSIDE_TOTAL` the use case
+records `total_fiat = net`, because the engine adds the fee back (`basis = total + fee_cost_component`).
+The Bitvavo buy therefore lands at a basis of exactly **499.81** and not **500.5599** — pinned at both
+ends: `499.0601` at ingestion (backend) and `499.81` out of `v_flattened_fifo_events` (database).
+
+**A stated zero is denominated** (14.30b). `applyProfileToRow` now fills the fee currency for an
+explicit `0` as well as for a non-zero fee, through a new internal `declaredDenomination` that answers
+the unit question independently of the amount. That is what makes the distinction *storable*: the
+ledger's `CHECK ((fee_amount IS NULL) = (fee_asset_id IS NULL))` admits no amount without an asset, so
+an undenominated `0` could only be written as the `NULL` that means "the source said nothing". The
+40 real stated zeros all resolve — 22 Kraken through `ROW_ASSET`, 18 Bitvavo through their own column —
+and the 12 empty Bitvavo cells name no currency, so the two states separate cleanly on the real data.
+**`CsvIngestionUseCase`'s `hasFee = !feeAmountDec.isZero()` is gone**, which is the site 14α located.
+
+**14.24's fallback was deleted, not relocated.** `row.fee_currency || row.asset_in || row.asset_out`
+inside the use case is removed; the denomination comes from `resolveFeeDenomination` and from nowhere
+else. A Bitunix row with a fee and an empty fee-currency column now persists **no fee at all** and is
+reported pending, instead of silently acquiring the row's asset.
+
+**`mergeRows` is decimal and denomination-aware** (14.30d). `aggregateRows(rows, profile)` — the
+profile is required, since a default would resolve fees under no profile. Each leg's unit comes from
+`resolveFeeDenomination` *before* the merge; equal units are summed with `Decimal`; a lone fee keeps
+its own digits verbatim rather than being round-tripped (`'17.720'` stays `'17.720'`); and **mismatched
+units are refused**, so the function's return type widened to `TransactionRow[]`. `useImportProcessor`
+stops the batch and names the conflict rather than submitting it.
+
+**The invariant guard now runs on the server** (14.32). `CsvIngestionUseCase` calls
+`checkProfileInvariant` over the batch as submitted, before anything is written, and returns the
+outcome. Until now the running balance was checked only in the wizard's preview, so any batch reaching
+the backend by another route was checked by nothing. `NOT_DECLARED` is returned as a stated fact.
+
+**The whole corpus of hidden Bit2Me fees is now recovered exactly** (14.19). New fixture
+`bit2meWithdrawals.ts` holds all **43** differing `Withdrawal` rows read from the three real workbooks;
+driven through the real mapper and the real appliers, the derived per-asset totals are
+`JASMY 220, GIGA 20, HBAR 11.4, XLM 3.9, ADA 2, AI16Z 2, USDC 0.3, XRP 0.0024, ETH 0.0005, BNB 0.0002` —
+digit for digit, which float arithmetic does not produce. The same test asserts every one of the 43
+rows keeps the **net** on its outbound side, so custody no longer credits the destination with the
+gross.
+
+### Findings
+
+1. **`FIAT_VALUATION` and `NAMED_COLUMN` are behaviourally identical in the appliers, and the phase
+   proved it by failing to break.** Swapping Bit2Me's declaration from one to the other changed
+   **nothing** (`20 passed`), because `declaredDenomination` handles both in one branch and the
+   quantity/basis decision is made afterwards by `isFiatCurrencyCode` plus the "is it the row's own
+   unit" test. The distinction survives as documentation of *why* Bit2Me's number is not a quantity;
+   what actually acts on that fact is the **convention** (`GROSS_AND_NET`) and the **directional fill**.
+   Recorded rather than papered over, and no test claims coverage of it. This is the same class as
+   14βb's invariant finding: check that the dimension named as the enforcement is what enforces.
+2. **The 43-row corpus test is discriminated by `directionalFill`, not by `feeConvention`.** Inverting
+   Bit2Me's convention to `NET_PLUS_FEE` fails only **1** test (the applier's own derivation);
+   switching `BOTH_SIDES_WRITTEN` to `ONE_SIDED` fails **3**, including the corpus. The derivation of
+   the 0.7 HBAR comes from `reduceDirectionalSides`, which is a different dimension from the one 14.19's
+   task text names. Stated so the break list is not read as covering the convention.
+3. **A fee paid in the asset enters the acquired lot's basis *and* is disposed of, and that is
+   correct** — 0.05 XRP at 2 EUR gives a basis of 2.1 plus a `FEE` disposal of 0.05. An earlier draft
+   comment in the new database test asserted the basis was the recorded total alone; it was wrong and
+   was corrected before the test landed.
+4. **`vitest` again passed over three real type errors.** The typecheck caught a `TS2339` in `routeFee`
+   (a union member without `asset`) that a green 181-test run had not noticed, and later caught eight
+   `IngestionResult` shape errors in a spec file. Finding 2 of 14βb, reproduced.
+5. **One of my own test expectations was wrong twice, both times about a real figure**: the futures
+   fee's route (money, not a disposal — `usd` is fiat), and the merge unit under Kraken's `ROW_ASSET`
+   (a `fee_currency` value on a Kraken row is spurious, since the source has no such column). Both were
+   corrected in the test, not in the code.
+
+### Red quality
+
+| task | Red | evidence |
+|---|---|---|
+| 14.30b | real, against a stub | `expected undefined to be 'HBAR'` (applier), `expected undefined to be '0'` (ledger) |
+| 14.23 | **partly green from the start** | the four existing union members were already covered by 14βb's spec; the new `COLLATERAL_CURRENCY` test was green from the start and its routing half was Red (`NO_FEE` from the stub) |
+| 14.29 | **partly green from the start** | Kraken's, Bit2Me's and Bitunix's derivations were already implemented; the `FEE_INSIDE_TOTAL` basis assertion was Red — `expected '499.81' to be '499.0601'` |
+| 14.24 | real | `expected 'HBAR' to be undefined` — the deleted fallback answered wrongly |
+| 14.30 | real | `expected undefined to deeply equal []`, then `reason` containing `convention` |
+| 14.19 | green from the start at the applier level, real at the corpus level | the corpus test is new and pinned by B10 (3 failures) |
+| 14.30d | real, on values | `expected '0.30000000000000004' to be '0.3'`, `expected '17.72' to be '17.720'`, `expected '0.5' to be '-0.5'` |
+| 14.25 | real | 13 failed / 5 passed against a `routeFee` stub that existed and returned `NO_FEE` |
+| 14.32 | real | `expected undefined to deeply equal { kind: 'VERIFIED', rowsChecked: 2 }` |
+| 14.33 | n/a | the verification pass; its content is the break table below |
+
+`routeFee` was committed first as a stub that **exists and answers wrongly** (`{ kind: 'NO_FEE',
+stated: false }`), so all 13 failures were on their own assertions rather than on a missing symbol
+(reminder 1).
+
+**Ten deliberate breaks, every one with a literal path and a printed test count** (reminder 8):
+
+| # | break | result |
+|---|---|---|
+| B1 | denominate only non-zero fees again (`resolveFeeDenomination` in place of `declaredDenomination`) | core-domain 1 failed / 19 passed; backend 1 failed / 44 passed |
+| B2 | record the source's gross instead of the net under `FEE_INSIDE_TOTAL` | core-domain 2 failed / 18 passed (`expected '499.81' to be '499.0601'`, and the rebate's paid total moved off zero); backend 1 failed / 44 passed |
+| B3 | reinstate the use case's `?? asset_in ?? asset_out` denomination fallback | backend 1 failed / 44 passed (`expected 'HBAR' to be undefined`) |
+| B4 | sum mismatched fee units instead of refusing them | core-domain 2 failed / 10 passed; frontend 1 failed / 3 passed |
+| B5 | put the merged fee back through `Number` / `Math.abs` | core-domain 4 failed / 8 passed |
+| B6 | let a negative asset-denominated fee become a disposal | core-domain 1 failed / 19 passed |
+| B7 | return `NOT_DECLARED` instead of running the invariant | backend 2 failed / 43 passed |
+| B8 | swap Bit2Me's `FIAT_VALUATION` for `NAMED_COLUMN` | **20 passed — no failure.** See finding 1; reported, not hidden |
+| B9 | invert Bit2Me's convention to `NET_PLUS_FEE` | core-domain 1 failed / 19 passed — and **not** the corpus test |
+| B10 | switch Bit2Me's `directionalFill` to `ONE_SIDED` | core-domain 3 failed / 17 passed, the corpus test among them |
+| G1 | `const deliberateTypeError: number = "not a number"` in `appliers.ts` | `tsc` reports `TS2322` at line 770 |
+| G2 | the same in `useImportProcessor.ts` | `vue-tsc --build --force` reports `TS2322` at line 123 |
+
+Every break was reverted **by re-editing** and each revert confirmed with `diff -q` against a copy
+taken beforehand (reminder 10). `git checkout --` was not run at any point.
+
+### Files touched
+
+| file | delta |
+|---|---|
+| `packages/core-domain/src/domain/services/sourceProfile/appliers.ts` | +117/−6 (`routeFee`, `declaredDenomination`, the stated-zero fill) |
+| `packages/core-domain/src/domain/services/normalizer/rowAggregator.ts` | +113/−26 |
+| `packages/core-domain/src/__tests__/feeModel.spec.ts` | +330 new |
+| `packages/core-domain/src/__tests__/fixtures/bit2meWithdrawals.ts` | +572 new (43 real rows) |
+| `packages/core-domain/src/__tests__/fixtures/realSourceRows.ts` | +49 (`KRAKEN_FUTURES_ROWS`, 2 real rows) |
+| `packages/core-domain/src/__tests__/rowAggregator.spec.ts` | +122/−13 |
+| `packages/database/tests/integration/fiscal_flag_and_fee_routing.spec.ts` | +65 |
+| `apps/backend/src/core/application/use-cases/CsvIngestionUseCase.ts` | +144/−26 |
+| `apps/backend/.../__tests__/CsvIngestionUseCase.spec.ts` | +264 |
+| `apps/backend/.../__tests__/IngestAndMaterializeUseCase.spec.ts` | +18/−9 (the two new result fields on nine doubles) |
+| `apps/frontend/.../composables/useImportProcessor.ts` | +26/−7 |
+| `apps/frontend/.../composables/__tests__/useImportProcessor.spec.ts` | +43 |
+
+### Measured state after 14γ
+
+| gate | before | after |
+|---|---|---|
+| `shared-types` tests | 46/46 | **46/46** |
+| `core-domain` tests | 157/157 | **183/183** |
+| `database` tests | 123/123 | **126/126** |
+| `apps/backend` tests | 364/364 | **376/376** |
+| `apps/frontend` tests | 435/435 | **436/436** |
+| all five typechecks | 0 | **0**, and two of them made to fail on purpose (G1, G2) |
+| `any` by the complete pattern (`: any`, `as any`, `<any>`, `any[]`, `, any>`) over the five `src` trees | 1 | **1** — still only `AutoMapColumnsUseCase.ts:113`, pre-existing |
+| `check-domain-isolation.sh` (both apps) | pass | **pass** |
+
+### Deferred, explicitly
+
+- **`pendingFeeReview` and `invariant` stop at the application layer.** Both are returned by
+  `CsvIngestionUseCase` and neither is on the wire. Surfacing them costs the five-hop contract change
+  14.45 measured (`ingestionOutcomeSchema` → route → frontend DTO → entity → view), no 14γ task asks
+  for it, and folding the count into the existing `pendingReview` field would conflate an unresolved
+  fee with an unresolved *price* — the kind of untrue label this change exists to remove. Whoever owns
+  the review UI should pick them up.
+- **A stated zero with no resolvable denomination still persists as `NULL`.** The pair `CHECK` leaves
+  no alternative, and inventing a unit is worse. It affects **no row in the corpus**: all 40 stated
+  zeros resolve a unit. Stated so the "distinct end to end" claim is not read as unconditional.
+- **`SpotTransactionSchema`'s dead refines** remain dead — 14α's second follow-up, still owned by
+  whoever owns the ledger contract.
+- Nothing else. No task in 14γ is partially done.
+
+### Conflicts with the archived specs in `openspec/specs/`
+
+None found. `domain-financial-precision` is honoured throughout: the new code uses `Decimal` /
+`PreciseAmount` and decimal strings, and the only `number` introduced anywhere is inside test
+assertions (`Number(netTotal) + Number(amount)`), which are checks *on* the strings rather than a path
+any value travels. `domain-purity` holds — `routeFee` and `declaredDenomination` are pure, and
+`decimal.js` is the one permitted third-party import. `domain-anti-corruption` holds: the routing
+decision lives in the domain, and the use case only applies it. `csv-data-ingestion` and
+`source-format-profiles` are what the phase satisfies. The one thing worth flagging to a reviewer is
+finding 1 above: `source-format-profiles`' fee-denomination union carries a member whose behaviour is
+indistinguishable from its neighbour's, which is a weaker claim than the spec's prose implies.
+
 ## Resume here — next action
 
-**149 checked boxes in `tasks.md`, 48 open** (the "of 176" figure earlier entries used predates the tasks added since; the measured totals are these); groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and **12 in full,
-including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β and 14βb** are
-closed. Group 14 runs **before** group 13. **No task is left open in a closed group.**
+**159 checked boxes in `tasks.md`, 38 open** (the "of 176" figure earlier entries used predates the
+tasks added since; the measured totals are these); groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb
+and 14γ** are closed. Group 14 runs **before** group 13. **No task is left open in a closed group.**
 
-### Start here next session — group 14, phase 14γ
+### Start here next session — group 14, phase 14δ
 
-Next is **14γ — the fee model: denomination, convention, and precision as one surface** (14.23, 14.29,
-14.24, 14.30, 14.19, 14.30b, 14.30d, 14.25, 14.32, 14.27 and the tasks listed under it in `tasks.md`).
-Every rule it has to declare now has a home, which is the whole reason 14βb ran first:
+Next is **14δ — leg integrity: a movement's two sides survive to the domain** (14.3, 14.19b and the
+tasks listed under it in `tasks.md`). It is ordered after the fee model for two reasons that are now
+concrete rather than anticipated:
 
-- **The declarations already exist.** `SOURCE_FORMAT_PROFILES` holds all seven profiles, and each 14γ
-  task's own text names which dimension it reads. 14γ writes behaviour against those declarations; it
-  should not need to add a dimension, and adding one is a signal to check `design.md` D30 first.
-- **The appliers already exist and are already called from both sides.**
-  `resolveFeeDenomination`, `resolveGrossNetFee`, `reduceDirectionalSides`, `isMergeKey`,
-  `checkProfileInvariant` and `applyProfileToRow` are in
-  `packages/core-domain/src/domain/services/sourceProfile/appliers.ts`, and `CsvIngestionUseCase`
-  plus `usePreviewTable` both go through `applyProfileToRow`. **14γ's fee work belongs inside those
-  functions, not beside them** — a second implementation is the drift this seam removed.
-- **Two nets will catch a regression within one edit.**
+- **`14.19b`'s rule is already half-built and half-called.** `reduceDirectionalSides` and
+  `BOTH_SIDES_WRITTEN` exist and run through `applyProfileToRow` on both sides of the boundary; 14γ
+  measured that this dimension — not the fee convention — is what derives Bit2Me's fee, and pinned all
+  43 differing withdrawals to it (finding 2 of the 14γ entry). What 14δ owes is the **deposit** half:
+  the 8 crypto `Deposit` rows that write both sides and net to zero in `v_custody_movements`.
+- **`14.3` changes what `mergeRows` receives, and `mergeRows` was rewritten in 14γ.** Its signature is
+  now `aggregateRows(rows, profile)` and its return type is `TransactionRow[]`, because a group whose
+  legs carry fees in two different units is **refused** rather than merged. Anything 14δ adds must keep
+  that refusal reachable, and `useImportProcessor` is where a refused group stops the batch.
+- **Two nets catch a regression within one edit.**
   `apps/backend/.../__tests__/sourceProfileParity.spec.ts` compares the preview and the ledger digit
-  for digit on real Bit2Me rows; `typeLabelCoverage.spec.ts` drives all six real vocabularies through
-  the real profile each header row resolves to.
-- **Do not trust `vitest` alone for anything that changes a signature.** This phase inherited three
-  type errors behind five green suites — finding 2 above.
-- **14.30b's site is already located:** `CsvIngestionUseCase` computes `hasFee =
-  !feeAmountDec.isZero()` and drops an explicit `'0'` to `undefined`, collapsing 22 Kraken and 18
-  Bitvavo rows at the layer D24 says preserves the distinction. Recorded in the 14α entry.
+  for digit on real Bit2Me rows; `packages/core-domain/src/__tests__/feeModel.spec.ts` drives the whole
+  43-row withdrawal corpus through the real mapper and the real appliers.
+- **Do not trust `vitest` alone for anything that changes a signature.** 14γ's typecheck caught a union
+  narrowing error and eight result-shape errors behind fully green suites.
 
 ### Superseded — the 14βb start-here notes
 
@@ -3313,6 +3498,11 @@ the DESIGN.md rule 3 violation (rule 3 given an operational definition, the over
    — the tests that failed on their own assertions, which are quoted verbatim in each entry. If a
    later pass wants to tighten this, re-running the recorded breaks for groups 6–11 with literal paths
    is the specific work; nothing else in those entries depends on it.
+9b. **A profile dimension can be inert.** 14γ swapped Bit2Me's `FIAT_VALUATION` for `NAMED_COLUMN` and
+    **not one test failed**: both fall through the same branch of `declaredDenomination`, and the
+    quantity-versus-money decision is made afterwards by `isFiatCurrencyCode`. Before crediting a
+    declared dimension with a behaviour, break it and watch something fail — the same lesson 14βb
+    learned about the invariants, one layer up.
 9. **A brand-token count over `views/` cannot see brand delivered by a Shadcn variant default.** The
    tooltip primitive's own class list was `bg-primary`, so every tooltip in the app was a brand moment
    that no view-directory count would ever report. Recorded beside DESIGN.md rule 3.

@@ -1,5 +1,11 @@
 import { ref } from "vue";
-import { generateIdHash, normalizeTransactionDirection, aggregateRows, normalizeToUtcIso } from "@kryptofolio/core-domain";
+import {
+  generateIdHash,
+  normalizeTransactionDirection,
+  aggregateRows,
+  normalizeToUtcIso,
+  SOURCE_FORMAT_PROFILES,
+} from "@kryptofolio/core-domain";
 import type { SourceProfileId, ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
 
@@ -50,10 +56,24 @@ export function useImportProcessor() {
       );
 
       // --- NEW AGGREGATION PHASE ---
-      const aggregatedRows = aggregateRows(rowsWithTimestamp);
+      const aggregatedRows = aggregateRows(
+        rowsWithTimestamp,
+        SOURCE_FORMAT_PROFILES[sourceProfileId],
+      );
+
+      /**
+       * A group the aggregator refused carries fees in two units and no single figure can stand for
+       * both. Submitting the batch without it would drop an operation silently, so the whole batch
+       * stops and names the conflict.
+       */
+      const refused = aggregatedRows.filter((row) => row.hasError);
+      if (refused.length > 0) {
+        processingErrors.value = refused.flatMap((row) => row.errors);
+        return false;
+      }
 
       const rowsWithHash = await Promise.all(
-        aggregatedRows.map(async (row) => {
+        (aggregatedRows as ValidTransactionRow[]).map(async (row) => {
           const normalizedMappedData = normalizeTransactionDirection(row.mappedData);
 
           // Inject account ID before hash generation

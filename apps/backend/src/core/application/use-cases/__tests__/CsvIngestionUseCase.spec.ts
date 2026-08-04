@@ -524,6 +524,270 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The fee model — denomination, convention, and the zero/absent distinction
+// ---------------------------------------------------------------------------
+
+describe('CsvIngestionUseCase — the fee model', () => {
+  let ledgerPort: Mocked<ILedgerPort>;
+  let userSettingsPort: Mocked<IUserSettingsPort>;
+
+  function makeUseCase(price = '1000'): CsvIngestionUseCase {
+    return new CsvIngestionUseCase(ledgerPort, makeMockPriceProvider(price), userSettingsPort);
+  }
+
+  function row(overrides: Partial<IngestibleTransaction> = {}): IngestibleTransaction {
+    return {
+      id_hash: 'hash-fee',
+      account_id: '10000000-0000-0000-0000-000000000002',
+      tx_type: 'withdrawal',
+      timestamp: '2025-09-16T13:07:47Z',
+      asset: 'HBAR',
+      amount: '-24',
+      asset_out: 'HBAR',
+      amount_out: '24',
+      total_fiat: '5',
+      price_fiat: '0.2',
+      fiat_currency: 'EUR',
+      metadata: {},
+      ...overrides,
+    };
+  }
+
+  function saved(index = 0) {
+    const tx = ledgerPort.saveSpotTransaction.mock.calls[index][0];
+    return {
+      feeAmount: tx.fee_amount?.toString(),
+      feeAssetId: tx.fee_asset_id,
+      totalFiat: tx.total_fiat.toString(),
+      amountOut: tx.amount_out?.toString(),
+    };
+  }
+
+  beforeEach(() => {
+    ledgerPort = makeMockLedgerPort();
+    userSettingsPort = makeMockUserSettingsPort();
+  });
+
+  describe('a stated zero and an empty cell reach the ledger as different states', () => {
+    it('persists an explicit zero as a zero, denominated by the profile', async () => {
+      // 22 Kraken rows and 18 Bitvavo rows write `0`. `gross = net + 0`, so there is nothing unknown
+      // about them, and storing NULL would make them indistinguishable from the 12 empty cells.
+      await makeUseCase().execute([row({ fee_amount: '0' })], 'spot', 'kraken-spot');
+
+      expect(saved().feeAmount).toBe('0');
+      expect(saved().feeAssetId).toBe('HBAR');
+    });
+
+    it('persists an absent fee as absent', async () => {
+      await makeUseCase().execute([row({ fee_amount: undefined })], 'spot', 'kraken-spot');
+
+      expect(saved().feeAmount).toBeUndefined();
+      expect(saved().feeAssetId).toBeUndefined();
+    });
+
+    it('does not report a stated zero as pending, because it needs no convention', async () => {
+      const result = await makeUseCase().execute(
+        [row({ fee_amount: '0', fee_currency: 'HBAR' })],
+        'spot',
+        'generic',
+      );
+
+      expect(result.pendingFeeReview).toEqual([]);
+    });
+  });
+
+  describe('the denomination comes from the profile and from nowhere else', () => {
+    it('gives a Kraken fee the row\'s own asset, which that profile is the only one to declare', async () => {
+      await makeUseCase().execute([row({ fee_amount: '0.005' })], 'spot', 'kraken-spot');
+
+      expect(saved().feeAssetId).toBe('HBAR');
+    });
+
+    it('does not fall back to the row\'s asset for a source that names a fee column', async () => {
+      // Bitunix declares a fee-currency column. A row that leaves it empty has an unresolved
+      // denomination, and quantity-versus-basis turns on it, so it is reported rather than guessed.
+      const result = await makeUseCase().execute(
+        [row({ fee_amount: '0.005', fee_currency: undefined })],
+        'spot',
+        'bitunix-spot',
+      );
+
+      expect(saved().feeAssetId).toBeUndefined();
+      expect(saved().feeAmount).toBeUndefined();
+      expect(result.pendingFeeReview).toHaveLength(1);
+      expect(result.pendingFeeReview[0].idHash).toBe('hash-fee');
+    });
+  });
+
+  describe('a fee the source already applied is not applied again', () => {
+    it('records the Bitvavo basis the buyer paid, and not that basis plus the fee', async () => {
+      // 0.30338 ETH × 1645 = 499.0601, plus a 0.7499 fee, is the 499.81 the row reports as paid.
+      // Storing the reported total *and* the fee makes the engine's basis 500.5599.
+      await makeUseCase().execute(
+        [
+          row({
+            tx_type: 'buy',
+            asset: 'ETH',
+            amount: '0.30338',
+            asset_out: undefined,
+            amount_out: undefined,
+            asset_in: 'ETH',
+            amount_in: '0.30338',
+            price_fiat: '1645',
+            total_fiat: '499.81',
+            fee_amount: '0.7499',
+            fee_currency: 'EUR',
+          }),
+        ],
+        'spot',
+        'bitvavo-spot',
+      );
+
+      expect(saved().totalFiat).toBe('499.0601');
+      expect(saved().feeAmount).toBe('0.7499');
+      expect(Number(saved().totalFiat) + Number(saved().feeAmount)).toBe(499.81);
+    });
+
+    it('leaves the reported total alone where the fee was charged on top of it', async () => {
+      await makeUseCase().execute(
+        [
+          row({
+            tx_type: 'buy',
+            asset: 'ADA',
+            asset_in: 'ADA',
+            amount_in: '546.844684',
+            asset_out: undefined,
+            amount_out: undefined,
+            total_fiat: '300',
+            price_fiat: '0.5486',
+            fee_amount: '1',
+            fee_currency: 'ADA',
+          }),
+        ],
+        'spot',
+        'bitunix-spot',
+      );
+
+      expect(saved().totalFiat).toBe('300');
+      expect(saved().feeAmount).toBe('1');
+      expect(saved().feeAssetId).toBe('ADA');
+    });
+
+    it('reports a non-zero fee under an unmeasured convention instead of applying one', async () => {
+      const result = await makeUseCase().execute(
+        [row({ fee_amount: '0.005', fee_currency: 'HBAR' })],
+        'spot',
+        'generic',
+      );
+
+      expect(result.pendingFeeReview).toHaveLength(1);
+      expect(result.pendingFeeReview[0].reason).toContain('convention');
+      // The movement itself is not lost, and the fee is kept as the source stated it.
+      expect(result.persisted).toBe(1);
+      expect(saved().feeAmount).toBe('0.005');
+    });
+  });
+
+  /**
+   * The running balance is what established Kraken's convention in the first place, and it is what
+   * would catch the exchange changing it. The wizard checks it over the preview; a batch reaching the
+   * backend by any other route was checked by nothing.
+   */
+  describe('a source shipping a running balance is reconciled against it', () => {
+    function krakenRow(over: Partial<IngestibleTransaction>): IngestibleTransaction {
+      return row({
+        tx_type: 'deposit',
+        asset: 'HBAR',
+        asset_out: undefined,
+        amount_out: undefined,
+        asset_in: 'HBAR',
+        ...over,
+      });
+    }
+
+    it('verifies every row of a batch whose balances reconcile', async () => {
+      const result = await makeUseCase().execute(
+        [
+          krakenRow({ id_hash: 'k1', amount: '24', amount_in: '24', fee_amount: '0', balance: '24' }),
+          krakenRow({
+            id_hash: 'k2',
+            tx_type: 'withdrawal',
+            amount: '-0.006',
+            amount_in: undefined,
+            asset_in: undefined,
+            asset_out: 'HBAR',
+            amount_out: '0.006',
+            fee_amount: '0.005',
+            balance: '23.989',
+          }),
+        ],
+        'spot',
+        'kraken-spot',
+      );
+
+      expect(result.invariant).toEqual({ kind: 'VERIFIED', rowsChecked: 2 });
+    });
+
+    it('reports the offending row when a balance does not reconcile', async () => {
+      const result = await makeUseCase().execute(
+        [
+          krakenRow({ id_hash: 'k1', amount: '24', amount_in: '24', fee_amount: '0', balance: '24' }),
+          krakenRow({ id_hash: 'k2', amount: '1', amount_in: '1', fee_amount: '0', balance: '999' }),
+        ],
+        'spot',
+        'kraken-spot',
+      );
+
+      expect(result.invariant.kind).toBe('FAILED');
+      if (result.invariant.kind !== 'FAILED') return;
+      expect(result.invariant.expected).toBe('25');
+      expect(result.invariant.actual).toBe('999');
+    });
+
+    it('says a source ships no independent redundancy rather than reporting it verified', async () => {
+      const result = await makeUseCase().execute(
+        [row({ fee_amount: '0.7', fee_currency: 'HBAR' })],
+        'spot',
+        'bitunix-spot',
+      );
+
+      expect(result.invariant).toEqual({ kind: 'NOT_DECLARED' });
+    });
+  });
+
+  describe('a fee hidden in the gross/net difference is recovered as a quantity', () => {
+    it('records the quantity that left the wallet and the fee it paid, not the euro valuation', async () => {
+      // Bit2Me writes 2.236429 out and 1.536429 in for one HBAR withdrawal, and prices the fee in
+      // euros. The 0.7 HBAR difference is a disposal that nothing recorded before.
+      await makeUseCase().execute(
+        [
+          row({
+            tx_type: 'withdrawal',
+            asset: undefined,
+            amount: undefined,
+            asset_out: 'HBAR',
+            amount_out: '2.236429',
+            asset_in: 'HBAR',
+            amount_in: '1.536429',
+            fee_amount: '0.210620368',
+            fee_currency: 'EUR',
+            total_fiat: '0.46',
+            price_fiat: '0.3',
+          }),
+        ],
+        'spot',
+        'bit2me-spot',
+      );
+
+      expect(saved().feeAmount).toBe('0.7');
+      expect(saved().feeAssetId).toBe('HBAR');
+      // Custody attributes the net to the destination; the gross would overstate the holding there.
+      expect(saved().amountOut).toBe('1.536429');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // E2E Tests — Real SQLite with real migration schema (W-3 fix)
 // ---------------------------------------------------------------------------
 

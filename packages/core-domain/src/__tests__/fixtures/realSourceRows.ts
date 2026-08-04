@@ -1241,6 +1241,55 @@ export const BITUNIX_ROWS = [
   }
 ] as const;
 
+/**
+ * Two real `futures trade` rows. Both settle their fee in the collateral currency, which the export
+ * names in `symbol` — `usd` — rather than beside the contract the position is in.
+ */
+export const KRAKEN_FUTURES_ROWS = [
+  {
+    "uid": "c0e50358-8012-438b-9925-3d49b5371b3a",
+    "dateTime": "2026-02-08 16:42:52",
+    "account": "flex",
+    "type": "futures trade",
+    "symbol": "usd",
+    "contract": "pf_xrpusd",
+    "change": "-1.45480000000",
+    "new balance": "0.00000000000",
+    "new average entry price": "",
+    "trade price": "1.42318000000000000000",
+    "mark price": "1.42372579167000000000",
+    "funding rate": "-0.000028384605269555",
+    "realized pnl": "-1.39220000000",
+    "fee": "0.06260000000",
+    "realized funding": "",
+    "collateral": "",
+    "conversion spread percentage": "",
+    "liquidation fee": "",
+    "position uid": ""
+  },
+  {
+    "uid": "4a19ac39-1091-43bb-bea3-98bf98c82061",
+    "dateTime": "2026-02-08 16:42:52",
+    "account": "flex",
+    "type": "futures trade",
+    "symbol": "usd",
+    "contract": "pf_xrpusd",
+    "change": "-3.81000000000",
+    "new balance": "0.00000000000",
+    "new average entry price": "",
+    "trade price": "1.42319000000000000000",
+    "mark price": "1.42372579167000000000",
+    "funding rate": "-0.000028384605269555",
+    "realized pnl": "-3.65210000000",
+    "fee": "0.16440000000",
+    "realized funding": "0.00650000000",
+    "collateral": "",
+    "conversion spread percentage": "",
+    "liquidation fee": "",
+    "position uid": ""
+  }
+] as const;
+
 export const TANGEM_ROWS = [
   {
     "Date": "2025-06-03 10:01:00 UTC",

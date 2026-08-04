@@ -65,6 +65,49 @@ describe('useImportProcessor', () => {
     expect(processingErrors.value).toContain('ingestion.errors.no_valid_rows_to_import')
   })
 
+  /**
+   * A group whose legs carry fees in two different units cannot be merged into a shape that holds one
+   * fee, so the aggregator refuses it. Submitting it anyway would send a figure recorded in a unit it
+   * was never charged in.
+   */
+  it('does not submit a group the aggregator refused to merge, and says why', async () => {
+    const mockMutateAsync = vi.fn().mockResolvedValue(true)
+    vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
+      mutateAsync: mockMutateAsync
+    } as unknown as ReturnType<typeof taxMutations.useSubmitIngestionMutation>)
+
+    const { processAndSubmit, processingErrors } = useImportProcessor()
+
+    const leg = (id: string, over: Partial<ValidTransactionRow['mappedData']>): ValidTransactionRow => ({
+      id,
+      originalData: {},
+      errors: [],
+      hasError: false,
+      mappedData: {
+        date: '2025-03-01',
+        time: '10:00:00',
+        tx_type: 'trade',
+        group_id: 'REF-FEE',
+        metadata: {},
+        ...over,
+      },
+    })
+
+    const result = await processAndSubmit(
+      [
+        leg('a', { amount: '-50', asset: 'EUR', fee_amount: '0.05' }),
+        leg('b', { amount: '7704.16', asset: 'PUMP', fee_amount: '17.720' }),
+      ],
+      'spot',
+      '10000000-0000-0000-0000-000000000001',
+      'kraken-spot',
+    )
+
+    expect(result).toBe(false)
+    expect(processingErrors.value.join(' ')).toContain('fee_denomination_conflict')
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
   it('should handle submission errors gracefully', async () => {
     const mockMutateAsync = vi.fn().mockRejectedValue(new Error('Network error'))
     vi.mocked(taxMutations.useSubmitIngestionMutation).mockReturnValue({
