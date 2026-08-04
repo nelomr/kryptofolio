@@ -22,8 +22,6 @@ function describeDenomination(value: FeeDenomination): string {
       return "row asset";
     case "NAMED_COLUMN":
       return `named column ${value.sourceColumn}`;
-    case "FIAT_VALUATION":
-      return `fiat valuation in ${value.sourceColumn}`;
     case "COLLATERAL_CURRENCY":
       return "collateral currency";
   }
@@ -152,7 +150,7 @@ describe("the source format profile table", () => {
     expect(SOURCE_FORMAT_PROFILES.tangem.invariant.kind).toBe("NONE");
   });
 
-  it("records the four measured fee denominations", () => {
+  it("records the measured fee denominations", () => {
     expect(SOURCE_FORMAT_PROFILES["kraken-spot"].feeDenomination.kind).toBe("ROW_ASSET");
     expect(SOURCE_FORMAT_PROFILES.tangem.feeDenomination.kind).toBe("ROW_ASSET");
     expect(SOURCE_FORMAT_PROFILES["bitvavo-spot"].feeDenomination).toEqual({
@@ -163,8 +161,10 @@ describe("the source format profile table", () => {
       kind: "NAMED_COLUMN",
       sourceColumn: "Fee Asset",
     });
+    // Measured, not assumed: `Moneda de la comisión` names the acquired asset on 98 of the 118
+    // trade rows and EUR on the movement rows, so it varies per row exactly as Bitvavo's does.
     expect(SOURCE_FORMAT_PROFILES["bit2me-spot"].feeDenomination).toEqual({
-      kind: "FIAT_VALUATION",
+      kind: "NAMED_COLUMN",
       sourceColumn: "Moneda de la comisión",
     });
     expect(SOURCE_FORMAT_PROFILES["kraken-futures"].feeDenomination.kind).toBe(

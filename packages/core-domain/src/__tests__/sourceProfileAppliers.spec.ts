@@ -11,6 +11,10 @@ import {
   resolveFeeDenomination,
   resolveGrossNetFee,
 } from "../domain/services/sourceProfile/appliers";
+import type {
+  FeeDenomination,
+  SourceFormatProfile,
+} from "../domain/services/sourceProfile/types";
 import {
   BIT2ME_ROWS,
   BITUNIX_ROWS,
@@ -89,6 +93,20 @@ describe("resolveFeeDenomination", () => {
     });
   });
 
+  it("treats a euro fee as a quantity when euro is the very unit the row moves", () => {
+    // A euro-funded trade pays its fee in euros, and that is a cost actually charged, not a
+    // valuation of something charged elsewhere. Only a fiat code that differs from the row's own
+    // unit can be a valuation, so the two cases must not collapse into one another.
+    const eurFundedTrade = bit2meRows.find(
+      (r) => r.fee_currency === "EUR" && r.asset_out === "EUR" && r.fee_amount === "0.0095",
+    );
+    expect(eurFundedTrade).toBeDefined();
+    expect(resolveFeeDenomination(BIT2ME, eurFundedTrade!)).toEqual({
+      kind: "ASSET_QUANTITY",
+      asset: "EUR",
+    });
+  });
+
   it("reads Bitunix's named fee asset", () => {
     const withdraw = bitunixRows.find((r) => r.fee_amount === "1");
     expect(withdraw).toBeDefined();
@@ -114,6 +132,60 @@ describe("resolveFeeDenomination", () => {
     };
     const result = resolveFeeDenomination(GENERIC, unnamed);
     expect(result.kind).toBe("PENDING_REVIEW");
+  });
+});
+
+/**
+ * A declared dimension that cannot change an outcome is documentation wearing an enforcement's
+ * clothes. These assertions are the mechanised form of the deliberate break that caught the last
+ * one: each remaining member is shown to answer differently from every other on a row that
+ * separates them, so a member added without behaviour has nowhere to hide.
+ */
+describe("every declared fee denomination is behaviourally distinguishable", () => {
+  /** A real Bit2Me trade: the fee column names the acquired asset while the row is funded in EUR. */
+  const jasmyTrade = bit2meRows.find((r) => r.fee_currency === "JASMY");
+
+  /**
+   * Typed over the whole union rather than over a list restated here: a member added with a payload
+   * of its own stops compiling, which is what forces the next one to be given behaviour too.
+   */
+  function withDenomination(kind: FeeDenomination["kind"]): SourceFormatProfile {
+    const declaration: FeeDenomination =
+      kind === "NAMED_COLUMN" ? { kind, sourceColumn: "Moneda de la comisión" } : { kind };
+    return { ...BIT2ME, feeDenomination: declaration };
+  }
+
+  it("separates the named column from the row's own asset", () => {
+    expect(jasmyTrade).toBeDefined();
+    expect(resolveFeeDenomination(withDenomination("NAMED_COLUMN"), jasmyTrade!)).toEqual({
+      kind: "ASSET_QUANTITY",
+      asset: "JASMY",
+    });
+    // The row moves EUR out, so reading the row's asset would name the funding currency instead.
+    expect(resolveFeeDenomination(withDenomination("ROW_ASSET"), jasmyTrade!)).toEqual({
+      kind: "ASSET_QUANTITY",
+      asset: "EUR",
+    });
+  });
+
+  it("separates the named column from the collateral currency", () => {
+    // A futures export names no fee currency per row; the collateral is named beside the contract.
+    const noFeeColumn: TransactionMappedData = {
+      ...bitvavoRows[0],
+      fee_amount: "0.0626",
+      fee_currency: "",
+      asset: "",
+      asset_in: "",
+      asset_out: "",
+      symbol: "usd",
+    };
+    expect(resolveFeeDenomination(withDenomination("COLLATERAL_CURRENCY"), noFeeColumn)).toEqual({
+      kind: "ASSET_QUANTITY",
+      asset: "usd",
+    });
+    expect(resolveFeeDenomination(withDenomination("NAMED_COLUMN"), noFeeColumn).kind).toBe(
+      "PENDING_REVIEW",
+    );
   });
 });
 

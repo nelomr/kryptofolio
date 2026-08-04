@@ -271,12 +271,21 @@ export class CsvIngestionUseCase {
         await this.ledgerPort.saveSpotTransaction(tx);
         persisted += 1;
       } else {
-        const feeAmountDec = row.fee_amount ? new Decimal(row.fee_amount).abs() : new Decimal(0);
-        const hasFee = !feeAmountDec.isZero();
-        const feeAssetId = hasFee ? (row.fee_currency || row.symbol || row.asset_in || row.asset_out || undefined) : undefined;
-
-        if (hasFee && !feeAssetId) {
-          throw new Error(`Transaction at ${row.timestamp} has a fee amount but no fee currency or asset could be determined.`);
+        /**
+         * The same two appliers the spot branch uses. A futures fee settles in the account's
+         * collateral, which is a declared property of the source and not the contract's asset — so
+         * reading the symbol here regardless of the profile would reinstate the global default that
+         * one export disproves inside itself. A stated zero keeps its denomination for the same
+         * reason it does on the spot side: undenominated it can only be stored as the NULL that
+         * means the source said nothing.
+         */
+        const fee = this.resolveFee(profile, row);
+        if (fee.pending !== null) {
+          pendingFeeReview.push({
+            idHash: row.id_hash,
+            timestamp: row.timestamp ?? '',
+            reason: fee.pending,
+          });
         }
 
         const tx: LedgerFuturesTransaction = {
@@ -289,8 +298,8 @@ export class CsvIngestionUseCase {
           amount: row.amount_in ? toPreciseAmount(new Decimal(row.amount_in).abs().toString()) : row.amount_out ? toPreciseAmount(new Decimal(row.amount_out).abs().toString()) : undefined,
           realized_pnl: row.realized_pnl ? toPreciseAmount(row.realized_pnl) : undefined,
           funding_amount: row.funding_amount ? toPreciseAmount(row.funding_amount) : undefined,
-          fee_amount: hasFee ? toPreciseAmount(feeAmountDec.toString()) : undefined,
-          fee_asset_id: feeAssetId,
+          fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
+          fee_asset_id: fee.assetId,
           fiat_currency: fiatCurrency,
           status: 'COMPLETED',
         };
@@ -307,7 +316,9 @@ export class CsvIngestionUseCase {
   }
 
   /**
-   * Turns the profile's two resolutions into what the ledger row must carry.
+   * Turns the profile's two resolutions into what the ledger row must carry, for both markets: a
+   * futures fee differs only in where its denomination comes from, which is the profile's business
+   * and not this method's.
    *
    * Nothing here reads the source's name or a column of its own: the whole per-source decision was
    * already made by `resolveFeeDenomination` and `resolveGrossNetFee`, and the earlier fallback here

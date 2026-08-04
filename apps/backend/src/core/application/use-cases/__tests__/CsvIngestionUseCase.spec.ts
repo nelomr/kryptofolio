@@ -785,6 +785,93 @@ describe('CsvIngestionUseCase — the fee model', () => {
       expect(saved().amountOut).toBe('1.536429');
     });
   });
+
+  describe('a futures fee is read under the same model as a spot fee', () => {
+    function futuresRow(overrides: Partial<IngestibleTransaction> = {}): IngestibleTransaction {
+      return {
+        id_hash: 'hash-futures-fee',
+        account_id: '10000000-0000-0000-0000-000000000003',
+        tx_type: 'futures trade',
+        timestamp: '2026-02-08T16:42:52Z',
+        symbol: 'usd',
+        amount_out: '1.4548',
+        realized_pnl: '-1.3922',
+        fiat_currency: 'USD',
+        metadata: {},
+        ...overrides,
+      };
+    }
+
+    function savedFutures(index = 0) {
+      const tx = ledgerPort.saveFuturesTransaction.mock.calls[index][0];
+      return { feeAmount: tx.fee_amount?.toString(), feeAssetId: tx.fee_asset_id };
+    }
+
+    it('routes a stated futures fee to the collateral currency the profile declares', async () => {
+      await makeUseCase().execute(
+        [futuresRow({ fee_amount: '0.06260000000' })],
+        'futures',
+        'kraken-futures',
+      );
+
+      expect(savedFutures().feeAmount).toBe('0.0626');
+      // Fiat collateral, so this is a cost and not a disposal — a crypto-margined account differs.
+      expect(savedFutures().feeAssetId).toBe('usd');
+    });
+
+    it('persists an explicit zero futures fee as a zero, denominated by the profile', async () => {
+      // 111 real futures rows write `0.00000000000`. Storing NULL would make them indistinguishable
+      // from the 680 rows whose fee cell is empty.
+      await makeUseCase().execute(
+        [
+          futuresRow({
+            tx_type: 'funding rate change',
+            amount_out: undefined,
+            amount_in: '0.0073',
+            fee_amount: '0.00000000000',
+          }),
+        ],
+        'futures',
+        'kraken-futures',
+      );
+
+      expect(savedFutures().feeAmount).toBe('0');
+      expect(savedFutures().feeAssetId).toBe('usd');
+    });
+
+    it('does not fall back to the row\'s own asset when no collateral currency is named', async () => {
+      const result = await makeUseCase().execute(
+        [
+          futuresRow({
+            symbol: undefined,
+            asset_out: 'XRP',
+            fee_amount: '0.06260000000',
+          }),
+        ],
+        'futures',
+        'kraken-futures',
+      );
+
+      expect(savedFutures().feeAmount).toBeUndefined();
+      expect(savedFutures().feeAssetId).toBeUndefined();
+      expect(result.pendingFeeReview).toHaveLength(1);
+      expect(result.persisted).toBe(1);
+    });
+
+    it('does not read the contract symbol for a profile that names a fee-currency column', async () => {
+      // The symbol is the collateral currency only where a profile says so. Reading it regardless is
+      // the global default one file disproves by mixing denominations inside itself.
+      const result = await makeUseCase().execute(
+        [futuresRow({ fee_amount: '0.06260000000' })],
+        'futures',
+        'generic',
+      );
+
+      expect(savedFutures().feeAmount).toBeUndefined();
+      expect(savedFutures().feeAssetId).toBeUndefined();
+      expect(result.pendingFeeReview).toHaveLength(1);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

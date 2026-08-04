@@ -23,13 +23,16 @@ import type { SourceProfileId } from "@kryptofolio/shared-types";
 export type FeeDenomination =
   /** The source has no fee-currency column: the fee is charged in the asset the row moves. */
   | { readonly kind: "ROW_ASSET" }
-  /** The source names the fee currency per row, and it really does vary within one file. */
-  | { readonly kind: "NAMED_COLUMN"; readonly sourceColumn: string }
   /**
-   * The fee column holds a fiat valuation of a fee paid in the asset. The number is a basis figure,
-   * never a quantity: recording it as one credits the user with a fee in the wrong unit.
+   * The source names the fee currency per row, and it really does vary within one file — two of the
+   * measured exports mix a fiat fee and an asset fee inside a single file.
+   *
+   * Whether the number beside that name is a *quantity* or a fiat *valuation* of a fee paid in the
+   * asset is not a property of the column: it is decided per row, by whether the named code is a
+   * currency and by whether the source wrote both directional sides. A separate member declaring
+   * "this column holds a valuation" was tried and removed — see `directionalFill`.
    */
-  | { readonly kind: "FIAT_VALUATION"; readonly sourceColumn: string }
+  | { readonly kind: "NAMED_COLUMN"; readonly sourceColumn: string }
   /** Futures: fees settle in the account's collateral currency, not in the contract's asset. */
   | { readonly kind: "COLLATERAL_CURRENCY" };
 

@@ -122,8 +122,7 @@ function declaredDenomination(
       return { kind: "ASSET_QUANTITY", asset };
     }
 
-    case "NAMED_COLUMN":
-    case "FIAT_VALUATION": {
+    case "NAMED_COLUMN": {
       const currency = firstNonEmpty(row.fee_currency);
       if (currency === undefined) {
         return {

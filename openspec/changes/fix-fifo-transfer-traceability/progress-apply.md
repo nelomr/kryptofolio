@@ -3333,12 +3333,56 @@ decision lives in the domain, and the use case only applies it. `csv-data-ingest
 finding 1 above: `source-format-profiles`' fee-denomination union carries a member whose behaviour is
 indistinguishable from its neighbour's, which is a weaker claim than the spec's prose implies.
 
+## 14.33b and 14.33c — closing the fee model's two loose ends
+
+Both were findings against 14γ's own report rather than against its code, and both are now closed.
+Tests: core-domain 183 → **186**, backend 376 → **380**. All five typechecks 0.
+
+### 14.33b — the futures branch was outside the fee model
+
+Confirmed by grep, not by the log: `CsvIngestionUseCase` now calls `resolveFee(profile, row)` on
+**both** paths (spot at 242, futures at 282). `hasFee` appears nowhere; the only surviving mention of
+the `fee_currency || asset_in || asset_out` fallback is the comment at 325 recording that it was
+deleted rather than kept as a backstop. Four futures tests hold the line, including an explicit zero
+futures fee persisting **as a zero denominated by the profile** instead of vanishing, and two that
+pin the two fallbacks that were removed.
+
+### 14.33c — the inert union member
+
+The task offered two ways out. The one taken: **`FIAT_VALUATION` was removed as something a profile
+can declare, and kept as something a resolution can return.** A profile now declares only
+`ROW_ASSET`, `NAMED_COLUMN` or `COLLATERAL_CURRENCY`; `NAMED_COLUMN` became its own `case` and decides
+per row whether the named column holds a quantity or a valuation.
+
+The distinction is real because it is not a property of the column: a fiat code that **differs** from
+the unit the row moves is a valuation of a fee paid in that unit (Bit2Me pricing an HBAR withdrawal
+fee in euros), and a fiat code that **is** the row's own unit is an ordinary quantity of money (a
+euro-funded trade's euro fee, a cost genuinely charged). Rejected alternative: deleting the member and
+letting `isFiatCurrencyCode` decide alone — that collapses those two cases, and the second is a real
+cost that would have been recorded as a mere valuation.
+
+Break B8 now fails, in both directions, which is what the task asked for:
+
+- **Never resolving to `FIAT_VALUATION`** → 3 failures. The behaviour a declaration cannot produce is
+  the `fee_fiat_valuation` metadata attached on the `REDUCED_TO_OUTBOUND` path.
+- **Dropping the "is it the row's own unit" guard** → 1 failure, *after* this pass added the test for
+  it. It passed 186/186 before, and that was not a missing case in the code but a missing test:
+  `routeFee` sends a fee to the basis when the kind is `FIAT_VALUATION` **or** when the asset is a
+  fiat code, so downstream the two resolutions collapse and only the function's own return value
+  distinguishes them. Pinned with the real Bit2Me `BNB`/`EUR` trade whose 0.0095 EUR fee is charged in
+  the very currency the row spends.
+
+Also corrected while here: the spec's Bit2Me row said `Moneda de la comisión` is `EUR` throughout.
+Measured — it is the **acquired asset on 98 of 118 trade rows** and `EUR` on the 45 movement rows, so
+two sources mix a fiat fee and an asset fee inside one file, not one.
+
 ## Resume here — next action
 
-**159 checked boxes in `tasks.md`, 38 open** (the "of 176" figure earlier entries used predates the
+**161 checked boxes in `tasks.md`, 39 open** (the "of 176" figure earlier entries used predates the
 tasks added since; the measured totals are these); groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb
-and 14γ** are closed. Group 14 runs **before** group 13. **No task is left open in a closed group.**
+and 14γ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
+group 13. **No task is left open in a closed group.**
 
 ### Start here next session — group 14, phase 14δ
 

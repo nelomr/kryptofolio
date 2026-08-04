@@ -82,12 +82,14 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
       ],
       forbidden: [],
     },
-    // `Moneda de la comisión` is EUR on all 45 movement rows while both sides name the asset: the
-    // number beside it is a valuation of a fee paid in the asset, never a quantity of it.
-    feeDenomination: { kind: "FIAT_VALUATION", sourceColumn: "Moneda de la comisión" },
+    // `Moneda de la comisión` varies per row: it names the acquired asset on 98 of the 118 trade
+    // rows and EUR on the 45 movement rows. The column is therefore read per row, like Bitvavo's.
+    feeDenomination: { kind: "NAMED_COLUMN", sourceColumn: "Moneda de la comisión" },
     // Origin and destination are both written, so the fee is their difference.
     feeConvention: { kind: "GROSS_AND_NET" },
-    // All 42 `Deposit` rows repeat the same asset and amount on both sides.
+    // All 42 `Deposit` rows repeat the same asset and amount on both sides. This is also what makes
+    // the euro figure on a movement row a valuation rather than a quantity: the fee that really left
+    // the wallet is `origen − destino` in the asset, and the euro number is only its price.
     directionalFill: { kind: "BOTH_SIDES_WRITTEN" },
     columnRoles: {
       // `Grupo` holds wallet compartments — earn, trading, pocket, blockchain, bank-transfer — so a

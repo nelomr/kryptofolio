@@ -100,17 +100,17 @@ A profile knows its market as a declared fact: the Kraken futures signature carr
 
 Each profile SHALL declare how a row's fee denomination is resolved. Ingestion SHALL NOT apply a global default, and SHALL NOT fall back to the row's own asset except where the profile declares that the source has no fee-currency column at all.
 
-Four conventions were measured across five real exports, and one source uses two of them inside a single file, which is why a per-source *default* is not merely imprecise but wrong (`design.md` D22):
+Three ways of resolving a denomination were measured across five real exports, and **two** of those sources mix a fiat fee and an asset fee inside a single file, which is why a per-source *default* is not merely imprecise but wrong (`design.md` D22):
 
 | source | declared denomination |
 |---|---|
 | Kraken spot | the row's own asset — there is no fee-currency column |
 | Bitvavo | the named `Fee currency` column, which really does vary per row: `EUR` on a `buy`, `XRP` on a `withdrawal` |
 | Bitunix | the named `Fee Asset` column |
-| Bit2Me | `Moneda de la comisión` is `EUR` on all 45 movement rows and the number beside it is a **fiat valuation**, not a quantity |
+| Bit2Me | the named `Moneda de la comisión` column, which also varies per row: the acquired asset on 98 of its 118 trade rows, `EUR` on its 45 movement rows |
 | Kraken futures | the collateral currency |
 
-The distinction decides quantity versus basis: a fee paid in the asset is a disposal that reduces the quantity remaining in a lot, and a fee paid in fiat adjusts the basis and must leave every quantity untouched.
+The distinction decides quantity versus basis: a fee paid in the asset is a disposal that reduces the quantity remaining in a lot, and a fee paid in fiat adjusts the basis and must leave every quantity untouched. Whether a *fiat* figure is the amount charged or only a **valuation** of a fee charged in the asset is not a property of the column, and SHALL NOT be declared as one: it follows from the source writing both directional sides in the same asset, where the fee that actually moved is the difference between them. A separate declared member asserting "this column holds a valuation" was implemented and then removed, because it could not change any outcome the named-column member did not already produce, and the one real row that would have distinguished it is a sale whose euro fee is a genuine cost.
 
 #### Scenario: A source with no fee-currency column resolves to the row's asset
 

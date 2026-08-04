@@ -37,7 +37,7 @@ type _KeysAreTheVocabulary = Assert<
 type _DenominationIsDiscriminated = Assert<
   Equal<
     FeeDenomination["kind"],
-    "ROW_ASSET" | "NAMED_COLUMN" | "FIAT_VALUATION" | "COLLATERAL_CURRENCY"
+    "ROW_ASSET" | "NAMED_COLUMN" | "COLLATERAL_CURRENCY"
   >
 >;
 type _ConventionIsDiscriminated = Assert<
