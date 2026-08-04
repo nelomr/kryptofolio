@@ -54,7 +54,15 @@ Migration files, schema definitions, and analytical adapters live in `packages/d
   - `DuckDbTaxCalculatorAdapter`: Consumes the vectorized DuckDB views to generate accurate capital gains and tax base categorization (IRPF).
   - `DuckDbPortfolioAnalyticsAdapter`: Responsible for ASOF joins and real-time market data projection.
   - `DuckDbMetricsAdapter`: Generates institutional risk metrics (Sharpe Ratio, Volatility, Max Drawdown, Alpha, Beta, Win Rate) via DuckDB OLAP queries. *See full [DuckDB Metrics & Time-Series Architecture](architecture/duckdb-metrics-time-series.md).*
-  - `FifoMaterializerService`: Orchestrates the complex lifecycle of extracting flattened events, calculating gains using FIFO matching, and persisting consumed lots back to the ledger securely.
+  - `FifoMaterializerService`: Orchestrates the complex lifecycle of extracting flattened events, calculating gains using FIFO matching, and persisting consumed lots back to the ledger via set reconciliation (insert new / update changed / soft-delete absent) rather than an UPSERT-only write, so rows recomputed away from the ledger actually retire.
+
+> [!NOTE]
+> Tax-lot calculation, the custody double-entry ledger, and the per-source fee/format model are
+> documented in full in [FIFO Tax Engine, Custody Ledger & Source Format Profiles](fifo-tax-engine.md).
+> `IngestAndMaterializeUseCase` (`apps/backend/src/core/application/use-cases/`) is the orchestrator
+> that runs `FifoMaterializerService.recalculate()` once per ingestion batch — never per row, since
+> `CsvIngestionUseCase` already performs a network price lookup per transaction — and after every
+> manual price/transfer-destination override edit.
 
 ## Domain Layer Isolation (`PreciseAmount`)
 

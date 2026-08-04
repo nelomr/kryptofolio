@@ -186,6 +186,26 @@ flowchart LR
 
 ---
 
+## 💰 FIFO Tax Engine & Custody Ledger
+
+Portfolio tax lots are computed exclusively in DuckDB, from a data-driven `fifo_event_policy`
+relation rather than inline `tx_type` predicate lists, and custody (which account physically holds
+an asset) is tracked by a separate double-entry ledger that never influences which lot a sale
+consumes. Each exchange source's own CSV conventions — fee denomination, gross/net/fee convention,
+whether a row writes one movement onto both directional columns — are declared once as a
+**source format profile** (`packages/core-domain/src/domain/services/sourceProfile/`) rather than
+guessed by the column mapper.
+
+> [!NOTE]
+> This is substantial enough to warrant its own document. See
+> **[FIFO Tax Engine, Custody Ledger & Source Format Profiles](fifo-tax-engine.md)** for the full
+> ingestion pipeline, the fee model, the custody ledger's `ownwallet-<ASSET>` counterparty, and the
+> DuckDB view dependency graph (`v_flattened_fifo_events` → `v_acquisitions`/`v_disposals` →
+> `v_fifo_matches` → `v_calculated_tax_lots`, plus `v_lot_custody_allocation` on a wholly separate
+> ordering).
+
+---
+
 ## 🤖 AI Agent Ready (Future Feature)
 
 Although the AI Agent integration (using Vercel AI SDK and Mastra) is a future capability, the application has been designed from the ground up to support it:

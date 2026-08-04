@@ -38,6 +38,7 @@ dist-ssr
 .design/*
 opencode.json
 propuestas/
+CLAUDE.md
 
 # OpenSpec — only track live specs and config, not change history
 openspec/changes/archive/
