@@ -3891,33 +3891,284 @@ them, which the old contract always did). All five typechecks 0. No `any` or cas
 Removing the two schema fields → both new schema tests failed, confirming the anti-corruption layer was
 the actual gap, not the component.
 
+## 2026-08-05 — 14η: the fidelity net and closing out — COMPLETE, all nine tasks
+
+Last phase of group 14. Nine heterogeneous tasks: two real implementation efforts (14.27/14.28), a
+contained `any` cleanup (14.21), a five-hop wire-contract change (14.28b), two closeout-by-verification
+tasks (14.22, 14.35), two proposal-only follow-ups (14.36, 14.36b), and one "already fixed, verify it"
+task that turned out **not** to be fixed (14.36c). Baseline: shared-types 49, core-domain 216, database
+136, backend 397, frontend 442; all five typechecks 0 errors, `HEAD = 94067a2`.
+
+### 14.36c — the premise was false; fixed for real
+
+Checked rather than trusted, per the task's own instruction. `RestTaxAdapter.importTransactions` still
+did exactly what the 14δ verification note described: flattened `id_hash: row.id_hash ?? ''` into the
+payload, cast the array `as never`, and two further `row as {...}` assertions. Not fixed.
+
+Root cause once the casts were removed (one real error, as 14δ's note predicted): the frontend had **two
+independent `TransactionMappedData`/`TransactionRow` definitions** — the canonical one in
+`packages/shared-types`, and a second, poorer one hand-declared in
+`apps/frontend/src/modules/data-ingestion/types.ts` (no `account_id`, no `fiscal_flag`, no
+`transfer_group_id`). `ITaxPort`, `RestTaxAdapter`, `ImportTransactionsUseCase` and
+`useTaxMutations.ts` all imported the local, impoverished one — which is why the cast existed at all:
+the real account, added by `useImportProcessor.ts` at runtime, was invisible to the type the send site
+actually used. Fixed by switching those four files' `TransactionRow` import to `@kryptofolio/shared-types`
+(mechanical — the two definitions share every field name, so no other call site changed), deleting the
+duplicate schema drift outright rather than teaching the send site to route around it.
+
+Built the actual boundary conversion `domain-anti-corruption` calls for:
+`toIngestionPayloadRow(row: TransactionRow)` in `RestTaxAdapter.ts` — folds `null` to `undefined` on
+exactly the 13 fields the ingestion route's own schema declares by name (everything else, `metadata`,
+`fiscal_flag`, `transfer_group_id`, crosses through the route's `passthrough()` untouched, confirmed by
+reading `objectInputType`'s `PassthroughType` — an index signature of `unknown` does not excess-property-
+check), and throws if `account_id` is absent rather than sending a uuid column `undefined`. Corrected
+`ITaxPort.ts`'s doc comment, which still claimed the caller supplies `id_hash`.
+
+12 tests in `RestTaxAdapter.spec.ts` (2 rewritten off the old id_hash-flattening behavior, 2 new: null
+folds to undefined, a missing account rejects before any network call). Two deliberate breaks: reverting
+the `tx_type` fold → `expected null to be undefined`; removing the `account_id` throw →
+`expected true instead of rejecting`. Both red for the named reason, both restored from a copy.
+
+### 14.21 — three `any`s, one legitimate exemption pattern, all removed
+
+`MarketDataAdapters.test.ts`'s mocked `ws` module: `static lastInstance: any`, `emit(event: string,
+...args: any[])`, and the outer `const MockWsClass = WebSocket as any`. None needed to stay `any` — the
+mock class lives inside a `vi.mock` factory and isn't importable by name at the outer scope, but a named
+`MockWebSocketInstance`/`MockWebSocketStatic` interface pair, declared once, types both sides exactly.
+`WebSocket as unknown as MockWebSocketStatic` replaces the `any` cast with a real, narrow type. Added a
+null-check (`if (!wsInstance) throw`) where the old `any` had silently permitted the possibility.
+Deliberate break: `wsInstance.emit(123)` → `tsc` reported `Argument of type 'number' is not assignable
+to parameter of type 'string'` at the exact line, then a full green run confirmed the checker had not
+been fooled by a solution-style tsconfig (backend's is not — `include: ["src/**/*"]`, not `"files": []"`).
+
+### 14.28b — the five-hop contract, built end to end, plus the UI surface
+
+`pendingFeeReview` existed in `IngestionResult`/`IngestAndMaterializeResult.ingestion` and stopped there.
+Threaded through all five hops named in the task:
+
+1. **Outcome DTO** — `feePendingReviewSchema` + `pendingFeeReview: z.array(...)` added to
+   `ingestionOutcomeSchema` (`apps/backend/.../dtos/materialization.ts`).
+2. **Route** — `ingestion.ts` populates it from `ingestion.pendingFeeReview`. 20 tests in
+   `ingestion.test.ts` (2 new; the other 18's mock containers all gained `pendingFeeReview: []`, since
+   the field is required, not optional, matching the house convention already set for `rejected`).
+3. **Frontend DTO** — `FeePendingReviewEntity` + `ExternalFeePendingReviewSchema`, extending
+   `IngestionOutcomeEntity`/`ExternalIngestionOutcomeSchema`. The type-only deep import from
+   `IngestionOutcomeDto` (backend's own DTO type) caught the missing field at compile time before a
+   single runtime test ran, exactly the pattern standing reminder 7 describes.
+4. **Adapter return type** — `RestTaxAdapter.importTransactions` went from `Promise<void>` (the response
+   was being **discarded entirely**, unrelated to this task but discovered while wiring it) to
+   `Promise<IngestionOutcomeEntity>`, parsed through `ExternalIngestionOutcomeSchema`. `ITaxPort`,
+   `ImportTransactionsUseCase` follow. 13 tests in `RestTaxAdapter.spec.ts` (was 12; the "resolves void"
+   test became "resolves the parsed outcome," plus one new test for a populated `pendingFeeReview`).
+5. **UI surface** — `PendingValuesReview.vue` gained an optional `feePendingReviewRows` prop and a new,
+   button-less list section (no assignment affordance exists for a fee yet, unlike a price or a
+   destination), and an empty-state check across both surfaces (`nothingPending`). Mounted a *second
+   instance* of the same component on the wizard's own step-3 success screen — not a second panel, the
+   same component reused, per the task's own instruction — fed from a new `feePendingReview` ref
+   `useImportProcessor.ts` now exposes from the mutation's return value.
+
+**Explicitly not folded into `pendingReview`**, per the task: a separate count, a separate field, a
+separate section with no shared vocabulary member.
+
+**Not covered by an automated test, and said so rather than claimed otherwise:** the one-line template
+binding `:fee-pending-review-rows="wizard.importProcessor.feePendingReview.value"` in
+`DataIngestionWizard.vue` has no dedicated mount test — that component had zero prior test coverage and
+building the Pinia-Colada/query-mocking harness to reach it was judged disproportionate to one line of
+glue, given eight more heterogeneous tasks remained. Verified instead by a deliberate break: removing
+`.value` (passing the `Ref` instead of the unwrapped array) made `vue-tsc --build --force` fail with
+`Type 'Ref<...>' is missing the following properties from type 'FeePendingReviewEntity[]'` at the exact
+line — real evidence, not asserted confidence, but narrower than a mount test would be.
+
+Frontend 442 → **451** (+9: 2 RestTaxAdapter/14.36c, 2 FiscalIntegritySchemas, 3 RestTaxAdapter/14.28b, 2
+PendingValuesReview... — see the running counts below for the definitive per-commit breakdown). Backend
+397 → **399** at this point (+2, the route test). All five typechecks 0 throughout.
+
+### 14.22, 14.35 — verified, not re-implemented
+
+**14.22.** Read group 13 in `tasks.md`: still `## 13. End-to-End Verification (the final gate — runs
+AFTER group 14)`, every task `[ ]`, unstarted. The premise ("group 14 now runs before group 13, so group
+13 is the single verification gate and needs no second pass") holds unchanged. Ticked.
+
+**14.35.** Read `design.md` D25 in full and each of the six decision tasks (14.4, 14.8, 14.13, 14.16,
+14.17, 14.19b) in `tasks.md`: all `[x]`, each carries "DECIDED" plus its verdict and rejected
+alternatives inline, matching D25 exactly. Checked every phase entry that actually implemented one of the
+six (14δ for 14.4/14.19b, 14ε for 14.8, 14ζ for 14.13, 14β for 14.16/14.17) for an undocumented deviation.
+Found none beyond what is already written up: 14.16's entry already names the one extra thing the task
+list omitted (the SQL `tx_type` CHECK and the reporting-currency magnitude rule); 14.17's entry already
+records the deferral and the follow-up change; 14.4/14.19b's and 14.8/14.13's entries report their six
+decisions implemented exactly as decided, with unrelated bugs found along the way recorded separately
+under their own headings, not folded into these six. Nothing left to write. Ticked.
+
+### 14.36 — already open, verified rather than recreated
+
+`openspec/changes/add-futures-collateral-ledger/` already exists (created in phase 14β per the task
+prompt's own warning) with `proposal.md`, `design.md`, `tasks.md` (12 tasks, none started) and a specs
+delta for `futures-collateral-movements`. Read all four files: the proposal's scope boundary matches the
+task's own wording almost verbatim (spot/futures never mix, futures never holds the asset, per-currency
+balance view). `openspec validate add-futures-collateral-ledger` → valid. Ticked without touching it.
+
+### 14.36b — a new proposal-only change, `adopt-fiscal-money-value-object`
+
+No prior directory existed for this one. Measured before proposing: `Money`'s actual surface
+(`packages/core-domain/src/value-objects/Money.ts`) is `constructor`, `toString`, `add/sub/mul/div/equals`
+— no comparison method, no numeric escape hatch — and `apps/frontend/src/composables/useFormatters.ts`'s
+`formatCurrency`/`formatPercent`/`formatNumber` already accept a `string` and `parseFloat` it once at the
+point of rendering, so no formatter change is needed, only `Money.toString()` at each of the ~8 call
+sites. `FiscalEntities.ts`'s ~15 monetary/quantity fields (`unitCost`, `totalCost`, `salePriceEur`,
+`gainLossEur`, `capitalGainsEur`, `realizedPnl`, …) are all still `number`, non-compliant with
+`domain-financial-precision`'s own existing requirement.
+
+`proposal.md` + `design.md` (three decisions resolved: extend `Money` with `isNegative`/`isZero`/
+`isPositive`/`compareTo` rather than a raw-Decimal getter or a `toNumber()` escape hatch; leave
+`useFormatters.ts` untouched; migrate leaf consumers before `FiscalEntities.ts` itself, behind a
+temporary `Money | number` union, so no commit in the sequence breaks `pnpm test`) + `tasks.md` (7
+groups, 20 tasks) + a `domain-financial-precision` specs delta (`## MODIFIED Requirements`, two new
+scenarios). `openspec validate adopt-fiscal-money-value-object --strict` → valid. No code written, per
+the task's explicit instruction — this is a proposal, not an implementation.
+
+### 14.27 — the fidelity net, and what it found
+
+Verified the fixture first, per the task's own warning about a fixture drifting from reality: sampled
+`KRAKEN_SPOT_ROWS`, `BITVAVO_ROWS`, `BITUNIX_ROWS` (all 3 rows), `KRAKEN_FUTURES_ROWS`, `TANGEM_ROWS`, and
+six `BIT2ME_ROWS` entries against the real files at
+`/Users/nelo/proyectos/AgenteIA/cripto-proyect/listadoTransacciones` (`bit2me_spot_2025.xlsx` read via
+`XLSX.utils.sheet_to_json`, the rest via `head`/`cat`). Every sampled row matched
+`packages/core-domain/src/__tests__/fixtures/realSourceRows.ts` exactly.
+
+Built the net in a new `apps/backend/.../use-cases/__tests__/quantityFidelityNet.spec.ts`, mirroring
+`typeLabelCoverage.spec.ts`'s own driving pattern exactly (`guessColumnMapping` → `mapToEntity` →
+`normalizeTransactionDirection` → `detectSourceProfile` for the D27 guard → `CsvIngestionUseCase.execute`)
+rather than inventing a second one. Backend fixtures live locally
+(`__tests__/fixtures/quantityFidelityRows.ts`, copied from the already-verified `realSourceRows.ts` rows),
+matching this codebase's own established convention — `typeLabelCoverage.spec.ts` does not import
+core-domain's test fixtures either, it carries its own local copy, and a cross-package deep import into
+another package's `src/__tests__/` would also have tripped `apps/backend/tsconfig.json`'s `rootDir`.
+
+**Before writing a single assertion, ran the pipeline and read the actual output** (`writeFileSync` to a
+scratch file — this repo's vitest silences console output). That measurement step is why this task took
+longer than "wire up a fixture": it found two real defects, not zero.
+
+**Defect 1 — `funding_amount` read the wrong column.** `kraken_futures.csv`'s real header order is
+`…, funding rate, realized pnl, fee, realized funding, …`. `COLUMN_DICTIONARY`'s `funding_amount` pattern
+list named both `"funding rate"` and `"realized funding"` as synonyms, and `guessColumnMapping` assigns
+a target field to whichever header it reaches first — so the *rate* (`-0.000028384605269555`, a
+fraction) claimed `funding_amount`, and the real amount (`0.00650000000`) fell through to `metadata`,
+unreachable. A rate is not an amount; the two are semantically different units. Fixed by removing
+`"funding rate"` from the pattern list. New test in `columnAutoMapper.spec.ts` pins both headers'
+destinations regardless of order.
+
+**Defect 2 — a stated fee lost its trailing zeros on the way to the ledger.** The exact defect class
+14δb already fixed for *quantities* (`sourceMagnitude`, `new Decimal(text).toString()` reformats
+`7704.160` to `7704.16`) was still live for *stated fees*, in two separate functions:
+`resolveGrossNetFee`'s `NET_PLUS_FEE`/`FEE_AS_STATED`/`FEE_INSIDE_TOTAL` branches returned `fee.toString()`
+(Decimal's canonical form) instead of the already-validated `feeText` (the source's own text), and
+`routeFee` then **re-parsed `convention.fee` through `new Decimal(...).toString()` a second time**, so
+even a caller that had received the correct text from `resolveGrossNetFee` lost it one function later.
+Measured on the real Kraken futures row: source states `fee: '0.16440000000'`; before the fix, the
+ledger persisted `'0.1644'` — numerically identical, not the digits the file states. Fixed both functions
+to pass the stated text straight through, reserving `new Decimal(...)` for values genuinely computed by
+subtraction or addition (`gross.minus(net)`, `net.plus(fee)`), which are not source text to begin with
+and correctly keep their computed form.
+
+**Three existing tests had baked the reformatting in as "expected"** and had to be corrected, the same
+shape 14δb already found twice: `feeModel.spec.ts`'s two `routeFee` assertions (`'0.1644'` →
+`'0.16440000000'`, `'17.72'` → `'17.720'`) and three backend integration tests
+(`CsvIngestionUseCase.spec.ts`, `ingestionBoundary.spec.ts` — whose own adjacent comment already stated
+the correct principle while the assertion two lines below violated it — and `sourceFidelity.spec.ts`,
+which round-trips through a real SQLite adapter).
+
+**A third finding, measured and deliberately not fixed — recorded as a named characterization test, not
+silently passing.** `kraken_spot.csv`'s `TZ7N3Z-O5Z5O-ODPRUX` trade states a fee on **both** legs, in two
+different currencies (EUR `1.0210`, confirmed by the row's own balance arithmetic —
+`500.0000 − 495.5398 − 1.0210 = 3.4392`, its stated balance — and ENA `1.86123`).
+`LedgerSpotTransaction` has one `fee_amount`/`fee_asset_id` pair, so the EUR fee is silently absent from
+the persisted row; only the ENA fee survives. Fixing this needs a schema decision (a second fee field? a
+fee-legs table?) that is a different, larger question than a fidelity net's task can settle mid-phase —
+exactly the shape of finding this change's working method says to record rather than invent an answer to.
+Named in the net as `KNOWN GAP`, asserting the current (incomplete) behavior explicitly, so a future
+change to the fee model cannot silently narrow this case's coverage without the assertion naming what
+changed. Switched the *passing* Kraken-spot assertion to a different real pair (`PLUME`, single stated
+fee) so the net's main case does not depend on resolving this gap.
+
+Net: 8 tests, all passing, covering all six real sources plus the one named gap.
+
+### 14.28 — verified, and the "no `number`" grep made permanent
+
+Ran the full suite after 14.27's two fixes (below). Second half: wrote
+`moneyPathNoNativeNumber.spec.ts` — not a one-off grep, a permanent test, `it.each` over 14 files
+spanning three packages (`CsvIngestionUseCase.ts`, `ILedgerPort.ts`, `PreciseAmount.ts`,
+`SQLiteLedgerAdapter.ts`, `appliers.ts`, `types.ts`, the normalizer's `rowAggregator`/`ingestionPipeline`/
+`tradeDirection`/three handler files, `TransactionMappedData.ts`, `ledger.ts`), asserting a regex naming
+every monetary/quantity field (`amount`, `fee_amount`, `total_fiat`, `price_fiat`, `quantity`, `gross`,
+`net`, `realized_pnl`, `funding_amount`, …) never appears immediately followed by `: number`. Deliberately
+narrow to named fields rather than banning `number` outright — a loop index is a legitimate `number` in
+these same files. Read via `readFileSync` against the files on disk, not a TypeScript import, so it
+cannot be fooled by a type alias narrowing `number` away before the check runs. 15 tests (14 files + one
+self-test proving the regex itself discriminates: catches `amount: number`, does not catch `index:
+number`). Deliberate break: injected `interface _DeliberateBreak { amount_in: number }` into
+`ledger.ts` → failed naming the exact file and line; restored from a copy.
+
+**One pre-existing `any` noticed, not fixed, out of scope.** `AutoMapColumnsUseCase.ts:117`,
+`mappedData: Record<string, any>` — present before this phase touched the file (for the `funding_amount`
+dictionary comment), untouched by this phase's diff, and not part of any of the nine tasks. Left for a
+future cleanup rather than folded in here.
+
+### Measured state after 14η — group 14 fully closed
+
+| package | tests | typecheck |
+|---|---|---|
+| `packages/shared-types` | 49 (unchanged) | 0 errors |
+| `packages/core-domain` | 216 → **220** (+4: funding-rate/funding-amount collision, 3× stated-fee digit preservation) | 0 errors |
+| `packages/database` | 136 (unchanged) | 0 errors |
+| `apps/backend` | 397 → **422** (+25: 2 pendingFeeReview route, 8 quantityFidelityNet, 15 moneyPathNoNativeNumber) | 0 errors |
+| `apps/frontend` | 442 → **451** (+9: 14.36c's RestTaxAdapter rewrite, 14.28b's outcome-parsing and PendingValuesReview extension) | 0 errors, `vue-tsc --build --force` |
+
+`grep -rnE ': any\b|as any\b|<any>|, any>|as never\b'` across every file this phase touched: zero hits
+outside the one pre-existing, untouched `any` named above and the test file's own doc-comment mentioning
+`as never` by name (a historical description, not a live cast).
+
 ## Resume here — next action
 
-**182 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
-**12 in full, including the 12.11–12.21 addendum** are closed, and group 14 is now **fully closed —
-all phases 14α, 14β, 14βb, 14γ, 14δ, 14ε, 14εb and 14ζ done**, 14γ's two follow-ups 14.33b/14.33c
-included. Group 14 ran **before** group 13 by design. **No task is left open in a closed group.**
+**191 checked boxes in `tasks.md`, 16 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**12 in full, including the 12.11–12.21 addendum** are closed, and **group 14 is now fully closed —
+every phase, 14α, 14β, 14βb, 14γ, 14δ, 14ε, 14εb, 14ζ and 14η, done**, 14γ's two follow-ups
+14.33b/14.33c and 14δ's own follow-up 14δb included. Group 14 ran **before** group 13 by design. **The
+16 remaining open tasks are all of group 13, and only group 13** — no task is left open in any closed
+group.
 
 ### Start here next session — group 13, the final verification gate
 
-Group 14 is the last implementation phase; **group 13 is next**, and it is the single verification
-gate this change has been building toward (14.22's own note: "group 13 is the single verification
-gate and needs no second pass"). Nothing else remains to implement — group 13 is verification against
-the real corpus, not new code. Do not start it in this session; it is recorded here only so the next
-session knows where to resume.
+**Group 14 is done. Group 13 is next, and it is the only thing left in this change.** It is the single
+verification gate this change has been building toward (14.22's own note, confirmed still true this
+session: "group 13 is the single verification gate and needs no second pass"). Nothing remains to
+implement — group 13 is verification against the real corpus, not new code. It was not started this
+session, per the task prompt's explicit instruction; it is recorded here only so the next session knows
+where to resume.
 
-**Open finding for whoever picks up group 13 or a follow-up change**, not fixed in 14ζ because it
-would add a `quality_flag`/pending-review concept to two views that have never carried one, which is
-larger than this phase's stated scope: `savings_base_yields_eur`/`general_base_airdrops_eur` in the
-Spanish tax report silently exclude an unresolved STAKING/AIRDROP/MINING/REWARD/PROMOTION row from
-the yearly income sum (`SUM` skips `NULL` rows) rather than flagging it pending, the way the
-capital-gains side does via `MISSING_PRICE`. Not a regression from this phase — the exclusion
-existed before nullability too, just reachable only via the ingestion-time `unresolvedFiat` counter
-rather than via the recorded fact. Worth a `D` number if group 13's real-corpus run surfaces an
-actual unresolved income row.
+**Two open findings for whoever picks up group 13 or a follow-up change**, neither fixed in the phase
+that found it because each needs a decision bigger than that phase's own scope:
 
-Measured state: shared-types 46, core-domain **212**, database 127, backend **390**, frontend 437; all
-five typechecks 0 errors.
+1. (14ζ) `savings_base_yields_eur`/`general_base_airdrops_eur` in the Spanish tax report silently
+   exclude an unresolved STAKING/AIRDROP/MINING/REWARD/PROMOTION row from the yearly income sum (`SUM`
+   skips `NULL` rows) rather than flagging it pending, the way the capital-gains side does via
+   `MISSING_PRICE`. Not a regression from 14ζ — the exclusion existed before nullability too, just
+   reachable only via the ingestion-time `unresolvedFiat` counter rather than via the recorded fact.
+   Worth a `D` number if group 13's real-corpus run surfaces an actual unresolved income row.
+2. (14η/14.27) `kraken_spot.csv`'s `TZ7N3Z-O5Z5O-ODPRUX` trade states a fee on **both** legs of one
+   trade, in two different currencies (EUR and ENA). `LedgerSpotTransaction` has one
+   `fee_amount`/`fee_asset_id` pair, so the EUR-side fee is silently absent from the persisted row —
+   pinned as a named `KNOWN GAP` characterization test in `quantityFidelityNet.spec.ts` rather than
+   fixed, since the fix needs a fee-model schema decision (a second fee field? a fee-legs table?) that
+   is its own `D` number, not a fidelity-net task.
+
+Measured state: shared-types **49**, core-domain **220**, database **136**, backend **422**,
+frontend **451**; all five typechecks 0 errors, `vue-tsc --build --force` and backend's own
+`tsc --noEmit` both included.
+
+### Superseded — the phase 14ζ start-here notes
+
+All of group 14 (14α through 14η) is closed as of this session; the notes below are kept for history
+only and describe a state that no longer exists.
 
 ### Start here next session — group 14, phase 14ζ
 
