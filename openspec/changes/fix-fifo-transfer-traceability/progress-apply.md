@@ -3838,9 +3838,38 @@ boolean-plus-payload shape the task named, touched one method and its one call s
 change to `IngestionResult`'s public shape (`unresolvedFiat: number` stayed a count, not a union,
 since nothing downstream of the use case needs per-row detail beyond the count already returned).
 
+### 14.14b — closing 14ζ's own open finding
+
+14ζ's report flagged, correctly, that an unresolved STAKING/AIRDROP row now vanishes from the yearly
+total instead of being counted — the mirror problem to the disposal side, which already has
+`excludedFlaggedEvents`. Fixed rather than deferred, since the pattern to copy already existed.
+
+`getSpanishTaxReport`'s `savingsBaseYields`/`generalBaseAirdrops` sum `total_fiat` over
+`savings_base_yields`/`general_base_airdrops`; `SUM` already skips a `NULL` row, so the total itself
+was never wrong. What was missing was the count — the total looked complete while a reward the price
+provider never priced contributed silently nothing. Added `excludedUnresolvedIncomeCount`: a
+`COUNT(*) WHERE total_fiat IS NULL` over both income views, threaded through `ITaxCalculatorPort`,
+`GetSpanishTaxReportUseCase`, and `SpanishTaxReportResponse` — the same shape `excludedFlaggedEvents`
+already has, deliberately, rather than inventing a second pattern for the same problem.
+
+Measured before writing the test: seeding one priced and one unpriced STAKING row and calling the real
+adapter showed the total (`500`, the priced row alone) was already correct — confirming the bug was
+purely the missing count, not a wrong sum.
+
+**Left alone, and stated plainly rather than folded in:** the frontend's `ExternalTaxReportSchema`
+drops `excludedFlaggedEvents` entirely today, so neither exclusion count reaches the UI yet. This new
+field keeps parity with the field it mirrors rather than fixing that gap, which is bigger than this
+task and belongs to group 13 or a follow-up.
+
+Tests: backend 393 → **397**. All five typechecks 0. No `any` or cast introduced.
+
+**Breaks: 2 applied, 2 red.** Forcing the count to always `0` → the "counts the unresolved reward"
+test failed. Dropping the `WHERE total_fiat IS NULL` filter (counting every income row, priced or
+not) → both count-specific tests failed, including the zero-exclusions one.
+
 ## Resume here — next action
 
-**180 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**181 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14 is now **fully closed —
 all phases 14α, 14β, 14βb, 14γ, 14δ, 14ε, 14εb and 14ζ done**, 14γ's two follow-ups 14.33b/14.33c
 included. Group 14 ran **before** group 13 by design. **No task is left open in a closed group.**

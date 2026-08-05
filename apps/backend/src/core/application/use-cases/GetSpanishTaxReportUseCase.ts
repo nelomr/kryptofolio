@@ -53,6 +53,8 @@ export interface SpanishTaxReportResponse {
   summary: TaxReportSummaryDto;
   /** Events held out of the totals above, so an incomplete base is never presented as complete. */
   excludedFlaggedEvents: number;
+  /** Income rows held out of the totals above because no price could be resolved for them. */
+  excludedUnresolvedIncomeCount: number;
   /** Figures the user declared rather than the market supplying. */
   manuallyAssignedCount: number;
   audit_trail: TaxReportAuditTrailEventDto[];
@@ -102,6 +104,7 @@ export class GetSpanishTaxReportUseCase {
       savingsBaseYields: reportBase.savingsBaseYields,
       generalBaseAirdrops: reportBase.generalBaseAirdrops,
       excludedFlaggedEvents: reportBase.excludedFlaggedEvents,
+      excludedUnresolvedIncomeCount: reportBase.excludedUnresolvedIncomeCount,
       manuallyAssignedCount: filteredEvents.filter(
         (evt) => evt.value_provenance === 'MANUAL',
       ).length,

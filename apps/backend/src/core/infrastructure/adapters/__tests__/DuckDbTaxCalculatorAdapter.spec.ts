@@ -155,6 +155,52 @@ describe('DuckDbTaxCalculatorAdapter', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // An unresolved income row must not silently vanish from the yearly total
+  // ---------------------------------------------------------------------------
+
+  /**
+   * A staking reward the price provider never priced: `total_fiat` is NULL, not `'0'` — the same
+   * distinction that keeps a genuinely free acquisition from being flagged MISSING_PRICE. `SUM`
+   * already skips the NULL row, which is correct for the total; nothing before this counted it.
+   */
+  const seedUnresolvedStaking = (): void => {
+    sqliteDb.exec(`
+      INSERT INTO assets (id, symbol) VALUES ('BTC', 'BTC');
+      INSERT INTO accounts (id, name, type) VALUES ('acc-1', 'Binance', 'exchange');
+
+      INSERT INTO spot_transactions
+        (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES
+        ('tx-staking-priced', 'h-staking-priced', 'acc-1', 'STAKING', 'BTC', '0.01', '500.00', '50000.00', 'EUR',
+         '2023-03-01T10:00:00Z', 'COMPLETED'),
+        ('tx-staking-unpriced', 'h-staking-unpriced', 'acc-1', 'STAKING', 'BTC', '0.02', NULL, NULL, 'EUR',
+         '2023-03-02T10:00:00Z', 'COMPLETED');
+    `);
+  };
+
+  it('excludes an unresolved staking reward from savingsBaseYields', async () => {
+    seedUnresolvedStaking();
+    const report = await adapter.getSpanishTaxReport(2023);
+    expect(Number(report.savingsBaseYields)).toBe(500);
+  });
+
+  it('counts the unresolved reward instead of letting it disappear from the total', async () => {
+    seedUnresolvedStaking();
+    const report = await adapter.getSpanishTaxReport(2023);
+    expect(report.excludedUnresolvedIncomeCount).toBe(1);
+  });
+
+  it('reports zero unresolved income when every reward has a price', async () => {
+    seedUnresolvedStaking();
+    sqliteDb.exec(`
+      UPDATE spot_transactions SET total_fiat = '600.00', price_fiat = '30000.00'
+      WHERE id = 'tx-staking-unpriced';
+    `);
+    const report = await adapter.getSpanishTaxReport(2023);
+    expect(report.excludedUnresolvedIncomeCount).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------
   // Custody and data quality — the two relations the port declares beyond lots
   // ---------------------------------------------------------------------------
 

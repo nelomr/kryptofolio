@@ -26,6 +26,7 @@ function makePort(
     generalBaseAirdrops: string;
     spotCapitalGains: string;
     excludedFlaggedEvents: number;
+    excludedUnresolvedIncomeCount: number;
   }> = {},
 ): ITaxCalculatorPort {
   return {
@@ -35,6 +36,7 @@ function makePort(
       generalBaseAirdrops: '0.00',
       spotCapitalGains: '0.00',
       excludedFlaggedEvents: 0,
+      excludedUnresolvedIncomeCount: 0,
       ...base,
     }),
     calculateLotsAndEvents: vi.fn().mockResolvedValue({ lots: [], events }),
@@ -136,6 +138,16 @@ describe('[Strict Hexagonal] GetSpanishTaxReportUseCase', () => {
     expect(result.audit_trail).toHaveLength(1);
     expect(result.audit_trail[0].sale_price_eur).toBeNull();
     expect(result.audit_trail[0].gain_loss_eur).toBeNull();
+  });
+
+  it('carries the unresolved-income count from the port to the response untouched', async () => {
+    const useCase = new GetSpanishTaxReportUseCase(
+      makePort([], { excludedUnresolvedIncomeCount: 3 }),
+    );
+
+    const result = await useCase.execute({ year: 2024 });
+
+    expect(result.excludedUnresolvedIncomeCount).toBe(3);
   });
 
   it('keeps an excluded event in the audit trail with its flag and exclusion stated', async () => {

@@ -81,7 +81,8 @@ describe('Backend contract — a nullable field survives the round trip', () => 
     }
     const backendResponse: SpanishTaxReportResponse = {
       year: 2024, method: 'FIFO', spotCapitalGains: '0', savingsBaseYields: '0',
-      generalBaseAirdrops: '0', excludedFlaggedEvents: 1, manuallyAssignedCount: 0,
+      generalBaseAirdrops: '0', excludedFlaggedEvents: 1, excludedUnresolvedIncomeCount: 0,
+      manuallyAssignedCount: 0,
       summary: {
         capital_gains_eur: 0, capital_losses_eur: 0, savings_base_yields_eur: 0,
         general_base_airdrops_eur: 0, net_patrimonial_result_eur: 0, estimated_irpf_eur: 0,

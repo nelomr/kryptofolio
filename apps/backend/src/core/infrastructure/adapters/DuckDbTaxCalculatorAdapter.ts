@@ -254,6 +254,17 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
       ${taxableEvents}
         AND is_taxable = 0
     `;
+    // `total_fiat IS NULL` is what an unresolved price leaves behind; `SUM` above already skips it,
+    // so the yearly total is correct on its own — this is the count that keeps it from *looking*
+    // complete when a reward the provider never priced silently dropped out of it.
+    const unresolvedIncomeQuery = `
+      SELECT CAST(COUNT(*) AS INTEGER) AS val FROM (
+        SELECT total_fiat FROM savings_base_yields WHERE year = $1${accountFilter}
+        UNION ALL
+        SELECT total_fiat FROM general_base_airdrops WHERE year = $1${accountFilter}
+      )
+      WHERE total_fiat IS NULL
+    `;
     const futuresGainsQuery = `
       SELECT CAST(COALESCE(SUM(pnl_fiat - fee_fiat), 0.0) AS VARCHAR) AS val
       FROM v_futures_realized_pnl
@@ -277,6 +288,10 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
       excludedEventsQuery,
       baseParams,
     )) as { val: string | number | bigint } | null;
+    const unresolvedIncomeRes = (await this.db.queryOne(
+      unresolvedIncomeQuery,
+      baseParams,
+    )) as { val: string | number | bigint } | null;
 
     const savingsBaseYields = new Decimal(savingsRes?.val ?? 0).toFixed(18);
     const generalBaseAirdrops = new Decimal(generalRes?.val ?? 0).toFixed(18);
@@ -290,6 +305,7 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
       generalBaseAirdrops,
       spotCapitalGains: spotCapitalGainsVal.toFixed(18),
       excludedFlaggedEvents: Number(excludedRes?.val ?? 0),
+      excludedUnresolvedIncomeCount: Number(unresolvedIncomeRes?.val ?? 0),
     };
   }
 }

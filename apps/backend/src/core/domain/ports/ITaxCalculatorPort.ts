@@ -22,6 +22,13 @@ export interface SpanishTaxBaseReport {
    * Reported alongside the figures so an incomplete total is never presented as complete.
    */
   excludedFlaggedEvents: number;
+  /**
+   * Income rows (staking, airdrops, and the rest of `savings_base_yields`/`general_base_airdrops`)
+   * excluded from the totals above because no price could be resolved for them — `total_fiat IS
+   * NULL`, not `'0'`. A `SUM` already skips these rows correctly; without this count the total looks
+   * complete while quietly missing whatever they were worth.
+   */
+  excludedUnresolvedIncomeCount: number;
 }
 
 /**
