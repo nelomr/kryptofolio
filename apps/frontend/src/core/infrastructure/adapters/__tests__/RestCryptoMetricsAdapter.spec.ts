@@ -121,6 +121,47 @@ describe('RestCryptoMetricsAdapter', () => {
     expect(result.worstAsset?.symbol).toBe('ETH')
   })
 
+  it('getKpis handles null bestAsset/worstAsset from backend (portfolio with < 2 assets)', async () => {
+    const payloadWithNullAssets = {
+      totalEquity: '10000.00',
+      totalCostBasis: '8000.00',
+      totalUnrealizedPnl: '2000.00',
+      totalRealizedPnl: '500.00',
+      allTimeHigh: '12000.00',
+      maxDrawdownPct: '-0.15',
+      annualizedVolatility: '0.25',
+      sharpeRatio: '1.50',
+      currency: 'EUR',
+      delta24hFiat: '150.00',
+      maxDrawdownFiat: '-1500.00',
+      recoveredFiat: '500.00',
+      winRatePercent: 65,
+      totalTrades: 20,
+      winningTrades: 13,
+      losingTrades: 7,
+      averageR: 1.5,
+      bestAsset: null,
+      worstAsset: null,
+      totalRoiPercent: 31.25,
+      totalRoiFiat: '2500.00',
+      excludedFlaggedLots: 0,
+    }
+
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.metrics.kpis.$get.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(payloadWithNullAssets)
+    })
+
+    const adapter = new RestCryptoMetricsAdapter()
+    const result = await adapter.getKpis()
+
+    expect(result.totalEquityFiat).toBe(10000)
+    expect(result.bestAsset).toBeUndefined()
+    expect(result.worstAsset).toBeUndefined()
+  })
+
   it('emits to errorBus and throws DomainValidationError when API payload is invalid', async () => {
     const invalidPayload = { total_roi_percent: 15.5 }
 

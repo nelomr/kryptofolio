@@ -63,10 +63,10 @@ export const CryptoKpisSchema = z
     losing_trades: numericField.optional(),
     averageR: numericField.optional(),
     average_r: numericField.optional(),
-    bestAsset: AssetKpiSchema.optional(),
-    best_asset: AssetKpiSchema.optional(),
-    worstAsset: AssetKpiSchema.optional(),
-    worst_asset: AssetKpiSchema.optional(),
+    bestAsset: AssetKpiSchema.nullable().optional(),
+    best_asset: AssetKpiSchema.nullable().optional(),
+    worstAsset: AssetKpiSchema.nullable().optional(),
+    worst_asset: AssetKpiSchema.nullable().optional(),
   })
   .refine(
     (raw) =>
