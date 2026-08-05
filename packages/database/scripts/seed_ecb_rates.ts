@@ -16,15 +16,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createReadStream } from 'node:fs';
 import readline from 'node:readline';
+import { resolveDataRoot, resolveLedgerDbPath } from '../src/dataPaths.js';
 
 // ---------------------------------------------------------------------------
 // Config — resolve paths relative to the monorepo root (two levels up)
 // ---------------------------------------------------------------------------
 
-const MONOREPO_ROOT = path.resolve(import.meta.dirname, '../../..');
-const LEDGER_DB_PATH = path.join(MONOREPO_ROOT, 'kryptofolio_ledger.db');
+// The ledger comes from the shared resolver, so seeding follows a relocated `KRYPTOFOLIO_DATA_DIR`
+// instead of writing to a second database beside the repository.
+const LEDGER_DB_PATH = resolveLedgerDbPath();
 const ECB_CSV_PATH = path.join(
-  MONOREPO_ROOT,
+  resolveDataRoot(),
   'prices_assets',
   'oracle_backups',
   'backup_ecb_exchange_rates.csv',

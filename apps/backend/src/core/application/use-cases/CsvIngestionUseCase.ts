@@ -10,6 +10,7 @@ import {
   prepareIngestionRows,
   resolveFeeDenomination,
   resolveGrossNetFee,
+  resolveRowIdentity,
   routeFee,
 } from '@kryptofolio/core-domain';
 import type { InvariantOutcome, SourceFormatProfile } from '@kryptofolio/core-domain';
@@ -115,6 +116,34 @@ function sourceMagnitude(text: string): string {
  */
 function isStatedMagnitude(value: string | null | undefined): boolean {
   return value !== null && value !== undefined && value !== '';
+}
+
+/**
+ * A directional leg: a quantity and the asset it is a quantity *of*, which only mean anything together.
+ *
+ * The ledger enforces that with `(amount_out IS NULL) = (asset_out_id IS NULL)`, so the pair cannot be
+ * half-filled in storage — but nothing stopped it being half-filled on the way there. Bitunix writes
+ * `Outgoing Amount: 0` against a blank `Outgoing Asset` on every deposit, and since the batch is one
+ * request, that single row failed an entire file with a 500 and no row of it was persisted.
+ *
+ * An undenominated zero is nothing, not zero of something, so the leg is absent. An undenominated
+ * quantity that is *not* zero is information this schema cannot hold, and is refused rather than
+ * quietly dropped — dropping it would silently change a balance.
+ */
+type DirectionalLeg =
+  | { readonly kind: 'ABSENT' }
+  | { readonly kind: 'STATED'; readonly amount: string; readonly asset: string }
+  | { readonly kind: 'UNDENOMINATED'; readonly amount: string };
+
+function readLeg(amount: string | null | undefined, asset: string | null | undefined): DirectionalLeg {
+  const magnitude = isStatedMagnitude(amount) ? sourceMagnitude(amount as string) : null;
+  const symbol = asset === null || asset === undefined || asset === '' ? null : asset;
+
+  if (magnitude === null) return { kind: 'ABSENT' };
+  if (symbol !== null) return { kind: 'STATED', amount: magnitude, asset: symbol };
+  return new Decimal(magnitude).isZero()
+    ? { kind: 'ABSENT' }
+    : { kind: 'UNDENOMINATED', amount: magnitude };
 }
 
 function toSpotTxType(raw: string | null | undefined, timestamp: string): SpotTxType {
@@ -274,6 +303,19 @@ export class CsvIngestionUseCase {
       const fiatCurrency = row.fiat_currency || baseCurrency;
 
       if (resolvedType.market === 'spot') {
+        const inbound = readLeg(row.amount_in, row.asset_in);
+        const outbound = readLeg(row.amount_out, row.asset_out);
+        const undenominated = [inbound, outbound].find(leg => leg.kind === 'UNDENOMINATED');
+        if (undenominated?.kind === 'UNDENOMINATED') {
+          rejected.push({
+            idHash: row.id_hash,
+            timestamp: row.timestamp ?? '',
+            txType: row.tx_type ?? null,
+            reason: `a quantity of ${undenominated.amount} names no asset, so it cannot be recorded`,
+          });
+          continue;
+        }
+
         const fiat = await this.resolveFiatMagnitudes(row, fiatCurrency);
         if (fiat.kind === 'UNRESOLVED') unresolvedFiat += 1;
 
@@ -296,10 +338,10 @@ export class CsvIngestionUseCase {
           account_id: accountId,
           timestamp: normalizeIsoTimestamp(row.timestamp),
           tx_type: resolvedType.txType,
-          amount_in: row.amount_in ? toPreciseAmount(sourceMagnitude(row.amount_in)) : undefined,
-          asset_in_id: row.asset_in || undefined,
-          amount_out: row.amount_out ? toPreciseAmount(sourceMagnitude(row.amount_out)) : undefined,
-          asset_out_id: row.asset_out || undefined,
+          amount_in: inbound.kind === 'STATED' ? toPreciseAmount(inbound.amount) : undefined,
+          asset_in_id: inbound.kind === 'STATED' ? inbound.asset : undefined,
+          amount_out: outbound.kind === 'STATED' ? toPreciseAmount(outbound.amount) : undefined,
+          asset_out_id: outbound.kind === 'STATED' ? outbound.asset : undefined,
           fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
           fee_asset_id: fee.assetId,
           total_fiat: total === null ? null : toPreciseAmount(total.toString()),
@@ -395,7 +437,16 @@ export class CsvIngestionUseCase {
 
     for (const row of prepared) {
       const mappedData = row.mappedData as SubmittedTransaction;
-      const id_hash = await generateIdHash(mappedData);
+      /**
+       * Identity comes from the profile, never from whichever column happened to map to `tx_id`.
+       * Bitunix's `Trx. ID` maps there and labels two separate ADA deposits with one value, so a
+       * source that declares no identity must have it suppressed rather than merely unread.
+       */
+      const identity = resolveRowIdentity(profile, mappedData);
+      const id_hash = await generateIdHash({
+        ...mappedData,
+        tx_id: identity.kind === 'DECLARED' ? identity.value : undefined,
+      });
       if (row.hasError) {
         refused.push({
           idHash: id_hash,

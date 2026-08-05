@@ -97,6 +97,55 @@ describe("POST /ingestion/transactions", () => {
     expect(market).toBe("spot");
   });
 
+  /**
+   * A source that ships no total column — Bit2Me writes the consideration as the row's outbound leg
+   * instead — must reach the use case with the field absent, not defaulted.
+   *
+   * Defaulting it to the string '0' made an absent column indistinguishable from a source stating a
+   * free acquisition, and two independent layers downstream read that '0' as a fact: `foldFiatSide`
+   * skips a row that already has a total (and `'0'` is truthy), so the outbound EUR leg was never
+   * folded into one; and the FIFO engine treats a non-NULL `total_fiat` as a recorded figure, so the
+   * lot's basis really is zero. Measured on a real Bit2Me year: 0 of 59 rows kept a total, and every
+   * cost basis came out 0 with no flag raised anywhere.
+   */
+  it("passes an omitted total_fiat through as absent, never as a stated zero", async () => {
+    const { total_fiat: _t, price_fiat: _p, ...rowWithoutFiat } = VALID_ROW;
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [rowWithoutFiat],
+        market: "spot",
+        timezone: "UTC",
+        sourceProfileId: "bit2me-spot",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const [{ rows }] = orchestrator(container).mock.calls[0];
+    expect(rows[0].total_fiat).toBeUndefined();
+    expect(rows[0].price_fiat).toBeUndefined();
+  });
+
+  it("still carries a stated zero, which is a source saying the acquisition was free", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rows: [{ ...VALID_ROW, total_fiat: "0", price_fiat: "0" }],
+        market: "spot",
+        timezone: "UTC",
+        sourceProfileId: "kraken-spot",
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const [{ rows }] = orchestrator(container).mock.calls[0];
+    expect(rows[0].total_fiat).toBe("0");
+    expect(rows[0].price_fiat).toBe("0");
+  });
+
   it("sequences nothing itself: it never reaches ingestion or the materialiser directly", async () => {
     await app.request("/ingestion/transactions", {
       method: "POST",

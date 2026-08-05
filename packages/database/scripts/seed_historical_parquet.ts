@@ -19,34 +19,50 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { DuckDBInstance } from '@duckdb/node-api';
+import { resolveDataRoot, resolveParquetPricesPath } from '../src/dataPaths.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MONOREPO_ROOT = path.resolve(import.meta.dirname, '../../..');
-const PRICES_DIR = path.join(MONOREPO_ROOT, 'prices_assets', 'prices');
-const PRICE_USD_DIR = path.join(MONOREPO_ROOT, 'prices_assets', 'price-usd');
+// Output through the shared resolver, so the tree this writes is the one DuckDB federates.
+const DATA_ROOT = resolveDataRoot();
+const PRICES_DIR = path.join(DATA_ROOT, 'prices_assets', 'prices');
+const PRICE_USD_DIR = path.join(DATA_ROOT, 'prices_assets', 'price-usd');
 const ORACLE_BACKUP = path.join(
-  MONOREPO_ROOT,
+  DATA_ROOT,
   'prices_assets',
   'oracle_backups',
   'backup_market_prices_fiscal.csv',
 );
-const PARQUET_OUTPUT = path.join(MONOREPO_ROOT, 'data', 'historical', 'prices');
+const PARQUET_OUTPUT = resolveParquetPricesPath();
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract the asset symbol from a CoinMarketCap filename. */
+/**
+ * The asset name a price file is for, taken from the part of its name before the date range.
+ *
+ * Split on `-` as well as `_`: `dino-usd-max-01-01-2025-to-25-03-2026-USD.csv` separates its name with
+ * dashes, and matching only up to the first `_` returned the entire filename — which then reached the
+ * price series as a ticker literally called
+ * `DINO-USD-MAX-01-01-2025-TO-25-03-2026-USD.CSV`, so DINO had no resolvable price at all.
+ */
 function extractSymbolFromFilename(filename: string): string | null {
-  // Filenames like: "Bitcoin_1_1_2024-31_12_2024_historical_data_coinmarketcap.csv"
-  // or "Bitcoin_1_1_2025-31_3_2026_historical_data_USD.csv"
-  // We use the asset name column in the CSV (column "name") when available.
-  // As a fallback, use the first word of the filename.
-  const nameMatch = filename.match(/^([^_]+)/);
+  const nameMatch = path.basename(filename, path.extname(filename)).match(/^([^_-]+)/);
   return nameMatch?.[1] ?? null;
+}
+
+/**
+ * Whether a resolved name is plausibly a ticker.
+ *
+ * A file whose name this script cannot read must be skipped loudly, not written under an invented
+ * symbol: an unresolvable ticker in the series is indistinguishable from an asset nobody holds, so the
+ * defect surfaces as a missing price months later rather than as a failed seed now.
+ */
+function isPlausibleTicker(symbol: string): boolean {
+  return /^[A-Z0-9]{1,12}$/.test(symbol);
 }
 
 /** Collect all CSV files from a directory. */
@@ -85,6 +101,27 @@ const NAME_TO_SYMBOL: Record<string, string> = {
 function mapNameToSymbol(name: string): string {
   const lower = name.toLowerCase().trim();
   return NAME_TO_SYMBOL[lower] ?? name.toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * Tickers the oracle backup writes under a second name, folded onto the one the ledger uses.
+ *
+ * Both entries were checked against the file rather than assumed, because folding two genuinely
+ * different assets would silently value one at the other's price. `GIGACHAD` matches `GIGA` on all 399
+ * shared dates, so they are one series; `PUMP-FUN` is the only name under which the ledger's `PUMP` is
+ * priced at all. Deliberately absent: `JASMYNE` disagrees with `JASMY` on all 468 shared dates and
+ * `WHBAR` with `HBAR` on all 356, so neither is an alias — wrapped HBAR is its own asset.
+ */
+const ORACLE_SYMBOL_ALIASES: Record<string, string> = {
+  GIGACHAD: 'GIGA',
+  'PUMP-FUN': 'PUMP',
+};
+
+function oracleSymbolExpr(): string {
+  const cases = Object.entries(ORACLE_SYMBOL_ALIASES)
+    .map(([from, to]) => `WHEN symbol = '${from}' THEN '${to}'`)
+    .join(' ');
+  return `CASE ${cases} ELSE symbol END`;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,11 +207,22 @@ async function main() {
           ? 'snapped_at'
           : 'date';
 
-        // Determine symbol — use 'name' column if available, else extract from filename
-        const hasNameCol = columnNames.includes('name');
-        const symbolExpr = hasNameCol
-          ? `name`
-          : `'${mapNameToSymbol(extractSymbolFromFilename(filename) ?? filename)}'`;
+        /**
+         * From the filename, never the `name` column. Both branches of the ternary this replaces read
+         * the filename anyway — the `name` alternative was computed into an unused variable — and the
+         * column holds a display name (`Wrapped HBAR`) rather than a ticker, so reading it would put
+         * prose in the symbol.
+         */
+        const resolvedName = extractSymbolFromFilename(filename);
+        const symbol = resolvedName === null ? null : mapNameToSymbol(resolvedName);
+        if (symbol === null || !isPlausibleTicker(symbol)) {
+          console.warn(
+            `    ⚠️  Skipped: ${filename} — no ticker could be read from its name` +
+              `${symbol === null ? '' : ` (got "${symbol}")`}. Add it to NAME_TO_SYMBOL.`,
+          );
+          await conn.run(`DROP TABLE IF EXISTS "${rawTable}";`);
+          continue;
+        }
 
         const closeCol = columnNames.includes('close') ? 'close' : 'price';
         const volumeCol = columnNames.includes('volume') ? 'volume' : 'total_volume';
@@ -187,7 +235,7 @@ async function main() {
           INSERT INTO cmc_staging
           SELECT
             CAST(TRY_CAST(CAST("${dateCol}" AS VARCHAR) AS DATE) AS DATE) AS date,
-            ${hasNameCol ? `'${mapNameToSymbol(extractSymbolFromFilename(filename) ?? '')}'` : `'${mapNameToSymbol(extractSymbolFromFilename(filename) ?? filename)}'`} AS symbol,
+            '${symbol}' AS symbol,
             CAST(COALESCE(TRY_CAST(${openCol} AS DECIMAL(38,18)), 0) AS DECIMAL(38,18)) AS open,
             CAST(COALESCE(TRY_CAST(${highCol} AS DECIMAL(38,18)), 0) AS DECIMAL(38,18)) AS high,
             CAST(COALESCE(TRY_CAST(${lowCol} AS DECIMAL(38,18)), 0) AS DECIMAL(38,18)) AS low,
@@ -213,21 +261,41 @@ async function main() {
     if (fs.existsSync(ORACLE_BACKUP)) {
       console.log(`📄 Processing oracle backup: ${path.basename(ORACLE_BACKUP)}`);
 
+      /**
+       * The backup states each price in EUR, in USD, or in both, and `currency` is a column of the
+       * series precisely so a row can say which. Reading only `price_usd` therefore discarded every
+       * asset the oracle priced in euro alone — USDT, USDC, BNB, SOL and PUMP-FUN among them, 1920 rows
+       * whose `price_eur` was populated throughout — and those became the ledger's `MISSING_PRICE`
+       * lots. A euro price is also the better of the two here: the ledger reports in euro, so it needs
+       * no FX conversion and cannot raise `CURRENCY_MISMATCH`.
+       *
+       * Measured before relying on it: no symbol in the backup mixes the two, so a series never flips
+       * denomination mid-stream.
+       */
       await conn.run(`
         CREATE TEMP TABLE oracle_staging AS
         SELECT
           CAST(date AS DATE)             AS date,
-          symbol,
+          ${oracleSymbolExpr()}          AS symbol,
           CAST(0 AS DECIMAL(38,18))      AS open,
           CAST(0 AS DECIMAL(38,18))      AS high,
           CAST(0 AS DECIMAL(38,18))      AS low,
-          CAST(price_usd AS DECIMAL(38,18)) AS close,
+          COALESCE(
+            TRY_CAST(price_usd AS DECIMAL(38,18)),
+            TRY_CAST(price_eur AS DECIMAL(38,18))
+          )                              AS close,
           CAST(0 AS DECIMAL(38,18))      AS volume,
-          'USD'                          AS currency,
+          CASE
+            WHEN TRY_CAST(price_usd AS DECIMAL(38,18)) IS NOT NULL THEN 'USD'
+            ELSE 'EUR'
+          END                            AS currency,
           CAST(YEAR(CAST(date AS DATE)) AS INTEGER) AS year
         FROM read_csv_auto('${ORACLE_BACKUP.replace(/'/g, "''")}', header = true)
         WHERE date IS NOT NULL
-          AND price_usd IS NOT NULL;
+          AND COALESCE(
+                TRY_CAST(price_usd AS DECIMAL(38,18)),
+                TRY_CAST(price_eur AS DECIMAL(38,18))
+              ) IS NOT NULL;
       `);
 
       // Merge oracle data into cmc_staging (only insert symbols NOT already covered)

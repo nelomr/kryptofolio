@@ -94,6 +94,93 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
     expect(userSettingsPort.setSetting).toHaveBeenCalledWith('needs_recalculation', 'true');
   });
 
+  /**
+   * A real row from `bit2me_spot_2024.xlsx`: the source ships no total column, and states what was
+   * paid as the row's outbound leg. The pipeline folds that leg into the fiat total, so the basis is
+   * the source's own exact figure and no price series is consulted at all.
+   *
+   * Regression guard for the wrong average costs: while the route defaulted an omitted `total_fiat` to
+   * `'0'`, `foldFiatSide` returned early on the truthy `'0'`, both legs survived into the ledger, and
+   * every lot's basis was zero.
+   */
+  it('takes a Bit2Me buy\'s fiat total from its outbound EUR leg when the source states no total', async () => {
+    const rows: SubmittedTransaction[] = [{
+      account_id: '10000000-0000-0000-0000-000000000003',
+      tx_type: 'Trade',
+      timestamp: '2024-12-02T22:37:00',
+      asset_in: 'XRP',
+      amount_in: '37.636893',
+      asset_out: 'EUR',
+      amount_out: '100',
+      fee_currency: 'EUR',
+      fee_amount: '0.95',
+      metadata: {},
+    }];
+
+    const result = await useCase.execute(rows, 'spot', 'bit2me-spot', 'Europe/Madrid');
+
+    expect(result.persisted).toBe(1);
+    expect(priceProvider.getHistoricalPrice).not.toHaveBeenCalled();
+
+    const [tx] = ledgerPort.saveSpotTransaction.mock.calls[0];
+    expect(tx.tx_type).toBe('BUY');
+    expect(tx.asset_in_id).toBe('XRP');
+    expect(tx.amount_in).toBe('37.636893');
+    expect(tx.fiat_currency).toBe('EUR');
+    // The folded leg leaves nothing behind: `(amount_out IS NULL) = (asset_out_id IS NULL)` is a
+    // ledger CHECK, and a surviving pair is the signature of the fold not having run.
+    expect(tx.asset_out_id).toBeUndefined();
+    expect(tx.amount_out).toBeUndefined();
+    expect(new Decimal(tx.total_fiat!).toNumber()).toBeCloseTo(100, 10);
+    expect(new Decimal(tx.price_fiat!).toNumber()).toBeCloseTo(100 / 37.636893, 10);
+  });
+
+  /**
+   * Bitunix writes `Outgoing Amount: 0` with `Outgoing Asset` blank on every deposit row: a magnitude
+   * with no denomination, which is nothing rather than zero of something. Sent on as a pair the ledger
+   * rejects it outright — `(amount_out IS NULL) = (asset_out_id IS NULL)` is a CHECK — and because the
+   * batch is one request, one such row failed the whole file with a 500.
+   */
+  it('drops an undenominated zero magnitude instead of sending half a pair to the ledger', async () => {
+    const rows: SubmittedTransaction[] = [{
+      account_id: '10000000-0000-0000-0000-000000000008',
+      tx_type: 'Deposit',
+      timestamp: '2025-12-13T12:07:06Z',
+      asset_in: 'ADA',
+      amount_in: '4.5',
+      amount_out: '0',
+      fee_amount: '0',
+      metadata: {},
+    }];
+
+    const result = await useCase.execute(rows, 'spot', 'bitunix-spot', 'UTC');
+
+    expect(result.persisted).toBe(1);
+    const [tx] = ledgerPort.saveSpotTransaction.mock.calls[0];
+    expect(tx.amount_out).toBeUndefined();
+    expect(tx.asset_out_id).toBeUndefined();
+  });
+
+  /** A real quantity of an unnamed asset is information the ledger cannot hold; refusing beats dropping. */
+  it('refuses a non-zero magnitude whose asset the source never named', async () => {
+    const rows: SubmittedTransaction[] = [{
+      account_id: '10000000-0000-0000-0000-000000000008',
+      tx_type: 'Deposit',
+      timestamp: '2025-12-13T12:07:06Z',
+      asset_in: 'ADA',
+      amount_in: '4.5',
+      amount_out: '12.75',
+      metadata: {},
+    }];
+
+    const result = await useCase.execute(rows, 'spot', 'bitunix-spot', 'UTC');
+
+    expect(result.persisted).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0].reason).toMatch(/asset/i);
+    expect(ledgerPort.saveSpotTransaction).not.toHaveBeenCalled();
+  });
+
   it('resolves FK dependencies before inserting (ensureAssetExists per asset)', async () => {
     const rows: SubmittedTransaction[] = [{
       account_id: '10000000-0000-0000-0000-000000000001',

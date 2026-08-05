@@ -33,6 +33,9 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     },
     // `balance = previous + amount − fee` per asset: reconciled on 34 of 34 real rows, and Kraken's
     // own documentation states the formula. The column takes no part in any derivation.
+    // `txid` is unique across all 34 rows of the real export; `refid` repeats on 10 of them, which is
+    // why that one is the merge key and this one the identity.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
     invariant: { kind: "RUNNING_BALANCE", rowOrder: "OLDEST_FIRST" },
   },
 
@@ -63,6 +66,8 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
      * needs a tolerance, which is what hides real drift. Declared as none until the futures
      * ingestion path exists to measure it properly.
      */
+    // `uid` is unique across all 1100 rows of the real export.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
     invariant: { kind: "NONE" },
   },
 
@@ -102,6 +107,10 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     },
     // Gross, net and fee are three columns of which the profile derives one, so any relation among
     // them is a tautology. Bit2Me's convention is caught by the digit-for-digit net, not here.
+    // `Descripción` holds `<compartment> <uuid>`, unique on all 59 rows of the real 2024 export. It is
+    // the only thing that tells apart the two identical 19.9980002 ADA fills at 2024-12-17 00:07 —
+    // two real operations a content-derived hash merged into one, losing 19.998 ADA outright.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "description" },
     invariant: { kind: "NONE" },
   },
 
@@ -139,6 +148,8 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     // `quantity × price + fee = paid` spans four columns, none derived from the others. Exact on all
     // 12 real rows that carry the four values; the other 30 are deposits and withdrawals with no
     // price, which the check reports as unverifiable rather than passing.
+    // `Transaction ID` is unique across all 42 rows of the real export.
+    rowIdentity: { kind: "DECLARED_FIELD", field: "tx_id" },
     invariant: { kind: "OVER_DETERMINED_ROW" },
   },
 
@@ -173,6 +184,10 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
       references: [],
       categoryLabels: ["Label", "Comment", "Trx. ID"],
     },
+    // `Trx. ID` is NOT an identity: `T0009` labels two separate ADA deposits, twelve minutes and 538
+    // ADA apart. Declaring it would merge them, so the rows are told apart by their content — and the
+    // mapped `tx_id` is suppressed, because reading it regardless is what made this a live defect.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
     invariant: { kind: "NONE" },
   },
 
@@ -201,6 +216,9 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     feeConvention: { kind: "NET_PLUS_FEE" },
     directionalFill: { kind: "ONE_SIDED" },
     columnRoles: { references: [], categoryLabels: ["Type", "Notes"] },
+    // `Notes` is prose — "Tangem Base Reserve" — not an identifier. This is why identity is declared
+    // per source instead of matched on a column name: the same mapped field is an id for Bit2Me.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
     invariant: { kind: "NONE" },
   },
 
@@ -218,6 +236,9 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     feeConvention: { kind: "UNDETERMINED" },
     directionalFill: { kind: "ONE_SIDED" },
     columnRoles: { references: [], categoryLabels: [] },
+    // An unprofiled file has no identity column anyone has measured, so two identical rows in one are
+    // indistinguishable. Stated, not omitted.
+    rowIdentity: { kind: "CONTENT_DERIVED" },
     invariant: { kind: "NONE" },
   },
 };

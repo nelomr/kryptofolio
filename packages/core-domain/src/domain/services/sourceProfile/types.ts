@@ -119,6 +119,30 @@ export type HeaderSignature =
   /** The fallback profile is reached by the absence of a match, never by matching. */
   | { readonly kind: "NOT_DETECTABLE" };
 
+/**
+ * Where a source writes each row's own identity, when it writes one at all.
+ *
+ * Distinct from `columnRoles.references`, which names a column that may *link two rows into one
+ * operation*. This names one that *tells two rows apart*. Bit2Me declares an identity column and no
+ * reference column; the two concepts do not overlap.
+ *
+ * Content cannot supply identity. `bit2me_spot_2024.xlsx` holds two byte-identical ADA fills at the
+ * same minute that are two real operations, so a content-derived hash collides and the ledger's
+ * `ON CONFLICT(id_hash)` merges them — 19.998 ADA lost, with every row still reported as ingested.
+ *
+ * Declared per source rather than matched by column name: `description`, `memo` and `notes` carry free
+ * text in other exports, and a global synonym would promote that free text to an identifier for every
+ * source alike — the defect class `feeDenomination` exists to prevent, in a second place.
+ */
+export type RowIdentity =
+  | {
+      readonly kind: "DECLARED_FIELD";
+      /** A mapped field, so identity survives whatever the wizard called the column. */
+      readonly field: "tx_id" | "description";
+    }
+  /** Stated, not omitted: this source cannot distinguish two identical rows. */
+  | { readonly kind: "CONTENT_DERIVED" };
+
 export interface SourceFormatProfile {
   readonly id: SourceProfileId;
   /** Shown in the wizard's selector. */
@@ -129,6 +153,7 @@ export interface SourceFormatProfile {
   readonly feeConvention: FeeConvention;
   readonly directionalFill: DirectionalFill;
   readonly columnRoles: ColumnRoles;
+  readonly rowIdentity: RowIdentity;
   readonly invariant: ProfileInvariant;
 }
 

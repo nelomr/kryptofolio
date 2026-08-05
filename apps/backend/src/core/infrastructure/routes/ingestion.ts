@@ -32,8 +32,19 @@ const rowSchema = z.object({
   amount_out: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),
   fee_currency: z.string().optional(),
   fee_amount: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),
-  total_fiat: z.union([z.string(), z.number()]).optional().transform(v => v?.toString() ?? '0'),
-  price_fiat: z.union([z.string(), z.number()]).optional().transform(v => v?.toString() ?? '0'),
+  /**
+   * No default. A source that ships no total column — Bit2Me states the consideration as the row's
+   * outbound leg — must arrive with the field absent, because `undefined` and `'0'` mean opposite
+   * things from here on: nothing was said, versus the acquisition was free.
+   *
+   * Collapsing them defeated two layers at once. `foldFiatSide` returns early for a row that already
+   * carries a total, and `'0'` is truthy, so the outbound EUR leg was never folded into one; and the
+   * FIFO engine's `has_recorded_fiat` is `total_fiat IS NOT NULL`, deliberately, so a defaulted zero
+   * is trusted as a recorded figure and the lot's basis is zero. Neither raises anything: the import
+   * reports success, and every average cost is wrong.
+   */
+  total_fiat: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),
+  price_fiat: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),
   symbol: z.string().optional(),
   realized_pnl: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),
   funding_amount: z.union([z.string(), z.number()]).optional().transform(v => v?.toString()),

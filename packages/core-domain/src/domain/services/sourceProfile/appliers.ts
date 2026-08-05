@@ -517,6 +517,31 @@ export function reduceDirectionalSides(
 }
 
 /**
+ * A row's own identity, or the statement that this source has none to give.
+ *
+ * The declaration is what makes this safe, and measurement is what makes the declaration: `txid` is
+ * unique across all 34 real Kraken rows and `Transaction ID` across all 42 Bitvavo rows, so both are
+ * identities; Bitunix's `Trx. ID` is *not* — `T0009` labels two separate ADA deposits, twelve minutes
+ * and 538 ADA apart — so Bitunix declares none, and its rows are told apart by their content instead.
+ *
+ * Reading `tx_id` wherever a column happened to map to it is what made that Bitunix case a live defect:
+ * two real deposits would have hashed alike and the second would have overwritten the first. So a
+ * source that declares no identity has any mapped `tx_id` actively suppressed, not merely ignored.
+ */
+export function resolveRowIdentity(
+  profile: SourceFormatProfile,
+  data: TransactionMappedData,
+): { readonly kind: "DECLARED"; readonly value: string } | { readonly kind: "CONTENT_DERIVED" } {
+  if (profile.rowIdentity.kind === "CONTENT_DERIVED") return { kind: "CONTENT_DERIVED" };
+
+  const stated = firstNonEmpty(
+    profile.rowIdentity.field === "tx_id" ? data.tx_id : data.description,
+  );
+  // A declared column the row leaves blank states nothing, so it cannot stand in for identity.
+  return stated === undefined ? { kind: "CONTENT_DERIVED" } : { kind: "DECLARED", value: stated };
+}
+
+/**
  * Whether a column may link two rows into one operation.
  *
  * Default-deny: a column nobody declared a reference is not one. `Grupo` looked like a link because
