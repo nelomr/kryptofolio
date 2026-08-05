@@ -98,6 +98,50 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
       expect(results[0].exchange).toBe("Binance");
     });
 
+    /**
+     * Mirrors `fee_amount`'s zero-versus-absent round trip one layer down: `null` means the
+     * ingestion layer could not resolve a total or a price, `'0'` means the source stated a
+     * genuinely free acquisition. Both must survive the SQLite round trip as written.
+     */
+    it("round-trips a null total_fiat and price_fiat as unresolved, distinct from a stated 0", async () => {
+      await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
+      await adapter.ensureAssetExists({ assetId: "asset-btc", symbol: "BTC" });
+
+      await adapter.saveSpotTransaction(
+        makeSpotTx({
+          id: "tx-unresolved",
+          id_hash: "hash-unresolved",
+          asset_out_id: undefined,
+          amount_out: undefined,
+          fee_amount: undefined,
+          fee_asset_id: undefined,
+          total_fiat: null,
+          price_fiat: null,
+        }),
+      );
+      await adapter.saveSpotTransaction(
+        makeSpotTx({
+          id: "tx-free",
+          id_hash: "hash-free",
+          asset_out_id: undefined,
+          amount_out: undefined,
+          fee_amount: undefined,
+          fee_asset_id: undefined,
+          total_fiat: toPreciseAmount("0"),
+          price_fiat: toPreciseAmount("0"),
+        }),
+      );
+
+      const results = await adapter.getSpotTransactions('10000000-0000-0000-0000-000000000001');
+      const unresolved = results.find((r) => r.id_hash === "hash-unresolved");
+      const free = results.find((r) => r.id_hash === "hash-free");
+
+      expect(unresolved?.total_fiat).toBeNull();
+      expect(unresolved?.price_fiat).toBeNull();
+      expect(free?.total_fiat).toBe("0");
+      expect(free?.price_fiat).toBe("0");
+    });
+
     it("only returns transactions for the requested account", async () => {
       await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000001', name: "Binance" });
       await adapter.ensureAccountExists({ accountId: '10000000-0000-0000-0000-000000000002', name: "Kraken" });

@@ -240,12 +240,12 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
     };
   }
 
-  function savedSpot(index = 0): { total_fiat: string; price_fiat: string; tx_type: string; fee_asset_id?: string } {
+  function savedSpot(index = 0): { total_fiat: string | null; price_fiat: string | null; tx_type: string; fee_asset_id?: string } {
     const call = ledgerPort.saveSpotTransaction.mock.calls[index];
     const tx = call[0];
     return {
-      total_fiat: tx.total_fiat.toString(),
-      price_fiat: tx.price_fiat.toString(),
+      total_fiat: tx.total_fiat === null ? null : tx.total_fiat.toString(),
+      price_fiat: tx.price_fiat === null ? null : tx.price_fiat.toString(),
       tx_type: tx.tx_type,
       fee_asset_id: tx.fee_asset_id,
     };
@@ -503,8 +503,23 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       expect(result.persisted).toBe(1);
       expect(result.unresolvedFiat).toBe(1);
       expect(result.rejected).toHaveLength(0);
-      // `0` is what the column can hold; the count above is what says it is unknown.
+      // NULL is what the column now holds for "unknown" — distinct from the '0' a genuinely free
+      // acquisition would carry (see the sibling test below).
+      expect(savedSpot().total_fiat).toBeNull();
+      expect(savedSpot().price_fiat).toBeNull();
+    });
+
+    it('persists a stated zero as a genuinely free acquisition, not as pending', async () => {
+      const result = await makeUseCase('999').execute(
+        [row({ tx_type: 'promotion', total_fiat: '0', price_fiat: '0', fiat_currency: 'EUR' })],
+        'spot',
+        'generic', 'UTC',
+      );
+
+      expect(result.persisted).toBe(1);
+      expect(result.unresolvedFiat).toBe(0);
       expect(savedSpot().total_fiat).toBe('0');
+      expect(savedSpot().price_fiat).toBe('0');
     });
 
     it('does not count a resolvable row as pending', async () => {
@@ -599,7 +614,7 @@ describe('CsvIngestionUseCase — the fee model', () => {
     return {
       feeAmount: tx.fee_amount?.toString(),
       feeAssetId: tx.fee_asset_id,
-      totalFiat: tx.total_fiat.toString(),
+      totalFiat: tx.total_fiat === null ? null : tx.total_fiat.toString(),
       amountOut: tx.amount_out?.toString(),
     };
   }

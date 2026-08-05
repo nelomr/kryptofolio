@@ -33,8 +33,13 @@ export interface LedgerSpotTransaction {
   amount_out?: PreciseAmount;
   fee_asset_id?: string;
   fee_amount?: PreciseAmount;
-  total_fiat: PreciseAmount;
-  price_fiat: PreciseAmount;
+  /**
+   * `null` when neither a total nor a price could be resolved at ingestion — genuinely unknown.
+   * A source-stated `0` (a promotional credit, a free acquisition) is a fact and stays `0`; only
+   * its absence becomes `null`. Same distinction as `fee_amount`, one layer down.
+   */
+  total_fiat: PreciseAmount | null;
+  price_fiat: PreciseAmount | null;
   /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
   fiat_currency: string;
   /**

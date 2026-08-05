@@ -70,8 +70,10 @@ export const FIFO_EVENT_POLICY: Record<SpotTxType, FifoEventPolicy> = {
   SPEND: TAXABLE_DISPOSAL_ONLY,
   FEE: TAXABLE_DISPOSAL_ONLY,
 
-  // Cost basis is the market value at receipt, never zero; an unresolvable value is flagged
-  // MISSING_PRICE rather than treated as free.
+  // Cost basis is the market value at receipt. An unresolvable value is flagged MISSING_PRICE
+  // rather than treated as free — but a source that explicitly states a 0 total is a genuinely
+  // free acquisition, and is recorded as such rather than looked up. NULL vs. '0' on total_fiat
+  // is what makes the two distinguishable; see resolveFiatMagnitudes and has_recorded_fiat.
   STAKING: ACQUISITION_ONLY,
   AIRDROP: ACQUISITION_ONLY,
   REWARD: ACQUISITION_ONLY,

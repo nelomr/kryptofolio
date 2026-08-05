@@ -61,8 +61,10 @@ function seed(db: DatabaseSync): void {
     '10',
     null,
     null,
-    '0',
-    '0',
+    // NULL, not '0': a stated 0 is now a genuinely free acquisition and would be trusted
+    // outright by has_recorded_fiat, rather than resolving to MISSING_PRICE.
+    null,
+    null,
     '2026-01-02T10:00:00.000Z',
   );
 
@@ -232,8 +234,10 @@ describe('manual overrides against the real FIFO engine', () => {
       tx_type: 'STAKING',
       asset_in_id: 'TSTCOIN',
       amount_in: toPreciseAmount('10'),
-      total_fiat: toPreciseAmount('0'),
-      price_fiat: toPreciseAmount('0'),
+      // NULL, not '0': the re-ingested row still doesn't know the price, which is what the
+      // override below must keep compensating for.
+      total_fiat: null,
+      price_fiat: null,
       fiat_currency: 'EUR',
       timestamp: '2026-01-02T10:00:00.000Z',
       status: 'COMPLETED',

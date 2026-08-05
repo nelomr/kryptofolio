@@ -26,8 +26,8 @@ interface TxSpec {
   amount_out?: string;
   fee_asset_id?: string;
   fee_amount?: string;
-  total_fiat?: string;
-  price_fiat?: string;
+  total_fiat?: string | null;
+  price_fiat?: string | null;
   transfer_group_id?: string;
 }
 
@@ -64,8 +64,10 @@ function seedTransactions(db: DatabaseSync, specs: readonly TxSpec[]): void {
       s.amount_out ?? null,
       s.fee_asset_id ?? null,
       s.fee_amount ?? null,
-      s.total_fiat ?? '0',
-      s.price_fiat ?? '0',
+      // Unspecified means the fixture never stated a fiat value at all -- NULL, not '0'. A
+      // stated 0 is now a genuinely free acquisition and would be trusted outright.
+      s.total_fiat ?? null,
+      s.price_fiat ?? null,
       s.timestamp,
       s.transfer_group_id ?? null
     );

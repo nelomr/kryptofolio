@@ -25,6 +25,10 @@ const MIGRATION_004_SQL = fs.readFileSync(
   path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
   'utf-8',
 );
+const MIGRATION_005_SQL = fs.readFileSync(
+  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/005_nullable_fiat_magnitudes.sql'),
+  'utf-8',
+);
 
 describe('DuckDbTaxCalculatorAdapter', () => {
   let sqlitePath: string;
@@ -39,6 +43,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     sqliteDb.exec(MIGRATION_SQL);
     sqliteDb.exec(MIGRATION_003_SQL);
     sqliteDb.exec(MIGRATION_004_SQL);
+    sqliteDb.exec(MIGRATION_005_SQL);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
@@ -305,7 +310,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
         (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat,
          fiat_currency, timestamp, status)
       VALUES
-        ('tx-staking', 'h-staking', 'acc-1', 'STAKING', 'BTC', '1', '0', '0', 'EUR',
+        ('tx-staking', 'h-staking', 'acc-1', 'STAKING', 'BTC', '1', NULL, NULL, 'EUR',
          '2024-01-01T10:00:00.000Z', 'COMPLETED');
     `);
 
@@ -316,6 +321,28 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     expect(missing[0].detail_key).toBe('fifo_quality.missing_price');
     expect(missing[0].pending_review).toBe(true);
     expect(missing[0].tx_id).toBe('tx-staking');
+  });
+
+  /**
+   * A stated `total_fiat = '0'` is a fact (a genuinely free acquisition) and must not be flagged
+   * `MISSING_PRICE` the way a `NULL` (unresolved) magnitude is — same row shape as the test above,
+   * differing only in NULL vs '0'.
+   */
+  it('does not flag a stated-zero acquisition as MISSING_PRICE', async () => {
+    sqliteDb.exec(`
+      INSERT INTO assets (id, symbol, is_fiat) VALUES ('BTC', 'BTC', 0);
+      INSERT INTO accounts (id, name, type) VALUES ('acc-1', 'Exchange A', 'exchange');
+      INSERT INTO spot_transactions
+        (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat,
+         fiat_currency, timestamp, status)
+      VALUES
+        ('tx-free', 'h-free', 'acc-1', 'STAKING', 'BTC', '1', '0', '0', 'EUR',
+         '2024-01-01T10:00:00.000Z', 'COMPLETED');
+    `);
+
+    const rows = await adapter.getDataQuality();
+    const missing = rows.filter((row) => row.tx_id === 'tx-free' && row.quality_flag === 'MISSING_PRICE');
+    expect(missing).toHaveLength(0);
   });
 
   it('returns no data-quality rows for a ledger with nothing wrong with it', async () => {

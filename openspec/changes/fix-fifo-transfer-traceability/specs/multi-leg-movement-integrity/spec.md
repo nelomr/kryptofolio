@@ -72,9 +72,9 @@ When a source records both legs of a movement between two accounts the ledger SH
 
 ### Requirement: An Unresolved Fiat Magnitude Is Distinguishable From a Genuine Zero
 
-The ledger SHALL represent "this magnitude is unknown" as a state distinct from "this magnitude is zero". `spot_transactions.total_fiat` and `price_fiat` are currently `TEXT NOT NULL` with a non-negative `CHECK`, so an unresolvable magnitude is stored as `'0'` — the same value a genuinely free acquisition carries.
+The ledger SHALL represent "this magnitude is unknown" as a state distinct from "this magnitude is zero". `spot_transactions.total_fiat` and `price_fiat` are nullable TEXT (migration `005`, keeping the non-negative `CHECK` on a present value): an unresolvable magnitude is stored as `NULL`, and a source-stated `0` — a genuinely free acquisition — stays `0`.
 
-The engine already behaves correctly, routing a `0` through override, then market series, then `NULL` plus `MISSING_PRICE`. What is wrong is that the ledger itself cannot state the difference, so the distinction depends on a downstream derivation rather than on the recorded fact.
+`v_flattened_fifo_events`'s `has_recorded_fiat` derivation reads `total_fiat IS NOT NULL`, so a genuinely-free row is trusted outright and an unresolved row falls through to override, then market series, then `NULL` plus `MISSING_PRICE`. The distinction lives in the recorded fact itself, not in a downstream derivation alone.
 
 #### Scenario: An unresolvable magnitude is recorded as unknown
 

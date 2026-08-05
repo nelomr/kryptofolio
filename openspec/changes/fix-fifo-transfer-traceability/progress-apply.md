@@ -3720,12 +3720,148 @@ assertion. Restoring Kraken futures' → 3 red. Declaring Bit2Me's `Grupo` a ref
 itself → 5 red, and via the mapping condition while the repetition condition passed, which is the
 evidence that both conditions earn their place.
 
+## Group 14, phase 14ζ — the ledger can state "unknown" for a fiat magnitude — COMPLETE (14.10–14.14)
+
+Last implementation phase of group 14. `spot_transactions.total_fiat`/`price_fiat` were `TEXT NOT
+NULL` with a non-negative `CHECK` — the same inconsistency 14.30b closed for `fee_amount` one layer
+up. An unresolvable magnitude and a genuinely free acquisition were both stored as `'0'`, distinguishable
+only by a same-request ingestion counter that nothing downstream could see again.
+
+**14.11/14.13 — migration `005_nullable_fiat_magnitudes.sql`.** SQLite cannot drop a `NOT NULL` via
+`ALTER`, so the table is rebuilt exactly as `004` rebuilt its own predecessor. Rebuilt `tax_lots`,
+`lot_history_events` and `lot_custody_entries` alongside it, unchanged, because they carry a
+`spot_transaction_id` FK and would otherwise reference deleted rows — same CLEAN SLATE reasoning
+`004` used (no production deployment, every source CSV re-ingestable). New test file
+`migration_005_nullable_fiat_magnitudes.spec.ts`, 9 cases: nullability, a stated `0` surviving
+distinct from `NULL`, and the non-negative `CHECK` still rejecting a negative value now that the
+column is nullable.
+
+**14.12 — propagated through four layers:**
+- `nonNegativePreciseAmountSchema.nullable()` on `SpotTransactionSchema.total_fiat`/`price_fiat`
+  (`packages/shared-types/src/schemas/ledger.ts`).
+- `LedgerSpotTransaction.total_fiat`/`price_fiat` become `PreciseAmount | null` (not optional —
+  every transaction has a total, possibly unknown, unlike `fee_amount`'s presence/absence). Mirrors
+  `sale_price_fiat`'s existing nullable convention rather than `fee_amount`'s optional one.
+- `SQLiteLedgerAdapter` read/write: `row.total_fiat ? toPreciseAmount(...) : null`, same truthy-check
+  idiom as `fee_amount` — safe here because a SQL `NULL` arrives as JS `null` (falsy) while a stored
+  `'0'` is a non-empty, truthy string.
+- `v_flattened_fifo_events`'s `has_recorded_fiat`: was `recorded_fiat IS NOT NULL AND recorded_fiat
+  <> 0`. That second clause was necessary while `0` was the only way to spell "unknown" — but it
+  meant a *genuinely* free row (a real stated `0`) was *also* read as unrecorded and sent through
+  the market-price fallback, which is the mirror-image of the defect this phase removes. Now
+  `recorded_fiat IS NOT NULL` alone: a stated `0` is trusted, only `NULL` falls through.
+
+**14.10 — `CsvIngestionUseCase.resolveFiatMagnitudes` restructured as the discriminated union the
+task brief suggested**, `{ kind: 'RESOLVED', total, unitPrice } | { kind: 'UNRESOLVED' }`, replacing
+`{ resolved: boolean }` alongside a `Decimal(0)` payload — the exact boolean-plus-payload shape
+CLAUDE.md rule 5 warns about, and the shape 14.30b's own `hasFee` boolean already proved to be a
+recurring defect class in this codebase. The harder part was distinguishing a *stated* zero from a
+*blank* cell: `row.total_fiat || '0'` treats `''` and `'0'` identically, so the original code always
+tried a market lookup when both magnitudes read as zero, overriding a source's own "no cost" fact.
+Added `isStatedMagnitude` (checks for `null`/`undefined`/`''` before the `|| '0'` default runs) and
+gated the market-lookup and cross-derivation branches on statedness rather than value, so a stated
+`0` short-circuits straight to `RESOLVED` and is never sent through `fetchUnitPrice`.
+
+**14.14 — verified by grep across every `total_fiat`/`price_fiat` reader**, not just the one fixed
+above:
+- `savings_base_yields`/`general_base_airdrops` (`CAST(total_fiat AS DECIMAL...)`) — `CAST(NULL)` is
+  `NULL`, propagates correctly.
+- `DuckDbTaxCalculatorAdapter.getSpanishTaxReport`'s `COALESCE(SUM(total_fiat), 0.0)` — wraps the
+  *aggregate*, not the row: `SUM` already skips `NULL` rows on its own, and the `COALESCE` only
+  covers the empty-table case. Not the D26 defect shape (no per-row fabrication), but recorded as an
+  open finding below since an unresolved STAKING/AIRDROP row's income now silently drops out of the
+  yearly total rather than being flagged, and neither income-base view carries a `quality_flag`
+  concept to say so.
+- Every other `total_fiat`/`price_fiat` in `DuckDbAdapter.ts` is inside `v_flattened_fifo_events` or
+  a view built on it (`v_acquisitions`, `v_disposals`) — already NULL-correct once `has_recorded_fiat`
+  was fixed, verified by the new "does not flag a stated-zero acquisition as MISSING_PRICE" test.
+- `spot_transactions.total_fiat`/`price_fiat` never cross HTTP directly — only the already-nullable
+  derived fields (`sale_price_fiat`, tax lot costs) do, and those were handled by group 2/5's own
+  work. Confirmed by grep: no route or frontend DTO reads the raw ledger columns. Frontend suite
+  (437/437) and its own typecheck stayed green untouched, consistent with that.
+
+**Fixture debt found and paid, not part of the four layers above but required to keep the suite
+green**: five test fixtures across three packages used a stated `'0','0'` to *mean* "unresolved" —
+exactly the ambiguity 14ζ exists to remove, now resolved into the wrong branch (`has_recorded_fiat`
+now trusts it as free). Fixed by changing each to `NULL`, since that is what they actually meant:
+`apps/backend/.../DuckDbTaxCalculatorAdapter.spec.ts` (STAKING row), `apps/backend/.../
+OverrideMaterialization.spec.ts` (STAKING seed row and its re-ingestion row), `packages/database/
+tests/fixtures/transfer-traceability.ts` (`stakingUnpriced`, the one acquisition-generating row in
+the fixture using the old sentinel — the four `TRANSFER_IN`/`TRANSFER_OUT`/`WITHDRAWAL`/`DEPOSIT`
+rows using `'0'` stayed `'0'`, correctly, since custody movements have no fiat total by policy and
+never reach `has_recorded_fiat`), and `packages/database/tests/integration/custody_ledger.spec.ts`'s
+own harness default (`s.total_fiat ?? '0'` → `?? null`, since "the fixture never specified a value"
+should mean unknown, not free). Each was caught by running the full suite after the SQL fix, not
+found by inspection — the value of measuring rather than asserting a claim.
+
+**Comment corrected**: `fifo-policy.ts`'s note beside `STAKING`/`AIRDROP`/`REWARD`/`MINING` claimed
+cost basis is "never zero" — true before this phase (there was no way to state zero and mean it),
+false after (a stated `0` is now trusted for every acquisition-generating type uniformly, not just
+`PROMOTION`). Reworded to state the corrected rule and point at the two functions that implement it.
+
+**Tests: shared-types 46 → 49 (+3: null/stated-zero/negative-rejection on `SpotTransactionSchema`),
+core-domain 216 (untouched), database 127 → 136 (+9, the new migration spec), backend 390 → 393
+(+3 net: new SQLiteLedgerAdapter round-trip test, new DuckDbTaxCalculatorAdapter stated-zero test,
+CsvIngestionUseCase's existing unresolved-fiat test extended plus one new genuinely-free test —
+several other CsvIngestionUseCase edits were assertion updates to already-counted tests), frontend
+437 (untouched, confirms 14.14's HTTP-boundary claim).** All five typechecks 0 errors, including
+`vue-tsc --build --force` and backend's own `tsc --noEmit`.
+
+**Deliberate breaks, each read to confirm it named the right assertion:**
+1. Reverted `ledger.ts`'s two `.nullable()` calls → Zod's own `SpotTransactionSchema.safeParse`
+   rejected the null-magnitude case with `Expected string, received null` — red for the schema
+   change, not a missing export.
+2. Widened migration `005`'s CHECK to permit a leading `-` → both "still rejects a negative
+   total_fiat/price_fiat" cases went red with `expected [Function] to throw an error` — proves the
+   CHECK, not just column presence, is under test.
+3. Reverted `SQLiteLedgerAdapter`'s read mapping to `toPreciseAmount(row.total_fiat ?? '0')` → the
+   new round-trip test failed with `expected '0' to be null` — proves the test discriminates the
+   adapter's own null-handling, not just the schema.
+4. Wrote the "stated-zero acquisition" test against the **unfixed** `has_recorded_fiat` (`<> 0`)
+   before touching `DuckDbAdapter.ts` — it failed with `expected [ {…} ] to have a length of +0 but
+   got 1`, i.e. `MISSING_PRICE` fired on a row that should not carry it. This was the natural
+   red-first order (test written to fail against current code) rather than a break-after-green,
+   recorded because it is the strongest evidence for this task: the fixture (`0`/`0`, no
+   `historical_prices` row for BTC) makes the two `has_recorded_fiat` definitions disagree, which is
+   exactly the discriminating case the SQL-comment claim needed.
+
+No break stayed green on a first attempt; none needed re-aiming.
+
+**No `any`/`as never`/`as unknown as` introduced** — verified by `grep -E ': any|as any|<any>|as
+never|as unknown as' ` plus the separate `, any>` pattern this project's grep has been bitten by
+before, across every file this phase touched. One incidental grep hit was the English words "as
+any" inside a new SQL comment string (`-- as any other recorded total`), not a cast.
+
+**`resolveFiatMagnitudes`'s discriminated-union refactor stayed in scope** per CLAUDE.md rule 8 and
+the task brief's own caveat ("only if that's a clean, in-scope change") — it replaced exactly the
+boolean-plus-payload shape the task named, touched one method and its one call site, and needed no
+change to `IngestionResult`'s public shape (`unresolvedFiat: number` stayed a count, not a union,
+since nothing downstream of the use case needs per-row detail beyond the count already returned).
+
 ## Resume here — next action
 
-**175 checked boxes in `tasks.md`, 30 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
-**12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
-14γ, 14δ and 14ε** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
-group 13. **No task is left open in a closed group.**
+**180 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**12 in full, including the 12.11–12.21 addendum** are closed, and group 14 is now **fully closed —
+all phases 14α, 14β, 14βb, 14γ, 14δ, 14ε, 14εb and 14ζ done**, 14γ's two follow-ups 14.33b/14.33c
+included. Group 14 ran **before** group 13 by design. **No task is left open in a closed group.**
+
+### Start here next session — group 13, the final verification gate
+
+Group 14 is the last implementation phase; **group 13 is next**, and it is the single verification
+gate this change has been building toward (14.22's own note: "group 13 is the single verification
+gate and needs no second pass"). Nothing else remains to implement — group 13 is verification against
+the real corpus, not new code. Do not start it in this session; it is recorded here only so the next
+session knows where to resume.
+
+**Open finding for whoever picks up group 13 or a follow-up change**, not fixed in 14ζ because it
+would add a `quality_flag`/pending-review concept to two views that have never carried one, which is
+larger than this phase's stated scope: `savings_base_yields_eur`/`general_base_airdrops_eur` in the
+Spanish tax report silently exclude an unresolved STAKING/AIRDROP/MINING/REWARD/PROMOTION row from
+the yearly income sum (`SUM` skips `NULL` rows) rather than flagging it pending, the way the
+capital-gains side does via `MISSING_PRICE`. Not a regression from this phase — the exclusion
+existed before nullability too, just reachable only via the ingestion-time `unresolvedFiat` counter
+rather than via the recorded fact. Worth a `D` number if group 13's real-corpus run surfaces an
+actual unresolved income row.
 
 Measured state: shared-types 46, core-domain **212**, database 127, backend **390**, frontend 437; all
 five typechecks 0 errors.

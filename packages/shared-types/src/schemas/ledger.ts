@@ -42,8 +42,14 @@ export const SpotTransactionSchema = z.object({
   amount_out: preciseAmountSchema.optional(),
   fee_asset_id: z.string().optional(),
   fee_amount: preciseAmountSchema.optional(),
-  total_fiat: nonNegativePreciseAmountSchema,
-  price_fiat: nonNegativePreciseAmountSchema,
+  /**
+   * `null` when the source stated neither a total nor a price and no market price could be
+   * resolved either — genuinely unknown. A source-stated `0` (a promotional credit, a free
+   * acquisition) is a fact and stays `0`; only its absence becomes `null`. Same distinction as
+   * `fee_amount`, one layer down.
+   */
+  total_fiat: nonNegativePreciseAmountSchema.nullable(),
+  price_fiat: nonNegativePreciseAmountSchema.nullable(),
   /** ISO-4217 currency code — required. Resolution: CSV field → base_currency setting → 'USD'. */
   fiat_currency: z.string().min(3).max(3),
   exchange: z.string().optional(),

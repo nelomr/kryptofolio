@@ -458,11 +458,11 @@ Last of the implementation phases: it is a migration reopening a table group 4 r
 touches `v_flattened_fifo_events`, which 14.25 also modifies. Doing it after the fee model avoids
 migrating the same view twice.
 
-- [ ] 14.10 Write tests: an unresolvable magnitude is distinguishable from `0`; a genuinely free acquisition stays `0` and is not reported pending; a negative magnitude is still rejected. Mirrors 14.30b's zero-versus-absent distinction, one layer down
-- [ ] 14.11 Add a migration making `total_fiat` and `price_fiat` nullable while keeping the non-negative `CHECK` on non-null values
-- [ ] 14.12 Propagate nullability through `nonNegativePreciseAmountSchema`, `LedgerSpotTransaction`, `SQLiteLedgerAdapter`, and `v_flattened_fifo_events`'s `has_recorded_fiat` derivation
-- [ ] 14.13 **DECIDED — the columns become nullable; migration `005`.** The same table already treats `fee_amount` as nullable-with-CHECK while the fiat magnitudes are `NOT NULL`, so this aligns an inconsistency inside one table rather than inventing a pattern. And it follows the rule settled for fees: `0` means "genuinely free", so "unknown" needs its own representation. SQLite cannot drop a `NOT NULL` with `ALTER`, so `005` rebuilds the table as `004` did, and group 4's tests need updating. The alternative — amending the spec to "recorded as `0` and reported as pending" — was rejected because the distinction would live only in an ingestion counter and a SQL derivation, never in the recorded fact
-- [ ] 14.14 Verify 14.10 passes and that no downstream reader treats a `NULL` magnitude as zero
+- [x] 14.10 Write tests: an unresolvable magnitude is distinguishable from `0`; a genuinely free acquisition stays `0` and is not reported pending; a negative magnitude is still rejected. Mirrors 14.30b's zero-versus-absent distinction, one layer down
+- [x] 14.11 Add a migration making `total_fiat` and `price_fiat` nullable while keeping the non-negative `CHECK` on non-null values
+- [x] 14.12 Propagate nullability through `nonNegativePreciseAmountSchema`, `LedgerSpotTransaction`, `SQLiteLedgerAdapter`, and `v_flattened_fifo_events`'s `has_recorded_fiat` derivation
+- [x] 14.13 **DECIDED — the columns become nullable; migration `005`.** The same table already treats `fee_amount` as nullable-with-CHECK while the fiat magnitudes are `NOT NULL`, so this aligns an inconsistency inside one table rather than inventing a pattern. And it follows the rule settled for fees: `0` means "genuinely free", so "unknown" needs its own representation. SQLite cannot drop a `NOT NULL` with `ALTER`, so `005` rebuilds the table as `004` did, and group 4's tests need updating. The alternative — amending the spec to "recorded as `0` and reported as pending" — was rejected because the distinction would live only in an ingestion counter and a SQL derivation, never in the recorded fact
+- [x] 14.14 Verify 14.10 passes and that no downstream reader treats a `NULL` magnitude as zero
 
 ### 14η. The fidelity net and closing out
 

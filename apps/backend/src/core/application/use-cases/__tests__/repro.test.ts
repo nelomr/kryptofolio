@@ -40,9 +40,12 @@ describe('Constraint Repro', () => {
     db.close();
   });
 
-  async function persistedFiat(): Promise<{ total: string; price: string }[]> {
+  async function persistedFiat(): Promise<{ total: string | null; price: string | null }[]> {
     const saved = await adapter.getSpotTransactions(ACCOUNT);
-    return saved.map((tx) => ({ total: tx.total_fiat.toString(), price: tx.price_fiat.toString() }));
+    return saved.map((tx) => ({
+      total: tx.total_fiat === null ? null : tx.total_fiat.toString(),
+      price: tx.price_fiat === null ? null : tx.price_fiat.toString(),
+    }));
   }
 
   it('Payload 1 - WITHDRAWAL', async () => {

@@ -58,6 +58,66 @@ describe("Ledger Schemas", () => {
       };
       expect(SpotTransactionSchema.safeParse(invalid).success).toBe(false);
     });
+
+    /**
+     * `total_fiat`/`price_fiat` mirror `fee_amount`'s zero-versus-absent distinction one layer
+     * down: `null` is "unknown", `"0"` is a stated fact (a genuinely free acquisition).
+     */
+    it("accepts null total_fiat and price_fiat as an unresolved magnitude", () => {
+      const valid = {
+        id: "id-124",
+        id_hash: "hash-124",
+        account_id: "5a68d802-7105-46d9-b314-8fd5fbd731f8",
+        timestamp: "2023-01-01T12:00:00Z",
+        tx_type: "STAKING",
+        amount_in: "1",
+        asset_in_id: "BTC",
+        total_fiat: null,
+        price_fiat: null,
+        fiat_currency: "USD",
+        status: "COMPLETED",
+      };
+      const res = SpotTransactionSchema.safeParse(valid);
+      if (!res.success) console.log(res.error);
+      expect(res.success).toBe(true);
+    });
+
+    it("accepts a stated zero as a genuinely free acquisition, distinct from null", () => {
+      const valid = {
+        id: "id-125",
+        id_hash: "hash-125",
+        account_id: "5a68d802-7105-46d9-b314-8fd5fbd731f8",
+        timestamp: "2023-01-01T12:00:00Z",
+        tx_type: "PROMOTION",
+        amount_in: "10",
+        asset_in_id: "EUR",
+        total_fiat: "0",
+        price_fiat: "0",
+        fiat_currency: "EUR",
+        status: "COMPLETED",
+      };
+      const res = SpotTransactionSchema.safeParse(valid);
+      if (!res.success) console.log(res.error);
+      expect(res.success).toBe(true);
+      expect(res.success && res.data.total_fiat).toBe("0");
+    });
+
+    it("still rejects a negative total_fiat even though the field is now nullable", () => {
+      const invalid = {
+        id: "id-126",
+        id_hash: "hash-126",
+        account_id: "5a68d802-7105-46d9-b314-8fd5fbd731f8",
+        timestamp: "2023-01-01T12:00:00Z",
+        tx_type: "BUY",
+        amount_in: "1",
+        asset_in_id: "BTC",
+        total_fiat: "-300.00",
+        price_fiat: "1",
+        fiat_currency: "EUR",
+        status: "COMPLETED",
+      };
+      expect(SpotTransactionSchema.safeParse(invalid).success).toBe(false);
+    });
   });
 
   describe("FuturesTransactionSchema", () => {

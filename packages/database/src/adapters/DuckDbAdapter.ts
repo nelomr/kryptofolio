@@ -286,7 +286,12 @@ function sanitizeFilePath(filePath: string): string {
                 TRY_CAST(t.amount_in AS DOUBLE)  AS qty_in,
                 TRY_CAST(t.amount_out AS DOUBLE) AS qty_out,
                 TRY_CAST(t.fee_amount AS DOUBLE) AS qty_fee,
-                recorded_fiat IS NOT NULL AND recorded_fiat <> 0 AS has_recorded_fiat,
+                -- A stated 0 is a fact (a genuinely free acquisition) and must be trusted the same
+                -- as any other recorded total; only its absence -- NULL -- means unresolved. Before
+                -- total_fiat could be NULL, every unresolved magnitude was also stored as 0, so this
+                -- used to read <> 0 to tell the two apart; that read a real free acquisition as
+                -- unresolved too, which is the defect the nullable column exists to remove.
+                recorded_fiat IS NOT NULL AS has_recorded_fiat,
                 p.generates_acquisition,
                 p.generates_disposal,
                 p.generates_fee_disposal,

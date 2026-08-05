@@ -102,8 +102,8 @@ interface SpotRow {
   amount_out?: string;
   fee_asset_id?: string;
   fee_amount?: string;
-  total_fiat: string;
-  price_fiat: string;
+  total_fiat: string | null;
+  price_fiat: string | null;
   fiat_currency: string;
 }
 
@@ -259,7 +259,8 @@ export function seedTransferTraceabilityFixture(
   });
 
   // ── 6. STAKING receipt with no resolvable price. Must be flagged MISSING_PRICE rather than
-  //    presented as a genuine zero-cost acquisition.
+  //    presented as a genuine zero-cost acquisition. NULL, not '0': a stated 0 is now a
+  //    genuinely free acquisition and would be trusted outright by has_recorded_fiat.
   insertSpot(db, {
     id: TX.stakingUnpriced,
     tx_type: 'STAKING',
@@ -267,8 +268,8 @@ export function seedTransferTraceabilityFixture(
     timestamp: TIMESTAMPS.stakingUnpriced,
     asset_in_id: 'XRP',
     amount_in: AMOUNTS.stakingQty,
-    total_fiat: '0',
-    price_fiat: '0',
+    total_fiat: null,
+    price_fiat: null,
     fiat_currency: 'EUR',
   });
 

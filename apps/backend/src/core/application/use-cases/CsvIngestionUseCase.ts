@@ -63,10 +63,9 @@ export interface IngestionResult {
   /**
    * Rows persisted with fiat magnitudes that could not be resolved.
    *
-   * `total_fiat` is `NOT NULL` and non-negative, so an unknown magnitude is stored as `0` — the
-   * same value a genuinely free acquisition would carry. This count is what distinguishes the two
-   * at the boundary; downstream, the FIFO engine reads a recorded `0` as unresolved and flags the
-   * derived rows `MISSING_PRICE`.
+   * `total_fiat`/`price_fiat` are stored as `NULL` in this case — distinct from the `'0'` a
+   * genuinely free acquisition carries. This count is a convenience for the caller; the
+   * distinction itself lives in the recorded fact, not just in this number.
    */
   readonly unresolvedFiat: number;
   /** Rows persisted with a fee the source's profile could not resolve. */
@@ -105,6 +104,17 @@ function sourceMagnitude(text: string): string {
   if (!new Decimal(text).isFinite()) throw new RangeError(`not a finite quantity: '${text}'`);
   const trimmed = text.trim();
   return trimmed.startsWith('-') || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed;
+}
+
+/**
+ * Whether a source row wrote a magnitude at all, as opposed to leaving the cell blank.
+ *
+ * `row.total_fiat || '0'` cannot make this distinction — `''` and `'0'` are both falsy — which is
+ * exactly why a stated `0` used to be indistinguishable from an absent value. This is the one place
+ * that reads the raw field before it collapses.
+ */
+function isStatedMagnitude(value: string | null | undefined): boolean {
+  return value !== null && value !== undefined && value !== '';
 }
 
 function toSpotTxType(raw: string | null | undefined, timestamp: string): SpotTxType {
@@ -265,7 +275,7 @@ export class CsvIngestionUseCase {
 
       if (resolvedType.market === 'spot') {
         const fiat = await this.resolveFiatMagnitudes(row, fiatCurrency);
-        if (!fiat.resolved) unresolvedFiat += 1;
+        if (fiat.kind === 'UNRESOLVED') unresolvedFiat += 1;
 
         const fee = this.resolveFee(profile, row);
         if (fee.pending !== null) {
@@ -276,7 +286,9 @@ export class CsvIngestionUseCase {
           });
         }
         // A fee the source's reported total already contained is not added to it a second time.
-        const total = fee.netTotal ?? fiat.total;
+        // `fee.netTotal` is independently derived from the row's own gross/net convention, so it
+        // stands in for the total even when `fiat` itself could not resolve one.
+        const total = fee.netTotal ?? (fiat.kind === 'RESOLVED' ? fiat.total : null);
 
         const tx: LedgerSpotTransaction = {
           id,
@@ -290,8 +302,8 @@ export class CsvIngestionUseCase {
           asset_out_id: row.asset_out || undefined,
           fee_amount: fee.amount === null ? undefined : toPreciseAmount(fee.amount),
           fee_asset_id: fee.assetId,
-          total_fiat: toPreciseAmount(total.toString()),
-          price_fiat: toPreciseAmount(fiat.unitPrice.toString()),
+          total_fiat: total === null ? null : toPreciseAmount(total.toString()),
+          price_fiat: fiat.kind === 'RESOLVED' ? toPreciseAmount(fiat.unitPrice.toString()) : null,
           fiat_currency: fiatCurrency,
           flag: row.fiscal_flag ?? undefined,
           transfer_group_id: row.transfer_group_id ?? undefined,
@@ -483,36 +495,44 @@ export class CsvIngestionUseCase {
    *
    * Direction is carried by `tx_type` and the directional asset fields, so a sign here is a modelling
    * error rather than information. A recorded magnitude is never replaced by a fetched price: the
-   * source figure is what the user was actually charged.
+   * source figure is what the user was actually charged — which is why a *stated* value, `0`
+   * included, is respected outright and never sent through a market lookup. Only the true absence
+   * of both fields — nothing stated, nothing derivable — is `UNRESOLVED`.
    */
   private async resolveFiatMagnitudes(
     row: IngestibleTransaction,
     fiatCurrency: string,
-  ): Promise<{ total: Decimal; unitPrice: Decimal; resolved: boolean }> {
+  ): Promise<{ kind: 'RESOLVED'; total: Decimal; unitPrice: Decimal } | { kind: 'UNRESOLVED' }> {
+    const totalStated = isStatedMagnitude(row.total_fiat);
+    const priceStated = isStatedMagnitude(row.price_fiat);
     const quantity = new Decimal(row.amount_in || row.amount_out || '0').abs();
     let total = new Decimal(row.total_fiat || '0').abs();
     let unitPrice = new Decimal(row.price_fiat || '0').abs();
 
-    if (total.isZero() && unitPrice.isZero()) {
+    if (!totalStated && !priceStated) {
       const primaryAsset = row.asset_in || row.asset_out;
       // A movement denominated in the reporting currency needs no price series: the quantity is
       // already the fiat magnitude. Without this a 10 € promotional credit resolves to 0 and the
       // income disappears from the general base it belongs to.
       if (primaryAsset && primaryAsset.toUpperCase() === fiatCurrency.toUpperCase()) {
-        return { total: quantity, unitPrice: new Decimal(1), resolved: true };
+        return { kind: 'RESOLVED', total: quantity, unitPrice: new Decimal(1) };
       }
       if (primaryAsset) {
         unitPrice = await this.fetchUnitPrice(primaryAsset, fiatCurrency, row.timestamp);
       }
     }
 
-    if (total.isZero() && !unitPrice.isZero()) {
+    if (!totalStated && !unitPrice.isZero()) {
       total = unitPrice.mul(quantity);
-    } else if (unitPrice.isZero() && !total.isZero() && !quantity.isZero()) {
+    } else if (!priceStated && !total.isZero() && !quantity.isZero()) {
       unitPrice = total.div(quantity);
     }
 
-    return { total, unitPrice, resolved: !total.isZero() || !unitPrice.isZero() };
+    const totalKnown = totalStated || !total.isZero();
+    const priceKnown = priceStated || !unitPrice.isZero();
+    return totalKnown || priceKnown
+      ? { kind: 'RESOLVED', total, unitPrice }
+      : { kind: 'UNRESOLVED' };
   }
 
   /** A provider that cannot answer leaves the magnitude unresolved instead of failing the batch. */
