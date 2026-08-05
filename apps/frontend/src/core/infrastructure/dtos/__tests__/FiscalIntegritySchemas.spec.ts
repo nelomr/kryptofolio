@@ -143,6 +143,9 @@ describe('ExternalIngestionOutcomeSchema — ingestion summary with structured r
         { idHash: 'abc123', timestamp: '2024-01-01T00:00:00Z', txType: 'FOO', reason: 'unmapped tx_type' },
       ],
       unresolvedFiat: 1,
+      pendingFeeReview: [
+        { idHash: 'fee456', timestamp: '2024-01-02T00:00:00Z', reason: "could not verify Bitvavo's fee convention" },
+      ],
     }
 
     const result = ExternalIngestionOutcomeSchema.safeParse(backendPayload)
@@ -151,6 +154,10 @@ describe('ExternalIngestionOutcomeSchema — ingestion summary with structured r
       expect(result.data.rejected).toHaveLength(1)
       expect(result.data.rejected[0].reason).toBe('unmapped tx_type')
       expect(result.data.unresolvedFiat).toBe(1)
+      // Distinct from `rejected` (a refused row) and from `pendingReview` (an unresolved price):
+      // this is a persisted row whose fee could not be resolved under any declared convention.
+      expect(result.data.pendingFeeReview).toHaveLength(1)
+      expect(result.data.pendingFeeReview[0].reason).toBe("could not verify Bitvavo's fee convention")
     }
   })
 
@@ -165,6 +172,23 @@ describe('ExternalIngestionOutcomeSchema — ingestion summary with structured r
       pendingReview: 0,
       rejected: [{ idHash: 'abc', timestamp: '2024-01-01T00:00:00Z', txType: null, reason: '' }],
       unresolvedFiat: 0,
+      pendingFeeReview: [],
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects a pending-fee-review row with an empty reason', () => {
+    const result = ExternalIngestionOutcomeSchema.safeParse({
+      status: 'success',
+      processedCount: 1,
+      message: 'ok',
+      materialized: false,
+      materialization: null,
+      materializationError: null,
+      pendingReview: 0,
+      rejected: [],
+      unresolvedFiat: 0,
+      pendingFeeReview: [{ idHash: 'fee1', timestamp: '2024-01-01T00:00:00Z', reason: '' }],
     })
     expect(result.success).toBe(false)
   })

@@ -20,7 +20,10 @@ import {
   SEVERITY_CLASSES,
   severityDotClass,
 } from "@/views/TaxReport/composables/useTaxCalculations";
-import type { FiscalIntegrityDefectEntity } from "@/core/domain/models/FiscalEntities";
+import type {
+  FiscalIntegrityDefectEntity,
+  FeePendingReviewEntity,
+} from "@/core/domain/models/FiscalEntities";
 
 /** An account the user can name as a movement's real counterparty. Synthetic ones never appear. */
 export interface SelectableAccount {
@@ -33,6 +36,11 @@ const { t } = useI18n();
 const props = withDefaults(
   defineProps<{
     rows: FiscalIntegrityDefectEntity[];
+    /**
+     * Rows persisted with a fee their source's profile could not resolve — a distinct defect from a
+     * pending price or destination, with no assignment affordance yet, so it is only listed.
+     */
+    feePendingReviewRows?: FeePendingReviewEntity[];
     accounts?: SelectableAccount[];
     isLoading?: boolean;
     isSubmitting?: boolean;
@@ -40,6 +48,7 @@ const props = withDefaults(
     fiatCurrency?: string;
   }>(),
   {
+    feePendingReviewRows: () => [],
     accounts: () => [],
     isLoading: false,
     isSubmitting: false,
@@ -57,6 +66,11 @@ const emit = defineEmits<{
 /** Only rows the user can actually act on: a diagnostic with no affordance is noise here. */
 const actionableRows = computed(() =>
   props.rows.filter((row) => row.pendingReview && row.txId !== null),
+);
+
+/** Nothing at all is waiting on the user, across either surface this card lists. */
+const nothingPending = computed(
+  () => actionableRows.value.length === 0 && props.feePendingReviewRows.length === 0,
 );
 
 /** A missing value is declared as a price; a holding with no origin is declared as a destination. */
@@ -114,7 +128,7 @@ function submitDestination(row: FiscalIntegrityDefectEntity) {
       </template>
 
       <p
-        v-else-if="actionableRows.length === 0"
+        v-else-if="nothingPending"
         class="text-sm text-muted-foreground"
       >
         {{ t("tax.pending.none") }}
@@ -224,6 +238,29 @@ function submitDestination(row: FiscalIntegrityDefectEntity) {
               {{ t("tax.pending.save") }}
             </Button>
           </form>
+        </div>
+
+        <!--
+          Listed only, deliberately with no assignment button: unlike a price or a destination, a
+          fee's denomination or convention has no declaration mechanism yet. Visibility is the whole
+          point here — the engine already declined to guess.
+        -->
+        <div
+          v-for="row in feePendingReviewRows"
+          :key="row.idHash"
+          data-testid="fee-pending-row"
+          class="flex flex-col gap-1 rounded-lg border border-border/40 bg-surface-2 p-4"
+        >
+          <div class="flex items-center gap-2">
+            <span
+              class="text-[10px] font-black uppercase tracking-widest text-muted-foreground"
+              >{{ t("tax.pending.fee_section_label") }}</span
+            >
+            <span class="font-mono text-[10px] tabular-nums text-muted-foreground">{{
+              row.timestamp.slice(0, 10)
+            }}</span>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ row.reason }}</p>
         </div>
       </template>
     </CardContent>

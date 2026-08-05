@@ -96,6 +96,7 @@ export function createIngestionApi(container: DIContainer) {
             // what a UI needs to list the refused rows and let the user correct them.
             rejected: ingestion.rejected,
             unresolvedFiat: ingestion.unresolvedFiat,
+            pendingFeeReview: ingestion.pendingFeeReview,
           });
 
           return c.json(body, 201);

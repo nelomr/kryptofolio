@@ -23,6 +23,7 @@ import type {
   RebuildOutcomeEntity,
   IngestionOutcomeEntity,
   IngestionRejectionEntity,
+  FeePendingReviewEntity,
   OverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 
@@ -134,6 +135,13 @@ const ExternalIngestionRejectionSchema = z.object({
   reason: z.string().min(1),
 }) satisfies z.ZodType<IngestionRejectionEntity>
 
+const ExternalFeePendingReviewSchema = z.object({
+  idHash: z.string().min(1),
+  timestamp: z.string(),
+  // Required: a pending fee without a reason leaves the user unable to correct the row.
+  reason: z.string().min(1),
+}) satisfies z.ZodType<FeePendingReviewEntity>
+
 export const ExternalIngestionOutcomeSchema = ExternalRebuildOutcomeSchema.and(
   z.object({
     status: z.literal('success'),
@@ -141,6 +149,7 @@ export const ExternalIngestionOutcomeSchema = ExternalRebuildOutcomeSchema.and(
     message: z.string(),
     rejected: z.array(ExternalIngestionRejectionSchema),
     unresolvedFiat: z.number().int().nonnegative(),
+    pendingFeeReview: z.array(ExternalFeePendingReviewSchema),
   }),
 ) satisfies z.ZodType<IngestionOutcomeEntity>
 

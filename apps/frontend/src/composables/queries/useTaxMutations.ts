@@ -33,8 +33,7 @@ import { SyncWeb3UseCase } from '@/core/application/use-cases/SyncWeb3UseCase'
 import { DeleteAllTransactionsUseCase } from '@/core/application/use-cases/DeleteAllTransactionsUseCase'
 import { DownloadTaxReportUseCase } from '@/core/application/use-cases/DownloadTaxReportUseCase'
 import { ImportTransactionsUseCase } from '@/core/application/use-cases/ImportTransactionsUseCase'
-import type { TransactionRow } from '@/modules/data-ingestion/types'
-import type { SourceProfileId } from '@kryptofolio/shared-types'
+import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
 
 // ---------------------------------------------------------------------------
 // useUploadTaxFileMutation

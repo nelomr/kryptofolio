@@ -390,6 +390,7 @@ export const es: I18nDictionary = {
   "tax.pending.price_placeholder": "0,00",
   "tax.pending.select_account": "Selecciona una cuenta",
   "tax.pending.save": "Guardar",
+  "tax.pending.fee_section_label": "Comisión sin resolver",
 
   "tax.tabs.ledgers": "Libros de Operaciones",
   "tax.tabs.report": "Auditoría e Informes",

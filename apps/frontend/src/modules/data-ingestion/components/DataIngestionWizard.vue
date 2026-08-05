@@ -4,6 +4,7 @@ import { useCsvImportWizardProvider } from "../composables/useCsvImportWizard";
 import DropzoneArea from "./DropzoneArea.vue";
 import DataGridValidator from "./DataGridValidator.vue";
 import SourceProfileSelector from "./SourceProfileSelector.vue";
+import PendingValuesReview from "@/views/TaxReport/components/PendingValuesReview.vue";
 import BaseSelect from "@/components/ui/select/BaseSelect.vue";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, FileUp, CheckCircle2, X, Loader2 } from "lucide-vue-next";
@@ -335,6 +336,21 @@ const isReadyToSubmit = computed(
         <p class="text-muted text-sm max-w-sm mb-8">
           {{ t("ingestion.grid.imported_success") }}
         </p>
+
+        <!--
+          Extends the tax report's own pending-review surface rather than adding a second panel: a
+          fee this batch could not resolve is a fact this exact component already knows how to list.
+        -->
+        <div
+          v-if="wizard.importProcessor.feePendingReview.value.length > 0"
+          class="w-full max-w-lg text-left mb-8"
+        >
+          <PendingValuesReview
+            :rows="[]"
+            :fee-pending-review-rows="wizard.importProcessor.feePendingReview.value"
+          />
+        </div>
+
         <div class="flex gap-4 justify-center">
           <Button
             @click="handleReset"

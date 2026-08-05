@@ -44,6 +44,17 @@ const ingestionRejectionSchema = z.object({
   reason: z.string().min(1),
 });
 
+/**
+ * A row persisted with a fee its source's profile could not resolve — a distinct defect from an
+ * unresolved *price* (`pendingReview`). A user who can declare a market price cannot necessarily
+ * declare a fee's denomination or convention, so the two counts are never folded into one.
+ */
+const feePendingReviewSchema = z.object({
+  idHash: z.string().min(1),
+  timestamp: z.string(),
+  reason: z.string().min(1),
+});
+
 export const ingestionOutcomeSchema = rebuildOutcomeSchema.extend({
   status: z.literal('success'),
   processedCount: z.number().int().nonnegative(),
@@ -52,6 +63,8 @@ export const ingestionOutcomeSchema = rebuildOutcomeSchema.extend({
   rejected: z.array(ingestionRejectionSchema),
   /** Rows persisted with a fiat magnitude that could not be resolved, recorded as `0`. */
   unresolvedFiat: z.number().int().nonnegative(),
+  /** Always present, empty when every fee resolved, so a consumer never has to test for absence. */
+  pendingFeeReview: z.array(feePendingReviewSchema),
 });
 
 /** What an override mutation reports: what it wrote, and the rebuild that followed. */

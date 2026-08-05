@@ -1,6 +1,6 @@
 import type { ITaxPort } from '@/core/domain/ports/ITaxPort'
-import type { TransactionRow } from '@/modules/data-ingestion/types'
-import type { SourceProfileId } from '@kryptofolio/shared-types'
+import type { IngestionOutcomeEntity } from '@/core/domain/models/FiscalEntities'
+import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
 
 export class ImportTransactionsUseCase {
   private readonly taxPort: ITaxPort
@@ -14,7 +14,7 @@ export class ImportTransactionsUseCase {
     market: 'spot' | 'futures',
     timezone: string,
     sourceProfileId: SourceProfileId,
-  ): Promise<void> {
+  ): Promise<IngestionOutcomeEntity> {
     return await this.taxPort.importTransactions(rows, market, timezone, sourceProfileId)
   }
 }

@@ -16,11 +16,11 @@ import type {
   TaxReportEntity,
   TaxDerivativeEntity,
   FiscalIntegrityReportEntity,
+  IngestionOutcomeEntity,
   OverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 import type { AccountId, TransactionIdHash } from '@/core/domain/models/BrandedTypes'
-import type { TransactionRow } from '@/modules/data-ingestion/types'
-import type { SourceProfileId } from '@kryptofolio/shared-types'
+import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
 
 /**
  * A price the user declares for an operation whose market value could not be resolved.
@@ -109,16 +109,21 @@ export interface ITaxPort {
 
   /**
    * Import an array of pre-parsed and validated transaction rows.
-   * Uses a deterministic `id_hash` for each row to guarantee idempotent UPSERT operations.
+   * The backend derives each row's `id_hash` from its own persisted content — the caller supplies
+   * no identifier, so re-ingesting the same file resolves to the same rows regardless of which
+   * client version submitted them.
    * @param rows - The array of validated TransactionRow objects.
    * @param market - Target market context ('spot' | 'futures')
+   * @returns The batch's outcome — what was rejected, what fiat magnitude or fee could not be
+   * resolved, and the rebuild that followed. Discarding it is how a decision the engine already made
+   * (a rejected row, an unresolvable fee) used to never reach the person who could act on it.
    */
   importTransactions(
     rows: TransactionRow[],
     market: 'spot' | 'futures',
     timezone: string,
     sourceProfileId: SourceProfileId,
-  ): Promise<void>
+  ): Promise<IngestionOutcomeEntity>
 
   /**
    * Delete all transactions — bulk state reset.

@@ -16,6 +16,7 @@ import type {
   TaxReportEntity,
   TaxDerivativeEntity,
   FiscalIntegrityReportEntity,
+  IngestionOutcomeEntity,
   OverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
@@ -25,6 +26,7 @@ import {
 } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
 import {
   ExternalFiscalIntegritySchema,
+  ExternalIngestionOutcomeSchema,
   ExternalOverrideOutcomeSchema,
 } from '@/core/infrastructure/dtos/FiscalIntegritySchemas'
 import { CexFuturesLedgerSchema } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
@@ -33,8 +35,40 @@ import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { bffClient } from '../http/BffClient'
-import type { TransactionRow } from '@/modules/data-ingestion/types'
-import type { SourceProfileId } from '@kryptofolio/shared-types'
+import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
+
+/**
+ * Ingestion boundary conversion — `TransactionRow.mappedData` models an unset field as `null` (its
+ * schema is `.nullable()`); the ingestion route models the same absence by omitting the key. Only the
+ * fields the route names explicitly need the fold, one by one — everything else (`metadata`,
+ * `fiscal_flag`, `transfer_group_id`, …) crosses through the route's own `passthrough()` untouched.
+ * `account_id` is rejected rather than sent as `undefined`: a uuid column has no representation for
+ * "unassigned", and the wizard already refuses to submit without one — reaching here without it is a
+ * defect, not a value to guess at.
+ */
+function toIngestionPayloadRow(row: TransactionRow) {
+  const { account_id, ...rest } = row.mappedData
+  if (!account_id) {
+    throw new Error('A row reached ingestion with no account assigned')
+  }
+  return {
+    ...rest,
+    account_id,
+    timestamp: rest.timestamp ?? undefined,
+    tx_type: rest.tx_type ?? undefined,
+    asset_in: rest.asset_in ?? undefined,
+    amount_in: rest.amount_in ?? undefined,
+    asset_out: rest.asset_out ?? undefined,
+    amount_out: rest.amount_out ?? undefined,
+    fee_currency: rest.fee_currency ?? undefined,
+    fee_amount: rest.fee_amount ?? undefined,
+    total_fiat: rest.total_fiat ?? undefined,
+    price_fiat: rest.price_fiat ?? undefined,
+    symbol: rest.symbol ?? undefined,
+    realized_pnl: rest.realized_pnl ?? undefined,
+    funding_amount: rest.funding_amount ?? undefined,
+  }
+}
 
 function parseOrFail<T>(
   schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
@@ -203,15 +237,14 @@ export class RestTaxAdapter implements ITaxPort {
     }
   }
 
-  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string, sourceProfileId: SourceProfileId): Promise<void> {
+  async importTransactions(rows: TransactionRow[], market: 'spot' | 'futures', timezone: string, sourceProfileId: SourceProfileId): Promise<IngestionOutcomeEntity> {
     try {
-      const payload = rows.map((row) => ({
-        ...(row as { mappedData: Record<string, unknown>; id_hash?: string }).mappedData,
-        id_hash: (row as { id_hash?: string }).id_hash ?? '',
-      }));
-      await bffClient.api.ingestion.transactions.$post({
-        json: { rows: payload as never, market, timezone, sourceProfileId },
+      const payload = rows.map((row) => toIngestionPayloadRow(row))
+      const res = await bffClient.api.ingestion.transactions.$post({
+        json: { rows: payload, market, timezone, sourceProfileId },
       });
+      const rawData = await res.json()
+      return parseOrFail(ExternalIngestionOutcomeSchema, rawData, 'importTransactions')
     } catch (err) {
       throw new TaxOperationError('IMPORT_FAILED', `Transactions import failed: ${(err as Error).message}`)
     }

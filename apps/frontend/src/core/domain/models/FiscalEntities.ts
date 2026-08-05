@@ -352,6 +352,17 @@ export interface IngestionRejectionEntity {
   reason: string
 }
 
+/**
+ * A row persisted with a fee its source's profile could not resolve — distinct from an unresolved
+ * *price* (`pendingReview`). A user able to declare a market price cannot necessarily declare a
+ * fee's denomination or convention, so the two are never the same count.
+ */
+export interface FeePendingReviewEntity {
+  idHash: string
+  timestamp: string
+  reason: string
+}
+
 export interface IngestionOutcomeEntity extends RebuildOutcomeEntity {
   status: 'success'
   processedCount: number
@@ -360,6 +371,8 @@ export interface IngestionOutcomeEntity extends RebuildOutcomeEntity {
   rejected: IngestionRejectionEntity[]
   /** Rows persisted with a fiat magnitude that could not be resolved. */
   unresolvedFiat: number
+  /** Always present, empty when every fee resolved. */
+  pendingFeeReview: FeePendingReviewEntity[]
 }
 
 // ---------------------------------------------------------------------------

@@ -384,6 +384,7 @@ export const en: I18nDictionary = {
   "tax.pending.price_placeholder": "0.00",
   "tax.pending.select_account": "Select an account",
   "tax.pending.save": "Save",
+  "tax.pending.fee_section_label": "Fee unresolved",
 
   "tax.tabs.ledgers": "Ledgers",
   "tax.tabs.report": "Audit & Reports",

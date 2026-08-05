@@ -1,12 +1,15 @@
 import { ref } from "vue";
 import type { SourceProfileId, ValidTransactionRow } from "@kryptofolio/shared-types";
 import { useSubmitIngestionMutation } from "@/composables/queries/useTaxMutations";
+import type { FeePendingReviewEntity } from "@/core/domain/models/FiscalEntities";
 
 
 export function useImportProcessor() {
   const isProcessing = ref(false);
   const processingErrors = ref<string[]>([]);
   const timezone = ref("UTC"); // New state for timezone, defaults to UTC
+  /** Rows the last submitted batch persisted with a fee its source's profile could not resolve. */
+  const feePendingReview = ref<FeePendingReviewEntity[]>([]);
 
   const submitIngestion = useSubmitIngestionMutation();
 
@@ -50,12 +53,14 @@ export function useImportProcessor() {
         mappedData: { ...row.mappedData, account_id: accountId },
       }));
 
-      await submitIngestion.mutateAsync({
+      const outcome = await submitIngestion.mutateAsync({
         rows,
         market: marketType,
         timezone: timezone.value,
         sourceProfileId
       });
+
+      feePendingReview.value = outcome.pendingFeeReview;
 
       return true;
     } catch (err) {
@@ -74,6 +79,7 @@ export function useImportProcessor() {
     isProcessing,
     processingErrors,
     timezone,
+    feePendingReview,
     processAndSubmit,
   };
 }

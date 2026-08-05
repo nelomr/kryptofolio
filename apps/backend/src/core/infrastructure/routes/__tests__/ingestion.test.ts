@@ -28,7 +28,7 @@ function makeMockContainer(): DIContainer {
   return {
     ingestAndMaterializeUseCase: {
       execute: vi.fn(async ({ rows }: { rows: unknown[] }) => ({
-        ingestion: { persisted: rows.length, rejected: [], unresolvedFiat: 0 },
+        ingestion: { persisted: rows.length, rejected: [], unresolvedFiat: 0, pendingFeeReview: [] },
         materialization: SUMMARY,
         materialized: true,
         materializationError: null,
@@ -128,7 +128,7 @@ describe("POST /ingestion/transactions", () => {
 
   it("reports a failed rebuild as a successful ingestion that still needs recalculation", async () => {
     orchestrator(container).mockResolvedValueOnce({
-      ingestion: { persisted: 1, rejected: [], unresolvedFiat: 0 },
+      ingestion: { persisted: 1, rejected: [], unresolvedFiat: 0, pendingFeeReview: [] },
       materialization: null,
       materialized: false,
       materializationError: "Catalog Error: v_custody_entries",
@@ -169,6 +169,7 @@ describe("POST /ingestion/transactions", () => {
           },
         ],
         unresolvedFiat: 0,
+        pendingFeeReview: [],
       },
       materialization: SUMMARY,
       materialized: true,
@@ -226,7 +227,7 @@ describe("POST /ingestion/transactions", () => {
 
   it("reports how many persisted rows carry an unresolved fiat magnitude", async () => {
     orchestrator(container).mockResolvedValueOnce({
-      ingestion: { persisted: 2, rejected: [], unresolvedFiat: 2 },
+      ingestion: { persisted: 2, rejected: [], unresolvedFiat: 2, pendingFeeReview: [] },
       materialization: SUMMARY,
       materialized: true,
       materializationError: null,
@@ -248,6 +249,7 @@ describe("POST /ingestion/transactions", () => {
         persisted: 0,
         rejected: [{ idHash: "hash-bad", timestamp: "2023-01-15T10:00:00Z", txType: null }],
         unresolvedFiat: 0,
+        pendingFeeReview: [],
       },
       materialization: SUMMARY,
       materialized: true,
@@ -261,6 +263,60 @@ describe("POST /ingestion/transactions", () => {
     });
 
     expect(res.status).toBe(500);
+  });
+
+  it("reports rows whose fee could not be resolved, distinctly from a pending price", async () => {
+    orchestrator(container).mockResolvedValueOnce({
+      ingestion: {
+        persisted: 1,
+        rejected: [],
+        unresolvedFiat: 0,
+        pendingFeeReview: [
+          {
+            idHash: "hash-fee",
+            timestamp: "2023-01-15T10:00:00Z",
+            reason: "Bitvavo's running-balance invariant could not verify this fee's convention",
+          },
+        ],
+      },
+      materialization: SUMMARY,
+      materialized: true,
+      materializationError: null,
+    });
+
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      pendingFeeReview: Array<{ idHash: string; timestamp: string; reason: string }>;
+      pendingReview: number;
+    };
+    expect(body.pendingFeeReview).toEqual([
+      {
+        idHash: "hash-fee",
+        timestamp: "2023-01-15T10:00:00Z",
+        reason: "Bitvavo's running-balance invariant could not verify this fee's convention",
+      },
+    ]);
+    // A pending fee is not a pending price: folding the two would make one unresolvable defect
+    // look like the other, which is exactly the ambiguity D13's nullability split exists to avoid.
+    expect(body.pendingReview).toBe(2);
+  });
+
+  it("reports an empty pending-fee-review list rather than omitting the field", async () => {
+    const res = await app.request("/ingestion/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [VALID_ROW], market: "spot", timezone: "UTC", sourceProfileId: "kraken-spot" }),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { pendingFeeReview: unknown[] };
+    expect(body.pendingFeeReview).toEqual([]);
   });
 
   it("returns 500 when the orchestrator throws", async () => {

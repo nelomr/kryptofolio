@@ -11,7 +11,7 @@ import type { ClassValue } from 'clsx'
 import PendingValuesReview from '../PendingValuesReview.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { I18N_PORT_KEY } from '@/core/injectionKeys'
-import type { FiscalIntegrityDefectEntity } from '@/core/domain/models/FiscalEntities'
+import type { FiscalIntegrityDefectEntity, FeePendingReviewEntity } from '@/core/domain/models/FiscalEntities'
 
 vi.mock('@/lib/utils', () => ({ cn: (...args: ClassValue[]) => args.join(' ') }))
 
@@ -25,6 +25,15 @@ function defect(overrides: Partial<FiscalIntegrityDefectEntity> = {}): FiscalInt
     occurredAt: '2026-01-25T00:00:00.000Z',
     detailKey: 'fifo_quality.missing_price.explanation',
     pendingReview: true,
+    ...overrides,
+  }
+}
+
+function feeRow(overrides: Partial<FeePendingReviewEntity> = {}): FeePendingReviewEntity {
+  return {
+    idHash: 'fee-a',
+    timestamp: '2026-02-10T00:00:00.000Z',
+    reason: "could not verify Bitvavo's fee convention",
     ...overrides,
   }
 }
@@ -141,5 +150,33 @@ describe('PendingValuesReview', () => {
     const wrapper = mountReview({ isSubmitting: true })
 
     expect(wrapper.get('[data-testid="assign-price"]').attributes('disabled')).toBeDefined()
+  })
+
+  describe('a fee its source could not resolve', () => {
+    it('lists it with its reason, distinctly from a price or destination defect', () => {
+      const wrapper = mountReview({ rows: [], feePendingReviewRows: [feeRow()] })
+
+      const row = wrapper.get('[data-testid="fee-pending-row"]')
+      expect(row.text()).toContain("could not verify Bitvavo's fee convention")
+    })
+
+    it('offers no assignment affordance, since none exists for a fee yet', () => {
+      const wrapper = mountReview({ rows: [], feePendingReviewRows: [feeRow()] })
+
+      expect(wrapper.find('[data-testid="assign-price"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="assign-destination"]').exists()).toBe(false)
+    })
+
+    it('does not report the empty state when only a fee is pending', () => {
+      const wrapper = mountReview({ rows: [], feePendingReviewRows: [feeRow()] })
+
+      expect(wrapper.text()).not.toContain('tax.pending.none')
+    })
+
+    it('reports the empty state when neither a fee nor a price/destination is pending', () => {
+      const wrapper = mountReview({ rows: [], feePendingReviewRows: [] })
+
+      expect(wrapper.text()).toContain('tax.pending.none')
+    })
   })
 })

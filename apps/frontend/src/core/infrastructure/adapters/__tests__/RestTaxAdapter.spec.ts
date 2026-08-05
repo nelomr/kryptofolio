@@ -35,6 +35,20 @@ vi.mock('../../http/BffClient', () => {
   }
 })
 
+/** A minimally valid ingestion outcome — every field the response schema requires, nothing more. */
+const VALID_INGESTION_OUTCOME = {
+  status: 'success' as const,
+  processedCount: 1,
+  message: 'ok',
+  materialized: false,
+  materialization: null,
+  materializationError: null,
+  pendingReview: 0,
+  rejected: [],
+  unresolvedFiat: 0,
+  pendingFeeReview: [],
+}
+
 describe('RestTaxAdapter.uploadTaxFile() — happy path', () => {
   it('sends a multipart POST to bffClient.api.tax.upload', async () => {
     const { bffClient } = await import('../../http/BffClient')
@@ -126,14 +140,20 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
   it('POSTs to bffClient.api.ingestion.transactions (not api.tax.import)', async () => {
     const { bffClient } = await import('../../http/BffClient')
     // @ts-ignore
-    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(VALID_INGESTION_OUTCOME),
+    })
 
     const adapter = new RestTaxAdapter()
     const rows = [
       {
-        id_hash: 'hash-abc',
-        account_id: '00000000-0000-0000-0000-000000000001',
-        mappedData: { tx_type: 'BUY', asset_in: 'BTC', amount_in: '1' },
+        mappedData: {
+          tx_type: 'BUY',
+          asset_in: 'BTC',
+          amount_in: '1',
+          account_id: '00000000-0000-0000-0000-000000000001',
+        },
       },
     ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
 
@@ -143,10 +163,13 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
     expect(bffClient.api.ingestion.transactions.$post).toHaveBeenCalledOnce()
   })
 
-  it('sends rows with mappedData flattened + id_hash at top level', async () => {
+  it('sends rows with mappedData flattened, without a client-supplied id_hash', async () => {
     const { bffClient } = await import('../../http/BffClient')
     // @ts-ignore
-    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(VALID_INGESTION_OUTCOME),
+    })
 
     const adapter = new RestTaxAdapter()
     const rows = [
@@ -161,18 +184,86 @@ describe('RestTaxAdapter.importTransactions() — happy path', () => {
 
     // @ts-ignore
     const call = bffClient.api.ingestion.transactions.$post.mock.lastCall[0]
-    expect(call.json.rows[0]).toMatchObject({ id_hash: 'hash-xyz', tx_type: 'SELL' })
+    expect(call.json.rows[0]).toMatchObject({ tx_type: 'SELL' })
+    expect(call.json.rows[0]).not.toHaveProperty('id_hash')
     expect(call.json.market).toBe('spot')
     expect(call.json.timezone).toBe('Europe/Madrid')
   })
 
-  it('resolves void on success', async () => {
+  it('folds a null mapped field to undefined instead of sending null', async () => {
     const { bffClient } = await import('../../http/BffClient')
     // @ts-ignore
-    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({ ok: true })
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(VALID_INGESTION_OUTCOME),
+    })
 
     const adapter = new RestTaxAdapter()
-    await expect(adapter.importTransactions([], 'futures', 'UTC', 'kraken-futures')).resolves.toBeUndefined()
+    const rows = [
+      {
+        mappedData: {
+          tx_type: null,
+          asset_in: 'BTC',
+          amount_in: '1',
+          account_id: '00000000-0000-0000-0000-000000000001',
+        },
+      },
+    ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
+
+    await adapter.importTransactions(rows, 'spot', 'UTC', 'kraken-spot')
+
+    // @ts-ignore
+    const call = bffClient.api.ingestion.transactions.$post.mock.lastCall[0]
+    expect(call.json.rows[0].tx_type).toBeUndefined()
+    expect('tx_type' in call.json.rows[0] ? call.json.rows[0].tx_type : undefined).toBeUndefined()
+  })
+
+  it('rejects a row with no account assigned rather than sending an incomplete row', async () => {
+    const adapter = new RestTaxAdapter()
+    const rows = [
+      {
+        mappedData: { tx_type: 'BUY', asset_in: 'BTC', amount_in: '1', account_id: null },
+      },
+    ] as unknown as Parameters<RestTaxAdapter['importTransactions']>[0]
+
+    await expect(
+      adapter.importTransactions(rows, 'spot', 'UTC', 'kraken-spot'),
+    ).rejects.toMatchObject({ code: 'IMPORT_FAILED' })
+  })
+
+  it('resolves the parsed outcome on success', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ ...VALID_INGESTION_OUTCOME, processedCount: 0 }),
+    })
+
+    const adapter = new RestTaxAdapter()
+    const outcome = await adapter.importTransactions([], 'futures', 'UTC', 'kraken-futures')
+    expect(outcome.processedCount).toBe(0)
+    expect(outcome.pendingFeeReview).toEqual([])
+  })
+
+  it('surfaces rows whose fee could not be resolved, distinct from a rejected row', async () => {
+    const { bffClient } = await import('../../http/BffClient')
+    // @ts-ignore
+    bffClient.api.ingestion.transactions.$post.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          ...VALID_INGESTION_OUTCOME,
+          pendingFeeReview: [
+            { idHash: 'fee-1', timestamp: '2024-01-01T00:00:00Z', reason: "could not verify Bitvavo's fee convention" },
+          ],
+        }),
+    })
+
+    const adapter = new RestTaxAdapter()
+    const outcome = await adapter.importTransactions([], 'spot', 'UTC', 'kraken-spot')
+    expect(outcome.pendingFeeReview).toHaveLength(1)
+    expect(outcome.pendingFeeReview[0].reason).toContain('Bitvavo')
+    expect(outcome.rejected).toEqual([])
   })
 })
 
