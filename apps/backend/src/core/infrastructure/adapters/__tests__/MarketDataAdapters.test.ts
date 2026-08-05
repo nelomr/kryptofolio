@@ -16,18 +16,37 @@ import { CoinGeckoMarketDataAdapter } from '../CoinGeckoMarketDataAdapter.js';
 import { KrakenMarketDataAdapter } from '../KrakenMarketDataAdapter.js';
 import { WebSocket } from 'ws';
 
+/**
+ * The shape of the mocked `ws` module's instances and its `lastInstance` static, named here so the
+ * one place that reads them back (`wsInstance` below) can do so through a real type instead of `any`
+ * — the mock class itself lives inside the `vi.mock` factory and isn't importable by name.
+ */
+type MockWebSocketListener = (...args: unknown[]) => void;
+
+interface MockWebSocketInstance {
+  listeners: Record<string, MockWebSocketListener[]>;
+  on: ReturnType<typeof vi.fn>;
+  emit: (event: string, ...args: unknown[]) => void;
+  send: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+}
+
+interface MockWebSocketStatic {
+  lastInstance: MockWebSocketInstance | null;
+}
+
 vi.mock('ws', () => {
-  class MockWebSocket {
-    static lastInstance: any = null;
+  class MockWebSocket implements MockWebSocketInstance {
+    static lastInstance: MockWebSocket | null = null;
     constructor() {
       MockWebSocket.lastInstance = this;
     }
-    listeners: Record<string, Function[]> = {};
-    on = vi.fn().mockImplementation((event, callback) => {
+    listeners: Record<string, MockWebSocketListener[]> = {};
+    on = vi.fn().mockImplementation((event: string, callback: MockWebSocketListener) => {
       if (!this.listeners[event]) this.listeners[event] = [];
       this.listeners[event].push(callback);
     });
-    emit = (event: string, ...args: any[]) => {
+    emit = (event: string, ...args: unknown[]) => {
       if (this.listeners[event]) {
         this.listeners[event].forEach((cb) => cb(...args));
       }
@@ -167,9 +186,10 @@ describe('WebSocket Adapters (e.g. KrakenMarketDataAdapter)', () => {
     // The adapter creates a new WebSocket instance. We can grab it from vitest mock instances
     // or just rely on the fact that we can grab the connected state if we trigger the open event.
     // Let's get the active mock instance.
-    const MockWsClass = WebSocket as any;
+    const MockWsClass = WebSocket as unknown as MockWebSocketStatic;
     const wsInstance = MockWsClass.lastInstance;
-    
+    if (!wsInstance) throw new Error('adapter.connect() did not construct a WebSocket mock instance');
+
     // Simulate connection established
     wsInstance.emit('open');
     await connectPromise;
