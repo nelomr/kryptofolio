@@ -211,6 +211,11 @@ export function resolveGrossNetFee(
     return { kind: "PENDING_REVIEW", reason: `fee amount '${feeText}' is not a number` };
   }
   const hasFee = fee !== undefined && !fee.isZero();
+  // Whenever a returned `fee` is the source's own stated figure rather than a value this function
+  // derives (a subtraction, a sum), it is reported as `feeText` — guaranteed defined here because
+  // `hasFee` is only true once `fee`, and therefore `feeText`, parsed successfully — not as
+  // `fee.toString()`, which discards trailing zeros the source wrote (`0.16440000000` becomes
+  // `0.1644`): numerically identical, but not the digits ingestion promises to keep.
 
   const convention = profile.feeConvention;
   switch (convention.kind) {
@@ -233,7 +238,7 @@ export function resolveGrossNetFee(
         gross: net.plus(fee).toString(),
         net: net.toString(),
         // The sign survives: a negative fee is a rebate the venue credited, not a direction.
-        fee: fee.toString(),
+        fee: feeText!,
       };
     }
 
@@ -257,7 +262,7 @@ export function resolveGrossNetFee(
             net: single.toString(),
           };
         }
-        return { kind: "FEE_AS_STATED", fee: fee.toString() };
+        return { kind: "FEE_AS_STATED", fee: feeText! };
       }
 
       if (
@@ -275,7 +280,7 @@ export function resolveGrossNetFee(
             net: net.toString(),
           };
         }
-        return { kind: "FEE_AS_STATED", fee: fee.toString() };
+        return { kind: "FEE_AS_STATED", fee: feeText! };
       }
 
       const derived = gross.minus(net);
@@ -316,7 +321,7 @@ export function resolveGrossNetFee(
         magnitude: "FIAT_TOTAL",
         gross: gross.toString(),
         net: gross.minus(fee).toString(),
-        fee: fee.toString(),
+        fee: feeText!,
       };
     }
 
@@ -388,6 +393,10 @@ export function routeFee(
     };
   }
 
+  // `convention.fee` is already the figure `resolveGrossNetFee` resolved to — its own stated text in
+  // every branch that does not net two sides against each other. `fee` exists only to ask questions
+  // about it (its sign); the value returned below is the text itself, not `fee.toString()`, which
+  // would re-parse and hand back Decimal's canonical form, trailing zeros dropped.
   const fee = new Decimal(convention.fee);
   // A fee the source stated without netting anything against it leaves the reported total alone.
   const netTotal =
@@ -402,7 +411,7 @@ export function routeFee(
   if (denomination.kind === "FIAT_VALUATION" || isFiatCurrencyCode(denomination.asset)) {
     const currency =
       denomination.kind === "FIAT_VALUATION" ? denomination.currency : denomination.asset;
-    return { kind: "BASIS_ADJUSTMENT", currency, amount: fee.toString(), netTotal };
+    return { kind: "BASIS_ADJUSTMENT", currency, amount: convention.fee, netTotal };
   }
 
   if (fee.isNegative()) {
@@ -414,7 +423,7 @@ export function routeFee(
     };
   }
 
-  return { kind: "ASSET_DISPOSAL", asset: denomination.asset, quantity: fee.toString() };
+  return { kind: "ASSET_DISPOSAL", asset: denomination.asset, quantity: convention.fee };
 }
 
 export type DirectionalReduction =

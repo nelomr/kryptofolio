@@ -128,10 +128,13 @@ describe("a fee's denomination comes from the profile's declaration", () => {
     // would resolve to a quantity of that crypto through the identical declaration — which is the
     // point of naming the collateral rather than assuming a currency.
     const trade = futuresRows.find((r) => r.fee_amount === "0.16440000000")!;
+    // The source's own digits, trailing zeros included — `routeFee` used to re-parse the already-
+    // resolved fee text through Decimal and hand back its canonical form, which is numerically the
+    // same figure but not the one the file states.
     expect(route(FUTURES, trade)).toEqual({
       kind: "BASIS_ADJUSTMENT",
       currency: "usd",
-      amount: "0.1644",
+      amount: "0.16440000000",
       netTotal: null,
     });
 
@@ -229,7 +232,8 @@ describe("routing reads the two resolved values and nothing else", () => {
     expect(route(KRAKEN, pumpTrade)).toEqual({
       kind: "ASSET_DISPOSAL",
       asset: "PUMP",
-      quantity: "17.72",
+      // The source's own digits: `17.720`, trailing zero included, not Decimal's canonical `17.72`.
+      quantity: "17.720",
     });
   });
 

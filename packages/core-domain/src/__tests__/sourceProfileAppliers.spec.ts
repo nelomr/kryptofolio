@@ -277,6 +277,45 @@ describe("resolveGrossNetFee", () => {
     expect(result.fee).toBe("-0.00543739");
   });
 
+  /**
+   * Kraken futures states `fee: '0.16440000000'`. `fee.toString()` on the parsed Decimal drops the
+   * trailing zeros the source wrote — numerically identical, but not the source's own digits, which
+   * is exactly the fidelity `sourceMagnitude` was written to preserve for quantities. A stated fee
+   * gets the same treatment: its own text, not Decimal's canonical form.
+   */
+  it("keeps a stated fee's own digits under NET_PLUS_FEE, trailing zeros included", () => {
+    const futuresFee: TransactionMappedData = {
+      ...krakenRows[0],
+      amount: "-3.81000000000",
+      fee_amount: "0.16440000000",
+      asset: "usd",
+    };
+    const result = resolveGrossNetFee(KRAKEN, futuresFee);
+    if (result.kind !== "RESOLVED") throw new Error(`expected RESOLVED, got ${result.kind}`);
+    expect(result.fee).toBe("0.16440000000");
+  });
+
+  it("keeps a stated fee's own digits under FEE_AS_STATED", () => {
+    const jasmyTrade: TransactionMappedData = {
+      ...bit2meRows.find((r) => r.fee_currency === "JASMY")!,
+      fee_amount: "9.570988840",
+    };
+    expect(resolveGrossNetFee(BIT2ME, jasmyTrade)).toEqual({
+      kind: "FEE_AS_STATED",
+      fee: "9.570988840",
+    });
+  });
+
+  it("keeps a stated fee's own digits under FEE_INSIDE_TOTAL", () => {
+    const buy: TransactionMappedData = {
+      ...bitvavoRows.find((r) => r.fee_amount === "0.7499")!,
+      fee_amount: "0.74990",
+    };
+    const result = resolveGrossNetFee(BITVAVO, buy);
+    if (result.kind !== "RESOLVED") throw new Error(`expected RESOLVED, got ${result.kind}`);
+    expect(result.fee).toBe("0.74990");
+  });
+
   it("is exact where a float would not be", () => {
     const tiny: TransactionMappedData = {
       ...krakenRows[0],

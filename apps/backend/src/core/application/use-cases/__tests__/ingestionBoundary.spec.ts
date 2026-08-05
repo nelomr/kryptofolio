@@ -104,7 +104,7 @@ describe('the ingestion boundary receives rows as the source wrote them', () => 
     // `-50.0000`, `7704.160` and `17.720` in the file: only the sign is dropped, and the sign is what
     // the direction was read from. The scale a source wrote a quantity at reaches the ledger intact.
     expect(tx.amount_in).toBe('7704.160');
-    expect(tx.fee_amount).toBe('17.72');
+    expect(tx.fee_amount).toBe('17.720');
     expect(tx.fee_asset_id).toBe('PUMP');
   });
 

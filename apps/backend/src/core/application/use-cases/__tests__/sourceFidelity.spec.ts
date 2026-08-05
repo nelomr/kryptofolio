@@ -89,7 +89,8 @@ describe('source fidelity from the normalizer to the ledger', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0].tx_type).toBe('TRANSFER_OUT');
     expect(saved[0].fee_asset_id).toBe('SOL');
-    expect(saved[0].fee_amount?.toString()).toBe('0.005');
+    // The source's own digits, trailing zeros included — not Decimal's canonical '0.005'.
+    expect(saved[0].fee_amount?.toString()).toBe('0.0050000000');
   });
 
   /**

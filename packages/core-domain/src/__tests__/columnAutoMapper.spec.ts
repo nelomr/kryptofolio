@@ -18,6 +18,22 @@ describe('columnAutoMapper', () => {
     expect(mapping['Desconocido']).toBe('metadata')
   })
 
+  /**
+   * `kraken_futures.csv`'s real header order is `…, funding rate, realized pnl, fee, realized
+   * funding, …`. A rate is not an amount — it is a fraction, not a currency value — but
+   * `funding_amount`'s pattern list named both, so whichever header the mapper reached first claimed
+   * the field and the other fell through to `metadata`. Header order deciding which of two
+   * semantically different columns lands in a typed field is exactly the class of defect this net
+   * exists to catch.
+   */
+  it('does not read a funding rate as a funding amount, regardless of header order', () => {
+    const headers = ['funding rate', 'realized funding']
+    const mapping = guessColumnMapping(headers)
+
+    expect(mapping['funding rate']).not.toBe('funding_amount')
+    expect(mapping['realized funding']).toBe('funding_amount')
+  })
+
   it('should correctly map an original row to a TransactionRow and preserve metadata', () => {
     const originalRow = {
       Fecha: '2023-12-01 15:30:00',

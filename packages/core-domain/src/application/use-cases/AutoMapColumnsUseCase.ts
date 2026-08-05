@@ -47,7 +47,11 @@ export const COLUMN_DICTIONARY: Record<string, string[]> = {
   symbol: ["symbol", "contract", "pair", "par"],
   realized_pnl: ["pnl", "realized pnl", "profit", "beneficio"],
   pnl_currency: ["pnl asset", "pnl currency"],
-  funding_amount: ["funding", "realized funding", "funding fee", "funding rate"],
+  // `funding rate` is deliberately absent: it is a fraction of the position, not a currency amount.
+  // Naming both let header order decide which column actually reached `funding_amount` — Kraken
+  // futures' real export lists `funding rate` before `realized funding`, so the fraction won and the
+  // real amount fell through to metadata.
+  funding_amount: ["funding", "realized funding", "funding fee"],
   funding_currency: ["funding asset", "funding currency"],
 
   // Metadata passthrough

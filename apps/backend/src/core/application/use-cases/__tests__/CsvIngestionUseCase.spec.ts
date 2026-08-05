@@ -868,7 +868,8 @@ describe('CsvIngestionUseCase — the fee model', () => {
         'kraken-futures', 'UTC',
       );
 
-      expect(savedFutures().feeAmount).toBe('0.0626');
+      // The source's own digits, trailing zeros included — not Decimal's canonical '0.0626'.
+      expect(savedFutures().feeAmount).toBe('0.06260000000');
       // Fiat collateral, so this is a cost and not a disposal — a crypto-margined account differs.
       expect(savedFutures().feeAssetId).toBe('usd');
     });
