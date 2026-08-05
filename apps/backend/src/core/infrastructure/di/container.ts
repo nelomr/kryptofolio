@@ -166,7 +166,9 @@ export class DIContainer {
     );
 
     // Ledger DB — separate SQLite instance for the financial ledger
-    const ledgerDb = getLedgerDb(process.env.LEDGER_DB_PATH);
+    // No path argument: `LEDGER_DB_PATH` is read where every other database path is read, so a
+    // relative value cannot be anchored to the cwd here and to the data root there.
+    const ledgerDb = getLedgerDb();
     this.ledgerPort = new SQLiteLedgerAdapter(ledgerDb);
 
     // CSV Ingestion — uses Kraken as the historical price provider

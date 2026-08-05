@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { resolveParquetPricesPath } from '@kryptofolio/database';
 import type { IAnalyticalDatabasePort } from '@kryptofolio/database';
 import type { IPriceIngestionPort, OHLCVRecord } from '../../domain/ports/IPriceIngestionPort.js';
 
@@ -23,9 +23,10 @@ export class DuckDbParquetPriceAdapter implements IPriceIngestionPort {
 
   constructor(duckDb: IAnalyticalDatabasePort) {
     this.duckDb = duckDb;
-    this.parquetBase =
-      process.env.PARQUET_DATA_PATH ||
-      path.resolve(process.cwd(), 'data/historical/prices');
+    // The same resolver the reader uses. A writer and a reader that each resolve their own
+    // cwd-relative path is how the price tree ends up written to one directory and queried from
+    // another.
+    this.parquetBase = resolveParquetPricesPath();
   }
 
   // ---------------------------------------------------------------------------

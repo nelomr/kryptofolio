@@ -135,7 +135,7 @@ Aplicamos estrictos controles de calidad (Arquitectura Limpia y TDD). Ejecuta es
 |---------|-------------|
 | `pnpm dev` | Inicia el servidor de desarrollo local del frontend (`-F @kryptofolio/frontend`). |
 | `pnpm dev:full` | Orquesta con Turborepo el arranque simultáneo del frontend y backend. |
-| `pnpm test` | Ejecuta de forma paralela la suite completa de pruebas unitarias usando Turborepo. |
+| `pnpm test` | Ejecuta la suite completa de pruebas del workspace con Turborepo, un paquete a la vez. |
 | `pnpm typecheck` | Ejecuta estáticamente **Vue-TSC** y chequeo de tipos en todos los paquetes. |
 | `pnpm lint` | Analiza el código con ESLint en todo el workspace. |
 | `pnpm build` | Compila y empaqueta el proyecto usando la caché de Turborepo. |

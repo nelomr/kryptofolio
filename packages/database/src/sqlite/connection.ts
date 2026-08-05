@@ -1,16 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
-import path from 'node:path';
+import { resolveLedgerDbPath } from '../dataPaths.js';
 
 let instance: DatabaseSync | null = null;
 let instancePath: string | null = null;
 
 /**
  * Initializes and returns the SQLite database connection.
- * @param dbPath Path to the database file. Defaults to 'kryptofolio_ledger.db' in the project root.
+ * @param dbPath Path to the database file. Defaults to the ledger file in the resolved data root.
  */
 export function getLedgerDb(dbPath?: string): DatabaseSync {
-  const defaultPath = path.resolve(process.cwd(), '../../kryptofolio_ledger.db');
-  const targetPath = dbPath || defaultPath;
+  const targetPath = dbPath || resolveLedgerDbPath();
 
   if (instance) {
     // S-4 fix: validate that the requested path matches the existing singleton.

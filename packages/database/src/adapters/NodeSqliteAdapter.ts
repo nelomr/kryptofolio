@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { IDatabasePort } from '../ports/IDatabasePort.js';
 import { toSqliteParams } from './sqlParams.js';
+import { resolveVaultDbPath } from '../dataPaths.js';
 
 /**
  * NodeSqliteAdapter — Infrastructure adapter for the generic IDatabasePort
@@ -13,18 +14,9 @@ export class NodeSqliteAdapter implements IDatabasePort {
 
   constructor() {
     const isMockMode = process.env.MOCK_MODE === 'true' || process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-    let dbUrl = ':memory:';
-
-    if (!isMockMode) {
-      if (!process.env.VAULT_DB_PATH) {
-        throw new Error(
-          '[NodeSqliteAdapter] CRITICAL: VAULT_DB_PATH environment variable is not defined. Please set it in your .env file or environment.',
-        );
-      }
-      dbUrl = process.env.VAULT_DB_PATH;
-    } else if (process.env.VAULT_DB_PATH) {
-      dbUrl = process.env.VAULT_DB_PATH;
-    }
+    // A test run that names no path gets a private in-memory vault; a real run always has a resolved
+    // one, so the absent-env case that used to abort startup no longer exists.
+    const dbUrl = isMockMode && !process.env.VAULT_DB_PATH ? ':memory:' : resolveVaultDbPath();
 
     this.db = new DatabaseSync(dbUrl);
   }

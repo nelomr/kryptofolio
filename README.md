@@ -55,7 +55,8 @@ We use **PNPM Catalogs** to maintain a single source of truth for common depende
 
 **Turborepo** orchestrates all build, test, lint, and typecheck tasks across the monorepo with automatic caching.
 - `pnpm build` → `turbo run build` (respects `^build` dependency order)
-- `pnpm test` → `turbo run test` (cached, parallelized)
+- `pnpm test` → `turbo run test --concurrency=1` (cached; one package at a time, because each package's
+  own Vitest config already caps its workers and the DuckDB suites report starvation as a timeout)
 - `pnpm typecheck` → `turbo run typecheck`
 
 ## 🎨 Institutional Design System
@@ -142,7 +143,7 @@ We apply strict quality controls (Clean Architecture and TDD). Run these command
 |---------|-------------|
 | `pnpm dev` | Starts the local frontend development server (`-F @kryptofolio/frontend`). |
 | `pnpm dev:full` | Orchestrates simultaneous frontend and backend startup via Turborepo. |
-| `pnpm test` | Runs the complete unit test suite in parallel across the workspace using Turborepo. |
+| `pnpm test` | Runs the complete test suite across the workspace via Turborepo, one package at a time. |
 | `pnpm typecheck` | Statically runs **Vue-TSC** and type checking across all packages. |
 | `pnpm lint` | Analyzes code with ESLint across the workspace. |
 | `pnpm build` | Compiles and bundles the project using Turborepo's caching. |

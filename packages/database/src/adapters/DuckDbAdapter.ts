@@ -10,6 +10,11 @@ import {
 } from '@kryptofolio/shared-types';
 import type { IAnalyticalDatabasePort } from '../ports/IAnalyticalDatabasePort.js';
 import { toDuckDbParams, toDuckDbValue } from './sqlParams.js';
+import {
+  resolveAnalyticalDbPath,
+  resolveLedgerDbPath,
+  resolveParquetPricesPath,
+} from '../dataPaths.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -30,16 +35,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
 
   constructor() {
     const isMockMode = process.env.MOCK_MODE === 'true';
-    this.dbPath = ':memory:';
-
-    if (!isMockMode) {
-      if (!process.env.DUCKDB_PATH) {
-        throw new Error(
-          '[DuckDbAdapter] CRITICAL: DUCKDB_PATH environment variable is not defined. Please set it in your .env file or environment.',
-        );
-      }
-      this.dbPath = process.env.DUCKDB_PATH;
-    }
+    this.dbPath = isMockMode ? ':memory:' : resolveAnalyticalDbPath();
   }
 
   public async initialize(ledgerDbPath?: string): Promise<void> {
@@ -61,24 +57,13 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         await this.connection.run(`SET threads = ${threadLimit};`);
       }
 
-      // Resolve the ledger database path
-      let resolvedLedgerPath = ledgerDbPath || process.env.LEDGER_DB_PATH;
-      if (!resolvedLedgerPath) {
-        const paths = [
-          path.resolve(process.cwd(), 'kryptofolio_ledger.db'),
-          path.resolve(process.cwd(), '../../kryptofolio_ledger.db'),
-          path.resolve(process.cwd(), '../kryptofolio_ledger.db'),
-        ];
-        for (const p of paths) {
-          if (fs.existsSync(p)) {
-            resolvedLedgerPath = p;
-            break;
-          }
-        }
-        if (!resolvedLedgerPath) {
-          resolvedLedgerPath = paths[0];
-        }
-      }
+      /**
+       * One resolved path, never a search. The previous probe tried three cwd-relative candidates and
+       * attached the first that happened to exist, so DuckDB could federate a *different* ledger file
+       * than the one the backend was writing — the analytical side would then read an empty database
+       * and report zero lots, with nothing anywhere raising an error.
+       */
+      const resolvedLedgerPath = ledgerDbPath || resolveLedgerDbPath();
 
 function sanitizeFilePath(filePath: string): string {
   if (!filePath || typeof filePath !== 'string') {
@@ -90,10 +75,23 @@ function sanitizeFilePath(filePath: string): string {
   return filePath.replace(/'/g, "''");
 }
 
-      // Attach the SQLite ledger database
+      /**
+       * READ_ONLY is load-bearing, not a precaution.
+       *
+       * `sqlite_scanner` links its own copy of SQLite, so a read-write ATTACH gives this process two
+       * independent SQLite libraries opening one WAL database. The second one takes ownership of the
+       * write-ahead log and unlinks `-wal`/`-shm`, leaving `node:sqlite` appending to a file no longer
+       * reachable by name: it reads its own rows back, every other connection sees the pre-attach
+       * database (or fails outright with `disk I/O error`), and a restart discards the lot. Nothing
+       * errors, because at the SQL level nothing has gone wrong — measured in
+       * `tests/integration/wal_coexistence.spec.ts`.
+       *
+       * A read-only attach also states the layering the rest of the system already assumes: SQLite is
+       * the only transactional writer, and every DuckDB relation over `ledger.*` is derived.
+       */
       const safeLedgerPath = sanitizeFilePath(resolvedLedgerPath);
       await this.connection.run(
-        `ATTACH '${safeLedgerPath}' AS ledger (TYPE SQLITE);`,
+        `ATTACH '${safeLedgerPath}' AS ledger (TYPE SQLITE, READ_ONLY);`,
       );
 
       // -----------------------------------------------------------------------
@@ -101,9 +99,7 @@ function sanitizeFilePath(filePath: string): string {
       // -----------------------------------------------------------------------
       // IMPORTANT: historical_prices must be created BEFORE any views that depend
       // on it (v_flattened_fifo_events, v_futures_realized_pnl, etc.) via ASOF JOIN.
-      const parquetBase =
-        process.env.PARQUET_DATA_PATH ||
-        path.resolve(process.cwd(), 'data/historical/prices');
+      const parquetBase = resolveParquetPricesPath();
 
       const sentinelDir = path.join(parquetBase, 'year=1970');
       const sentinelFile = path.join(sentinelDir, 'prices.parquet');

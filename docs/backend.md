@@ -104,8 +104,11 @@ export const bffClient = hc<AppType>(import.meta.env.VITE_API_URL || 'http://loc
 
 | Variable | Scope | Description |
 |---|---|---|
-| `VAULT_DB_PATH` | Backend | Path to the SQLite vault `.db` file (`kryptofolio.db`). Required unless `MOCK_MODE=true`. |
-| `DUCKDB_PATH` | Backend | Path to the DuckDB OLAP database file (`fiscal.duckdb`). Required unless `MOCK_MODE=true`. |
+| `KRYPTOFOLIO_DATA_DIR` | Backend | Optional. Directory holding every database file. Defaults to the workspace root. A relative value is anchored to the workspace root, never to the working directory. |
+| `LEDGER_DB_PATH` | Backend | Optional override for the SQLite ledger (`kryptofolio_ledger.db`). |
+| `VAULT_DB_PATH` | Backend | Optional override for the SQLite vault (`kryptofolio.db`). |
+| `DUCKDB_PATH` | Backend | Optional override for the DuckDB OLAP database (`fiscal.duckdb`). |
+| `PARQUET_DATA_PATH` | Backend | Optional override for the historical-price Parquet tree (`data/historical/prices`). |
 | `MOCK_MODE` | Backend | Set to `true` to use in-memory SQLite (no file needed). |
 | `PORT` | Backend | HTTP port (default: `3001`). |
 | `KRYPTO_MASTER_KEY` | Backend | Base64 AES key fallback when OS keyring is unavailable (Docker). |
