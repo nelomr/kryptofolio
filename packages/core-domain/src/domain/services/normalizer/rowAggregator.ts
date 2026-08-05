@@ -115,13 +115,34 @@ export function aggregateRows(
     } else if (namesOneAssetOnBothSides(groupRows)) {
       // Both legs survive as recorded. What links them is the identifier they share, which the
       // ledger keeps, not a record that spends and receives one asset at once.
-      merged.push(...groupRows);
+      merged.push(...withTransferGroupId(groupRows, profile));
     } else {
       merged.push(mergeRows(groupRows, groupRows[0].mappedData.group_id ?? "", profile));
     }
   }
 
   return [...standalone, ...merged];
+}
+
+/**
+ * Stamps `transfer_group_id` onto a same-asset pair, guarded against repeating D20: a shared
+ * identifier is trusted as a link only when the source declares having a genuine reference column
+ * at all — Bit2Me's is deliberately empty — and when exactly two legs share it. Grouping is already
+ * keyed on identifier and instant, so "same instant" holds by construction; a group larger than two
+ * is the shape D20's `Grupo` took (499 rows under one value) and is ignored as a link, not paired.
+ */
+function withTransferGroupId(
+  groupRows: readonly ValidTransactionRow[],
+  profile: SourceFormatProfile,
+): readonly ValidTransactionRow[] {
+  const groupId = groupRows[0].mappedData.group_id;
+  const trustworthy = groupRows.length === 2 && profile.columnRoles.references.length > 0;
+  if (!trustworthy || !groupId) return groupRows;
+
+  return groupRows.map((row) => ({
+    ...row,
+    mappedData: { ...row.mappedData, transfer_group_id: groupId },
+  }));
 }
 
 /**

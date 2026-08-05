@@ -5,6 +5,11 @@ export const BaseTransactionMappedDataSchema = z.object({
   // Identifiers & Grouping
   tx_id: z.string().nullable().optional(),
   group_id: z.string().nullable().optional(),
+  /**
+   * Links the two legs of one physical custody movement, once the source's own reference has been
+   * validated to behave like one — same instant, at most two legs. Never set from a category column.
+   */
+  transfer_group_id: z.string().nullable().optional(),
   account_id: z.string().nullable().optional(),
   
   // Base Fields

@@ -3587,45 +3587,123 @@ one side", **stayed green**: it had been applied to a `return null` that the one
 Re-aimed at the guard that case actually passes through, it went red. A break that does not fail is not
 evidence until it is shown to be reaching the code it claims to test.
 
+## 2026-08-05 — 14ε: the recorded-counterparty tier stops being unreachable
+
+14.6, 14.7, 14.8, 14.9 closed. `transfer_group_id` is now a producer, not just a schema column and a
+dead read: ingestion populates it, and DuckDB's `recorded_counterparty` tier — dead since it was added
+in migration `004` — resolves a real transfer to its real destination for the first time.
+
+**Where the work went.** `prepareIngestionRows` was the right entry point, as the previous session's
+notes predicted: `aggregateRows()` already groups rows by `(group_id, instant)` for the same-asset-pair
+case (14δ's own guard), so the transfer-group guard is a small addition at that exact point rather than
+a new pass over the rows. New function `withTransferGroupId` in `rowAggregator.ts`: a group's shared
+`group_id` is stamped onto both legs' `mappedData.transfer_group_id` only when the group has **exactly
+two** rows **and** the source's profile declares at least one genuine reference column
+(`columnRoles.references.length > 0`). Grouping is already keyed on the identifier *and* the instant, so
+"same instant" holds by construction before this guard ever runs — the guard's own job is only the size
+check and the per-source declaration, which is what D20/14.8 asked for.
+
+**Why the profile-declared-reference check and not `isMergeKey` by column name.** `isMergeKey(profile,
+column)` needs the *original header* that produced `group_id`, and by the time a row reaches
+`aggregateRows` only the mapped value survives — `originalData` keeps the raw row, but nothing carries
+forward which header fed which canonical field. Re-deriving that link would have meant threading a new
+piece of provenance through the whole mapping pipeline for a check that the emptiness of
+`columnRoles.references` already answers just as precisely: Bit2Me's is `[]`, so no group of its rows is
+ever trusted regardless of what merged them, and Kraken's is `["refid"]`, so its groups are. Measured
+against the real files (`/Users/nelo/proyectos/AgenteIA/cripto-proyect/listadoTransacciones`) rather than
+assumed: `kraken_spot.csv`'s 24 `refid` values split 14 singleton / 10 pairs, **zero** groups larger than
+two; `bitvavo_spot.csv`'s 42 `Transaction ID` values are all singletons (each row is already a complete
+trade, so the pairing tier is simply inert for Bitvavo, not broken); `bitunix_spot.csv`'s `Trx. ID` has
+one pair and one singleton — consistent with the profile's own note that `Trx. ID` repeats across
+unrelated rows, which is exactly why Bitunix's `columnRoles.references` is `[]` and the guard excludes it
+regardless of size.
+
+**Port and persistence.** `LedgerSpotTransaction` gained `transfer_group_id?: string | null`;
+`SQLiteLedgerAdapter.saveSpotTransaction`/`getSpotTransactions` now write and read the column that
+migration `004` already created and indexed; `CsvIngestionUseCase` copies `row.transfer_group_id` onto
+the persisted transaction. No new `any`/`as never`/`as unknown as` — grepped `: any|as any|<any>|,
+any>|as never|as unknown as` across the full diff, zero hits.
+
+**Tests, at three levels.** Core-domain (`rowAggregator.spec.ts`, pure function): a two-leg same-asset
+Kraken-shaped group gets `transfer_group_id` on both legs; a three-leg group at the same instant gets it
+on none; a single-leg group gets it on none; a two-leg group under a profile with an empty
+`columnRoles.references` (Bit2Me-shaped) gets it on none even though the pairing shape alone would
+qualify. Backend (`ingestionBoundary.spec.ts`): extended the existing "two-row same-asset Kraken group
+survives to the ledger as two legs" tests — the ones the previous session's notes flagged as certain to
+move — with an assertion that both persisted rows carry the shared `transfer_group_id`, including the
+variant that round-trips through a real `SQLiteLedgerAdapter` and a real SQLite schema. Database
+(`custody_ledger.spec.ts`): new test seeding a `TRANSFER_OUT`/`TRANSFER_IN` pair with a shared
+`transfer_group_id` and no destination override, asserting `v_custody_entries` resolves both legs to the
+real counterparty account and never to `ownwallet-BTC` — this is 14.9's own verification, since
+`v_lot_custody_allocation` derives from the same `v_custody_movements` chain.
+
+**Deliberate breaks, three applied, three red, all reaching the intended assertion.**
+1. Removed `transfer_group_id: row.transfer_group_id ?? undefined` from `CsvIngestionUseCase`'s spot
+   branch (replaced with `undefined`) → both `ingestionBoundary.spec.ts` assertions on
+   `transfer_group_id` went red with `expected undefined to be 'TSPOTEARN-1'`; 6 of 8 tests in the file
+   still passed, confirming the break landed only on the lines it targeted.
+2. Widened `withTransferGroupId`'s guard from `groupRows.length === 2` to `groupRows.length >= 2` →
+   the "ambiguous group" core-domain test went red on its own named assertion
+   (`expected 'TSPOTEARN-1' to be undefined`), 19 of 20 tests in the file still green.
+3. Dropped the `profile.columnRoles.references.length > 0` half of the same guard → the "no declared
+   reference" core-domain test went red the same way, 19 of 20 still green.
+4. Reverted the `custody_ledger.spec.ts` seed helper's new `s.transfer_group_id ?? null` bind back to a
+   literal `null` → the new recorded-counterparty test went red
+   (`expected [ 'acc-a', 'ownwallet-BTC' ]` instead of `[ 'acc-a', 'acc-b' ]`), proving the DuckDB view
+   side of 14.9 is exercised by the seeded column and not merely by the view already existing.
+
+All four breaks were restored from a copy made before editing (`/tmp/*.bak`), never via `git checkout`.
+
+**Measured, not assumed:** confirmed by grep that `isMergeKey` remains unused in any production path —
+14.8's guard reads `columnRoles.references` directly rather than through it, so `isMergeKey` is still
+exercised only by its own unit tests. Nothing here changes that; folding the two would be a
+`sourceProfile/appliers.ts` change with its own review, not part of this task's scope.
+
+**Spec updated.** `specs/multi-leg-movement-integrity/spec.md`'s "Two Legs of One Physical Movement Are
+Linked in the Ledger" requirement no longer says `transfer_group_id` "is written by nothing today" — it
+now states what populates it and how the guard works, and the "No resolution tier is left unreachable"
+scenario changed from an either/or (populate it, or remove the tier) to a plain requirement, since one
+side of that either/or is now done. Added a new scenario naming the size guard explicitly.
+
+**Counts: shared-types 46, core-domain 212 (+4), database 127 (+1), backend 390 (unchanged — the two
+new assertions extended existing tests rather than adding new ones), frontend 437 (unchanged, untouched
+by this phase).** All five typechecks 0 errors, backend's own `tsc --noEmit` and frontend's
+`vue-tsc --build --force` included.
+
+**Not touched, on purpose:** `isMergeKey`'s dormancy in production code, Bitvavo's `Transaction ID`
+being mapped to `tx_id` rather than `group_id` by `COLUMN_DICTIONARY` (which is why Bitvavo's pairing
+tier is inert rather than active — measured harmless, since Bitvavo's real export has no multi-leg
+groups to pair), and anything in group 13 or phase 14ζ.
+
 ## Resume here — next action
 
-**170 checked boxes in `tasks.md`, 34 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**174 checked boxes in `tasks.md`, 30 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
-14γ and 14δ** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
+14γ, 14δ and 14ε** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
 group 13. **No task is left open in a closed group.**
 
-Measured state: shared-types 46, core-domain **199**, database 126, backend **388**, frontend 437; all
+Measured state: shared-types 46, core-domain **212**, database 127, backend **390**, frontend 437; all
 five typechecks 0 errors.
 
-### Start here next session — group 14, phase 14ε
+### Start here next session — group 14, phase 14ζ
 
-Next is **14ε — the recorded-counterparty tier stops being unreachable** (14.6, 14.7, 14.8, 14.9). Its
-precondition is now met and measured: 14δ moved aggregation behind the ingestion boundary and refuses a
-same-asset group, so **the backend receives both legs of a movement** and `v_custody_movements`'s
-`recorded_counterparty` tier has rows that can enter it. Four things to carry:
+14ε closed this session — see the dated entry above. Next is **14ζ — the ledger can state "unknown" for
+a fiat magnitude**. Two things to carry from 14ε:
 
-- **`prepareIngestionRows(rows, profile)` is where 14ε's work goes.** It is the single composition point
-  — classify, apply the profile per leg, aggregate — and `CsvIngestionUseCase.prepare` derives the
-  identifier straight after it. `transfer_group_id` is a per-leg field, so it is populated in that pass,
-  not in the aggregator.
-- **The guard 14.8 asks for has a precedent to copy.** `aggregateRows` already keys on identifier **and
-  instant** and already refuses a group naming one asset on both sides; "same instant, at most two legs"
-  is the same shape of check over the same grouping, and D20's measurement (`grupo` holding 499 rows) is
-  why it exists.
-- **Which column is a reference is already declared.** `profile.columnRoles.references` and
-  `isMergeKey` exist; Kraken's is `refid` and Bit2Me's set is deliberately empty. 14.8 needs no new
-  dimension, only to read that one.
-- **Three tests will move within one edit of anything on this path**: `ingestionBoundary.spec.ts` (the
-  boundary and the same-asset group, including one end-to-end case against the real SQLite schema),
-  `sourceProfileParity.spec.ts` (preview versus ledger, digit for digit, on real Bit2Me rows) and
-  `feeModel.spec.ts` (the whole 43-row withdrawal corpus). And **typecheck separately** — 14δ's own
-  signature change produced four type errors behind five fully green suites.
+- **`transfer_group_id` is now populated, through `withTransferGroupId` in `rowAggregator.ts`, guarded
+  by group size and by the profile declaring a non-empty `columnRoles.references`.** Nothing in 14ζ
+  should need to touch that function; if it does, re-read 14ε's own entry first, since the guard is
+  deliberately narrow and re-widening it silently is how D20 would recur.
+- **14ζ interacts with a known non-discriminating assertion** (carried forward from the addendum,
+  still open): `suppresses the tax-loss suggestion` in `ExpandedLotsTable.status.spec.ts` currently
+  passes for a second, independent reason — the view forces a flagged lot's basis to `0`. If 14ζ makes
+  that magnitude nullable, the assertion becomes discriminating and is worth re-checking then.
 
-**Two findings 14δ measured and deliberately did not fix — read them before touching the type mapping
-or the timestamps.** Every merged Kraken trade is recorded as `BUY`, sales included (that is
-`baseline.md`'s `SELL`/`SWAP` = 0, and it wants a `D` number rather than a mid-phase edit); and the
-user's timezone choice is still overwritten by the normalizer. Both are written up in full in the 14δ
-entry above, and the first has a characterisation test naming it so it cannot change silently.
+**Two findings 14δ measured and deliberately did not fix — still open, unrelated to 14ε.** Every merged
+Kraken trade is recorded as `BUY`, sales included (that is `baseline.md`'s `SELL`/`SWAP` = 0, and it
+wants a `D` number rather than a mid-phase edit); and the user's timezone choice is still overwritten by
+the normalizer. Both are written up in full in the 14δ entry above, and the first has a
+characterisation test naming it so it cannot change silently.
 
 ### Superseded — the 14βb start-here notes
 

@@ -380,3 +380,86 @@ describe("Row Aggregator — merging fees is arithmetic on denominated quantitie
     expect(merged.mappedData.fee_amount).toBe("-0.5");
   });
 });
+
+/**
+ * `transfer_group_id` is what lets custody attribute a same-asset transfer to the account that
+ * actually received it instead of the synthetic `ownwallet-<ASSET>`. It is only trustworthy when
+ * the shared identifier behaves like a reference — D20's `Grupo` held 499 rows under one value, so
+ * size alone disproves that a group is one operation regardless of what merged it.
+ */
+describe("Row Aggregator — transfer_group_id links a same-asset pair, guarded", () => {
+  const leg = (
+    id: string,
+    over: Partial<ValidTransactionRow["mappedData"]>
+  ): ValidTransactionRow => ({
+    id,
+    originalData: {},
+    errors: [],
+    hasError: false,
+    mappedData: {
+      timestamp: "2025-10-07T23:40:26Z",
+      tx_type: "transfer",
+      group_id: "TSPOTEARN-1",
+      exchange: null,
+      description: null,
+      metadata: {},
+      ...over,
+    },
+  });
+
+  it("stamps both legs of a two-row same-asset group with the shared reference", () => {
+    const rows = [
+      leg("a", { amount: "-1405.18513", asset: "HBAR" }),
+      leg("b", { amount: "1405.18513", asset: "HBAR" }),
+    ];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    expect(result).toHaveLength(2);
+    for (const r of result) {
+      expect(r.mappedData.transfer_group_id).toBe("TSPOTEARN-1");
+    }
+  });
+
+  it("leaves transfer_group_id unset when more than two legs share the identifier and instant", () => {
+    // D20's own shape: a value that groups far more rows than one operation ever has is not a
+    // reference, and is ignored as a link entirely rather than paired or merged.
+    const rows = [
+      leg("a", { amount: "-100", asset: "HBAR" }),
+      leg("b", { amount: "60", asset: "HBAR" }),
+      leg("c", { amount: "40", asset: "HBAR" }),
+    ];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    expect(result).toHaveLength(3);
+    for (const r of result) {
+      expect(r.mappedData.transfer_group_id).toBeUndefined();
+    }
+  });
+
+  it("leaves transfer_group_id unset for a single-leg group, which has nothing to pair with", () => {
+    const rows = [leg("a", { amount: "-1405.18513", asset: "HBAR" })];
+
+    const result = aggregateRows(rows, KRAKEN);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].mappedData.transfer_group_id).toBeUndefined();
+  });
+
+  it("leaves transfer_group_id unset for a source that declares no reference column at all", () => {
+    // Bit2Me's columnRoles.references is deliberately empty. Even a well-behaved two-leg, same-
+    // instant group must not be trusted as a link when the source never declared the column genuine.
+    const rows = [
+      leg("a", { amount: "-100", asset: "EUR" }),
+      leg("b", { amount: "100", asset: "EUR" }),
+    ];
+
+    const result = aggregateRows(rows, BIT2ME);
+
+    expect(result).toHaveLength(2);
+    for (const r of result) {
+      expect(r.mappedData.transfer_group_id).toBeUndefined();
+    }
+  });
+});

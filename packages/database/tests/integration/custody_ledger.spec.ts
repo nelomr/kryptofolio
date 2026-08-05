@@ -28,6 +28,7 @@ interface TxSpec {
   fee_amount?: string;
   total_fiat?: string;
   price_fiat?: string;
+  transfer_group_id?: string;
 }
 
 const ACC_A = 'acc-a';
@@ -47,8 +48,9 @@ function seedTransactions(db: DatabaseSync, specs: readonly TxSpec[]): void {
   const insert = db.prepare(
     `INSERT INTO spot_transactions (
        id, id_hash, account_id, tx_type, asset_in_id, amount_in, asset_out_id, amount_out,
-       fee_asset_id, fee_amount, total_fiat, price_fiat, fiat_currency, timestamp, status
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'COMPLETED')`
+       fee_asset_id, fee_amount, total_fiat, price_fiat, fiat_currency, timestamp, status,
+       transfer_group_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 'COMPLETED', ?)`
   );
   for (const s of specs) {
     insert.run(
@@ -64,7 +66,8 @@ function seedTransactions(db: DatabaseSync, specs: readonly TxSpec[]): void {
       s.fee_amount ?? null,
       s.total_fiat ?? '0',
       s.price_fiat ?? '0',
-      s.timestamp
+      s.timestamp,
+      s.transfer_group_id ?? null
     );
   }
 }
@@ -210,6 +213,28 @@ describe('custody double entry', () => {
       .prepare('SELECT COUNT(*) AS n FROM accounts WHERE is_synthetic = 1')
       .get() as { n: number };
     expect(seeded.n).toBe(0);
+  });
+
+  /**
+   * The tier `transfer_group_id` exists for. Before ingestion populated it, `v_custody_movements`
+   * could only resolve a counterparty through a user-declared override or fall through to the
+   * synthetic `ownwallet-<ASSET>` — the ledger's own reference, carried on both legs, was dead
+   * weight. No override is set here, so this can only pass through `recorded_counterparty`.
+   */
+  it('attributes a transfer to the real destination through a shared transfer_group_id, no override needed', async () => {
+    h = await harness('recorded-counterparty', [
+      BUY_10_BTC,
+      transferOut({ transfer_group_id: 'REF-1' }),
+      transferIn({ transfer_group_id: 'REF-1' }),
+    ]);
+    const rows = await entries(h);
+
+    const outLegs = rows.filter((r) => r.spot_transaction_id === 'tx-out');
+    const inLegs = rows.filter((r) => r.spot_transaction_id === 'tx-in');
+    expect(outLegs.map((r) => r.account_id).sort()).toEqual([ACC_A, ACC_B].sort());
+    expect(inLegs.map((r) => r.account_id).sort()).toEqual([ACC_A, ACC_B].sort());
+    expect(outLegs.some((r) => isSyntheticAccountName(r.account_id))).toBe(false);
+    expect(inLegs.some((r) => isSyntheticAccountName(r.account_id))).toBe(false);
   });
 
   it('redirects the credit when a destination override names a real account', async () => {

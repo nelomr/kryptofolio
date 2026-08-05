@@ -44,7 +44,7 @@ The order is now fixed by one function, `prepareIngestionRows(rows, profile)` �
 
 When a source records both legs of a movement between two accounts the ledger SHALL persist their shared identity, so custody resolution can pair them from recorded fact rather than falling through to the synthetic counterparty.
 
-`spot_transactions.transfer_group_id` exists for this and is written by nothing today, which makes the `recorded_counterparty` tier of `v_custody_movements` unreachable: no ledger row can enter it.
+`spot_transactions.transfer_group_id` exists for this. Ingestion now populates it from the source's own declared reference column (`SourceFormatProfile.columnRoles.references` — Kraken's `refid`, Bitvavo's `Transaction ID`, and an explicitly empty set for sources with no genuine reference, such as Bit2Me and Bitunix), guarded against repeating a category column being mistaken for a reference: a value is trusted as a link only when exactly two legs share it at the same instant. `v_custody_movements`'s `recorded_counterparty` tier is therefore reachable — a source that ships a genuine reference for both legs of a transfer resolves to the real counterparty account instead of falling through to the synthetic one.
 
 #### Scenario: A recorded pair resolves to the real counterparty
 
@@ -58,11 +58,16 @@ When a source records both legs of a movement between two accounts the ledger SH
 - **WHEN** a group names more than one candidate counterparty account
 - **THEN** resolution MUST fall through to the synthetic counterparty rather than choosing one
 
+#### Scenario: A reference that behaves like a category column is never trusted as a link
+
+- **WHEN** a shared source identifier groups more than two legs recorded at the same instant
+- **THEN** `transfer_group_id` MUST NOT be populated from it for any row in that group
+- **AND** the group MUST neither be merged nor paired on the strength of that identifier
+
 #### Scenario: No resolution tier is left unreachable
 
 - **WHEN** the change is complete
-- **THEN** either `transfer_group_id` MUST be populated by ingestion
-- **OR** the `recorded_counterparty` tier and the column MUST be removed
+- **THEN** `transfer_group_id` MUST be populated by ingestion from each source's own declared reference column
 - **AND** a tier that no ledger row can enter MUST NOT remain in the engine
 
 ### Requirement: An Unresolved Fiat Magnitude Is Distinguishable From a Genuine Zero

@@ -42,6 +42,13 @@ export interface LedgerSpotTransaction {
    * derived events inherit it, which is how the AEAT audit trail survives materialisation.
    */
   flag?: FiscalClassificationFlag | null;
+  /**
+   * Links this leg to the other leg of the same physical custody movement, once ingestion has
+   * validated the source's own reference as one — see `withTransferGroupId` in `rowAggregator`.
+   * Read by DuckDB's `v_custody_movements` to attribute a transfer to its real counterparty instead
+   * of the synthetic `ownwallet-<ASSET>`.
+   */
+  transfer_group_id?: string | null;
   timestamp: string; // ISO-8601
   status: string;
 }

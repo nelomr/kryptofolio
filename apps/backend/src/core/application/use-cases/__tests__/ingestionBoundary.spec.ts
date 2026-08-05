@@ -250,6 +250,11 @@ describe('a two-row same-asset Kraken group survives to the ledger as two legs',
 
     // Each leg belongs to the sub-wallet its own row named, which is what a custody split needs.
     expect(new Set(rows.map((tx) => tx.account_id)).size).toBe(2);
+
+    // Both legs carry the shared reference, which is what makes the recorded-counterparty tier
+    // reachable: custody can now attribute this transfer to the real destination account.
+    expect(out?.transfer_group_id).toBe('TSPOTEARN-1');
+    expect(into?.transfer_group_id).toBe('TSPOTEARN-1');
   });
 
   /**
@@ -311,6 +316,8 @@ describe('a two-row same-asset Kraken group survives to the ledger as two legs',
         expect(bothSides).toBe(false);
       }
       expect(saved.map((tx) => tx.tx_type).sort()).toEqual(['TRANSFER_IN', 'TRANSFER_OUT']);
+      // Round-tripped through the real `transfer_group_id` column, not merely held in memory.
+      expect(saved.every((tx) => tx.transfer_group_id === 'TSPOTEARN-1')).toBe(true);
     } finally {
       db.close();
     }

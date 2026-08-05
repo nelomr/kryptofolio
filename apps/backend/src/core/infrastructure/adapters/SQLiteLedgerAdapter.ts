@@ -131,6 +131,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       price_fiat: toPreciseAmount(row.price_fiat as string),
       fiat_currency: (row.fiat_currency as string) ?? 'USD',
       flag: (row.flag as LedgerSpotTransaction['flag']) ?? undefined,
+      transfer_group_id: (row.transfer_group_id as string | null) ?? undefined,
       timestamp: row.timestamp as string,
       status: row.status as string,
     }));
@@ -142,12 +143,12 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         id, id_hash, account_id, tx_type,
         asset_in_id, amount_in, asset_out_id, amount_out,
         fee_asset_id, fee_amount, total_fiat, price_fiat,
-        fiat_currency, timestamp, status, flag
+        fiat_currency, timestamp, status, flag, transfer_group_id
       ) VALUES (
         ?, ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
-        ?, ?, ?, ?
+        ?, ?, ?, ?, ?
       )
       ON CONFLICT(id_hash) DO UPDATE SET
         account_id = excluded.account_id,
@@ -164,6 +165,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         timestamp = excluded.timestamp,
         status = excluded.status,
         flag = excluded.flag,
+        transfer_group_id = excluded.transfer_group_id,
         updated_at = datetime('now', 'utc'),
         deleted_at = NULL
     `);
@@ -185,6 +187,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       tx.timestamp,
       tx.status,
       tx.flag ?? null,
+      tx.transfer_group_id ?? null,
     );
   }
 

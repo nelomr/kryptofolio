@@ -294,6 +294,7 @@ export class CsvIngestionUseCase {
           price_fiat: toPreciseAmount(fiat.unitPrice.toString()),
           fiat_currency: fiatCurrency,
           flag: row.fiscal_flag ?? undefined,
+          transfer_group_id: row.transfer_group_id ?? undefined,
           status: 'COMPLETED',
         };
         await this.ledgerPort.saveSpotTransaction(tx);
