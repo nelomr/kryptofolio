@@ -362,6 +362,10 @@ export const en: I18nDictionary = {
   "tax.summary.yields": "Yields",
   "tax.summary.total_losses": "Compensable Losses",
   "tax.summary.estimated_irpf": "Estimated IRPF (Savings Base)",
+  "tax.summary.excluded_flagged_events":
+    "disposal(s) excluded from the totals above for a data-quality defect.",
+  "tax.summary.excluded_unresolved_income":
+    "income row(s) excluded from the totals above because no price could be resolved.",
 
   "tax.integrity.title": "Fiscal Hospital",
   "tax.integrity.analyzing": "Analyzing data integrity...",

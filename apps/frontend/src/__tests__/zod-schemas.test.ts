@@ -292,6 +292,34 @@ describe('ExternalTaxReportSchema', () => {
     }
   });
 
+  it('parses the two exclusion counts the backend sends at the top level, camelCase', () => {
+    // The backend's SpanishTaxReportResponse sends these two siblings of `summary`, not inside it,
+    // and not snake_case — unlike every other field on this response.
+    const raw = {
+      year: 2024,
+      method: 'FIFO',
+      audit_trail: [],
+      excludedFlaggedEvents: 2,
+      excludedUnresolvedIncomeCount: 3,
+    };
+    const result = ExternalTaxReportSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.excludedFlaggedEvents).toBe(2);
+      expect(result.data.excludedUnresolvedIncomeCount).toBe(3);
+    }
+  });
+
+  it('defaults both exclusion counts to zero when the backend omits them', () => {
+    const raw = { year: 2024, method: 'FIFO', audit_trail: [] };
+    const result = ExternalTaxReportSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.excludedFlaggedEvents).toBe(0);
+      expect(result.data.excludedUnresolvedIncomeCount).toBe(0);
+    }
+  });
+
   it('handles missing optional summary fields with zero defaults', () => {
     const raw = {
       year: 2023,

@@ -21,7 +21,9 @@ describe('TaxReportSummaryCards.vue', () => {
       capitalGains: 1234.56,
       yields: 50.25,
       totalLosses: 100.0,
-      estimatedIrpf: 250.0
+      estimatedIrpf: 250.0,
+      excludedFlaggedEvents: 0,
+      excludedUnresolvedIncomeCount: 0,
     }
     const wrapper = mount(TaxReportSummaryCards, {
       props: { metrics }
@@ -33,5 +35,38 @@ describe('TaxReportSummaryCards.vue', () => {
     expect(content).toContain('1')
     expect(content).toContain('234.56')
     expect(content).toContain('50.25')
+  })
+
+  it('hides the exclusions notice when nothing was excluded', () => {
+    const wrapper = mount(TaxReportSummaryCards)
+    expect(wrapper.find('[data-testid="summary-exclusions-notice"]').exists()).toBe(false)
+  })
+
+  it('shows the count of disposals excluded for a data-quality defect', () => {
+    const wrapper = mount(TaxReportSummaryCards, {
+      props: {
+        metrics: {
+          capitalGains: 0, yields: 0, totalLosses: 0, estimatedIrpf: 0,
+          excludedFlaggedEvents: 2, excludedUnresolvedIncomeCount: 0,
+        },
+      },
+    })
+    const notice = wrapper.find('[data-testid="summary-exclusions-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(wrapper.find('[data-testid="excluded-flagged-events"]').text()).toContain('2')
+    expect(wrapper.find('[data-testid="excluded-unresolved-income"]').exists()).toBe(false)
+  })
+
+  it('shows the count of income rows excluded for an unresolved price', () => {
+    const wrapper = mount(TaxReportSummaryCards, {
+      props: {
+        metrics: {
+          capitalGains: 0, yields: 0, totalLosses: 0, estimatedIrpf: 0,
+          excludedFlaggedEvents: 0, excludedUnresolvedIncomeCount: 5,
+        },
+      },
+    })
+    expect(wrapper.find('[data-testid="excluded-unresolved-income"]').text()).toContain('5')
+    expect(wrapper.find('[data-testid="excluded-flagged-events"]').exists()).toBe(false)
   })
 })

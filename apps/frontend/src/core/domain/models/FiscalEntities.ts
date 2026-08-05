@@ -276,6 +276,10 @@ export interface TaxReportEntity {
   summary: TaxReportSummary
   /** Detailed per-transaction audit trail for AEAT */
   auditTrail: TaxLotHistoryEvent[]
+  /** Disposal events held out of the summary above because they carry a data-quality defect. */
+  excludedFlaggedEvents: number
+  /** Income rows (staking, airdrops, …) held out of the summary above because no price could be resolved. */
+  excludedUnresolvedIncomeCount: number
 }
 
 // ---------------------------------------------------------------------------

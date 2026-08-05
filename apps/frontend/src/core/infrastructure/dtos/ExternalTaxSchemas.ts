@@ -392,6 +392,11 @@ export const ExternalTaxReportSchema = z
     generalBaseAirdrops: numericField.optional(),
     summary: ExternalTaxReportSummarySchema.optional(),
     audit_trail: z.array(ExternalTaxLotHistorySchema).optional().default([]),
+    // Excluded from the totals above rather than folded into them, so an incomplete base is never
+    // presented as complete. Two counts because a disposal-side defect and an unpriced income row
+    // are different failures with different remedies.
+    excludedFlaggedEvents: z.number().int().optional().default(0),
+    excludedUnresolvedIncomeCount: z.number().int().optional().default(0),
   })
   .transform((raw) => {
     const spotGains = raw.spotCapitalGains ?? 0;
@@ -411,6 +416,8 @@ export const ExternalTaxReportSchema = z
       method: raw.method,
       summary,
       auditTrail: raw.audit_trail,
+      excludedFlaggedEvents: raw.excludedFlaggedEvents,
+      excludedUnresolvedIncomeCount: raw.excludedUnresolvedIncomeCount,
     };
   });
 

@@ -164,6 +164,8 @@ export class RestTaxAdapter implements ITaxPort {
       method: dto.method,
       summary: dto.summary,
       auditTrail: dto.auditTrail as TaxReportEntity['auditTrail'],
+      excludedFlaggedEvents: dto.excludedFlaggedEvents,
+      excludedUnresolvedIncomeCount: dto.excludedUnresolvedIncomeCount,
     }
   }
 

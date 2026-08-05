@@ -172,6 +172,8 @@ describe('TaxReportEntity — fiscal domain shape', () => {
         estimatedIrpfEur: 800,
       },
       auditTrail: [],
+      excludedFlaggedEvents: 0,
+      excludedUnresolvedIncomeCount: 0,
     }
     expect(report.summary.capitalGainsEur).toBe(5000)
     expect(report.summary.estimatedIrpfEur).toBe(800)

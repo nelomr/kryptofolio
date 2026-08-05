@@ -3867,9 +3867,33 @@ Tests: backend 393 → **397**. All five typechecks 0. No `any` or cast introduc
 test failed. Dropping the `WHERE total_fiat IS NULL` filter (counting every income row, priced or
 not) → both count-specific tests failed, including the zero-exclusions one.
 
+### 14.14c — the two exclusion counts reach the screen
+
+The user asked directly: don't leave the UI half of 14.14b's fix undone. Checked first rather than
+assumed — `ExternalTaxReportSchema` declared neither `excludedFlaggedEvents` nor
+`excludedUnresolvedIncomeCount`, and a plain `z.object` silently strips keys it does not declare, so
+both counts were being thrown away by the anti-corruption layer before this fix, on the disposal side
+too, not only the income side 14.14b added.
+
+Measured `SpanishTaxReportResponse`'s real shape rather than assuming it matched the rest of the
+response: both fields are top-level camelCase siblings of `summary`, not snake_case — every other field
+on this response is. Declared on the schema, threaded through `TaxReportEntity` →
+`RestTaxAdapter.getReport()` → `useTaxReportPort`'s `metrics` → a new warning notice in
+`TaxReportSummaryCards.vue`, hidden entirely when both counts are zero so a clean report shows nothing
+extra. English and Spanish copy added (`tax.summary.excluded_flagged_events`,
+`tax.summary.excluded_unresolved_income`).
+
+Tests: frontend 437 → **442** — three component tests (notice hidden / each count shown independently)
+and two schema tests (the real camelCase shape parses; both default to zero when the backend omits
+them, which the old contract always did). All five typechecks 0. No `any` or cast introduced.
+
+**Breaks: 3 applied, 3 red.** Forcing the notice to never show → both count-display tests failed.
+Removing the two schema fields → both new schema tests failed, confirming the anti-corruption layer was
+the actual gap, not the component.
+
 ## Resume here — next action
 
-**181 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**182 checked boxes in `tasks.md`, 25 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14 is now **fully closed —
 all phases 14α, 14β, 14βb, 14γ, 14δ, 14ε, 14εb and 14ζ done**, 14γ's two follow-ups 14.33b/14.33c
 included. Group 14 ran **before** group 13 by design. **No task is left open in a closed group.**

@@ -39,6 +39,8 @@ const mockReport: TaxReportEntity = {
     estimatedIrpfEur: 190,
   },
   auditTrail: [],
+  excludedFlaggedEvents: 0,
+  excludedUnresolvedIncomeCount: 0,
 };
 
 function createMockTaxPort(): ITaxPort {
