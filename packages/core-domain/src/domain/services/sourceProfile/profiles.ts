@@ -49,7 +49,10 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     feeConvention: { kind: "NET_PLUS_FEE" },
     directionalFill: { kind: "ONE_SIDED" },
     columnRoles: {
-      references: ["uid"],
+      // `uid` is unique on all 1100 rows of the real export: it names the row, not the operation, so
+      // it can never link two rows and is not a reference. It is also what the mapper reads as
+      // `tx_id`, which is the field a per-row identifier belongs in.
+      references: [],
       categoryLabels: ["account", "type", "contract", "position uid"],
     },
     /**
@@ -127,7 +130,10 @@ export const SOURCE_FORMAT_PROFILES: SourceFormatProfileTable = {
     feeConvention: { kind: "FEE_INSIDE_TOTAL" },
     directionalFill: { kind: "ONE_SIDED" },
     columnRoles: {
-      references: ["Transaction ID"],
+      // Unique on all 42 real rows, and the source writes one row per operation — both sides of a
+      // trade sit in `Amount` and `Received / Paid Amount` — so there is never a second leg to link.
+      // Like Bitunix's `Trx. ID`, the name suggests a reference and the data refuses it.
+      references: [],
       categoryLabels: ["Type", "Status", "Timezone"],
     },
     // `quantity × price + fee = paid` spans four columns, none derived from the others. Exact on all

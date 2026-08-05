@@ -3675,9 +3675,54 @@ being mapped to `tx_id` rather than `group_id` by `COLUMN_DICTIONARY` (which is 
 tier is inert rather than active — measured harmless, since Bitvavo's real export has no multi-leg
 groups to pair), and anything in group 13 or phase 14ζ.
 
+### 14εb — the declared references that were not references
+
+14ε's report flagged Bitvavo's declared reference as "inert" and left it. Measured, it was not merely
+inert but **false**, and it was not alone.
+
+`columnRoles.references` promises, in its own contract and in `isMergeKey`'s, columns that link two rows
+into one operation. Against the real exports:
+
+| file | column | rows | distinct | groups |
+|---|---|---|---|---|
+| kraken_spot | `refid` | 34 | 24 | 14 singletons + **10 pairs** |
+| kraken_spot | `txid` | 34 | 34 | all unique |
+| bitvavo_spot | `Transaction ID` | 42 | 42 | **all unique** |
+| kraken_futures | `uid` | 1100 | 1100 | **all unique** |
+
+Bitvavo's `Transaction ID` and Kraken futures' `uid` name a row, not an operation. Both are also what
+`COLUMN_DICTIONARY` routes to `tx_id` — which is exactly where a per-row identifier belongs. **The
+mapping was correct; the declaration was the lie**, which inverts how the finding was originally framed.
+Bitvavo additionally writes one row per operation (both sides in `Amount` and `Received / Paid Amount`),
+so it has no second leg to link even in principle.
+
+Both were unreachable: a row without `group_id` goes straight to `standalone` and is never grouped, and
+futures rows never enter `prepareIngestionRows` at all. Unreachable is not the same as true — `isMergeKey`
+answered `true` for a per-row identifier, **a test pinned that answer**, and 14ε's guard trusts this
+list's length rather than its contents.
+
+**The structural fix is the point, not the two-line correction.** A per-profile invariant now requires
+every declared reference to be routed to `group_id` by the mapper *and* to actually repeat in the real
+export. The two conditions are independent, which is what makes the pair worth having:
+
+- `Grupo` — a category label read as a reference (D20) — repeats heavily and fails the **mapping** test.
+- `Transaction ID` / `uid` — a row identifier read as a reference — is correctly unmapped and fails the
+  **repetition** test.
+
+So the seam is now defended in both polarities. Kraken spot's `refid` is the corpus's only genuine
+leg-linking reference and passes both conditions, which is what proves the invariant discriminates rather
+than merely rejecting everything.
+
+Tests: core-domain 212 → **216**. All five typechecks 0. No `any` or cast introduced.
+
+**Breaks: 3 applied, 3 red.** Restoring Bitvavo's declaration → 4 red, including the flipped `isMergeKey`
+assertion. Restoring Kraken futures' → 3 red. Declaring Bit2Me's `Grupo` a reference, reproducing D20
+itself → 5 red, and via the mapping condition while the repetition condition passed, which is the
+evidence that both conditions earn their place.
+
 ## Resume here — next action
 
-**174 checked boxes in `tasks.md`, 30 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
+**175 checked boxes in `tasks.md`, 30 open**; groups 1, 2, 2b, 3, 4, 5, 6, 7, 8, 9, 10, 11 and
 **12 in full, including the 12.11–12.21 addendum** are closed, and group 14's phases **14α, 14β, 14βb,
 14γ, 14δ and 14ε** are closed, **14γ's two follow-ups 14.33b and 14.33c included**. Group 14 runs **before**
 group 13. **No task is left open in a closed group.**

@@ -338,7 +338,12 @@ describe("isMergeKey", () => {
 
   it("accepts a column the source declares a genuine reference", () => {
     expect(isMergeKey(KRAKEN, "refid")).toBe(true);
-    expect(isMergeKey(BITVAVO, "Transaction ID")).toBe(true);
+  });
+
+  it("refuses an identifier that names a row rather than linking two", () => {
+    // Unique on every real row, so answering `true` here would offer a per-row identifier as a merge
+    // key — the `Grupo` mistake with its polarity reversed.
+    expect(isMergeKey(BITVAVO, "Transaction ID")).toBe(false);
   });
 
   it("refuses a column nobody declared, so an unknown column is never a merge key", () => {

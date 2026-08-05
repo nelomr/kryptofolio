@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SOURCE_PROFILE_IDS } from "@kryptofolio/shared-types";
 
+import { COLUMN_DICTIONARY } from "../application/use-cases/AutoMapColumnsUseCase";
 import { SOURCE_FORMAT_PROFILES } from "../domain/services/sourceProfile/profiles";
 import type {
   DeclaredMarket,
@@ -11,6 +12,14 @@ import type {
   ProfileInvariant,
   SourceFormatProfile,
 } from "../domain/services/sourceProfile/types";
+import {
+  BIT2ME_ROWS,
+  BITUNIX_ROWS,
+  BITVAVO_ROWS,
+  KRAKEN_FUTURES_ROWS,
+  KRAKEN_SPOT_ROWS,
+  TANGEM_ROWS,
+} from "./fixtures/realSourceRows";
 
 /**
  * Exhaustive over each `kind` with no `default` arm: a member added to any dimension fails to
@@ -194,5 +203,84 @@ describe("the source format profile table", () => {
 
   it("declares Kraken's refid as a genuine reference", () => {
     expect(SOURCE_FORMAT_PROFILES["kraken-spot"].columnRoles.references).toContain("refid");
+  });
+});
+
+/**
+ * A declared reference is a claim about the source's data, and it can be false. Two of them were:
+ * Bitvavo's `Transaction ID` and Kraken futures' `uid` were declared references while being unique
+ * on every row of the real export — 42 of 42 and 1100 of 1100 — so neither could ever link two rows
+ * into one operation, which is the whole meaning of the declaration.
+ *
+ * Both were inert, because neither column maps to `group_id` and a row without one is never grouped.
+ * Inert is not the same as true: `isMergeKey` answered `true` for a per-row identifier, and the guard
+ * that trusts a shared identifier reads this list's length. This is the `Grupo` defect with the
+ * polarity reversed — there a category column was mistaken for a reference by its name, here a row
+ * identifier was, and the seam exists to make that mistake impossible rather than merely unlucky.
+ *
+ * The two conditions are independent and a genuine reference passes both: the mapper must route the
+ * column to `group_id`, and the column must actually repeat in the file.
+ */
+describe("every declared reference is one, measured against the real export", () => {
+  const CORPUS: ReadonlyArray<{
+    readonly profileId: string;
+    readonly rows: ReadonlyArray<Readonly<Record<string, string>>>;
+  }> = [
+    { profileId: "kraken-spot", rows: KRAKEN_SPOT_ROWS },
+    { profileId: "kraken-futures", rows: KRAKEN_FUTURES_ROWS },
+    { profileId: "bitvavo-spot", rows: BITVAVO_ROWS },
+    { profileId: "bitunix-spot", rows: BITUNIX_ROWS },
+    { profileId: "bit2me-spot", rows: BIT2ME_ROWS },
+    { profileId: "tangem", rows: TANGEM_ROWS },
+  ];
+
+  /** The field the mapper routes a header to, by the same dictionary the wizard uses. */
+  function mappedFieldOf(header: string): string | undefined {
+    const wanted = header.trim().toLowerCase();
+    const entry = Object.entries(COLUMN_DICTIONARY).find(([, patterns]) =>
+      patterns.some((pattern) => pattern.toLowerCase() === wanted),
+    );
+    return entry?.[0];
+  }
+
+  for (const { profileId, rows } of CORPUS) {
+    const profile = SOURCE_FORMAT_PROFILES[profileId as keyof typeof SOURCE_FORMAT_PROFILES];
+
+    for (const reference of profile.columnRoles.references) {
+      it(`routes ${profileId}'s declared '${reference}' to the field aggregation groups on`, () => {
+        expect(mappedFieldOf(reference)).toBe("group_id");
+      });
+
+      it(`finds ${profileId}'s declared '${reference}' repeating in the real file`, () => {
+        const present = rows.filter((row) => (row[reference] ?? "").trim() !== "");
+        expect(
+          present.length,
+          `'${reference}' is absent from every row of ${profileId}'s fixture`,
+        ).toBeGreaterThan(0);
+
+        const occurrences = new Map<string, number>();
+        for (const row of present) {
+          const value = row[reference].trim();
+          occurrences.set(value, (occurrences.get(value) ?? 0) + 1);
+        }
+        const linked = [...occurrences.values()].filter((count) => count > 1);
+
+        expect(
+          linked.length,
+          `every '${reference}' value is unique across ${present.length} rows, so it identifies a row rather than linking two`,
+        ).toBeGreaterThan(0);
+      });
+    }
+  }
+
+  it("finds exactly one genuine leg-linking reference in the whole corpus", () => {
+    // Kraken spot's `refid` is the only one: 24 values over 34 rows, 10 of them pairs.
+    const declared = CORPUS.flatMap(({ profileId }) =>
+      SOURCE_FORMAT_PROFILES[
+        profileId as keyof typeof SOURCE_FORMAT_PROFILES
+      ].columnRoles.references.map((reference) => `${profileId}:${reference}`),
+    );
+
+    expect(declared).toEqual(["kraken-spot:refid"]);
   });
 });
