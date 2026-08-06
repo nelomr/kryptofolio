@@ -3,6 +3,55 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.4](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.4) (2026-07-28)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.4)
+
+**Patch Changes**
+
+- [`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f) Thanks [@nelomr](https://github.com/nelomr)! - - **Phase 2B Analytics & Time Series Engine**: Added DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst Assets) with Hono RPC endpoints and Vue 3 UI widgets.
+  - **Domain Layer Isolation & PreciseAmount Value Objects**: Removed direct `decimal.js` dependencies from domain ports (`ILedgerPort`, `IPriceProviderPort`) using branded string value objects (`PreciseAmount`), and enforced strict CSV transaction ingestion constraints.
+  - **Portfolio Rebuild Sync & Base Currency Configuration**: Fixed `FifoMaterializerService` synchronization across SQLite ledgers and DuckDB analytical views, and aligned metric adapters with user-configured base currency (`userSettingsPort`).
+- Updated dependencies [[`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f)]:
+  - @kryptofolio/shared-types@1.1.3
+  - @kryptofolio/core-domain@1.1.3
+
+### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.5)
+
+**Patch Changes**
+
+- [`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f) Thanks [@nelomr](https://github.com/nelomr)! - - **Phase 2B Analytics & Time Series Engine**: Added DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst Assets) with Hono RPC endpoints and Vue 3 UI widgets.
+  - **Domain Layer Isolation & PreciseAmount Value Objects**: Removed direct `decimal.js` dependencies from domain ports (`ILedgerPort`, `IPriceProviderPort`) using branded string value objects (`PreciseAmount`), and enforced strict CSV transaction ingestion constraints.
+  - **Portfolio Rebuild Sync & Base Currency Configuration**: Fixed `FifoMaterializerService` synchronization across SQLite ledgers and DuckDB analytical views, and aligned metric adapters with user-configured base currency (`userSettingsPort`).
+- Updated dependencies [[`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f)]:
+  - @kryptofolio/database@0.0.8
+  - @kryptofolio/shared-types@1.1.3
+  - @kryptofolio/core-domain@1.1.3
+
+### 🧠 Core Domain (`@kryptofolio/core-domain` @ 1.1.3)
+
+**Patch Changes**
+
+- Updated dependencies [[`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f)]:
+  - @kryptofolio/shared-types@1.1.3
+
+### 🗄️ Database (`@kryptofolio/database` @ 0.0.8)
+
+**Patch Changes**
+
+- [`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f) Thanks [@nelomr](https://github.com/nelomr)! - - **Phase 2B Analytics & Time Series Engine**: Added DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst Assets) with Hono RPC endpoints and Vue 3 UI widgets.
+  - **Domain Layer Isolation & PreciseAmount Value Objects**: Removed direct `decimal.js` dependencies from domain ports (`ILedgerPort`, `IPriceProviderPort`) using branded string value objects (`PreciseAmount`), and enforced strict CSV transaction ingestion constraints.
+  - **Portfolio Rebuild Sync & Base Currency Configuration**: Fixed `FifoMaterializerService` synchronization across SQLite ledgers and DuckDB analytical views, and aligned metric adapters with user-configured base currency (`userSettingsPort`).
+
+### 📦 Shared Types (`@kryptofolio/shared-types` @ 1.1.3)
+
+**Patch Changes**
+
+- [`a616b45`](https://github.com/nelomr/kryptofolio/commit/a616b4590a32b80555b789e701cec9a0bcbded4f) Thanks [@nelomr](https://github.com/nelomr)! - - **Phase 2B Analytics & Time Series Engine**: Added DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst Assets) with Hono RPC endpoints and Vue 3 UI widgets.
+  - **Domain Layer Isolation & PreciseAmount Value Objects**: Removed direct `decimal.js` dependencies from domain ports (`ILedgerPort`, `IPriceProviderPort`) using branded string value objects (`PreciseAmount`), and enforced strict CSV transaction ingestion constraints.
+  - **Portfolio Rebuild Sync & Base Currency Configuration**: Fixed `FifoMaterializerService` synchronization across SQLite ledgers and DuckDB analytical views, and aligned metric adapters with user-configured base currency (`userSettingsPort`).
+
+
 ## [1.16.3](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.3) (2026-07-10)
 
 ### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.4)
