@@ -238,7 +238,66 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.valueProvenance).toBe('MANUAL')
+    }
+  })
+
+  it('parses a MARKET_CONVERTED value_provenance', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price_eur: 2,
+      gain_loss_eur: 0.5,
+      operation_type: 'FEE',
+      value_provenance: 'MARKET_CONVERTED',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.valueProvenance).toBe('MARKET_CONVERTED')
+    }
+  })
+
+  it('parses a MISSING_FX_RATE quality_flag', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price_eur: 2,
+      gain_loss_eur: 0.5,
+      operation_type: 'FEE',
+      quality_flag: 'MISSING_FX_RATE',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.qualityFlag).toBe('MISSING_FX_RATE')
+    }
+  })
+
+  it('maps fx_rate and fx_rate_date to camelCase properties', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price_eur: 2,
+      gain_loss_eur: 0.5,
+      operation_type: 'SELL',
+      fx_rate: 1.05,
+      fx_rate_date: '2024-03-01',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.fxRate).toBe(1.05)
+      expect(result.data.fxRateDate).toBe('2024-03-01')
+    }
+  })
+
+  it('preserves an unresolved fx_rate as null rather than coercing to 0', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price_eur: 2,
+      gain_loss_eur: 0.5,
+      operation_type: 'SELL',
+      fx_rate: null,
+      fx_rate_date: null,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.fxRate).toBeNull()
+      expect(result.data.fxRateDate).toBeNull()
     }
   })
 

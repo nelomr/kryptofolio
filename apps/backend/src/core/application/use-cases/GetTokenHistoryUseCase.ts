@@ -78,6 +78,8 @@ export interface TokenLotHistoryEventDto {
   flag?: FiscalClassificationFlag | null;
   quality_flag?: FifoQualityFlag | null;
   value_provenance?: ManualValueProvenance;
+  fx_rate?: number | null;
+  fx_rate_date?: string | null;
   notes?: string;
   asset_symbol?: string;
   exchange_name?: string;
@@ -166,6 +168,8 @@ export class GetTokenHistoryUseCase {
           flag: evt.flag ?? null,
           quality_flag: evt.quality_flag ?? null,
           value_provenance: evt.value_provenance,
+          fx_rate: evt.fx_rate === null ? null : Number(evt.fx_rate),
+          fx_rate_date: evt.fx_rate_date ?? null,
           notes: evt.notes ?? undefined,
           asset_symbol: evt.asset_symbol || symbolUpper,
           exchange_name: evt.exchange_name || 'Exchange',

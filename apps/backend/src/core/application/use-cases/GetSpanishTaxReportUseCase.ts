@@ -39,6 +39,8 @@ export interface TaxReportAuditTrailEventDto {
   /** Present when the row was excluded from the declared base, and why. */
   quality_flag?: FifoQualityFlag | null;
   value_provenance?: ManualValueProvenance;
+  fx_rate?: string | null;
+  fx_rate_date?: string | null;
   notes?: string;
   asset_symbol?: string;
   exchange_name?: string;
@@ -128,6 +130,8 @@ export class GetSpanishTaxReportUseCase {
         flag: evt.flag ?? null,
         quality_flag: evt.quality_flag ?? null,
         value_provenance: evt.value_provenance,
+        fx_rate: evt.fx_rate === null ? null : evt.fx_rate?.toString(),
+        fx_rate_date: evt.fx_rate_date ?? null,
         notes: evt.notes ?? undefined,
         asset_symbol: evt.asset_symbol,
         exchange_name: evt.exchange_name,

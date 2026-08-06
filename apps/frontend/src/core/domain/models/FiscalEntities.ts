@@ -233,6 +233,10 @@ export interface TaxLotHistoryEvent {
   qualityFlag?: FifoQualityFlag | null
   /** Whether salePriceEur/gainLossEur came from the market or from a manual assignment */
   valueProvenance?: ManualValueProvenance
+  /** The conversion rate applied, if any. */
+  fxRate?: number | null
+  /** The date of the conversion rate applied, if any. */
+  fxRateDate?: string | null
   notes?: string
   /** Asset symbol (e.g., BTC) */
   assetSymbol?: string

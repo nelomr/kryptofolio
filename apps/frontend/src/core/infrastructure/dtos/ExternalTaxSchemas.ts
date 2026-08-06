@@ -226,6 +226,8 @@ export const ExternalTaxLotHistoryShape = z.object({
     // from a hardcoded 'SELL' to the real disposal type, but the field was never renamed.
     // Required, and constrained to the canonical vocabulary: the backend always sends one.
     operation_type: z.enum(DISPOSAL_TYPES),
+    fx_rate: nullableNumericField.optional(),
+    fx_rate_date: z.string().nullable().optional(),
 });
 
 export const ExternalTaxLotHistorySchema = ExternalTaxLotHistoryShape
@@ -246,6 +248,8 @@ export const ExternalTaxLotHistorySchema = ExternalTaxLotHistoryShape
       flag: raw.flag ?? null,
       qualityFlag: raw.quality_flag ?? null,
       valueProvenance: raw.value_provenance,
+      fxRate: raw.fx_rate ?? null,
+      fxRateDate: raw.fx_rate_date ?? null,
       notes: raw.notes,
       assetSymbol: raw.asset_symbol,
       assetLogoUri: raw.asset_logo_uri,

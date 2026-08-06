@@ -140,6 +140,26 @@ describe('[Strict Hexagonal] GetSpanishTaxReportUseCase', () => {
     expect(result.audit_trail[0].gain_loss_eur).toBeNull();
   });
 
+  it('carries fx_rate and fx_rate_date when a conversion occurred', async () => {
+    const useCase = new GetSpanishTaxReportUseCase(
+      makePort([
+        {
+          ...BASE_EVENT,
+          fx_rate: '1.09',
+          fx_rate_date: '2024-03-01',
+          value_provenance: 'MARKET_CONVERTED',
+        },
+      ]),
+    );
+
+    const result = await useCase.execute({ year: 2024 });
+
+    expect(result.audit_trail).toHaveLength(1);
+    expect(result.audit_trail[0].fx_rate).toBe('1.09');
+    expect(result.audit_trail[0].fx_rate_date).toBe('2024-03-01');
+    expect(result.audit_trail[0].value_provenance).toBe('MARKET_CONVERTED');
+  });
+
   it('carries the unresolved-income count from the port to the response untouched', async () => {
     const useCase = new GetSpanishTaxReportUseCase(
       makePort([], { excludedUnresolvedIncomeCount: 3 }),

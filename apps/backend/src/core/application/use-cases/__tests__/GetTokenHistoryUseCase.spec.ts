@@ -219,6 +219,27 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
       expect(event.gain_loss_eur).toBeNull();
       expect(event.is_taxable).toBe(false);
     });
+
+    it('carries fx_rate and fx_rate_date down to the response', async () => {
+      const port = makePort({
+        lots: [XLM_LOT],
+        events: [
+          {
+            ...XLM_EVENT,
+            fx_rate: '1.09',
+            fx_rate_date: '2024-03-01',
+            value_provenance: 'MARKET_CONVERTED',
+          },
+        ],
+      });
+
+      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const event = result.history['lot-xlm-1'][0];
+
+      expect(event.fx_rate).toBe(1.09);
+      expect(event.fx_rate_date).toBe('2024-03-01');
+      expect(event.value_provenance).toBe('MARKET_CONVERTED');
+    });
   });
 
   describe('current custody location', () => {

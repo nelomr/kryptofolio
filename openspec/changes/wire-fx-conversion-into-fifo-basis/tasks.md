@@ -32,14 +32,14 @@
 - [x] 4.2 Add the rate join to `acquisition_priced`: `ASOF LEFT JOIN ledger.exchange_rates` on the normalised pair, `CAST(date AS DATE) <= tx_date`, most recent first. Cast the `TEXT` date as the valuation view already does.
 - [x] 4.3 Resolve the reciprocal pair with `1 / rate` when the direct pair is absent, and mark which of the two was used so provenance can record it.
 - [x] 4.4 Add a test that the reciprocal path is only taken when the direct pair is missing, and that a direct rate is never inverted.
-- [x] 4.5 Add a test that a rate dated *after* the transaction is never used, seeding only a later rate and asserting `MISSING_FX_RATE`.
+- [x] 4.5 Add a test that a rate dated _after_ the transaction is never used, seeding only a later rate and asserting `MISSING_FX_RATE`.
 
 ## 5. Conversion at each valuation site
 
 - [x] 5.1 Convert the acquisition price in `acquisition_resolved`, in `DECIMAL(38,18)` — and replace the existing `TRY_CAST(market_price_in AS DOUBLE)` while there, per the design decision. A float multiplication has no place in a cost basis.
 - [x] 5.2 Add a test that would fail if the multiplication were inverted: for a rate below 1, the converted euro figure MUST be smaller than its USD source.
 - [x] 5.3 Convert the disposal price in `disposal_priced`, with a test that a disposal and its matched lot are both stated in the reporting currency and the gain is their difference.
-- [x] 5.4 Convert the fee price, with a test that the fee component of the basis and the fee disposal use the *same* resolved rate — so a fee cannot be valued at one rate as an expense and another as a disposal.
+- [x] 5.4 Convert the fee price, with a test that the fee component of the basis and the fee disposal use the _same_ resolved rate — so a fee cannot be valued at one rate as an expense and another as a disposal.
 - [x] 5.5 Add a test that a recorded `total_fiat` is never converted, even when a rate exists.
 - [x] 5.6 Add a test that a series already in the reporting currency resolves with no row in `exchange_rates` at all.
 
@@ -49,7 +49,7 @@
 - [x] 6.2 Add a test for each of the three outcomes on one fixture: convertible (no flag, real basis, taxable), no rate (`MISSING_FX_RATE`, masked, non-taxable), override in a foreign currency (`CURRENCY_MISMATCH`, masked, non-taxable).
 - [x] 6.3 Emit `value_provenance = 'MARKET_CONVERTED'` with `fx_rate` and `fx_rate_date` populated for a converted figure, and `NULL` rates for an unconverted one.
 - [x] 6.4 Add a test that recomputes a stored basis from its quantity, series price and recorded rate and reproduces the stored figure — the reproducibility requirement, made executable.
-- [ ] 6.5 Carry the two new columns through `FifoMaterializerService` and `SQLiteLedgerAdapter`'s reconcile paths without widening any type to `any`.
+- [x] 6.5 Carry the two new columns through `FifoMaterializerService` and `SQLiteLedgerAdapter`'s reconcile paths without widening any type to `any`.
 
 ## 7. Precision and formatting
 
@@ -60,21 +60,21 @@
 
 ## 8. Frontend surface
 
-- [ ] 8.1 Extend the frontend quality-flag union and its Zod DTO so `MISSING_FX_RATE` and `MARKET_CONVERTED` parse, never as a bare `string`.
+- [x] 8.1 Extend the frontend quality-flag union and its Zod DTO so `MISSING_FX_RATE` and `MARKET_CONVERTED` parse, never as a bare `string`.
 - [x] 8.2 Add i18n labels and descriptions for both, in `en` and `es`, in the same change — a flag with no label renders as an unknown string to the user.
-- [ ] 8.3 Show the rate and its date wherever a converted figure is presented in the audit trail, so a user can see how the number was reached.
-- [ ] 8.4 Verify a nullable rate renders as absent rather than as `0` — `null >= 0` is `true` in JavaScript, and this project has shipped that bug.
+- [x] 8.3 Show the rate and its date wherever a converted figure is presented in the audit trail, so a user can see how the number was reached.
+- [x] 8.4 Verify a nullable rate renders as absent rather than as `0` — `null >= 0` is `true` in JavaScript, and this project has shipped that bug.
 
 ## 9. Rebuild and verification on real data
 
-- [ ] 9.1 Force a full FIFO rebuild against the real ledger and record the after figures for the same counts captured in 0.2.
-- [ ] 9.2 Verify one converted lot by hand against its source file and the ECB rate for its date, digit for digit — not against a fixture.
-- [ ] 9.3 Report what remains flagged and why, per flag and per asset, including any asset whose price series does not cover its earliest transaction. No silent residue.
-- [ ] 9.4 Run `pnpm typecheck` and `pnpm test` across the workspace and confirm both green.
-- [ ] 9.5 Grep the diff for `: any`, `as any`, `<any>` and `, any>` and confirm none were introduced.
+- [x] 9.1 Force a full FIFO rebuild against the real ledger and record the after figures for the same counts captured in 0.2.
+- [x] 9.2 Verify one converted lot by hand against its source file and the ECB rate for its date, digit for digit — not against a fixture.
+- [x] 9.3 Report what remains flagged and why, per flag and per asset, including any asset whose price series does not cover its earliest transaction. No silent residue.
+- [x] 9.4 Run `pnpm typecheck` and `pnpm test` across the workspace and confirm both green.
+- [x] 9.5 Grep the diff for `: any`, `as any`, `<any>` and `, any>` and confirm none were introduced.
 
 ## 10. Documentation
 
-- [ ] 10.1 Document the conversion in `docs/fifo-tax-engine.md`: where it happens, how a rate is resolved, what each of the three currency outcomes means, and how to reproduce a converted figure.
-- [ ] 10.2 Update `docs/architecture/duckdb-*.md` for the new join in the view graph.
-- [ ] 10.3 Document in `docs/backend.md` that the FX ledger is now maintained by the running backend, with the seed script as the backfill path for history predating first install.
+- [] 10.1 (Skipped by user request) Document the conversion in `docs/fifo-tax-engine.md`: where it happens, how a rate is resolved, what each of the three currency outcomes means, and how to reproduce a converted figure.
+- [] 10.2 (Skipped by user request) Update `docs/architecture/duckdb-*.md` for the new join in the view graph.
+- [] 10.3 (Skipped by user request) Document in `docs/backend.md` that the FX ledger is now maintained by the running backend, with the seed script as the backfill path for history predating first install.
