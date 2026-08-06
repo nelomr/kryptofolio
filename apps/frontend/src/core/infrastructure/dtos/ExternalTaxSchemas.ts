@@ -210,7 +210,7 @@ export const ExternalTaxLotHistoryShape = z.object({
     sale_price_eur: nullableNumericField,
     gain_loss_eur: nullableNumericField,
     sale_fee_eur: numericField.optional(),
-    is_taxable: z.boolean().default(false),
+    is_taxable: z.coerce.boolean().default(false),
     // Fiscal classification — orthogonal to quality_flag below, both may be present at once.
     flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
     // Data-quality defect on this event's own valuation, if any.
@@ -267,7 +267,7 @@ const ExternalLotCustodyLocationSchema = z
   .object({
     account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
     account_name: z.string(),
-    is_synthetic: z.boolean(),
+    is_synthetic: z.coerce.boolean(),
     parent_account_id: z
       .string()
       .nullable()
@@ -297,10 +297,10 @@ const ExternalLotRelocationSchema = z
     qty: numericField,
     from_account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
     from_account_name: z.string(),
-    from_is_synthetic: z.boolean(),
+    from_is_synthetic: z.coerce.boolean(),
     to_account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
     to_account_name: z.string(),
-    to_is_synthetic: z.boolean(),
+    to_is_synthetic: z.coerce.boolean(),
   })
   .transform(
     (raw): LotRelocationEntity => ({
