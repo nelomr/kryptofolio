@@ -6,7 +6,10 @@
 "@kryptofolio/core-domain": patch
 ---
 
-- **Fix FIFO Transfer Traceability**: Replaced the legacy single-account event processing with a multi-account custody model that tracks `WITHDRAWAL`/`DEPOSIT` movements correctly without consuming the original lot cost basis.
-- **Data Quality Pipeline**: Added a separate `quality_flag` column and a robust flagging system (`MISSING_PRICE`, `CUSTODY_RESIDUAL`, `NEGATIVE_COST_BASIS`, etc.) decoupled from the legacy `WALLET_ACTIVATION` flag. 
-- **Schema & Migration**: Included a clean-slate `004` migration that drops previously-derived data (`spot_transactions`, `tax_lots`, etc.), replacing it with `lot_custody_entries` and manual override tracking. Existing IRPF figures from previous schema versions are superseded.
-- **DTO Canonicalization**: Breaking change standardizing the `status` enum (`OPEN`, `PARTIAL`, `CLOSED`), and standardizing quantity values across UI and the database.
+- **FIFO Engine & Traceability Pipeline**: Replaced legacy single-account event processing with a robust, multi-account custody model that correctly traces `WITHDRAWAL` and `DEPOSIT` movements without consuming the original lot cost basis.
+- **Source Format Profiles**: Deployed a complete ingestion pipeline redesign. All exchange idiosyncrasies (e.g., Bit2Me row collapse) are now abstracted behind Source Profiles, allowing precise control over trade direction, fee denomination, convention, and precision behind the boundary.
+- **Data Quality & Fidelity**: Implemented a comprehensive fidelity net. Added explicit data quality flags (`MISSING_PRICE`, `CUSTODY_RESIDUAL`, `NEGATIVE_COST_BASIS`) independent of legacy rules. Nullable fiat magnitudes are now correctly handled, and unresolved income rows are explicitly counted rather than silently dropped.
+- **Automatic Rebuild & Manual Overrides**: Introduced automatic portfolio rebuilding mechanics and the foundation for manual fiscal overrides to correct or override lot valuations.
+- **Schema & Migrations**: Applied migrations 004, 005, and 006, wiping legacy derived tables (`spot_transactions`, `tax_lots`) in favor of `lot_custody_entries` and tracking FX conversion provenance. Existing IRPF figures are superseded.
+- **Tax Report UI Enhancements**: Realigned frontend DTOs to standard lot statuses (`OPEN`, `PARTIAL`, `CLOSED`). The UI now renders canonical lot status, full custody history, pending reviews, and correctly surfaces both exclusion counts. 
+- **Database Stability**: Resolved an issue where DuckDB's ATTACH could orphan the SQLite WAL, and coerced DuckDB numeric booleans to prevent frontend parsing errors.
