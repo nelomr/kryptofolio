@@ -26,44 +26,70 @@ erDiagram
     assets ||--o{ spot_transactions : "asset_out"
     spot_transactions ||--o{ tax_lots : "creates"
     tax_lots ||--o{ lot_history_events : "consumed by"
+    tax_lots ||--o{ lot_custody_entries : "held in"
     spot_transactions ||--o{ lot_history_events : "trigger"
+    spot_transactions ||--o{ lot_custody_entries : "trigger"
+    accounts ||--o{ accounts : "parent_account"
 
     accounts {
         TEXT id PK "UUID"
+        TEXT parent_account_id FK "UUID (Exchange sub-wallets)"
+        INTEGER is_synthetic "0 or 1"
         TEXT name
         TEXT type
     }
     assets {
         TEXT id PK "UUID"
         TEXT symbol UK
+        INTEGER is_fiat "0 or 1"
     }
     spot_transactions {
         TEXT id PK "UUID"
         TEXT id_hash UK "Cryptographic Hash"
-        TEXT tx_type "BUY, SELL, DEPOSIT, etc"
+        TEXT tx_type "BUY, SELL, DEPOSIT, TRANSFER_IN, etc"
         TEXT amount_in "TEXT for precision"
         TEXT amount_out "TEXT for precision"
-        TEXT total_fiat
+        TEXT total_fiat ">= 0"
+        TEXT transfer_group_id "Groups legs of custody movement"
+        TEXT flag "Fiscal classification"
     }
     tax_lots {
         TEXT id PK "UUID"
         TEXT status "OPEN, PARTIAL, CLOSED"
         TEXT original_qty
         TEXT remaining_qty
-        TEXT unit_cost_fiat
+        TEXT unit_cost_fiat ">= 0"
+        TEXT fx_rate "Rate used for conversion"
+        TEXT fx_rate_date "Date of the FX rate"
+        TEXT exchange_location "Acquiring venue"
+        TEXT quality_flag "Valuation defects"
+        TEXT value_provenance "MARKET or MANUAL"
     }
     lot_history_events {
         TEXT id PK "UUID"
         TEXT amount_from_lot
-        TEXT gain_loss_fiat
+        TEXT sale_price_fiat "NULLABLE"
+        TEXT gain_loss_fiat "NULLABLE"
+        TEXT fx_rate "Rate used for conversion"
+        TEXT fx_rate_date "Date of the FX rate"
         INTEGER is_taxable
+        TEXT disposal_type "SELL, SWAP, FEE, SPEND"
+        TEXT flag
+        TEXT quality_flag
     }
-    audit_log {
-        TEXT id PK
-        TEXT table_name
-        TEXT action "INSERT, UPDATE, DELETE"
-        TEXT old_values "JSON"
-        TEXT new_values "JSON"
+    lot_custody_entries {
+        TEXT id PK "UUID"
+        TEXT tax_lot_id FK
+        TEXT account_id FK
+        TEXT qty_delta "SIGNED (-/+)"
+    }
+    manual_price_overrides {
+        TEXT id_hash PK
+        TEXT price_fiat
+    }
+    transfer_destination_overrides {
+        TEXT id_hash PK
+        TEXT counterparty_account_id FK
     }
 ```
 
@@ -74,20 +100,28 @@ erDiagram
 SQLite is configured with `PRAGMA journal_mode = WAL` and `synchronous = NORMAL` for high concurrency. All tables use `STRICT` mode to prevent silent type coercion.
 
 ### 3.1. Infrastructure Tables
-- **`accounts`**: Identifies the exchange, wallet, or custom portfolio (e.g., Binance, Ledger). Primary key is a UUID.
-- **`assets`**: Dictionary of all traded tokens and fiat currencies (e.g., `BTC`, `EUR`, `USDT`).
+- **`accounts`**: User portfolios, exchanges, and custom wallets. Now supports a hierarchical structure via `parent_account_id`, allowing nested locations like "Binance -> Earn" or "Ledger -> Cold".
+- **`assets`**: Global dictionary of known cryptocurrencies, fiat currencies, and commodities.
+- **`exchange_rates`**: Daily historical FX rates (e.g. EUR/USD) populated by the boot fetch mechanism and ECB backfill script, used for dynamic fiat value conversions.
 
 ### 3.2. Transaction Tables
 - **`spot_transactions`**: The superset table for all standard crypto movements. 
-  - Supports 14 distinct `tx_type` enumerations (e.g., `BUY`, `SELL`, `STAKING`, `AIRDROP`).
-  - Uses `CHECK` constraints to ensure that if an amount exists, its corresponding asset ID must also exist (e.g., `CHECK ((amount_in IS NULL) = (asset_in_id IS NULL))`).
-  - Ensures amounts only contain valid numeric characters via `GLOB '*[0-9]*' AND NOT GLOB '*[^-0-9.]*'`.
+  - Supports 15 distinct `tx_type` enumerations (e.g., `BUY`, `SELL`, `STAKING`, `AIRDROP`, `TRANSFER_IN`, `TRANSFER_OUT`).
+  - Uses `CHECK` constraints to ensure that if an amount exists, its corresponding asset ID must also exist.
+  - Ensures amounts only contain valid numeric characters via `GLOB '*[0-9]*'`.
+  - `total_fiat` and `price_fiat` are strictly non-negative magnitudes.
 - **`futures_transactions`**: Specialized ledger for derivatives. Tracks `realized_pnl`, `funding_amount`, and `settlement_asset_id`.
 
 ### 3.3. Tax and Analytical Tables
 Generated post-ingestion by the analytical engine (FIFO/LIFO algorithms):
-- **`tax_lots`**: Represents acquired assets acting as the cost basis for future sales.
-- **`lot_history_events`**: Represents the consumption (disposal) of a lot, calculating the specific Capital Gain or Loss.
+- **`tax_lots`**: Represents acquired assets acting as the cost basis for future sales. It retains the original `exchange_location` for provenance. If `unit_cost_fiat` was derived via FX conversion, `fx_rate` and `fx_rate_date` are persisted for strict reproducibility.
+- **`lot_history_events`**: Represents the consumption (disposal) of a lot, calculating the specific Capital Gain or Loss. It separates fiscal classifications (`flag`) from valuation defects (`quality_flag`, including `MISSING_FX_RATE`), and allows `sale_price_fiat` to be NULL when unresolved.
+- **`lot_custody_entries`**: A double-entry custody ledger. Records movements without altering cost-basis or timestamps, enabling true traceability via `qty_delta` (intentionally signed).
+
+### 3.4. User-Authored Override Tables
+User adjustments are segregated from derived tables so recalculation never destroys them:
+- **`manual_price_overrides`**: Allows users to manually declare the fiat price for a given transaction hash.
+- **`transfer_destination_overrides`**: Allows users to declare the counterparty account for outbound transfers that couldn't be auto-reconciled.
 
 ---
 
@@ -126,6 +160,12 @@ CREATE VIEW IF NOT EXISTS v_active_spot_transactions AS
 
 CREATE VIEW IF NOT EXISTS v_active_tax_lots AS
     SELECT *, acquisition_timestamp AS date FROM tax_lots WHERE deleted_at IS NULL;
+
+CREATE VIEW IF NOT EXISTS v_active_lot_history_events AS
+    SELECT * FROM lot_history_events WHERE deleted_at IS NULL;
+
+CREATE VIEW IF NOT EXISTS v_active_lot_custody_entries AS
+    SELECT * FROM lot_custody_entries WHERE deleted_at IS NULL;
 ```
 
 These raw views are the foundation for the advanced analytical pipeline executed within **DuckDB**:

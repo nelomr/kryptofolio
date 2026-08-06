@@ -1,65 +1,91 @@
-# database-migrations Specification
+## ADDED Requirements
 
-## Purpose
-TBD - created by archiving change phase-2b-time-series. Update Purpose after archive.
-## Requirements
-### Requirement: `spot_transactions.fiat_currency` Column Migration
-The system SHALL add `fiat_currency TEXT NOT NULL DEFAULT 'USD'` to the `spot_transactions` table in the `003_currency_schema.sql` migration (extending the existing Phase Parquet migration), preserving the exact native currency used at transaction time.
+### Requirement: `004_fifo_traceability.sql` Forward Migration
 
-#### Scenario: Transaction executed in EUR
-- **WHEN** a user buys BTC paying with EUR (e.g. from a Bit2Me CSV ingestion)
-- **THEN** the system MUST store `total_fiat` and `price_fiat` in EUR, and `fiat_currency = 'EUR'`
-- **AND** the FIFO engine MUST use this currency when computing cost-basis in the view `v_calculated_tax_lots`
+The system SHALL add a forward-only migration `004_fifo_traceability.sql` introducing `assets.is_fiat`, `accounts.parent_account_id`, `accounts.is_synthetic`, `lot_history_events.disposal_type`, the constrained `lot_history_events.flag`, the `lot_custody_entries`, `manual_price_overrides`, and `transfer_destination_overrides` tables, and non-negative CHECK constraints on fiat magnitude columns. The migration SHALL be idempotent and SHALL be registered in `_schema_migrations`.
 
-#### Scenario: Transaction executed in USD (default)
-- **WHEN** a new transaction is inserted without explicitly setting `fiat_currency`
-- **THEN** the DEFAULT value of `'USD'` MUST be applied automatically, ensuring backward compatibility with all existing rows
+#### Scenario: Migration applies cleanly
 
----
+- **WHEN** `004_fifo_traceability.sql` runs against an existing ledger
+- **THEN** all new columns and tables MUST exist
+- **AND** `_schema_migrations` MUST record version `004`
 
-### Requirement: `futures_transactions.fiat_currency` Column Migration
-The system SHALL add `fiat_currency TEXT NOT NULL DEFAULT 'USD'` to the `futures_transactions` table, enabling correct fiscal reporting for PnL settled in non-EUR assets.
+#### Scenario: Re-running the migration is a no-op
 
-#### Scenario: Futures contract settled in USDT
-- **WHEN** a futures position is closed with `realized_pnl` settled in USDT
-- **THEN** `fiat_currency = 'USD'` MUST be stored
-- **AND** the `v_futures_realized_pnl` view MUST use this to apply the correct USD/EUR exchange rate during tax report generation
+- **WHEN** the migration runner is invoked twice
+- **THEN** the second invocation MUST make no changes and MUST NOT error
 
----
+#### Scenario: STRICT mode is preserved on new tables
 
-### Requirement: No EUR Hardcodes in DuckDB Views
-After migration, the DuckDB FIFO views (`v_flattened_fifo_events`, `v_calculated_tax_lots`, `v_calculated_lot_history_events`, `v_futures_realized_pnl`) SHALL NOT contain any hardcoded `'EUR'` string as a currency. All currency references MUST read from the `fiat_currency` column of the originating transaction.
+- **WHEN** `lot_custody_entries`, `manual_price_overrides`, and `transfer_destination_overrides` are created
+- **THEN** each MUST be declared `STRICT`
+- **AND** their financial columns MUST use TEXT with the project's numeric GLOB CHECK pattern
 
-#### Scenario: Existing FIFO view outputs correct currency
-- **WHEN** `v_calculated_tax_lots` is queried for a BTC acquisition paid in USD
-- **THEN** the `fiat_currency` column of the result row MUST be `'USD'`, not `'EUR'`
+### Requirement: Clean-Slate Purge of Transactional and Derived Data
 
----
+Because the project has no production deployment and every source CSV is re-ingestable, the migration SHALL purge transactional and derived ledger data rather than carrying repair or backfill logic. Re-ingestion is the documented path, and is required regardless because the Kraken `wallet` column needed for sub-account identity was never persisted and cannot be recovered retroactively.
 
-### Requirement: Domain Types Consistency
-The `LedgerSpotTransaction` and `LedgerFuturesTransaction` interfaces in `ILedgerPort.ts` SHALL include `fiat_currency: string` as a **mandatory** (non-optional) field. The `CsvIngestionUseCase` SHALL resolve `fiat_currency` using the following order: CSV field value → `base_currency` from `IUserSettingsPort.getSetting('base_currency')` → `'USD'` as ultimate fallback. No ingested transaction shall ever have an implicit or defaulted currency.
+#### Scenario: Transactional and derived data are purged
 
-#### Scenario: Domain type enforces currency
-- **WHEN** a `LedgerSpotTransaction` object is created without `fiat_currency`
-- **THEN** the TypeScript compiler MUST emit an error (required field missing)
+- **WHEN** the migration completes
+- **THEN** `spot_transactions`, `futures_transactions`, `tax_lots`, `lot_history_events`, and `lot_custody_entries` MUST contain zero rows
 
----
+#### Scenario: Vault, settings, and migration history are preserved
 
-### Requirement: Shared Types Zod Schema Update
-The `@kryptofolio/shared-types` package SHALL include `fiat_currency: z.string()` (**required, NO `.default()`**) in the `SpotTransactionSchema`, `FuturesTransactionSchema`, `TaxLotSchema`, and `TaxLotEventSchema` Zod schemas. The existing `TaxLotSchema` (L96) and `TaxLotEventSchema` (L112) currently have `.default('EUR')` which MUST be removed — the SQL-level `DEFAULT 'USD'` serves only as a DB safety net; the application layer MUST always provide an explicit value.
+- **WHEN** the migration completes
+- **THEN** the vault tables, `user_settings`, and `_schema_migrations` MUST retain their contents
+- **AND** no credential or user preference MUST be lost
 
-#### Scenario: Zod validation rejects missing fiat_currency
-- **WHEN** a record missing `fiat_currency` is validated against `SpotTransactionSchema`
-- **THEN** the Zod parse MUST fail with a validation error ("Required" error on `fiat_currency`)
-- **AND** the same behavior MUST apply to `FuturesTransactionSchema`, `TaxLotSchema`, and `TaxLotEventSchema`
+#### Scenario: No repair or backfill logic is carried
 
----
+- **WHEN** the migration is inspected
+- **THEN** it MUST NOT contain an `ABS()` repair statement over existing fiat values
+- **AND** it MUST NOT contain a heuristic backfill of `disposal_type` for pre-existing events
 
-### Requirement: SQL Injection Remediation (Pre-requisite)
-All DuckDB adapter methods (`getHoldingsSnapshot`, `getDerivativesPnl`, `calculateLotsAndEvents`, `getSpanishTaxReport`) SHALL use DuckDB parameterized queries for ALL user-supplied values (`accountId`, `year`). String interpolation of user input directly into SQL strings is STRICTLY FORBIDDEN.
+#### Scenario: Constraints apply to an empty table
 
-#### Scenario: Malicious accountId input
-- **WHEN** `getHoldingsSnapshot` is called with `accountId = "'; DROP TABLE tax_lots; --"`
-- **THEN** the parameterized query MUST safely escape the value, and no SQL injection occurs
-- **AND** the query returns zero results (no matching accountId)
+- **WHEN** the non-negative fiat CHECK constraints are added
+- **THEN** they MUST apply against purged tables so no pre-existing violation can abort the migration
 
+### Requirement: Seeded Reference Data
+
+The migration SHALL seed the reference data the corrected engine depends on: fiat classification for recognised ISO-4217 symbols, and the venue/sub-wallet account structure required for re-ingestion.
+
+#### Scenario: Known fiat symbols are classified
+
+- **WHEN** an asset row exists for EUR, USD, GBP, or CHF after the migration
+- **THEN** its `is_fiat` value MUST be `1`
+
+#### Scenario: Unrecognised symbols default to non-fiat
+
+- **WHEN** an asset is created for a symbol outside the ISO-4217 list
+- **THEN** its `is_fiat` value MUST be `0`
+
+#### Scenario: Synthetic accounts are created on demand, not pre-seeded
+
+- **WHEN** the migration completes
+- **THEN** no `ownwallet-<ASSET>` account MUST exist yet
+- **AND** each MUST be created during ingestion when first required
+
+### Requirement: Ledger Is Marked Pending After Migration
+
+The migration SHALL set `user_settings.needs_recalculation = 'true'` so that the corrected engine reprocesses the ledger on the next materialisation, and so the UI signals that derived figures are pending.
+
+#### Scenario: Ledger is marked pending
+
+- **WHEN** the migration completes
+- **THEN** `needs_recalculation` MUST be `'true'`
+
+#### Scenario: Re-ingestion produces correct derived data
+
+- **WHEN** the source CSVs are re-ingested after the migration
+- **THEN** materialisation MUST run automatically once per batch
+- **AND** no lot MUST be derived from a crypto `DEPOSIT`
+- **AND** no principal disposal MUST be derived from a `WITHDRAWAL`
+- **AND** for a ledger containing no `SELL` or `SWAP`, the reported spot capital gains MUST consist solely of valued fee disposals
+
+#### Scenario: Re-ingestion is idempotent
+
+- **WHEN** the same source CSVs are ingested twice after the migration
+- **THEN** the second ingestion MUST insert zero new transactions
+- **AND** the derived tables MUST be byte-identical after both runs

@@ -1,17 +1,8 @@
-## ADDED Requirements
-
-### Requirement: Configure fiscal year
-
-The system SHALL allow the user to select a fiscal year (calculation method is locked to FIFO) from the fiscal controls panel.
-
-#### Scenario: Selection triggers recalculation
-
-- **WHEN** the user selects a different fiscal year and clicks "Recalcular"
-- **THEN** the system triggers a data fetch to the backend to retrieve the updated tax report details
+## MODIFIED Requirements
 
 ### Requirement: Display detailed FIFO lot traceability
 
-The system SHALL display a detailed table representing the audit trail of tax lot history events.
+The system SHALL display a detailed table representing the audit trail of tax lot history events. The audit trail SHALL distinguish taxable disposals from non-taxable custody movements, SHALL show each event's real `disposalType` rather than a universal sale label, and SHALL show the acquiring venue alongside the account where the disposal occurred. Events excluded from the tax base SHALL display their quality flag and the reason for exclusion, and figures that were manually assigned SHALL be marked as such.
 
 #### Scenario: Displaying empty states
 
@@ -23,20 +14,49 @@ The system SHALL display a detailed table representing the audit trail of tax lo
 - **WHEN** the data is being fetched or recalculated
 - **THEN** the system displays a loading state animation (e.g., "Generando Libro de Auditoría...")
 
-### Requirement: Download Tax Report
+#### Scenario: Fee disposal is distinguishable from a sale
 
-The system SHALL allow the user to download the fiscal report.
+- **WHEN** an audit row originates from a crypto network fee
+- **THEN** it MUST display the `FEE` provenance
+- **AND** MUST NOT be presented as a sale
 
-#### Scenario: User downloads report
+#### Scenario: Custody movement appears as non-taxable
 
-- **WHEN** the user clicks "Descargar Informe"
-- **THEN** the system invokes the backend adapter to generate and download a PDF/CSV file and provides visual feedback of the operation
+- **WHEN** a lot was relocated between the user's own accounts during the fiscal year
+- **THEN** the audit trail MUST show the movement with origin and destination accounts
+- **AND** MUST show no gain or loss figure for it
+- **AND** MUST mark it non-taxable
 
-### Requirement: Consistent Mock Data Representation
+#### Scenario: Movement to a synthetic account is identified
 
-The system SHALL support rendering high-quality mock data that covers all edge cases (e.g., fractional quantities, varied transaction types) for development and testing.
+- **WHEN** a movement's counterparty is a synthetic `ownwallet-<ASSET>` account
+- **THEN** the audit row MUST identify the destination as unresolved self-custody
+- **AND** MUST offer the path to declare the real account
 
-#### Scenario: Consistent data across views
+#### Scenario: Excluded events state their reason
 
-- **WHEN** the application is running in mock or development mode
-- **THEN** the tax audit reports and the main portfolio views must display data derived from the exact same centralized mock portfolio dataset, ensuring cross-view consistency.
+- **WHEN** an event carries a data-quality flag and is non-taxable
+- **THEN** the audit row MUST display the flag with an i18n-resolved explanation
+- **AND** MUST indicate that the event does not contribute to the declared base
+
+#### Scenario: Manually assigned figures are marked
+
+- **WHEN** an audit row's value originated from a manual price assignment
+- **THEN** the row MUST be marked as manually assigned
+- **AND** the recorded note MUST be retrievable
+
+#### Scenario: Report states how many figures were manually assigned
+
+- **WHEN** a fiscal year's report includes manually assigned values
+- **THEN** the report MUST display the count of such figures
+
+#### Scenario: Holding period reflects the original acquisition
+
+- **WHEN** a disposed lot had been moved between accounts before the sale
+- **THEN** the audit row MUST show the original acquisition date, not any movement date
+
+#### Scenario: Sale-free fiscal year declares zero spot gains
+
+- **WHEN** the selected fiscal year contains custody movements and fee disposals but no `SELL` or `SWAP` transactions
+- **THEN** the report's spot capital-gains figure MUST be the sum of valued fee disposals only
+- **AND** MUST NOT include any amount derived from transferred principals

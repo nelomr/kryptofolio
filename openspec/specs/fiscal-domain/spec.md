@@ -1,76 +1,112 @@
-# fiscal-domain Specification
+## ADDED Requirements
 
-## Purpose
-TBD - created by archiving change hex-arch-zod-refactor. Update Purpose after archive.
-## Requirements
-### Requirement: Define Tax and Fiscal Domain Models
-The system SHALL define strict TypeScript domain models for all fiscal capabilities inferred from the legacy system, protecting the UI from fragmented legacy properties.
+### Requirement: Canonical Lot Status in the Domain Model
 
-#### Scenario: Defining Tax Transactions
-- **WHEN** creating the `TaxTransactionEntity`
-- **THEN** it MUST include normalized fields: `symbol`, `type` (BUY, SELL, DEPOSIT, etc.), `amount`, `total_eur`, `price_eur`, `fee_eur`, and `timestamp` as a native `Date` object
+`TaxLotEntity.status` SHALL be typed as the canonical `'OPEN' | 'PARTIAL' | 'CLOSED'` union and SHALL be required, not optional. The `'FULL' | 'PARTIAL' | 'EMPTY'` union SHALL be removed from the domain model and from every DTO schema.
 
-#### Scenario: Defining Portfolio Summaries
-- **WHEN** creating the `PortfolioSummaryEntity`
-- **THEN** it MUST contain nested metrics (`total_equity_eur`, `total_cost_basis_eur`, `total_realized_pnl_eur`, `total_unrealized_pnl_eur`, `total_pnl_eur`) and an array of `HoldingEntity`
+#### Scenario: Domain entity carries the canonical union
 
-#### Scenario: Defining Tax Reports
-- **WHEN** creating the `TaxReportEntity`
-- **THEN** it MUST include a summary with `capital_gains_eur`, `capital_losses_eur`, `savings_base_yields_eur`, `general_base_airdrops_eur`, `net_patrimonial_result_eur`, and `estimated_irpf_eur`
-- **AND** include an `audit_trail` array of detailed calculation events
+- **WHEN** `TaxLotEntity` is inspected
+- **THEN** `status` MUST be typed `'OPEN' | 'PARTIAL' | 'CLOSED'`
+- **AND** it MUST NOT be optional
 
-### Requirement: Zod Schemas for Legacy Data Sanitization
-The system SHALL implement complex Zod DTO schemas (`ExternalTaxTransactionSchema`, `ExternalTaxReportSchema`, `ExternalTokenDetailsSchema`) to normalize inconsistencies from the legacy API before they reach the domain layer.
+#### Scenario: DTO schema validates the canonical vocabulary
 
-#### Scenario: Resolving Transaction Types and Symbols
-- **WHEN** the legacy API sends a transaction with `tx_type: 'BUY'`, `asset_in: 'BTC'`, and `amount_in: 0.5`
-- **THEN** the Zod schema (`preprocess`) MUST map it cleanly so the adapter can construct a `TaxTransactionEntity` with `type: 'BUY'`, `symbol: 'BTC'`, and `amount: 0.5`
+- **WHEN** `ExternalTaxLotSchema` parses a backend payload with `status: 'OPEN'`
+- **THEN** the parse MUST succeed and produce `status: 'OPEN'`
+- **WHEN** the payload carries `status: 'FULL'`
+- **THEN** the parse MUST fail and emit a controlled error to the `errorBus`
 
-#### Scenario: Resolving Numeric Strings and Aliases
-- **WHEN** the legacy API sends metrics like `weighted_average_cost` or string values like `"0.50"`
-- **THEN** Zod MUST cast them to numbers and map them to their standard domain equivalents (e.g., `avg_price_eur`)
+#### Scenario: Mock schemas share the canonical vocabulary
 
-## MODIFIED Requirements
+- **WHEN** `MockDtoSchemas` maps a mock lot
+- **THEN** it MUST produce the same `'OPEN' | 'PARTIAL' | 'CLOSED'` values as the real adapter
+- **AND** mock and real payloads MUST be interchangeable at the port boundary
 
-### Requirement: Define Tax and Fiscal Domain Models
-The system SHALL define strict TypeScript domain models for all fiscal capabilities inferred from the legacy system, protecting the UI from fragmented legacy properties. The `ITaxRepository` port SHALL also declare two operational methods: `uploadTaxFile` and `deleteAllTransactions`.
+### Requirement: Typed Disposal Provenance and Separate Flag Fields on Lot Events
 
-#### Scenario: Defining Tax Transactions
-- **WHEN** creating the `TaxTransactionEntity`
-- **THEN** it MUST include normalized fields: `symbol`, `type` (BUY, SELL, DEPOSIT, etc.), `amount`, `total_eur`, `price_eur`, `fee_eur`, and `timestamp` as a native `Date` object
+`TaxLotHistoryEvent` SHALL carry a required `disposalType` typed as `'SELL' | 'SWAP' | 'FEE' | 'SPEND'`, retain its existing `flag` field typed as the fiscal-classification union, and gain a separate optional `qualityFlag` typed as the canonical data-quality union. None SHALL be typed as a bare `string`, and the `any` type SHALL NOT be used anywhere in the fiscal domain.
 
-#### Scenario: Defining Portfolio Summaries
-- **WHEN** creating the `PortfolioSummaryEntity`
-- **THEN** it MUST contain nested metrics (`total_equity_eur`, `total_cost_basis_eur`, `total_realized_pnl_eur`, `total_unrealized_pnl_eur`, `total_pnl_eur`) and an array of `HoldingEntity`
+#### Scenario: Event exposes real provenance
 
-#### Scenario: Defining Tax Reports
-- **WHEN** creating the `TaxReportEntity`
-- **THEN** it MUST include a summary with `capital_gains_eur`, `capital_losses_eur`, `savings_base_yields_eur`, `general_base_airdrops_eur`, `net_patrimonial_result_eur`, and `estimated_irpf_eur`
-- **AND** include an `audit_trail` array of detailed calculation events
+- **WHEN** a `TaxLotHistoryEvent` is produced from a fee disposal
+- **THEN** `disposalType` MUST be `'FEE'`
+- **AND** the UI MUST be able to distinguish it from a genuine sale without inspecting free text
 
-#### Scenario: ITaxRepository includes uploadTaxFile
-- **WHEN** a class declares `implements ITaxRepository`
-- **THEN** TypeScript SHALL require implementing `uploadTaxFile(file: File): Promise<void>` and `deleteAllTransactions(): Promise<void>` in addition to the existing six methods
+#### Scenario: Existing fiscal classification is preserved
 
+- **WHEN** a `TaxLotHistoryEvent` derives from a Tangem wallet-activation operation
+- **THEN** `flag` MUST remain `'WALLET_ACTIVATION'`
+- **AND** the existing badge and audit-trail logic that reads it MUST continue to work unchanged
 
+#### Scenario: Classification and defect coexist on one event
 
-## MODIFIED Requirements
+- **WHEN** a wallet-activation operation also has an unresolvable price
+- **THEN** `flag` MUST be `'WALLET_ACTIVATION'` and `qualityFlag` MUST be `'MISSING_PRICE'`
+- **AND** neither MUST overwrite the other
 
-### Requirement: Zod Schemas for Legacy Data Sanitization
-The system SHALL implement complex Zod DTO schemas (`ExternalTaxTransactionSchema`, `ExternalTaxReportSchema`, `ExternalTokenDetailsSchema`) to normalize inconsistencies from the legacy API before they reach the domain layer. The `audit_trail` field SHALL be validated with a proper `ExternalTaxLotHistorySchema` instead of `z.array(z.unknown())`.
+#### Scenario: Both flag fields are typed unions
 
-#### Scenario: Resolving Transaction Types and Symbols
-- **WHEN** the legacy API sends a transaction with `tx_type: 'BUY'`, `asset_in: 'BTC'`, and `amount_in: 0.5`
-- **THEN** the Zod schema (`preprocess`) MUST map it cleanly so the adapter can construct a `TaxTransactionEntity` with `type: 'BUY'`, `symbol: 'BTC'`, and `amount: 0.5`
+- **WHEN** `TaxLotHistoryEvent.flag` and `TaxLotHistoryEvent.qualityFlag` are inspected
+- **THEN** each MUST be typed as its own union or `undefined`, never as `string`
+- **AND** an unrecognised value from the backend MUST fail Zod validation rather than flow through as a string
 
-#### Scenario: Resolving Numeric Strings and Aliases
-- **WHEN** the legacy API sends metrics like `weighted_average_cost` or string values like `"0.50"`
-- **THEN** Zod MUST cast them to numbers and map them to their standard domain equivalents (e.g., `avg_price_eur`)
+#### Scenario: Non-taxable events are explicit
 
-#### Scenario: Audit trail entries are typed and validated
-- **WHEN** the legacy API sends a tax report with an `audit_trail` array
-- **THEN** each entry SHALL be validated through `ExternalTaxLotHistorySchema` producing `TaxLotHistoryEvent` domain entities with `disposalDate` as native `Date`, `gainLossEur` as `number`, and `isTaxable` as `boolean`
+- **WHEN** an event carries a data-quality flag
+- **THEN** `isTaxable` MUST be `false`
+- **AND** the entity MUST be consumable by the UI to render a non-taxable indicator
 
-#### Scenario: Malformed audit trail entries use safe defaults
-- **WHEN** an audit trail entry has missing optional fields (e.g., `flag`, `notes`)
-- **THEN** the schema SHALL produce a valid `TaxLotHistoryEvent` with `undefined` for optional fields and `0` for missing numeric fields
+### Requirement: Custody Location in the Domain Model
+
+The domain SHALL distinguish the venue where a lot was acquired from the accounts currently holding it. `TaxLotEntity` SHALL retain `exchange` as the acquiring venue and gain a `currentLocations` collection describing present custody per account.
+
+#### Scenario: Acquiring venue and current custody differ
+
+- **WHEN** a lot acquired on `Kraken:spot` has been partially moved to a self-custody wallet
+- **THEN** `exchange` MUST read the acquiring venue
+- **AND** `currentLocations` MUST contain one entry per holding account with its quantity
+
+#### Scenario: Synthetic custody is representable
+
+- **WHEN** part of a lot is attributed to `ownwallet-XRP`
+- **THEN** `currentLocations` MUST include that account
+- **AND** the entry MUST be marked as synthetic so the UI can present it distinctly
+
+#### Scenario: Custody entries use branded identifiers and precision values
+
+- **WHEN** a `currentLocations` entry is constructed
+- **THEN** its account identifier MUST use a branded type from `BrandedTypes.ts`
+- **AND** its quantity MUST use the project's precision value object, not a raw primitive
+
+### Requirement: Manual Value Provenance in the Domain Model
+
+The domain SHALL represent whether a monetary value originated from a manual assignment rather than from market data, as a typed field on the affected entities.
+
+#### Scenario: Manually assigned cost basis is marked
+
+- **WHEN** a lot's cost basis derives from a manual price override
+- **THEN** the entity MUST expose that provenance as a typed field
+- **AND** the UI MUST NOT infer it from the absence of a flag
+
+#### Scenario: Provenance survives the anti-corruption layer
+
+- **WHEN** the backend payload carries the manual-value provenance
+- **THEN** the Zod DTO schema MUST validate and map it into the domain entity
+- **AND** an unrecognised provenance value MUST fail validation
+
+### Requirement: Fiscal Domain Remains Framework-Free
+
+The fiscal domain models and all new value objects SHALL contain no framework dependency, and no use of the `any` type.
+
+#### Scenario: Domain layer imports no framework
+
+- **WHEN** the fiscal domain models, custody value objects, and provenance types are inspected
+- **THEN** they MUST NOT import Zod, Axios, or Vue
+- **AND** `scripts/check-domain-isolation.sh` MUST pass
+
+#### Scenario: No any type is present
+
+- **WHEN** the fiscal domain and its DTO schemas are type-checked
+- **THEN** no `any` type MUST appear
+- **AND** `unknown` with narrowing MUST be used where a dynamic value is unavoidable

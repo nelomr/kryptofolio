@@ -88,8 +88,8 @@ describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
     
     // 3. Real parser logic (detect profile, guess mapping, map to entity)
     const detection = detectSourceProfile([...headers]);
-    expect(detection.kind).toBe('RESOLVED');
-    const profileId = (detection as any).profileId;
+    if (detection.kind !== 'RESOLVED') throw new Error('Could not resolve profile');
+    const profileId = detection.profileId;
     
     const mapping = guessColumnMapping([...headers]);
     

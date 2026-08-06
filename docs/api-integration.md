@@ -106,7 +106,9 @@ Retrieves tax lots (FIFO purchases) and historical balance updates for a specifi
   ```
 
 #### `POST /api/portfolio/rebuild`
-Triggers the backend to re-process the FIFO allocation queues from raw transactions.
+Triggers the backend to re-process the FIFO allocation queues and synchronize the analytical engine.
+
+Internally, this endpoint fetches the `FifoMaterializerService` from the Dependency Injection container and calls `rebuildAll()`. This executes a full materialisation cycle: reading all immutable raw transactions from the SQLite ledger (`spot_transactions`), executing the FIFO accounting models, rebuilding the double-entry custody ledger (`lot_custody_entries`) inside DuckDB, and safely resetting the `needs_recalculation` flag in `user_settings` back to `false`.
 
 - **Request Body:** `{}`
 - **Response Format:** `200 OK`

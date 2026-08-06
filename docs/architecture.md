@@ -59,6 +59,8 @@ sequenceDiagram
     Colada-->>UI: Reactive status update (isPending)
 ```
 
+The Backend relies on a centralized Dependency Injection (DI) container (`apps/backend/src/core/infrastructure/di/container.ts`). This container securely instantiates Domain Services (like `FifoMaterializerService`) injecting their required Adapters (SQLite/DuckDB) and configuration ports. The Hono routing layer fetches these instances from the container rather than instantiating them directly, keeping the route definitions perfectly decoupled from business logic implementations.
+
 **Architectural Rules for Data Flow:**
 1. **Reads (Queries):** Simple read operations may bypass Use Cases and let the composables delegate directly to the injected Domain Port (acting as a Repository). This follows CQRS principles.
 2. **Writes (Mutations):** All state-changing operations MUST be orchestrated through an explicit `UseCase` class in `src/core/application/use-cases/`.

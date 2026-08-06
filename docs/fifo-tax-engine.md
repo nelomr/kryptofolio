@@ -291,9 +291,7 @@ flowchart TD
   **no** principal disposal — but still generate a fee disposal, because a crypto network fee paid
   while transferring is still a real disposal of that crypto.
 - **`v_flattened_fifo_events`** — joins every completed transaction against the policy table and
-  emits `ACQUISITION` / `DISPOSAL` rows per branch, with `NULL` (never `COALESCE(price, 1.0)` or
-  `COALESCE(price, 0.0)`) whenever a historical price can't be resolved, plus a `MANUAL` vs.
-  `MARKET` `value_provenance` and a `currency_mismatch` boolean per row.
+  emits `ACQUISITION` / `DISPOSAL` rows per branch. Historical prices are resolved via `ASOF LEFT JOIN` against `ledger.exchange_rates` to convert prices into the reporting currency (falling back to a reciprocal rate if a direct pair is absent). Emits `NULL` whenever a price can't be resolved or converted, plus a `value_provenance` (`MANUAL`, `MARKET`, or `MARKET_CONVERTED`) and a `currency_mismatch` boolean per row. If `MARKET_CONVERTED`, the FX rate and its date are persisted for strict auditability.
 - **`v_acquisitions` / `v_disposals`** — global per-asset FIFO ordering via window functions
   (`SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id)`), producing the cumulative
   quantity intervals the matcher joins against.
@@ -330,7 +328,7 @@ Two columns on `lot_history_events`, deliberately never merged:
 | Column | Vocabulary | Answers |
 |---|---|---|
 | `flag` (pre-existing) | `WALLET_ACTIVATION`, … | "what kind of operation is this" — fiscal classification, consumed by the AEAT audit trail |
-| `quality_flag` (new) | `MISSING_PRICE`, `CURRENCY_MISMATCH`, `CUSTODY_RESIDUAL`, `UNTRACKED_INFLOW`, `CUSTODY_IMBALANCE`, `NEGATIVE_COST_BASIS`, `ORPHAN_LOT`, `UNKNOWN_TX_TYPE` | "what is wrong with its numbers" — a valuation or integrity defect |
+| `quality_flag` (new) | `MISSING_PRICE`, `MISSING_FX_RATE`, `CURRENCY_MISMATCH`, `CUSTODY_RESIDUAL`, `UNTRACKED_INFLOW`, `CUSTODY_IMBALANCE`, `NEGATIVE_COST_BASIS`, `ORPHAN_LOT`, `UNKNOWN_TX_TYPE` | "what is wrong with its numbers" — a valuation or integrity defect (e.g. `CURRENCY_MISMATCH` is now scoped to a manual override in a foreign currency, while `MISSING_FX_RATE` denotes an unconvertible historical market price) |
 
 A wallet-activation event whose price can't be resolved must be able to carry *both* values at
 once. A single column would force a precedence rule between them, and the frontend's
