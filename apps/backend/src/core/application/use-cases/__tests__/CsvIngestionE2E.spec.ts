@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import Papa from 'papaparse';
 import { DatabaseSync } from 'node:sqlite';
 import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedgerAdapter';
@@ -23,6 +24,7 @@ import type { SourceProfileId } from '@kryptofolio/shared-types';
 const ACCOUNT_ID = '10000000-0000-0000-0000-000000000001';
 
 describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
+  let sqlitePath: string;
   let sqliteDb: DatabaseSync;
   let sqliteAdapter: SQLiteLedgerAdapter;
   let duckDbAdapter: DuckDbAdapter;
@@ -32,14 +34,17 @@ describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
   let e2eUseCase: IngestAndMaterializeUseCase;
 
   beforeEach(async () => {
-    sqliteDb = new DatabaseSync(':memory:');
+    sqlitePath = path.join(os.tmpdir(), `test_ledger_ingest_${Date.now()}.db`);
+    sqliteDb = new DatabaseSync(sqlitePath);
     
 
     sqliteAdapter = new SQLiteLedgerAdapter(sqliteDb);
     await sqliteAdapter.initialize();
     
+    process.env.MOCK_MODE = 'false';
+    process.env.DUCKDB_PATH = ':memory:';
     duckDbAdapter = new DuckDbAdapter();
-    await duckDbAdapter.initialize();
+    await duckDbAdapter.initialize(sqlitePath);
     taxCalculatorAdapter = new DuckDbTaxCalculatorAdapter(duckDbAdapter);
 
     const mockPriceProvider = {
@@ -66,6 +71,9 @@ describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
 
   afterEach(async () => {
     sqliteDb.close();
+    if (fs.existsSync(sqlitePath)) {
+      fs.unlinkSync(sqlitePath);
+    }
     vi.restoreAllMocks();
   });
 
