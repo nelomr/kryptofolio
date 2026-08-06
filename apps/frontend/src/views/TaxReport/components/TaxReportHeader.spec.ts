@@ -16,10 +16,10 @@ vi.mock('../composables/useWalletsPort', () => ({
 }))
 
 describe('TaxReportHeader.vue', () => {
-  it('renders wallet dropdown with default props', () => {
+  it('does not render wallet dropdown temporarily', () => {
     const wrapper = mount(TaxReportHeader)
     const buttonTexts = wrapper.findAll('button').map(b => b.text())
-    expect(buttonTexts.some(t => t.includes('All Wallets'))).toBe(true)
+    expect(buttonTexts.some(t => t.includes('All Wallets'))).toBe(false)
   })
 
 
