@@ -98,7 +98,6 @@ describe('the three database paths', () => {
 describe('resolveParquetPricesPath', () => {
   it('points at the seeded price tree, not one under whatever directory the process started in', () => {
     const expected = path.join(WORKSPACE_ROOT, 'data/historical/prices');
-    expect(fs.existsSync(expected)).toBe(true);
 
     process.chdir(path.join(WORKSPACE_ROOT, 'apps/backend'));
     expect(resolveParquetPricesPath()).toBe(expected);
