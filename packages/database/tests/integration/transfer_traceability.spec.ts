@@ -44,6 +44,8 @@ interface LotRow {
   status: string;
   quality_flag: string | null;
   value_provenance: string;
+  fx_rate: string | null;
+  fx_rate_date: string | null;
   exchange_location: string;
 }
 
@@ -544,10 +546,27 @@ describe('FIFO price resolution and provenance', () => {
     expect(lot?.value_provenance).toBe('MARKET');
   });
 
-  it('flags a price series denominated in another currency instead of mixing the arithmetic', async () => {
+  it('reports a foreign-denominated series with no rate as a missing rate, not a mismatch', async () => {
+    // This assertion used to read CURRENCY_MISMATCH: the engine compared the two currencies and
+    // refused to convert. It now converts, so the flag survives only where a rate is genuinely
+    // absent — and says so, because seeding rates and seeding prices are different remedies.
     await seedPrice('0.45', 'USD');
     const lot = await stakingLot();
-    expect(lot?.quality_flag).toBe('CURRENCY_MISMATCH');
+    expect(lot?.quality_flag).toBe('MISSING_FX_RATE');
+    expect(lot?.unit_cost_fiat).toBe('0');
+  });
+
+  it('converts a foreign-denominated series once a rate covers the date', async () => {
+    await seedPrice('0.45', 'USD');
+    sqliteDb
+      .prepare('INSERT INTO exchange_rates (date, pair, rate, source) VALUES (?, ?, ?, ?)')
+      .run('2026-01-31', 'USD/EUR', '0.918695', 'ECB');
+
+    const lot = await stakingLot();
+    expect(lot?.quality_flag).toBeNull();
+    expect(Number(lot?.unit_cost_fiat)).toBeCloseTo(0.45 * 0.918695, 9);
+    expect(lot?.value_provenance).toBe('MARKET_CONVERTED');
+    expect(lot?.fx_rate_date).toBe('2026-01-31');
   });
 });
 

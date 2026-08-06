@@ -78,6 +78,19 @@ export interface LedgerFuturesTransaction {
   status: string;
 }
 
+/**
+ * The exchange rate a converted figure used, and the date it was published for.
+ *
+ * One value rather than two optional fields: a rate without its date cannot be audited and a date
+ * without its rate states nothing, so neither half is separately representable. Absent entirely when
+ * no conversion took place — never a 0 rate, which would read as a rate that was actually applied.
+ */
+export interface FxConversion {
+  readonly rate: PreciseAmount;
+  /** ISO-8601 date, `YYYY-MM-DD` — the FX ledger row's own date, not the transaction's. */
+  readonly rateDate: string;
+}
+
 export interface LedgerTaxLot {
   id: string;
   spot_transaction_id: string;
@@ -94,8 +107,10 @@ export interface LedgerTaxLot {
   status: TaxLotStatus;
   /** Data-quality defect on this lot's basis, if any. Suppresses gains; never blocks. */
   quality_flag?: FifoQualityFlag | null;
-  /** Whether the cost basis was observed from market data or declared by the user. */
+  /** Whether the cost basis was observed from market data, declared by the user, or converted. */
   value_provenance?: ManualValueProvenance;
+  /** Present only when `value_provenance` is `MARKET_CONVERTED`. */
+  fx_conversion?: FxConversion | null;
 }
 
 export interface LedgerTaxLotEvent {
@@ -125,8 +140,10 @@ export interface LedgerTaxLotEvent {
   flag?: FiscalClassificationFlag | null;
   /** Data-quality defect on this event's valuation, if any. */
   quality_flag?: FifoQualityFlag | null;
-  /** Whether the monetary value was observed from market data or declared by the user. */
+  /** Whether the monetary value was observed from market data, declared by the user, or converted. */
   value_provenance?: ManualValueProvenance;
+  /** Present only when `value_provenance` is `MARKET_CONVERTED`. */
+  fx_conversion?: FxConversion | null;
   notes?: string;
 }
 

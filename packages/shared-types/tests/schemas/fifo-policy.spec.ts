@@ -96,7 +96,19 @@ describe('flag vocabularies', () => {
   });
 
   it('exposes the manual-value provenance vocabulary', () => {
-    expect([...MANUAL_VALUE_PROVENANCE].sort()).toEqual(['MANUAL', 'MARKET']);
+    expect([...MANUAL_VALUE_PROVENANCE].sort()).toEqual([
+      'MANUAL',
+      'MARKET',
+      'MARKET_CONVERTED',
+    ]);
+  });
+
+  it('distinguishes an absent rate from an absent price', () => {
+    // The two are fixed differently — seed rates vs. seed prices — so collapsing them would send a
+    // user to the wrong remedy.
+    expect(FIFO_QUALITY_FLAGS).toContain('MISSING_FX_RATE');
+    expect(FIFO_QUALITY_FLAGS).toContain('MISSING_PRICE');
+    expect(FLAG_SEVERITY.MISSING_FX_RATE).toBe(FLAG_SEVERITY.MISSING_PRICE);
   });
 });
 

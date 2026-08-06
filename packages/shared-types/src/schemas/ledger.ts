@@ -103,8 +103,14 @@ export const TaxLotSchema = z.object({
   status: z.enum(TAX_LOT_STATUSES),
   /** Data-quality defect on this lot's basis, if any. Suppresses gains rather than blocking. */
   quality_flag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
-  /** Whether the cost basis was observed from market data or declared by the user. */
+  /** Whether the cost basis was observed from market data, declared by the user, or converted. */
   value_provenance: z.enum(MANUAL_VALUE_PROVENANCE).optional(),
+  /**
+   * The rate a converted figure used, and the date it was published for. Both NULL together when no
+   * conversion took place — a 0 rate would read as a rate that was actually applied.
+   */
+  fx_rate: nonNegativePreciseAmountSchema.nullable().optional(),
+  fx_rate_date: z.string().nullable().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -185,8 +191,14 @@ export const TaxLotEventSchema = z.object({
    * from each vocabulary, and merging them would force a lossy precedence rule.
    */
   quality_flag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
-  /** Whether the monetary value was observed from market data or declared by the user. */
+  /** Whether the monetary value was observed from market data, declared by the user, or converted. */
   value_provenance: z.enum(MANUAL_VALUE_PROVENANCE).optional(),
+  /**
+   * The rate a converted figure used, and the date it was published for. Both NULL together when no
+   * conversion took place — a 0 rate would read as a rate that was actually applied.
+   */
+  fx_rate: nonNegativePreciseAmountSchema.nullable().optional(),
+  fx_rate_date: z.string().nullable().optional(),
   notes: z.string().optional(),
   /** Resolved asset ticker symbol (e.g. 'BTC') — populated by v_calculated_lot_history_events JOIN */
   asset_symbol: z.string().optional(),

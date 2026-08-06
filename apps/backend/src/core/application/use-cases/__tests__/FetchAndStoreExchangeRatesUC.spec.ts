@@ -2,11 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FetchAndStoreExchangeRatesUC } from '../FetchAndStoreExchangeRatesUC';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort';
 import type { IExchangeRatePort } from '../../../domain/ports/IExchangeRatePort';
+import type { IFxRateLedgerPort, DailyExchangeRate } from '../../../domain/ports/IFxRateLedgerPort';
+
+/** 1 / 1.0825 bounded to the 18 decimal places the DECIMAL(38,18) basis columns hold. */
+const LEDGER_RATE = '0.923787528868360277';
 
 describe('FetchAndStoreExchangeRatesUC', () => {
   let userSettingsPort: import('vitest').Mocked<IUserSettingsPort>;
   let exchangeRatePort: import('vitest').Mocked<IExchangeRatePort>;
+  let fxRateLedgerPort: import('vitest').Mocked<IFxRateLedgerPort>;
   let useCase: FetchAndStoreExchangeRatesUC;
+  /** Rows the fake ledger has accepted, keyed by the table's own primary key. */
+  let stored: Map<string, DailyExchangeRate>;
 
   beforeEach(() => {
     userSettingsPort = {
@@ -16,7 +23,25 @@ describe('FetchAndStoreExchangeRatesUC', () => {
     exchangeRatePort = {
       getLatestRates: vi.fn(),
     };
-    useCase = new FetchAndStoreExchangeRatesUC(userSettingsPort, exchangeRatePort);
+    stored = new Map();
+    fxRateLedgerPort = {
+      // Mirrors INSERT OR IGNORE on (date, pair): a repeat is dropped, never a conflict.
+      upsertDailyExchangeRates: vi.fn(async (rates: readonly DailyExchangeRate[]) => {
+        let inserted = 0;
+        for (const rate of rates) {
+          const key = `${rate.date}|${rate.pair}`;
+          if (stored.has(key)) continue;
+          stored.set(key, rate);
+          inserted += 1;
+        }
+        return inserted;
+      }),
+    };
+    useCase = new FetchAndStoreExchangeRatesUC(
+      userSettingsPort,
+      exchangeRatePort,
+      fxRateLedgerPort
+    );
   });
 
   it('should get rates from port, store USD/EUR rates, and store the publication date', async () => {
@@ -28,7 +53,7 @@ describe('FetchAndStoreExchangeRatesUC', () => {
       }
     });
 
-    const resultDate = await useCase.execute();
+    const resultDate = await useCase.execute({ asOfDate: '2026-06-19' });
 
     expect(resultDate).toBe('2026-06-19');
     expect(exchangeRatePort.getLatestRates).toHaveBeenCalledTimes(1);
@@ -46,5 +71,79 @@ describe('FetchAndStoreExchangeRatesUC', () => {
     });
 
     await expect(useCase.execute()).rejects.toThrow('USD rate not found in exchange rate data');
+  });
+
+  describe('the historical FX ledger', () => {
+    beforeEach(() => {
+      exchangeRatePort.getLatestRates.mockResolvedValue({
+        date: '2026-06-19',
+        rates: { USD: '1.0825' },
+      });
+    });
+
+    it('writes the ECB-published rate at its own publication date', async () => {
+      await useCase.execute({ asOfDate: '2026-06-19' });
+
+      expect([...stored.values()]).toEqual([
+        {
+          date: '2026-06-19',
+          pair: 'USD/EUR',
+          rate: LEDGER_RATE,
+          source: 'ECB',
+        },
+      ]);
+    });
+
+    it('is idempotent on a second run for the same date', async () => {
+      await useCase.execute({ asOfDate: '2026-06-19' });
+      const insertedAgain = await fxRateLedgerPort.upsertDailyExchangeRates.mock.results[0]!.value;
+      expect(insertedAgain).toBe(1);
+
+      await useCase.execute({ asOfDate: '2026-06-19' });
+
+      expect(stored.size).toBe(1);
+      expect(await fxRateLedgerPort.upsertDailyExchangeRates.mock.results[1]!.value).toBe(0);
+    });
+
+    it('marks a carried-forward day as ECB_PRIOR_DAY, never as published', async () => {
+      // The ECB does not publish at weekends: on Sunday the 21st the newest rate is still the 19th's,
+      // and the two intervening days carry it forward. Labelling them `ECB` would assert a
+      // publication that never happened.
+      await useCase.execute({ asOfDate: '2026-06-21' });
+
+      expect([...stored.values()]).toEqual([
+        { date: '2026-06-19', pair: 'USD/EUR', rate: LEDGER_RATE, source: 'ECB' },
+        { date: '2026-06-20', pair: 'USD/EUR', rate: LEDGER_RATE, source: 'ECB_PRIOR_DAY' },
+        { date: '2026-06-21', pair: 'USD/EUR', rate: LEDGER_RATE, source: 'ECB_PRIOR_DAY' },
+      ]);
+    });
+
+    it('writes only the published row when the publication date is today', async () => {
+      await useCase.execute({ asOfDate: '2026-06-19' });
+      expect([...stored.values()].filter((r) => r.source === 'ECB_PRIOR_DAY')).toEqual([]);
+    });
+
+    it('never back-dates: an asOf date before publication writes the published row alone', async () => {
+      await useCase.execute({ asOfDate: '2026-06-18' });
+      expect([...stored.values()]).toEqual([
+        { date: '2026-06-19', pair: 'USD/EUR', rate: LEDGER_RATE, source: 'ECB' },
+      ]);
+    });
+
+    it('stores the rate as USD/EUR — the direction the ECB publishes reciprocally', async () => {
+      // exchange_rates holds `<base>/<quote>` meaning EUR = USD × rate, so the stored figure is the
+      // reciprocal of the ECB's EUR-based quote. A row of 1.0825 here would scale every converted
+      // figure by ~1.17 instead of ~0.92.
+      await useCase.execute({ asOfDate: '2026-06-19' });
+      const row = stored.get('2026-06-19|USD/EUR');
+      expect(row).toBeDefined();
+      expect(Number(row!.rate)).toBeLessThan(1);
+    });
+
+    it('still writes the KV store when the ledger write is what fails', async () => {
+      fxRateLedgerPort.upsertDailyExchangeRates.mockRejectedValueOnce(new Error('disk full'));
+      await expect(useCase.execute({ asOfDate: '2026-06-19' })).rejects.toThrow('disk full');
+      expect(userSettingsPort.setSetting).toHaveBeenCalledWith('exchange_rate_date', '2026-06-19');
+    });
   });
 });

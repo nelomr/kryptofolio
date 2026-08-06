@@ -91,6 +91,11 @@ export class FifoMaterializerService {
       status: lot.status,
       quality_flag: lot.quality_flag ?? null,
       value_provenance: lot.value_provenance ?? 'MARKET',
+      // Both halves or neither: the pair is one fact, and a rate without its date cannot be audited.
+      fx_conversion:
+        lot.fx_rate != null && lot.fx_rate_date != null
+          ? { rate: toPreciseAmount(lot.fx_rate), rateDate: lot.fx_rate_date }
+          : null,
     }));
 
     const domainEvents: LedgerTaxLotEvent[] = events.map(event => ({
@@ -110,6 +115,11 @@ export class FifoMaterializerService {
       flag: event.flag ?? null,
       quality_flag: event.quality_flag ?? null,
       value_provenance: event.value_provenance ?? 'MARKET',
+      // Both halves or neither: the pair is one fact, and a rate without its date cannot be audited.
+      fx_conversion:
+        event.fx_rate != null && event.fx_rate_date != null
+          ? { rate: toPreciseAmount(event.fx_rate), rateDate: event.fx_rate_date }
+          : null,
       notes: event.notes,
     }));
 

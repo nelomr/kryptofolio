@@ -7,6 +7,8 @@ import { DuckDbAdapter, applyMigrations } from '@kryptofolio/database';
 import { DuckDbTaxCalculatorAdapter } from '../DuckDbTaxCalculatorAdapter.js';
 
 
+import Decimal from 'decimal.js';
+
 describe('Tax Engine — Stress & Edge Case Tests', () => {
   let sqlitePath: string;
   let sqliteDb: DatabaseSync;
@@ -76,8 +78,8 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
 
     expect(events).toHaveLength(100);
 
-    const totalGains = events.reduce((sum, e) => sum + Number(e.gain_loss_fiat), 0);
-    expect(totalGains).toBe(5000);
+    const totalGainsDec = events.reduce((sum, e) => sum.add(new Decimal(e.gain_loss_fiat ?? '0')), new Decimal(0));
+    expect(totalGainsDec.toFixed(2)).toBe('5000.00');
   });
 
   it('[Strict TDD] should ignore own-wallet transfers for capital gains/losses while taxing transfer fees', async () => {

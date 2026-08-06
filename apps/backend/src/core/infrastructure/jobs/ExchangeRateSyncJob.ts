@@ -8,7 +8,8 @@ export async function startExchangeRateBootSync() {
     const { FetchAndStoreExchangeRatesUC } = await import('../../application/use-cases/FetchAndStoreExchangeRatesUC.js');
     const useCase = new FetchAndStoreExchangeRatesUC(
       container.userSettingsPort,
-      container.exchangeRatePort
+      container.exchangeRatePort,
+      container.fxRateLedgerPort
     );
     
     const previousDate = await container.userSettingsPort.getSetting('exchange_rate_date');

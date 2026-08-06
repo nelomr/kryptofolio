@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
+import { toPreciseAmount, type PreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 import type {
   ILedgerPort,
   LedgerInitializationSummary,
@@ -17,6 +17,10 @@ import type {
   EnsureAccountInput,
   EnsureAssetInput,
 } from '../../domain/ports/ILedgerPort';
+import type {
+  IFxRateLedgerPort,
+  DailyExchangeRate,
+} from '../../domain/ports/IFxRateLedgerPort.js';
 import { deriveSubAccountId } from '@kryptofolio/shared-types';
 
 /** A value as SQLite accepts it. `null` is a first-class value here, not a missing one. */
@@ -40,12 +44,26 @@ interface DerivedTableSpec<T> {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * Reads the rate/date pair back as one value, or nothing.
+ *
+ * A half-present pair is not representable in the domain type and is refused by the table's own
+ * CHECK, so a row carrying only one of the two is a corrupt row rather than a partial conversion.
+ */
+function readFxConversion(
+  rate: unknown,
+  rateDate: unknown,
+): { rate: PreciseAmount; rateDate: string } | null {
+  if (typeof rate !== 'string' || typeof rateDate !== 'string') return null;
+  return { rate: toPreciseAmount(rate), rateDate };
+}
+
+/**
  * SQLiteLedgerAdapter — Anti-Corruption Layer between SQLite TEXT storage and Domain entities.
  *
  * Responsibility: convert TEXT ↔ Decimal.js at the DB boundary.
  * All monetary columns stored as TEXT in SQLite; returned as Decimal to the domain.
  */
-export class SQLiteLedgerAdapter implements ILedgerPort {
+export class SQLiteLedgerAdapter implements ILedgerPort, IFxRateLedgerPort {
   private db: DatabaseSync;
 
   constructor(db: DatabaseSync) {
@@ -299,6 +317,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       status: row.status as LedgerTaxLot['status'],
       quality_flag: row.quality_flag as LedgerTaxLot['quality_flag'],
       value_provenance: row.value_provenance as LedgerTaxLot['value_provenance'],
+      fx_conversion: readFxConversion(row.fx_rate, row.fx_rate_date),
     }));
   }
 
@@ -369,6 +388,7 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       flag: row.flag as LedgerTaxLotEvent['flag'],
       quality_flag: row.quality_flag as LedgerTaxLotEvent['quality_flag'],
       value_provenance: row.value_provenance as LedgerTaxLotEvent['value_provenance'],
+      fx_conversion: readFxConversion(row.fx_rate, row.fx_rate_date),
       notes: row.notes as string | undefined,
     }));
   }
@@ -378,11 +398,12 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       INSERT INTO lot_history_events (
         id, tax_lot_id, spot_transaction_id, account_id,
         disposal_date, amount_from_lot, sale_price_fiat, gain_loss_fiat,
-        fiat_currency, is_taxable, disposal_type, flag, quality_flag, value_provenance, notes
+        fiat_currency, is_taxable, disposal_type, flag, quality_flag, value_provenance,
+        fx_rate, fx_rate_date, notes
       ) VALUES (
         ?, ?, ?, ?,
         ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON CONFLICT(id) DO UPDATE SET
         amount_from_lot = excluded.amount_from_lot,
@@ -392,6 +413,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         disposal_type = excluded.disposal_type,
         quality_flag = excluded.quality_flag,
         value_provenance = excluded.value_provenance,
+        fx_rate = excluded.fx_rate,
+        fx_rate_date = excluded.fx_rate_date,
         updated_at = datetime('now', 'utc')
     `);
 
@@ -410,6 +433,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
       event.flag ?? null,
       event.quality_flag ?? null,
       event.value_provenance ?? 'MARKET',
+      event.fx_conversion?.rate.toString() ?? null,
+      event.fx_conversion?.rateDate ?? null,
       event.notes ?? null,
     );
   }
@@ -542,6 +567,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
           'status',
           'quality_flag',
           'value_provenance',
+          'fx_rate',
+          'fx_rate_date',
         ],
         identify: (lot) => lot.id,
         project: (lot) => [
@@ -559,6 +586,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
           lot.status,
           lot.quality_flag ?? null,
           lot.value_provenance ?? 'MARKET',
+          lot.fx_conversion?.rate.toString() ?? null,
+          lot.fx_conversion?.rateDate ?? null,
         ],
       },
       lots,
@@ -585,6 +614,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
           'flag',
           'quality_flag',
           'value_provenance',
+          'fx_rate',
+          'fx_rate_date',
           'notes',
         ],
         identify: (event) => event.id,
@@ -602,6 +633,8 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
           event.flag ?? null,
           event.quality_flag ?? null,
           event.value_provenance ?? 'MARKET',
+          event.fx_conversion?.rate.toString() ?? null,
+          event.fx_conversion?.rateDate ?? null,
           event.notes ?? null,
         ],
       },
@@ -803,6 +836,22 @@ export class SQLiteLedgerAdapter implements ILedgerPort {
         override.fiat_currency,
         override.note ?? null,
       );
+  }
+
+  async upsertDailyExchangeRates(rates: readonly DailyExchangeRate[]): Promise<number> {
+    // INSERT OR IGNORE, not ON CONFLICT DO UPDATE: (date, pair) is the table's primary key and a
+    // published rate is a historical fact. Overwriting one would silently move a tax figure that may
+    // already have been reported.
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO exchange_rates (date, pair, rate, source) VALUES (?, ?, ?, ?)`,
+    );
+
+    let inserted = 0;
+    for (const rate of rates) {
+      const result = insert.run(rate.date, rate.pair, rate.rate, rate.source);
+      inserted += Number(result.changes);
+    }
+    return inserted;
   }
 
   async removeManualPriceOverride(idHash: string): Promise<void> {

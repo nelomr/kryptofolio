@@ -65,15 +65,17 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
        */
       const resolvedLedgerPath = ledgerDbPath || resolveLedgerDbPath();
 
-function sanitizeFilePath(filePath: string): string {
-  if (!filePath || typeof filePath !== 'string') {
-    throw new Error('[DuckDbAdapter] File path must be a non-empty string.');
-  }
-  if (filePath.includes('\0')) {
-    throw new Error('[DuckDbAdapter] File path contains null bytes.');
-  }
-  return filePath.replace(/'/g, "''");
-}
+      function sanitizeFilePath(filePath: string): string {
+        if (!filePath || typeof filePath !== 'string') {
+          throw new Error(
+            '[DuckDbAdapter] File path must be a non-empty string.',
+          );
+        }
+        if (filePath.includes('\0')) {
+          throw new Error('[DuckDbAdapter] File path contains null bytes.');
+        }
+        return filePath.replace(/'/g, "''");
+      }
 
       /**
        * READ_ONLY is load-bearing, not a precaution.
@@ -208,20 +210,20 @@ function sanitizeFilePath(filePath: string): string {
             ft.id,
             ft.account_id,
             ft.symbol,
-            CAST(CAST(ft.realized_pnl AS DOUBLE) * CAST(COALESCE(
+            CAST(CAST(ft.realized_pnl AS DECIMAL(38,18)) * COALESCE(
                 CASE
-                    WHEN ft.settlement_asset_id = ft.fiat_currency THEN CAST(1 AS DECIMAL(38,18))
-                    ELSE hp_settle.close
+                    WHEN ft.settlement_asset_id = ft.fiat_currency THEN CAST(1 AS DECIMAL(26,12))
+                    ELSE CAST(hp_settle.close AS DECIMAL(26,12))
                 END,
-                CAST(1 AS DECIMAL(38,18))
-            ) AS DOUBLE) AS DECIMAL(38,18)) AS pnl_fiat,
-            CAST(CAST(COALESCE(ft.fee_amount, '0') AS DOUBLE) * CAST(COALESCE(
+                CAST(1 AS DECIMAL(26,12))
+            ) AS DECIMAL(38,18)) AS pnl_fiat,
+            CAST(CAST(COALESCE(ft.fee_amount, '0') AS DECIMAL(38,18)) * COALESCE(
                 CASE
-                    WHEN ft.fee_asset_id = ft.fiat_currency THEN CAST(1 AS DECIMAL(38,18))
-                    ELSE hp_fee.close
+                    WHEN ft.fee_asset_id = ft.fiat_currency THEN CAST(1 AS DECIMAL(26,12))
+                    ELSE CAST(hp_fee.close AS DECIMAL(26,12))
                 END,
-                CAST(1 AS DECIMAL(38,18))
-            ) AS DOUBLE) AS DECIMAL(38,18)) AS fee_fiat,
+                CAST(1 AS DECIMAL(26,12))
+            ) AS DECIMAL(38,18)) AS fee_fiat,
             ft.timestamp,
             SUBSTR(CAST(ft.timestamp AS VARCHAR), 1, 4) AS year
         FROM ledger.futures_transactions ft
@@ -264,6 +266,52 @@ function sanitizeFilePath(filePath: string): string {
         WITH fiat_assets AS MATERIALIZED (
             SELECT id FROM ledger.assets WHERE is_fiat = 1
         ),
+        -- One row per (date, pair), direct rows preferred over reciprocal ones.
+        --
+        -- The ECB publishes EUR-based rates only, so exchange_rates holds USD/EUR and never
+        -- EUR/USD: a direct-only lookup would silently make this feature EUR-only while appearing
+        -- general. The reciprocal is a second-class result and is marked as such — inverting a rate
+        -- published to six decimal places loses precision the direct rate would not, and DuckDB's
+        -- decimal division degrades to DOUBLE, so the inversion is cast back to a bounded decimal
+        -- rather than left as a float. ROW_NUMBER, not a COALESCE of two joins, is what makes
+        -- "a direct rate is never inverted" true by construction when both directions exist.
+        fx_rates_ranked AS MATERIALIZED (
+            SELECT
+                CAST(date AS DATE) AS rate_date,
+                pair,
+                rate,
+                is_reciprocal,
+                ROW_NUMBER() OVER (
+                    PARTITION BY rate_date, pair ORDER BY is_reciprocal
+                ) AS preference
+            FROM (
+                SELECT
+                    date,
+                    pair,
+                    CAST(rate AS DECIMAL(18,12)) AS rate,
+                    0 AS is_reciprocal
+                FROM ledger.exchange_rates
+
+                UNION ALL
+
+                SELECT
+                    date,
+                    SPLIT_PART(pair, '/', 2) || '/' || SPLIT_PART(pair, '/', 1) AS pair,
+                    -- DuckDB has no exact decimal division, so the inversion is computed and then
+                    -- rounded to twelve places. This is why a reciprocal is recorded as a
+                    -- second-class result: the direct rate is never derived, only read.
+                    CAST(1.0 / CAST(rate AS DOUBLE) AS DECIMAL(18,12)) AS rate,
+                    1 AS is_reciprocal
+                FROM ledger.exchange_rates
+                WHERE TRY_CAST(rate AS DECIMAL(38,18)) IS NOT NULL
+                  AND TRY_CAST(rate AS DECIMAL(38,18)) <> 0
+            )
+        ),
+        fx_resolved AS MATERIALIZED (
+            SELECT rate_date, pair, rate, is_reciprocal
+            FROM fx_rates_ranked
+            WHERE preference = 1
+        ),
         tx_context AS MATERIALIZED (
             SELECT
                 t.id,
@@ -278,10 +326,20 @@ function sanitizeFilePath(filePath: string): string {
                 t.fee_amount,
                 t.fiat_currency,
                 CAST(SUBSTR(CAST(t.timestamp AS VARCHAR), 1, 10) AS DATE) AS tx_date,
-                TRY_CAST(t.total_fiat AS DOUBLE) AS recorded_fiat,
-                TRY_CAST(t.amount_in AS DOUBLE)  AS qty_in,
-                TRY_CAST(t.amount_out AS DOUBLE) AS qty_out,
-                TRY_CAST(t.fee_amount AS DOUBLE) AS qty_fee,
+                -- Every magnitude below enters as DECIMAL and stays DECIMAL. The source columns are
+                -- decimal strings; casting them to DOUBLE first made 0.9 into
+                -- 0.899999999999999994 and carried that residue into remaining_qty and into every
+                -- FIFO interval boundary derived from it.
+                --
+                -- Scales are chosen, never defaulted: DuckDB types a product as
+                -- DECIMAL(min(38, p1+p2), s1+s2), so two scale-18 factors leave two integer digits
+                -- and overflow any real basis. A fiat extension therefore multiplies a scale-12
+                -- quantity by a scale-18 price, giving scale 30 and eight integer digits.
+                TRY_CAST(t.total_fiat AS DECIMAL(38,18)) AS recorded_fiat,
+                TRY_CAST(t.price_fiat AS DECIMAL(38,18)) AS recorded_price,
+                TRY_CAST(t.amount_in AS DECIMAL(38,18))  AS qty_in,
+                TRY_CAST(t.amount_out AS DECIMAL(38,18)) AS qty_out,
+                TRY_CAST(t.fee_amount AS DECIMAL(38,18)) AS qty_fee,
                 -- A stated 0 is a fact (a genuinely free acquisition) and must be trusted the same
                 -- as any other recorded total; only its absence -- NULL -- means unresolved. Before
                 -- total_fiat could be NULL, every unresolved magnitude was also stored as 0, so this
@@ -293,7 +351,7 @@ function sanitizeFilePath(filePath: string): string {
                 p.generates_fee_disposal,
                 p.taxable_disposal,
                 p.principal_disposal_type,
-                TRY_CAST(ovr.price_fiat AS DOUBLE) AS override_unit_price,
+                TRY_CAST(ovr.price_fiat AS DECIMAL(38,18)) AS override_unit_price,
                 CASE WHEN ovr.price_fiat IS NOT NULL
                      THEN ovr.fiat_currency <> t.fiat_currency
                 END AS override_currency_differs,
@@ -315,8 +373,13 @@ function sanitizeFilePath(filePath: string): string {
                 c.*,
                 hp_in.close      AS market_price_in,
                 hp_in.currency   AS market_currency_in,
+                fx_in.rate       AS fx_rate_in,
+                fx_in.rate_date  AS fx_rate_date_in,
+                fx_in.is_reciprocal AS fx_reciprocal_in,
                 hp_fee.close     AS market_price_fee,
-                hp_fee.currency  AS market_currency_fee
+                hp_fee.currency  AS market_currency_fee,
+                fx_fee.rate      AS fx_rate_fee,
+                fx_fee.rate_date AS fx_rate_date_fee
             FROM (
                 SELECT * FROM tx_context
                 WHERE generates_acquisition
@@ -327,26 +390,69 @@ function sanitizeFilePath(filePath: string): string {
               ON hp_in.symbol = c.asset_in_id AND hp_in.date <= c.tx_date
             ASOF LEFT JOIN historical_prices hp_fee
               ON hp_fee.symbol = c.fee_asset_id AND hp_fee.date <= c.tx_date
+            -- The pair is built from the *price row's own* currency, not from a global assumption
+            -- about the series: one symbol can hold both USD and EUR rows, so the denomination is a
+            -- property of the row the ASOF price join returned.
+            ASOF LEFT JOIN fx_resolved fx_in
+              ON fx_in.pair = (hp_in.currency || '/' || c.fiat_currency)
+             AND fx_in.rate_date <= c.tx_date
+            ASOF LEFT JOIN fx_resolved fx_fee
+              ON fx_fee.pair = (hp_fee.currency || '/' || c.fiat_currency)
+             AND fx_fee.rate_date <= c.tx_date
         ),
         acquisition_resolved AS (
             SELECT
                 a.*,
-                COALESCE(a.override_unit_price, TRY_CAST(a.market_price_in AS DOUBLE)) AS derived_unit_price,
+                -- The conversion itself is exact decimal arithmetic, and is deliberately NOT cast
+                -- back down to DECIMAL(38,18) here: scales add, so this product is DECIMAL(38,30),
+                -- and those thirty places are what let a 1e-21 price stay distinguishable from zero
+                -- long enough for the round-to-zero guard below to flag it instead of persisting a
+                -- silent 0. Eight integer digits is ample for a unit price.
+                CAST(a.market_price_in AS DECIMAL(38,18)) * a.fx_rate_in AS converted_price_in,
+                CAST(a.market_price_fee AS DECIMAL(38,18)) * a.fx_rate_fee AS converted_price_fee,
+                a.market_currency_in IS NOT NULL
+                    AND a.market_currency_in <> a.fiat_currency AS needs_conversion_in,
+                a.fee_asset_id IS NOT NULL
+                    AND a.fee_asset_id <> a.fiat_currency
+                    AND a.market_currency_fee IS NOT NULL
+                    AND a.market_currency_fee <> a.fiat_currency AS needs_conversion_fee,
                 CASE
-                    WHEN a.fee_asset_id IS NULL THEN CAST(0 AS DOUBLE)
-                    WHEN a.fee_asset_id = a.fiat_currency THEN a.qty_fee
-                    ELSE a.qty_fee * TRY_CAST(a.market_price_fee AS DOUBLE)
+                    WHEN a.override_unit_price IS NOT NULL THEN a.override_unit_price
+                    WHEN needs_conversion_in THEN CAST(converted_price_in AS DECIMAL(38,18))
+                    ELSE CAST(a.market_price_in AS DECIMAL(38,18))
+                END AS derived_unit_price,
+                CASE
+                    WHEN a.fee_asset_id IS NULL THEN CAST(0 AS DECIMAL(38,30))
+                    WHEN a.fee_asset_id = a.fiat_currency THEN CAST(a.qty_fee AS DECIMAL(38,30))
+                    WHEN needs_conversion_fee
+                        THEN CAST(a.qty_fee AS DECIMAL(26,12)) * CAST(converted_price_fee AS DECIMAL(38,18))
+                    ELSE CAST(a.qty_fee AS DECIMAL(26,12)) * CAST(a.market_price_fee AS DECIMAL(38,18))
                 END AS fee_cost_component,
-                CASE WHEN a.has_recorded_fiat THEN a.recorded_fiat
-                     ELSE a.qty_in * derived_unit_price
-                END + fee_cost_component AS basis_fiat
+                CASE WHEN a.has_recorded_fiat THEN CAST(a.recorded_fiat AS DECIMAL(38,30))
+                     ELSE CAST(a.qty_in AS DECIMAL(26,12)) * derived_unit_price
+                END + fee_cost_component AS basis_fiat,
+                -- A conversion was required and no rate resolved. Distinct from MISSING_PRICE: the
+                -- price is present, only the rate is absent, and the two are fixed differently.
+                -- A recorded total or a manual override is never converted, so neither can raise it.
+                NOT a.has_recorded_fiat
+                    AND a.override_unit_price IS NULL
+                    AND (
+                        (needs_conversion_in AND a.fx_rate_in IS NULL)
+                        OR (needs_conversion_fee AND a.fx_rate_fee IS NULL)
+                    ) AS missing_fx_rate,
+                NOT a.has_recorded_fiat
+                    AND a.override_unit_price IS NULL
+                    AND needs_conversion_in
+                    AND a.fx_rate_in IS NOT NULL AS did_convert_in
             FROM acquisition_priced a
         ),
         disposal_priced AS (
             SELECT
                 c.*,
                 hp_out.close     AS market_price_out,
-                hp_out.currency  AS market_currency_out
+                hp_out.currency  AS market_currency_out,
+                fx_out.rate      AS fx_rate_out,
+                fx_out.rate_date AS fx_rate_date_out
             FROM (
                 SELECT * FROM tx_context
                 WHERE generates_disposal
@@ -355,12 +461,17 @@ function sanitizeFilePath(filePath: string): string {
             ) c
             ASOF LEFT JOIN historical_prices hp_out
               ON hp_out.symbol = c.asset_out_id AND hp_out.date <= c.tx_date
+            ASOF LEFT JOIN fx_resolved fx_out
+              ON fx_out.pair = (hp_out.currency || '/' || c.fiat_currency)
+             AND fx_out.rate_date <= c.tx_date
         ),
         fee_priced AS (
             SELECT
                 c.*,
                 hp_fee.close     AS market_price_fee,
-                hp_fee.currency  AS market_currency_fee
+                hp_fee.currency  AS market_currency_fee,
+                fx_fee.rate      AS fx_rate_fee,
+                fx_fee.rate_date AS fx_rate_date_fee
             FROM (
                 SELECT * FROM tx_context
                 WHERE generates_fee_disposal
@@ -375,6 +486,12 @@ function sanitizeFilePath(filePath: string): string {
             ) c
             ASOF LEFT JOIN historical_prices hp_fee
               ON hp_fee.symbol = c.fee_asset_id AND hp_fee.date <= c.tx_date
+            -- The same pair, the same date and therefore the same resolved rate the acquisition
+            -- branch uses for this fee's expense component: one fee cannot be worth one figure as a
+            -- cost and another as a disposal.
+            ASOF LEFT JOIN fx_resolved fx_fee
+              ON fx_fee.pair = (hp_fee.currency || '/' || c.fiat_currency)
+             AND fx_fee.rate_date <= c.tx_date
         )
         SELECT
             id AS tx_id,
@@ -383,26 +500,41 @@ function sanitizeFilePath(filePath: string): string {
             timestamp,
             asset_in_id AS asset_id,
             'ACQUISITION' AS event_type,
-            CAST(PRINTF('%.12f', qty_in) AS DECIMAL(38,18)) AS amount,
-            CAST(PRINTF('%.12f', basis_fiat) AS DECIMAL(38,18)) AS total_fiat,
-            CAST(PRINTF('%.12f', basis_fiat / NULLIF(qty_in, 0)) AS DECIMAL(38,18)) AS price_fiat,
+            qty_in AS amount,
+            CAST(basis_fiat AS DECIMAL(38,18)) AS total_fiat,
+            -- The one irreducible division. DuckDB types DECIMAL / DECIMAL as DOUBLE, so a quotient
+            -- cannot be exact here; it is rounded straight back to the destination scale. The
+            -- authoritative figure is total_fiat, which stays exact decimal — this is derived from it.
+            CAST(basis_fiat / NULLIF(qty_in, CAST(0 AS DECIMAL(38,18))) AS DECIMAL(38,18)) AS price_fiat,
             CAST(NULL AS VARCHAR) AS disposal_type,
             FALSE AS taxable_disposal,
-            CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL
-                 THEN 'MANUAL' ELSE 'MARKET'
+            CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL THEN 'MANUAL'
+                 WHEN did_convert_in THEN 'MARKET_CONVERTED'
+                 ELSE 'MARKET'
             END AS value_provenance,
+            CASE WHEN did_convert_in THEN fx_rate_in END AS fx_rate,
+            CASE WHEN did_convert_in THEN CAST(fx_rate_date_in AS VARCHAR) END AS fx_rate_date,
+            missing_fx_rate,
+            -- Narrowed to the manual-override case. A user-declared price in a currency other than
+            -- the transaction's is a contradiction in the input, so converting it would mean guessing
+            -- which of the two figures was meant. A series in another currency is no longer a mismatch
+            -- at all — it is converted above, or reported as MISSING_FX_RATE when it cannot be.
             COALESCE(
-                CASE
-                    WHEN has_recorded_fiat THEN FALSE
-                    WHEN override_unit_price IS NOT NULL THEN override_currency_differs
-                    ELSE market_currency_in <> fiat_currency
+                CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL
+                     THEN override_currency_differs
                 END, FALSE
-            ) OR COALESCE(
-                CASE
-                    WHEN fee_asset_id IS NOT NULL AND fee_asset_id <> fiat_currency
-                    THEN market_currency_fee <> fiat_currency
-                END, FALSE
-            ) AS currency_mismatch
+            ) AS currency_mismatch,
+            -- A non-zero figure that formats to eighteen zeros is not free, it is unrepresentable.
+            -- Persisting it as an unflagged 0 is the exact confusion this change removes.
+            -- Asserted on the inputs, not on a float probe of the output: if a quantity and a price
+            -- were both non-zero, their product is non-zero, so a zero at the destination scale means
+            -- unrepresentable rather than free.
+            COALESCE(
+                qty_in <> 0
+                    AND derived_unit_price <> 0
+                    AND CAST(basis_fiat AS DECIMAL(38,18)) = 0,
+                FALSE
+            ) AS rounds_to_zero
         FROM acquisition_resolved
 
         UNION ALL
@@ -414,27 +546,51 @@ function sanitizeFilePath(filePath: string): string {
             timestamp,
             asset_out_id AS asset_id,
             'DISPOSAL' AS event_type,
-            CAST(PRINTF('%.12f', qty_out) AS DECIMAL(38,18)) AS amount,
-            CAST(PRINTF('%.12f', unit_price * qty_out) AS DECIMAL(38,18)) AS total_fiat,
-            CAST(PRINTF('%.12f', unit_price) AS DECIMAL(38,18)) AS price_fiat,
+            qty_out AS amount,
+            CAST(CAST(qty_out AS DECIMAL(26,12)) * unit_price AS DECIMAL(38,18)) AS total_fiat,
+            CAST(unit_price AS DECIMAL(38,18)) AS price_fiat,
             principal_disposal_type AS disposal_type,
             taxable_disposal,
-            CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL
-                 THEN 'MANUAL' ELSE 'MARKET'
+            CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL THEN 'MANUAL'
+                 WHEN did_convert_out THEN 'MARKET_CONVERTED'
+                 ELSE 'MARKET'
             END AS value_provenance,
+            CASE WHEN did_convert_out THEN fx_rate_out END AS fx_rate,
+            CASE WHEN did_convert_out THEN CAST(fx_rate_date_out AS VARCHAR) END AS fx_rate_date,
+            missing_fx_rate,
             COALESCE(
-                CASE
-                    WHEN has_recorded_fiat THEN FALSE
-                    WHEN override_unit_price IS NOT NULL THEN override_currency_differs
-                    ELSE market_currency_out <> fiat_currency
+                CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL
+                     THEN override_currency_differs
                 END, FALSE
-            ) AS currency_mismatch
+            ) AS currency_mismatch,
+            COALESCE(
+                qty_out <> 0
+                    AND unit_price <> 0
+                    AND CAST(CAST(qty_out AS DECIMAL(26,12)) * unit_price AS DECIMAL(38,18)) = 0,
+                FALSE
+            ) AS rounds_to_zero
         FROM (
             SELECT
                 d.*,
-                CASE WHEN d.has_recorded_fiat AND d.qty_out IS NOT NULL AND d.qty_out <> 0
-                     THEN d.recorded_fiat / d.qty_out
-                     ELSE COALESCE(d.override_unit_price, TRY_CAST(d.market_price_out AS DOUBLE))
+                d.market_currency_out IS NOT NULL
+                    AND d.market_currency_out <> d.fiat_currency AS needs_conversion_out,
+                NOT d.has_recorded_fiat
+                    AND d.override_unit_price IS NULL
+                    AND needs_conversion_out
+                    AND d.fx_rate_out IS NOT NULL AS did_convert_out,
+                NOT d.has_recorded_fiat
+                    AND d.override_unit_price IS NULL
+                    AND needs_conversion_out
+                    AND d.fx_rate_out IS NULL AS missing_fx_rate,
+                CASE WHEN d.override_unit_price IS NOT NULL
+                     THEN CAST(d.override_unit_price AS DECIMAL(38,18))
+                     WHEN d.has_recorded_fiat AND d.recorded_price IS NOT NULL
+                     THEN d.recorded_price
+                     WHEN d.has_recorded_fiat AND d.qty_out IS NOT NULL AND d.qty_out <> 0
+                     THEN CAST(CAST(d.recorded_fiat AS DECIMAL(38,18)) / NULLIF(CAST(d.qty_out AS DECIMAL(26,12)), CAST(0 AS DECIMAL(26,12))) AS DECIMAL(38,18))
+                     WHEN needs_conversion_out
+                     THEN CAST(CAST(d.market_price_out AS DECIMAL(38,18)) * d.fx_rate_out AS DECIMAL(38,18))
+                     ELSE CAST(d.market_price_out AS DECIMAL(38,18))
                 END AS unit_price
             FROM disposal_priced d
         )
@@ -452,22 +608,46 @@ function sanitizeFilePath(filePath: string): string {
             timestamp,
             fee_asset_id AS asset_id,
             'DISPOSAL' AS event_type,
-            CAST(PRINTF('%.12f', qty_fee) AS DECIMAL(38,18)) AS amount,
-            CAST(PRINTF('%.12f', unit_price * qty_fee) AS DECIMAL(38,18)) AS total_fiat,
-            CAST(PRINTF('%.12f', unit_price) AS DECIMAL(38,18)) AS price_fiat,
+            qty_fee AS amount,
+            CAST(CAST(qty_fee AS DECIMAL(26,12)) * unit_price AS DECIMAL(38,18)) AS total_fiat,
+            CAST(unit_price AS DECIMAL(38,18)) AS price_fiat,
             'FEE' AS disposal_type,
             TRUE AS taxable_disposal,
-            CASE WHEN override_unit_price IS NOT NULL THEN 'MANUAL' ELSE 'MARKET' END AS value_provenance,
+            CASE WHEN override_unit_price IS NOT NULL THEN 'MANUAL'
+                 WHEN did_convert_fee THEN 'MARKET_CONVERTED'
+                 ELSE 'MARKET'
+            END AS value_provenance,
+            CASE WHEN did_convert_fee THEN fx_rate_fee END AS fx_rate,
+            CASE WHEN did_convert_fee THEN CAST(fx_rate_date_fee AS VARCHAR) END AS fx_rate_date,
+            missing_fx_rate,
             COALESCE(
-                CASE
-                    WHEN override_unit_price IS NOT NULL THEN override_currency_differs
-                    ELSE market_currency_fee <> fiat_currency
-                END, FALSE
-            ) AS currency_mismatch
+                CASE WHEN override_unit_price IS NOT NULL THEN override_currency_differs END,
+                FALSE
+            ) AS currency_mismatch,
+            COALESCE(
+                qty_fee <> 0
+                    AND unit_price <> 0
+                    AND CAST(CAST(qty_fee AS DECIMAL(26,12)) * unit_price AS DECIMAL(38,18)) = 0,
+                FALSE
+            ) AS rounds_to_zero
         FROM (
             SELECT
                 f.*,
-                COALESCE(f.override_unit_price, TRY_CAST(f.market_price_fee AS DOUBLE)) AS unit_price
+                f.market_currency_fee IS NOT NULL
+                    AND f.market_currency_fee <> f.fiat_currency AS needs_conversion_fee,
+                f.override_unit_price IS NULL
+                    AND needs_conversion_fee
+                    AND f.fx_rate_fee IS NOT NULL AS did_convert_fee,
+                f.override_unit_price IS NULL
+                    AND needs_conversion_fee
+                    AND f.fx_rate_fee IS NULL AS missing_fx_rate,
+                CASE
+                    WHEN f.override_unit_price IS NOT NULL
+                    THEN CAST(f.override_unit_price AS DECIMAL(38,18))
+                    WHEN needs_conversion_fee
+                    THEN CAST(CAST(f.market_price_fee AS DECIMAL(38,18)) * f.fx_rate_fee AS DECIMAL(38,18))
+                    ELSE CAST(f.market_price_fee AS DECIMAL(38,18))
+                END AS unit_price
             FROM fee_priced f
         );
       `);
@@ -483,11 +663,15 @@ function sanitizeFilePath(filePath: string): string {
             asset_id,
             amount,
             total_fiat,
-            CAST(PRINTF('%.12f', CAST(total_fiat AS DOUBLE) / CAST(amount AS DOUBLE)) AS DECIMAL(38,18)) AS unit_cost_fiat,
-            CAST(PRINTF('%.12f', CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) AS DOUBLE)) AS DECIMAL(38,18)) AS cum_amount,
-            CAST(PRINTF('%.12f', CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) - amount AS DOUBLE)) AS DECIMAL(38,18)) AS prev_cum_amount,
+            price_fiat AS unit_cost_fiat,
+            CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) AS DECIMAL(38,18)) AS cum_amount,
+            CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) - amount AS DECIMAL(38,18)) AS prev_cum_amount,
             value_provenance,
-            currency_mismatch
+            fx_rate,
+            fx_rate_date,
+            missing_fx_rate,
+            currency_mismatch,
+            rounds_to_zero
         FROM v_flattened_fifo_events
         WHERE event_type = 'ACQUISITION';
       `);
@@ -502,13 +686,17 @@ function sanitizeFilePath(filePath: string): string {
             asset_id,
             amount,
             total_fiat,
-            CAST(PRINTF('%.12f', CAST(total_fiat AS DOUBLE) / CAST(amount AS DOUBLE)) AS DECIMAL(38,18)) AS unit_price_fiat,
-            CAST(PRINTF('%.12f', CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) AS DOUBLE)) AS DECIMAL(38,18)) AS cum_amount,
-            CAST(PRINTF('%.12f', CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) - amount AS DOUBLE)) AS DECIMAL(38,18)) AS prev_cum_amount,
+            price_fiat AS unit_price_fiat,
+            CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) AS DECIMAL(38,18)) AS cum_amount,
+            CAST(SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id) - amount AS DECIMAL(38,18)) AS prev_cum_amount,
             disposal_type,
             taxable_disposal,
             value_provenance,
-            currency_mismatch
+            fx_rate,
+            fx_rate_date,
+            missing_fx_rate,
+            currency_mismatch,
+            rounds_to_zero
         FROM v_flattened_fifo_events
         WHERE event_type = 'DISPOSAL';
       `);
@@ -545,8 +733,19 @@ function sanitizeFilePath(filePath: string): string {
                 d.disposal_type,
                 d.taxable_disposal,
                 CASE WHEN a.value_provenance = 'MANUAL' OR d.value_provenance = 'MANUAL'
-                     THEN 'MANUAL' ELSE 'MARKET'
+                     THEN 'MANUAL'
+                     -- A match is stated as converted when either side was, because the gain is the
+                     -- difference of the two and inherits the weaker provenance of the pair.
+                     WHEN a.value_provenance = 'MARKET_CONVERTED' OR d.value_provenance = 'MARKET_CONVERTED'
+                     THEN 'MARKET_CONVERTED'
+                     ELSE 'MARKET'
                 END AS value_provenance,
+                -- The disposal's own rate: this row is a disposal event, and its sale price is the
+                -- figure a reader is auditing. The lot carries the acquisition's rate separately.
+                COALESCE(d.fx_rate, a.fx_rate) AS fx_rate,
+                COALESCE(d.fx_rate_date, a.fx_rate_date) AS fx_rate_date,
+                COALESCE(a.missing_fx_rate, FALSE) OR COALESCE(d.missing_fx_rate, FALSE) AS missing_fx_rate,
+                COALESCE(a.rounds_to_zero, FALSE) OR COALESCE(d.rounds_to_zero, FALSE) AS rounds_to_zero,
                 COALESCE(a.currency_mismatch, FALSE) OR COALESCE(d.currency_mismatch, FALSE) AS currency_mismatch,
                 d.timestamp AS disposal_date,
                 a.timestamp AS acquisition_date
@@ -568,14 +767,24 @@ function sanitizeFilePath(filePath: string): string {
             disposal_type,
             taxable_disposal,
             value_provenance,
+            fx_rate,
+            fx_rate_date,
             currency_mismatch,
+            -- MISSING_FX_RATE outranks MISSING_PRICE: when a conversion was required and no rate
+            -- resolved, the price is present and it is the rate that must be seeded. Reporting
+            -- MISSING_PRICE would send a reader to the wrong remedy.
             CASE
                 WHEN unit_cost_fiat < CAST(0 AS DECIMAL(38,18)) THEN 'NEGATIVE_COST_BASIS'
                 WHEN currency_mismatch THEN 'CURRENCY_MISMATCH'
+                WHEN missing_fx_rate THEN 'MISSING_FX_RATE'
+                WHEN rounds_to_zero THEN 'MISSING_PRICE'
                 WHEN unit_cost_fiat IS NULL OR unit_price_fiat IS NULL THEN 'MISSING_PRICE'
             END AS quality_flag,
             CASE WHEN quality_flag IS NULL
-                 THEN CAST(CAST(unit_price_fiat - unit_cost_fiat AS DOUBLE) * CAST(matched_amount AS DOUBLE) AS DECIMAL(38,18))
+                 THEN CAST(
+                          CAST(unit_price_fiat - unit_cost_fiat AS DECIMAL(38,18))
+                          * CAST(matched_amount AS DECIMAL(26,12))
+                      AS DECIMAL(38,18))
             END AS gain_loss_fiat,
             disposal_date,
             acquisition_date
@@ -600,6 +809,10 @@ function sanitizeFilePath(filePath: string): string {
                 COALESCE(acc.name, 'Unknown') AS exchange_location,
                 a.id_hash AS source_tx_id,
                 a.value_provenance,
+                a.fx_rate,
+                a.fx_rate_date,
+                a.missing_fx_rate,
+                a.rounds_to_zero,
                 a.currency_mismatch
             FROM v_acquisitions a
             LEFT JOIN ledger.spot_transactions src_tx ON a.tx_id = src_tx.id
@@ -622,6 +835,8 @@ function sanitizeFilePath(filePath: string): string {
             CASE
                 WHEN raw_unit_cost_fiat < CAST(0 AS DECIMAL(38,18)) THEN 'NEGATIVE_COST_BASIS'
                 WHEN currency_mismatch THEN 'CURRENCY_MISMATCH'
+                WHEN missing_fx_rate THEN 'MISSING_FX_RATE'
+                WHEN rounds_to_zero THEN 'MISSING_PRICE'
                 WHEN raw_unit_cost_fiat IS NULL THEN 'MISSING_PRICE'
             END AS quality_flag,
             -- tax_lots.unit_cost_fiat is NOT NULL with a non-negative GLOB CHECK, so an unresolved
@@ -635,6 +850,10 @@ function sanitizeFilePath(filePath: string): string {
             exchange_location,
             source_tx_id,
             value_provenance,
+            -- NULL, not 0, when no conversion took place: null >= 0 is true in JavaScript, so a
+            -- zero here would read to a consumer as a rate that was actually applied.
+            CAST(fx_rate AS VARCHAR) AS fx_rate,
+            fx_rate_date,
             CASE
                 WHEN original_qty_num - matched_qty <= CAST(0.0000000000000001 AS DECIMAL(38,18)) THEN 'CLOSED'
                 WHEN matched_qty > CAST(0 AS DECIMAL(38,18)) THEN 'PARTIAL'
@@ -658,6 +877,8 @@ function sanitizeFilePath(filePath: string): string {
             m.disposal_type,
             m.quality_flag,
             m.value_provenance,
+            CAST(m.fx_rate AS VARCHAR) AS fx_rate,
+            m.fx_rate_date,
             -- The fiscal classification the source stated on the operation this event derives from.
             -- Read from the transaction rather than recomputed, so there is one producer of the
             -- value and the AEAT audit trail survives materialisation.
@@ -762,17 +983,19 @@ function sanitizeFilePath(filePath: string): string {
             COALESCE(hp.currency, (SELECT base_curr FROM target_setting)) AS price_currency,
             CAST(
                 CASE
-                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN 1.0
-                    ELSE COALESCE(CAST(er.rate AS DOUBLE), 1.0)
+                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN CAST(1 AS DECIMAL(18,12))
+                    ELSE COALESCE(CAST(er.rate AS DECIMAL(18,12)), CAST(1 AS DECIMAL(18,12)))
                 END
             AS DECIMAL(38,18)) AS fx_rate,
             CAST(
-                CAST(b.running_balance AS DOUBLE) *
-                CAST(COALESCE(hp.close, CAST(0 AS DECIMAL(38,18))) AS DOUBLE) *
+                CAST(
+                    CAST(b.running_balance AS DECIMAL(38,18)) *
+                    COALESCE(CAST(hp.close AS DECIMAL(26,12)), CAST(0 AS DECIMAL(26,12)))
+                AS DECIMAL(38,18)) *
                 CASE
-                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN 1.0
-                    ELSE COALESCE(CAST(er.rate AS DOUBLE), 1.0)
-                END
+                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN CAST(1 AS DECIMAL(26,12))
+                    ELSE COALESCE(CAST(er.rate AS DECIMAL(26,12)), CAST(1 AS DECIMAL(26,12)))
+                 END
             AS DECIMAL(38,18)) AS daily_value
         FROM v_daily_running_balances b
         JOIN ledger.assets a ON b.asset_id = a.id
@@ -941,7 +1164,8 @@ function sanitizeFilePath(filePath: string): string {
         );
       }
       const principal = row.generatesDisposal ? `'${row.txType}'` : 'NULL';
-      const custodyMovement = !row.generatesAcquisition && !row.generatesDisposal;
+      const custodyMovement =
+        !row.generatesAcquisition && !row.generatesDisposal;
       return `('${row.txType}', ${row.generatesAcquisition}, ${row.generatesDisposal}, ${row.generatesFeeDisposal}, ${row.taxableDisposal}, ${principal}, ${custodyMovement})`;
     });
 
@@ -970,6 +1194,9 @@ function sanitizeFilePath(filePath: string): string {
   private async seedFifoFlagSeverity(): Promise<void> {
     const resolvableByUser: Record<FifoQualityFlag, boolean> = {
       MISSING_PRICE: true,
+      // The FX ledger is not user-editable, but a manual price override in the reporting currency
+      // sidesteps the conversion entirely, so the defect is resolvable from the override surface.
+      MISSING_FX_RATE: true,
       CURRENCY_MISMATCH: true,
       NEGATIVE_COST_BASIS: true,
       CUSTODY_RESIDUAL: true,
@@ -1035,19 +1262,19 @@ function sanitizeFilePath(filePath: string): string {
    */
   private async createCustodyRelations(): Promise<void> {
     this.ensureConnection();
-  // -----------------------------------------------------------------------
-  //  Double-entry custody
-  // -----------------------------------------------------------------------
-  // Custody is a balance, not a pairing. Every leg of a movement resolves its own counterparty
-  // and posts two entries that cancel, so nothing has to be matched to anything: a withdrawal
-  // whose deposit never appears accumulates in the synthetic counterparty instead of failing,
-  // self-custody spanning years costs nothing, and two movements of the same asset in
-  // succession cannot cross-match because there is no match to make.
-  //
-  // The counterparty resolves in one order: a user-declared destination, then a counterparty
-  // the ledger itself records through `transfer_group_id`, then the synthetic per-asset
-  // account. Nothing is inferred from how close two rows are in time or in amount.
-  await this.connection!.run(`
+    // -----------------------------------------------------------------------
+    //  Double-entry custody
+    // -----------------------------------------------------------------------
+    // Custody is a balance, not a pairing. Every leg of a movement resolves its own counterparty
+    // and posts two entries that cancel, so nothing has to be matched to anything: a withdrawal
+    // whose deposit never appears accumulates in the synthetic counterparty instead of failing,
+    // self-custody spanning years costs nothing, and two movements of the same asset in
+    // succession cannot cross-match because there is no match to make.
+    //
+    // The counterparty resolves in one order: a user-declared destination, then a counterparty
+    // the ledger itself records through `transfer_group_id`, then the synthetic per-asset
+    // account. Nothing is inferred from how close two rows are in time or in amount.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_custody_movements AS
     WITH fiat_assets AS MATERIALIZED (
         SELECT id FROM ledger.assets WHERE is_fiat = 1
@@ -1130,17 +1357,17 @@ function sanitizeFilePath(filePath: string): string {
     WHERE qty IS NOT NULL AND qty > CAST(0 AS DECIMAL(38,18));
   `);
 
-  // The event stream custody replays. Four kinds, and the rank is the physical order they can
-  // occur in at one instant: a quantity must be acquired before it can move, must leave one
-  // account before it arrives at another, and a network fee settles after the principal leg —
-  // which is why an under-funded transfer leaves its shortfall on the fee rather than silently
-  // shrinking the recorded movement.
-  //
-  // `step` is what the recursion advances through, and only movement legs get one of their own:
-  // each has to see what the previous one left behind. Originations and consumptions are pure
-  // additions to and subtractions from inventory, so they are folded into the step of the
-  // movement they precede.
-  await this.connection!.run(`
+    // The event stream custody replays. Four kinds, and the rank is the physical order they can
+    // occur in at one instant: a quantity must be acquired before it can move, must leave one
+    // account before it arrives at another, and a network fee settles after the principal leg —
+    // which is why an under-funded transfer leaves its shortfall on the fee rather than silently
+    // shrinking the recorded movement.
+    //
+    // `step` is what the recursion advances through, and only movement legs get one of their own:
+    // each has to see what the previous one left behind. Originations and consumptions are pure
+    // additions to and subtractions from inventory, so they are folded into the step of the
+    // movement they precede.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_lot_custody_timeline AS
     -- Every upstream relation is read exactly once. Without the MATERIALIZED pins each of the
     -- four branches below re-derives v_flattened_fifo_events through the attached SQLite ledger,
@@ -1244,16 +1471,16 @@ function sanitizeFilePath(filePath: string): string {
     FROM ordered o;
   `);
 
-  // Custody allocation is the one genuinely sequential part of this engine: each movement draws
-  // from what the movements before it left in that account, so the cumulative-interval join
-  // that matches taxation FIFO cannot express it. The recursion carries the inventory as keyed
-  // rows and `USING KEY` overwrites them in place, so state stays bounded by
-  // (asset, account, lot) rather than growing one snapshot per step.
-  //
-  // This ordering is per (account, asset) and has no fiscal effect whatsoever: it decides which
-  // lot's quantity moved, never which lot a sale consumes. Nothing here emits an event, changes
-  // a remaining quantity or a status, or reorders the global per-asset taxation queue.
-  await this.connection!.run(`
+    // Custody allocation is the one genuinely sequential part of this engine: each movement draws
+    // from what the movements before it left in that account, so the cumulative-interval join
+    // that matches taxation FIFO cannot express it. The recursion carries the inventory as keyed
+    // rows and `USING KEY` overwrites them in place, so state stays bounded by
+    // (asset, account, lot) rather than growing one snapshot per step.
+    //
+    // This ordering is per (account, asset) and has no fiscal effect whatsoever: it decides which
+    // lot's quantity moved, never which lot a sale consumes. Nothing here emits an event, changes
+    // a remaining quantity or a status, or reorders the global per-asset taxation queue.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_lot_custody_allocation AS
     WITH RECURSIVE
     timeline AS MATERIALIZED (
@@ -1419,13 +1646,13 @@ function sanitizeFilePath(filePath: string): string {
     WHERE row_kind = 'ALLOC';
   `);
 
-  // One debit and one credit per allocated slice. The two legs are the same magnitude with
-  // opposite signs, so a movement nets to zero for its asset by construction — the property
-  // that makes custody idempotent and order-independent across rebuilds.
-  //
-  // Emitted at 12 decimal places because `lot_custody_entries.qty_delta` is TEXT behind a GLOB
-  // that admits no exponent form.
-  await this.connection!.run(`
+    // One debit and one credit per allocated slice. The two legs are the same magnitude with
+    // opposite signs, so a movement nets to zero for its asset by construction — the property
+    // that makes custody idempotent and order-independent across rebuilds.
+    //
+    // Emitted at 12 decimal places because `lot_custody_entries.qty_delta` is TEXT behind a GLOB
+    // that admits no exponent form.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_custody_entries AS
     WITH allocated AS MATERIALIZED (
         SELECT * FROM v_lot_custody_allocation
@@ -1453,11 +1680,11 @@ function sanitizeFilePath(filePath: string): string {
     FROM allocated a;
   `);
 
-  // Where each lot's quantity physically sits now: credited at its acquiring account, debited
-  // where it was disposed of, and shifted by every allocated movement. The lot row itself is
-  // untouched — `tax_lots.exchange_location` keeps reporting the acquiring venue no matter how
-  // many times the quantity has moved.
-  await this.connection!.run(`
+    // Where each lot's quantity physically sits now: credited at its acquiring account, debited
+    // where it was disposed of, and shifted by every allocated movement. The lot row itself is
+    // untouched — `tax_lots.exchange_location` keeps reporting the acquiring venue no matter how
+    // many times the quantity has moved.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_lot_current_location AS
     WITH allocated AS MATERIALIZED (
         SELECT tax_lot_id, asset_id, from_account_id, to_account_id, qty
@@ -1498,11 +1725,11 @@ function sanitizeFilePath(filePath: string): string {
     GROUP BY ALL;
   `);
 
-  // Two figures per account and asset that ought to agree: what the ledger says the account
-  // holds, and what custody can attribute to actual lots. They diverge exactly when a movement
-  // could not be backed by any lot held there, or when a disposal exceeded everything ever
-  // acquired — which is what makes the difference worth reporting rather than absorbing.
-  await this.connection!.run(`
+    // Two figures per account and asset that ought to agree: what the ledger says the account
+    // holds, and what custody can attribute to actual lots. They diverge exactly when a movement
+    // could not be backed by any lot held there, or when a disposal exceeded everything ever
+    // acquired — which is what makes the difference worth reporting rather than absorbing.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_custody_balances AS
     WITH movements AS MATERIALIZED (
         SELECT asset_id, from_account_id, to_account_id, qty FROM v_custody_movements
@@ -1555,20 +1782,20 @@ function sanitizeFilePath(filePath: string): string {
     LEFT JOIN ledger.accounts acc ON acc.id = COALESCE(lb.account_id, ct.account_id);
   `);
 
-  // Defects are data. Nothing here blocks a rebuild, and severity is read from the seeded
-  // vocabulary rather than restated, so there is exactly one ranking in the system.
-  //
-  // The residual tolerance is the asset's own recorded fee volume: an unrecorded network fee
-  // cannot plausibly exceed the fees that were recorded for that same asset. A shared absolute
-  // constant would be meaningless across assets whose unit values differ by orders of
-  // magnitude — 0,01 is noise in XRP and a fortune in BTC.
-  //
-  // Sign is the whole diagnosis. A positive synthetic balance means the quantity left known
-  // accounts and has not come back, which may be entirely correct. A negative balance means
-  // more was moved or disposed of than ever arrived, so a holding exists whose cost basis was
-  // never established — the fiscally dangerous direction, and the reason this is high severity
-  // wherever it occurs rather than only on the synthetic account.
-  await this.connection!.run(`
+    // Defects are data. Nothing here blocks a rebuild, and severity is read from the seeded
+    // vocabulary rather than restated, so there is exactly one ranking in the system.
+    //
+    // The residual tolerance is the asset's own recorded fee volume: an unrecorded network fee
+    // cannot plausibly exceed the fees that were recorded for that same asset. A shared absolute
+    // constant would be meaningless across assets whose unit values differ by orders of
+    // magnitude — 0,01 is noise in XRP and a fortune in BTC.
+    //
+    // Sign is the whole diagnosis. A positive synthetic balance means the quantity left known
+    // accounts and has not come back, which may be entirely correct. A negative balance means
+    // more was moved or disposed of than ever arrived, so a holding exists whose cost basis was
+    // never established — the fiscally dangerous direction, and the reason this is high severity
+    // wherever it occurs rather than only on the synthetic account.
+    await this.connection!.run(`
     CREATE OR REPLACE VIEW v_fifo_data_quality AS
     WITH fee_scale AS (
         SELECT
@@ -1734,7 +1961,9 @@ function sanitizeFilePath(filePath: string): string {
           if (val === undefined || val === null) {
             appender.appendNull();
           } else {
-            appender.appendValue(toDuckDbValue(val, 'DuckDbAdapter.bulkInsert', colName));
+            appender.appendValue(
+              toDuckDbValue(val, 'DuckDbAdapter.bulkInsert', colName),
+            );
           }
         }
         appender.endRow();

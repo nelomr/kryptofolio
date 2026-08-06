@@ -107,6 +107,7 @@ const settingsApi = new Hono()
       const useCase = new FetchAndStoreExchangeRatesUC(
         container.userSettingsPort,
         container.exchangeRatePort,
+        container.fxRateLedgerPort,
       );
       await useCase.execute();
       bffLogger.info("Successfully fetched and stored ECB exchange rates");

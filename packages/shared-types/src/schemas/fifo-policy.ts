@@ -138,7 +138,17 @@ export type FiscalClassificationFlag = (typeof FISCAL_CLASSIFICATION_FLAGS)[numb
 export const FIFO_QUALITY_FLAGS = [
   /** No historical price could be resolved; the value is unknown, not zero. */
   'MISSING_PRICE',
-  /** The transaction's fiat currency disagrees with its fee or price series. */
+  /**
+   * A price resolved in another currency, but no FX rate covers that pair on or before the
+   * transaction's date.
+   *
+   * Distinct from `MISSING_PRICE` because the remedies differ: a missing price is fixed by seeding
+   * the price series, a missing rate by seeding the FX ledger. Distinct from `CURRENCY_MISMATCH`
+   * because nothing about the input contradicts itself — only reference data is absent.
+   */
+  'MISSING_FX_RATE',
+  /** A user-declared price is stated in a currency other than the transaction's — the input itself
+   * disagrees, so converting would mean guessing which of the two was meant. */
   'CURRENCY_MISMATCH',
   /** A synthetic ownwallet account holds a positive residual beyond fee scale. */
   'CUSTODY_RESIDUAL',
@@ -171,13 +181,20 @@ export const FLAG_SEVERITY: Record<FifoQualityFlag, FlagSeverity> = {
   CURRENCY_MISMATCH: 'medium',
   CUSTODY_IMBALANCE: 'medium',
   MISSING_PRICE: 'medium',
+  MISSING_FX_RATE: 'medium',
   ORPHAN_LOT: 'medium',
   UNKNOWN_TX_TYPE: 'medium',
   CUSTODY_RESIDUAL: 'low',
 };
 
-/** Whether a monetary value was observed from market data or declared by the user. */
-export const MANUAL_VALUE_PROVENANCE = ['MARKET', 'MANUAL'] as const;
+/**
+ * Whether a monetary value was observed from market data, declared by the user, or observed and
+ * then converted into the reporting currency.
+ *
+ * `MARKET_CONVERTED` exists so a reader never has to infer "a conversion happened" from a non-NULL
+ * rate column; the rate and its date accompany it for reproducibility.
+ */
+export const MANUAL_VALUE_PROVENANCE = ['MARKET', 'MANUAL', 'MARKET_CONVERTED'] as const;
 export type ManualValueProvenance = (typeof MANUAL_VALUE_PROVENANCE)[number];
 
 // ---------------------------------------------------------------------------

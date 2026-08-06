@@ -263,9 +263,12 @@ export const es: I18nDictionary = {
   "fifo_quality.missing_price.label": "Sin precio",
   "fifo_quality.missing_price.explanation":
     "No se pudo resolver un precio de mercado para esta operación, por lo que su valor es desconocido, no cero. Los eventos afectados quedan excluidos de la base fiscal hasta que se asigne un valor.",
+  "fifo_quality.missing_fx_rate.label": "Sin tipo de cambio",
+  "fifo_quality.missing_fx_rate.explanation":
+    "Se encontró un precio de mercado, pero en otra divisa, y no hay ningún tipo de cambio registrado para ese par en esta fecha ni antes. Carga el histórico de tipos de cambio, o asigna un valor en tu divisa de referencia, para resolverlo.",
   "fifo_quality.currency_mismatch.label": "Divisa incoherente",
   "fifo_quality.currency_mismatch.explanation":
-    "La divisa de la operación no coincide con la de su comisión o su serie de precios. No se aplicó ninguna conversión y los eventos afectados quedan excluidos de la base fiscal.",
+    "Un valor asignado a mano está expresado en una divisa distinta a la de la operación, así que no se puede saber cuál de las dos se pretendía. Reexpresa el valor en la divisa de la operación; hasta entonces los eventos afectados quedan fuera de la base fiscal.",
   "fifo_quality.custody_residual.label": "Residuo de custodia",
   "fifo_quality.custody_residual.explanation":
     "Una cuenta de autocustodia mantiene más de lo que explican los movimientos registrados. La cantidad es autocustodia real o una comisión de red no registrada.",

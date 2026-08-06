@@ -261,9 +261,12 @@ export const en: I18nDictionary = {
   "fifo_quality.missing_price.label": "No price",
   "fifo_quality.missing_price.explanation":
     "No market price could be resolved for this operation, so its value is unknown rather than zero. Affected events are excluded from the tax base until a value is assigned.",
+  "fifo_quality.missing_fx_rate.label": "No exchange rate",
+  "fifo_quality.missing_fx_rate.explanation":
+    "A market price was found, but in another currency, and no exchange rate is held for that pair on or before this date. Seed the exchange-rate history, or assign a value in your reporting currency, to resolve it.",
   "fifo_quality.currency_mismatch.label": "Currency mismatch",
   "fifo_quality.currency_mismatch.explanation":
-    "The operation's currency disagrees with its fee or price series. No conversion was applied, and the affected events are excluded from the tax base.",
+    "A value assigned by hand is stated in a currency other than the operation's, so which of the two was meant is ambiguous. Restate the value in the operation's currency; the affected events stay out of the tax base until then.",
   "fifo_quality.custody_residual.label": "Custody residual",
   "fifo_quality.custody_residual.explanation":
     "A self-custody account holds more than the recorded movements explain. The quantity is either genuinely self-custodied or an unrecorded network fee.",

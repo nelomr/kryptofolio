@@ -3,6 +3,7 @@ import type { IVaultCredentialsPort } from '../../domain/ports/IVaultCredentials
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import type { IPriceHistoryPort } from '../../domain/ports/IPriceHistoryPort.js';
 import type { IMarketDataProvider } from '../../domain/ports/IMarketDataProvider.js';
+import type { IFxRateLedgerPort } from "../../domain/ports/IFxRateLedgerPort.js";
 import type { IExchangeRatePort } from '../../domain/ports/IExchangeRatePort.js';
 import type { ILedgerPort } from '../../domain/ports/ILedgerPort.js';
 import type { IPriceIngestionPort } from '../../domain/ports/IPriceIngestionPort.js';
@@ -87,6 +88,8 @@ export class DIContainer {
 
   /** Exchange Rates */
   public readonly exchangeRatePort: IExchangeRatePort;
+  /** The dated FX ledger the FIFO engine resolves rates from, distinct from the current-rate KV. */
+  public readonly fxRateLedgerPort: IFxRateLedgerPort;
 
   /** Market data */
   public readonly priceHistoryPort: IPriceHistoryPort;
@@ -169,7 +172,9 @@ export class DIContainer {
     // No path argument: `LEDGER_DB_PATH` is read where every other database path is read, so a
     // relative value cannot be anchored to the cwd here and to the data root there.
     const ledgerDb = getLedgerDb();
-    this.ledgerPort = new SQLiteLedgerAdapter(ledgerDb);
+    const ledgerAdapter = new SQLiteLedgerAdapter(ledgerDb);
+    this.ledgerPort = ledgerAdapter;
+    this.fxRateLedgerPort = ledgerAdapter;
 
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);

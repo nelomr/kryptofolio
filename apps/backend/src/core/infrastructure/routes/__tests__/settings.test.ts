@@ -16,6 +16,9 @@ vi.mock('../../di/container', () => ({
         rates: { USD: '1.05' }
       }),
     },
+    fxRateLedgerPort: {
+      upsertDailyExchangeRates: vi.fn().mockResolvedValue(1),
+    },
     updateActiveMarketProviderUseCase: {
       execute: vi.fn(),
     },
