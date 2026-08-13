@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Market Data Orchestration Specification
+
+## Purpose
+
+One active market provider at a time, toggled through vault settings.
+
+## Requirements
 
 ### Requirement: Mutually Exclusive Provider Activation
 The system SHALL ensure that only one market data provider is active at any given time per category (`crypto`, `general`).

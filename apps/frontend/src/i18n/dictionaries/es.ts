@@ -107,6 +107,11 @@ export const es: I18nDictionary = {
   "portfolio.metrics_tabs.risk.zones.loss": "PÉRDIDA",
 
   "portfolio.syncing": "(Sincronizando...)",
+  "portfolio.load_failed": "No se pudo cargar la cartera. Revisa el backend y reintenta.",
+  "portfolio.conversion.notice": "Importes convertidos para mostrarse en",
+  "portfolio.conversion.rate_basis": "tasas con fecha",
+  "portfolio.conversion.incomplete": "posiciones no se pudieron convertir y se muestran en su propia divisa",
+  "portfolio.conversion.unconverted": "sin convertir",
   "portfolio.no_assets": "No se han encontrado activos en la cartera.",
   "portfolio.subtitle": "Analisis portfolio",
   "portfolio.sync_btn": "Sincronizar Portfolio",
@@ -207,6 +212,7 @@ export const es: I18nDictionary = {
   "table.asset_type_fiat": "Dinero Fiat",
   "table.asset": "Activo",
   "table.balance": "Balance",
+  "table.cost_basis": "Base de Coste",
   "table.avg_cost": "Coste Medio",
   "table.market_value": "Valor de Mercado",
   "table.performance": "Rendimiento",
@@ -315,6 +321,10 @@ export const es: I18nDictionary = {
   "pagination.aria_label": "Paginación",
 
   // Tax Domain
+  "tax.audit.badge_unconverted": "Sin convertir",
+  "tax.currency.figures_in": "Cifras en",
+  "tax.currency.converted_at_event_date": "convertidas al cambio de la fecha de cada operación",
+  "tax.currency.incomplete": "Incompleto: ninguna tasa de cambio cubre estas operaciones, por lo que quedan fuera de los totales anteriores.",
   "tax.title": "Informe Fiscal",
   "tax.subtitle": "Cumplimiento AEAT IRPF • Transacciones e Informe Fiscal",
   "tax.transactions.title": "Transacciones Fiscales",

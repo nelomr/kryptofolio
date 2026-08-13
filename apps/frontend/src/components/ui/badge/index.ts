@@ -17,6 +17,9 @@ export const badgeVariants = cva(
         outline: "text-foreground",
         profit: "border-transparent bg-profit/15 text-profit hover:bg-profit/25",
         loss: "border-transparent bg-loss/15 text-loss hover:bg-loss/25",
+        // A figure the view could not express in the requested currency. Visually distinct from
+        // profit and loss on purpose: it is neither, and showing it as either states a result.
+        warning: "border-transparent bg-warning-soft text-warning hover:bg-warning/20",
       },
     },
     defaultVariants: {

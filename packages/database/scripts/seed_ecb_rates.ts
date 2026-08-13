@@ -17,6 +17,7 @@ import path from 'node:path';
 import { createReadStream } from 'node:fs';
 import readline from 'node:readline';
 import { resolveDataRoot, resolveLedgerDbPath } from '../src/dataPaths.js';
+import { classifyEcbBackupRecord, type EcbBackupRow } from './ecbBackupRecord.js';
 
 // ---------------------------------------------------------------------------
 // Config — resolve paths relative to the monorepo root (two levels up)
@@ -36,19 +37,18 @@ const ECB_CSV_PATH = path.join(
 // Types
 // ---------------------------------------------------------------------------
 
-interface EcbRateRow {
-  date: string;
-  pair: string;
-  rate: string;
-  source: string;
+interface ParsedBackup {
+  readonly rows: readonly EcbBackupRow[];
+  readonly rejected: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function parseEcbCsv(csvPath: string): Promise<EcbRateRow[]> {
-  const rows: EcbRateRow[] = [];
+async function parseEcbCsv(csvPath: string): Promise<ParsedBackup> {
+  const rows: EcbBackupRow[] = [];
+  const rejected: string[] = [];
 
   const rl = readline.createInterface({
     input: createReadStream(csvPath),
@@ -57,8 +57,10 @@ async function parseEcbCsv(csvPath: string): Promise<EcbRateRow[]> {
 
   let isFirstLine = true;
   let headers: string[] = [];
+  let lineNumber = 0;
 
   for await (const line of rl) {
+    lineNumber += 1;
     if (!line.trim()) continue;
 
     if (isFirstLine) {
@@ -73,23 +75,18 @@ async function parseEcbCsv(csvPath: string): Promise<EcbRateRow[]> {
       record[h] = values[i] ?? '';
     });
 
-    // We only need: date, pair, rate, source
-    const row: EcbRateRow = {
-      date: record['date'] ?? '',
-      pair: record['pair'] ?? '',
-      rate: record['rate'] ?? '',
-      source: record['source'] ?? 'ECB',
-    };
-
-    if (row.date && row.pair && row.rate) {
-      rows.push(row);
+    const outcome = classifyEcbBackupRecord(record);
+    if (outcome.kind === 'accepted') {
+      rows.push(outcome.row);
+    } else {
+      rejected.push(`line ${lineNumber}: ${outcome.reason}`);
     }
   }
 
-  return rows;
+  return { rows, rejected };
 }
 
-function bulkInsertRates(db: DatabaseSync, rows: EcbRateRow[]): number {
+function bulkInsertRates(db: DatabaseSync, rows: readonly EcbBackupRow[]): number {
   if (rows.length === 0) return 0;
 
   const insert = db.prepare(
@@ -142,8 +139,13 @@ async function main() {
 
   // 3. Parse CSV
   console.log('📖 Parsing ECB CSV...');
-  const rows = await parseEcbCsv(ECB_CSV_PATH);
+  const { rows, rejected } = await parseEcbCsv(ECB_CSV_PATH);
   console.log(`   → ${rows.length} rows parsed`);
+
+  if (rejected.length > 0) {
+    console.error(`⛔ ${rejected.length} row(s) rejected and not seeded:`);
+    for (const reason of rejected) console.error(`   ${reason}`);
+  }
 
   if (rows.length === 0) {
     console.warn('⚠️  No rows found in the CSV. Exiting.');
@@ -164,6 +166,11 @@ async function main() {
   console.log(`   Total rows processed : ${rows.length}`);
   console.log(`   Rows inserted        : ${inserted}`);
   console.log(`   Rows skipped (dups)  : ${skipped}`);
+  console.log(`   Rows rejected        : ${rejected.length}`);
+
+  // A rejected row is a backup file the ledger cannot represent, not a seeding detail: exiting
+  // non-zero keeps it out of a CI log's green tail.
+  if (rejected.length > 0) process.exit(1);
 }
 
 main().catch((err) => {

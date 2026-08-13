@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Fifo Event Policy Specification
+
+## Purpose
+
+The canonical FIFO event policy map, materialised as a single DuckDB relation, including how a fee-disposal branch is scoped independently of the trade that carried it.
+
+## Requirements
 
 ### Requirement: Canonical FIFO Event Policy Map
 

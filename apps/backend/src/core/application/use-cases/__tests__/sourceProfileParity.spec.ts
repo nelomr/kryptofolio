@@ -27,6 +27,7 @@ import { CsvIngestionUseCase, type IngestibleTransaction } from '../CsvIngestion
 import type { ILedgerPort, LedgerSpotTransaction } from '../../../domain/ports/ILedgerPort';
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
 const ACCOUNT = '10000000-0000-0000-0000-000000000001';
@@ -157,6 +158,7 @@ describe('a Bit2Me file is read the same way on both sides of the ingestion boun
       ledgerPort,
       makeSilentPriceProvider(),
       makeUserSettingsPort(),
+      NO_BACKFILL_SCHEDULER,
     );
   });
 

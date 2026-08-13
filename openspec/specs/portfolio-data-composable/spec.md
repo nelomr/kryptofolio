@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Portfolio Data Composable Specification
+
+## Purpose
+
+The portfolio data composable: what it exposes, how it transforms allocation and performance data, and the rebuild action.
+
+## Requirements
 
 ### Requirement: Expose Portfolio Data
 The composable MUST expose the portfolio store instance, loading flags, and core metrics.

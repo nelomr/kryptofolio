@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { figureClass, figureText } from '@/composables/useConvertedAmountDisplay';
 /**
  * TaxReportDetailsTable — FIFO lot traceability audit table (presentational).
  *
@@ -36,7 +37,6 @@ import {
 } from '@/composables/useFormatters';
 import {
   usePagination,
-  gainLossClass,
 } from '../composables/useTaxCalculations';
 import TaxPagination from './TaxPagination.vue';
 import CryptoIcon from '@/components/common/CryptoIcon/CryptoIcon.vue';
@@ -258,7 +258,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
 
               <TableCell class="text-right">
                 <div class="font-mono text-muted-foreground">
-                  {{ formatCurrency(event.salePriceEur) }}
+                  {{ figureText(event.salePrice) }}
                 </div>
                 <div
                   v-if="event.fxRate != null && event.fxRateDate"
@@ -275,10 +275,10 @@ function getAssetTypeLabel(symbol: string | undefined): string {
               <TableCell
                 :class="[
                   'text-right font-mono font-semibold',
-                  gainLossClass(event.gainLossEur),
+                  figureClass(event.gainLoss),
                 ]"
               >
-                {{ formatCurrency(event.gainLossEur) }}
+                {{ figureText(event.gainLoss) }}
               </TableCell>
 
               <TableCell class="text-right font-mono text-muted-foreground">

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Hierarchical Table Specification
+
+## Purpose
+
+The three-level holdings table and the visual cues that carry tax status.
+
+## Requirements
 
 ### Requirement: Render 3-Level Table
 The system SHALL display a dynamic data table with three levels of data: Holding Summary, Lots Breakdown, and Lot History. The Level 2 lot rows SHALL render the canonical `OPEN | PARTIAL | CLOSED` status received from the backend and SHALL NOT recompute or re-label it locally. Level 2 SHALL additionally display the accounts currently holding the lot when they differ from its acquiring venue, marking synthetic custody accounts distinctly.

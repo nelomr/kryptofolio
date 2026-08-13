@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Unrealized Pnl Federation Specification
+
+## Purpose
+
+Injecting market data through the Appender API, and computing unrealized PnL from it.
+
+## Requirements
 
 ### Requirement: Market Data Injection via Appender API
 The Infrastructure layer SHALL inject real-time market prices into the ephemeral DuckDB instance (using the DuckDB Node Appender API or equivalent high-speed ingestion) before calculating unrealized performance.

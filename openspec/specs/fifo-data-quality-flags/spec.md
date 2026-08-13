@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Fifo Data Quality Flags Specification
+
+## Purpose
+
+The canonical data-quality flag vocabulary, and the rule that an unresolvable event is non-taxable and flagged rather than valued at zero.
+
+## Requirements
 
 ### Requirement: Canonical Data-Quality Flag Vocabulary
 

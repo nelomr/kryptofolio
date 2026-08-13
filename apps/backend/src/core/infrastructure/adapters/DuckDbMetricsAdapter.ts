@@ -27,18 +27,43 @@ const UNTRUSTWORTHY_BASIS_FLAGS = "('NEGATIVE_COST_BASIS', 'MISSING_PRICE')";
  * which lots they are counting.
  */
 const OPEN_LOTS_WITH_QUALITY = `
-    SELECT asset_id, remaining_qty, unit_cost_fiat, status, quality_flag FROM v_calculated_tax_lots
+    SELECT asset_id, remaining_qty, original_qty, unit_cost_fiat, total_cost_fiat, fiat_currency,
+           CAST(acquisition_timestamp AS DATE) AS acquired_on, status, quality_flag
+    FROM v_calculated_tax_lots
     UNION ALL
-    SELECT asset_id, remaining_qty, unit_cost_fiat, status, quality_flag FROM ledger.tax_lots
+    SELECT asset_id, remaining_qty, original_qty, unit_cost_fiat, total_cost_fiat, fiat_currency,
+           CAST(acquisition_timestamp AS DATE) AS acquired_on, status, quality_flag
+    FROM ledger.tax_lots
     WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
 `;
 
 /** The dual-source event set, identical wherever realized PnL is summed. */
 const REALIZED_EVENTS = `
-    SELECT gain_loss_fiat FROM ledger.lot_history_events
+    SELECT gain_loss_fiat, fiat_currency, CAST(disposal_date AS DATE) AS disposal_on
+    FROM ledger.lot_history_events
     UNION ALL
-    SELECT gain_loss_fiat FROM v_calculated_lot_history_events
+    SELECT gain_loss_fiat, fiat_currency, CAST(disposal_date AS DATE) AS disposal_on
+    FROM v_calculated_lot_history_events
     WHERE (SELECT COUNT(*) FROM ledger.lot_history_events) = 0
+`;
+
+/**
+ * A realized gain converted at the rate of the day it was realized.
+ *
+ * Not the latest rate: a disposal is a completed event, and expressing what it earned
+ * using today's FX would report a gain the user never made. The identity case is cut in
+ * the join predicate, so a gain already in the display currency reads no rate at all.
+ */
+const REALIZED_EVENTS_CONVERTED = (param: string) => `
+    SELECT
+        CAST(CAST(e.gain_loss_fiat AS DECIMAL(38,18))
+             * COALESCE(fx.rate, CAST(1 AS DECIMAL(18,12))) AS DECIMAL(38,18)) AS gain_loss_fiat,
+        e.fiat_currency <> ${param} AND fx.rate IS NULL AS unconvertible
+    FROM (${REALIZED_EVENTS}) e
+    ASOF LEFT JOIN v_fx_daily fx
+      ON fx.pair = e.fiat_currency || '/' || ${param}
+     AND e.fiat_currency <> ${param}
+     AND fx.rate_date <= e.disposal_on
 `;
 
 /**
@@ -52,9 +77,36 @@ const REALIZED_EVENTS = `
  *
  * Refreshed on every call: a cached table would report figures from before the last rebuild.
  */
+/**
+ * The daily series, converted at each point's OWN date.
+ *
+ * `v_portfolio_daily_valuation` aggregates in canonical EUR, because it sums assets whose price
+ * series are denominated differently and must reduce them to one unit first. Converting that result
+ * into the display currency is this query's job, and it is done per date rather than by scaling the
+ * finished series by a single rate — a uniformly scaled chart shows today's FX applied to every
+ * point in history, which is a different shape, not merely a different unit.
+ *
+ * A point the FX ledger cannot cover stays NULL and keeps its unconvertible mark, rather than
+ * passing through at a factor of one. The EUR-to-display hop can only fail for a missing rate,
+ * so it never touches `unpriced`, which the view keeps separate for a different remedy.
+ */
+const VALUATION_CONVERTED = `
+    SELECT * REPLACE (
+        CASE WHEN v.daily_value IS NULL OR ($1 <> 'EUR' AND fx.rate IS NULL) THEN NULL
+             ELSE CAST(v.daily_value * COALESCE(fx.rate, CAST(1 AS DECIMAL(18,12))) AS DECIMAL(38,18))
+        END AS daily_value,
+        v.unconvertible OR ($1 <> 'EUR' AND fx.rate IS NULL) AS unconvertible
+    )
+    FROM v_portfolio_daily_valuation v
+    ASOF LEFT JOIN v_fx_daily fx
+      ON fx.pair = 'EUR/' || $1
+     AND $1 <> 'EUR'
+     AND fx.rate_date <= v.date
+`;
+
 const PINNED_SOURCES: ReadonlyArray<readonly [string, string]> = [
   ['kpi_open_lots', OPEN_LOTS_WITH_QUALITY],
-  ['kpi_valuation', 'SELECT * FROM v_portfolio_daily_valuation'],
+  ['kpi_valuation', VALUATION_CONVERTED],
   ['kpi_events', REALIZED_EVENTS],
   // Read by both the volatility and the Sharpe statement, so pinning it pays for itself once.
   ['kpi_returns_volatility', 'SELECT * FROM v_portfolio_returns_volatility'],
@@ -74,8 +126,12 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
   }
 
   public async getKpis(targetCurrency?: string): Promise<MetricsKpis> {
+    const displayCurrency = targetCurrency ?? 'EUR';
     for (const [table, source] of PINNED_SOURCES) {
-      await this.db.execute(`CREATE OR REPLACE TEMP TABLE ${table} AS ${source}`);
+      // Only the sources that actually reference $1 are given one: DuckDB rejects a bound value
+      // a statement has no placeholder for, so passing it unconditionally fails to bind.
+      const params = source.includes('$1') ? [displayCurrency] : undefined;
+      await this.db.execute(`CREATE OR REPLACE TEMP TABLE ${table} AS ${source}`, params);
     }
 
     const valuation = await this.db.queryOne<{
@@ -89,12 +145,76 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
 
     const costRes = await this.db.queryOne<{
       total_cost: string;
-    }>(`
-      SELECT CAST(COALESCE(SUM(
-          CAST(remaining_qty AS DOUBLE) * CAST(unit_cost_fiat AS DOUBLE)
-      ), 0.0) AS VARCHAR) AS total_cost
-      FROM (${TRUSTWORTHY_OPEN_LOTS})
-    `);
+    }>(
+      `
+      -- Scales allocated from measurement, not inherited. On the real ledger:
+      -- quantities carry at most 8 significant decimals, unit costs carry more than 12 in
+      -- 638 of 639 lots, and the largest monetary integer part is 5 digits. So the decimals
+      -- belong on the cost, not on the quantity — the reverse of what this expression used
+      -- to do. DECIMAL(38,18) x DECIMAL(22,8) is DECIMAL(38,26): 12 integer digits, a
+      -- ceiling of 1e12 against a largest observed figure of 79163, and a unit cost that
+      -- stays intact well below any price that exists.
+      -- Converted per lot at its own acquisition date, exactly as the holdings snapshot does,
+      -- so the two figures a user sees side by side cannot disagree. An untouched lot uses its
+      -- recorded total; only a partially disposed one is rebuilt from the derived unit cost.
+      SELECT CAST(COALESCE(SUM(CASE
+          WHEN l.remaining_qty = l.original_qty
+              THEN CAST(CAST(l.total_cost_fiat AS DECIMAL(38,18)) * l.display_rate AS DECIMAL(38,18))
+          ELSE CAST(
+              CAST(CAST(l.unit_cost_fiat AS DECIMAL(38,18)) * l.display_rate AS DECIMAL(38,18))
+              * CAST(l.remaining_qty AS DECIMAL(22,8))
+          AS DECIMAL(38,18))
+      END), CAST(0 AS DECIMAL(38,18))) AS VARCHAR) AS total_cost
+      -- A lot the FX ledger cannot cover is left out of the total rather than added at a factor of
+      -- one, which would put a euro figure into a dollar sum at its euro value — the right order of
+      -- magnitude and therefore the most expensive kind of wrong. What makes the omission honest
+      -- rather than silent is rates_incomplete below, which is derived from the same predicate.
+      FROM (
+          SELECT t.*, COALESCE(fx.rate, CAST(1 AS DECIMAL(18,12))) AS display_rate
+          FROM (${TRUSTWORTHY_OPEN_LOTS}) t
+          ASOF LEFT JOIN v_fx_daily fx
+            ON fx.pair = t.fiat_currency || '/' || $1
+           AND t.fiat_currency <> $1
+           AND fx.rate_date <= t.acquired_on
+          WHERE t.fiat_currency = $1 OR fx.rate IS NOT NULL
+      ) l
+    `,
+      [displayCurrency],
+    );
+
+    // Any figure feeding a total that could not reach the display currency, and — separately —
+    // any asset whose value is absent because nothing ever priced it. Read from the same pinned
+    // sources the totals are summed from, so neither flag can disagree with them.
+    //
+    // The two are reported apart because their remedies are opposites: an unresolved rate is
+    // fixed by seeding the FX ledger, an unpriced asset by seeding the price series. Together in
+    // one boolean, a ledger with complete FX coverage and a single unpriced asset announced its
+    // exchange rates incomplete and sent the user to the wrong one.
+    //
+    // Two independent booleans rather than a union: a portfolio can genuinely exhibit either,
+    // both, or neither, and neither carries a payload the other's absence would make meaningless
+    // — the state a union exists to make unrepresentable does not exist here.
+    const incompleteRes = await this.db.queryOne<{
+      rates_incomplete: boolean;
+      prices_incomplete: boolean;
+    }>(
+      `
+      SELECT
+          (
+              EXISTS (SELECT 1 FROM kpi_valuation WHERE unconvertible)
+              OR EXISTS (
+                  SELECT 1 FROM (${TRUSTWORTHY_OPEN_LOTS}) t
+                  ASOF LEFT JOIN v_fx_daily fx
+                    ON fx.pair = t.fiat_currency || '/' || $1
+                   AND t.fiat_currency <> $1
+                   AND fx.rate_date <= t.acquired_on
+                  WHERE t.fiat_currency <> $1 AND fx.rate IS NULL
+              )
+          ) AS rates_incomplete,
+          EXISTS (SELECT 1 FROM kpi_valuation WHERE unpriced) AS prices_incomplete
+    `,
+      [displayCurrency],
+    );
 
     const flaggedLotsRes = await this.db.queryOne<{
       flagged_lots: number;
@@ -151,10 +271,13 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       LIMIT 1
     `);
 
-    const spotPnlRes = await this.db.queryOne<{ spot_pnl: string }>(`
-      SELECT CAST(COALESCE(SUM(CAST(gain_loss_fiat AS DECIMAL(38,18))), 0.0) AS VARCHAR) AS spot_pnl
-      FROM kpi_events
-    `);
+    const spotPnlRes = await this.db.queryOne<{ spot_pnl: string }>(
+      `
+      SELECT CAST(COALESCE(SUM(gain_loss_fiat), CAST(0 AS DECIMAL(38,18))) AS VARCHAR) AS spot_pnl
+      FROM (${REALIZED_EVENTS_CONVERTED('$1')})
+    `,
+      [displayCurrency],
+    );
 
     const futuresPnlRes = await this.db.queryOne<{ futures_pnl: string }>(`
       SELECT CAST(COALESCE(SUM(pnl_fiat - fee_fiat), 0.0) AS VARCHAR) AS futures_pnl
@@ -183,9 +306,9 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       average_r: number;
     }>(`
       WITH all_trades AS (
-          SELECT CAST(gain_loss_fiat AS DOUBLE) AS pnl FROM kpi_events
+          SELECT CAST(gain_loss_fiat AS DECIMAL(38,18)) AS pnl FROM kpi_events
           UNION ALL
-          SELECT CAST(pnl_fiat AS DOUBLE) - CAST(fee_fiat AS DOUBLE) AS pnl
+          SELECT CAST(CAST(pnl_fiat AS DECIMAL(38,18)) - CAST(fee_fiat AS DECIMAL(38,18)) AS DECIMAL(38,18)) AS pnl
           FROM v_futures_realized_pnl
       )
       SELECT
@@ -213,14 +336,16 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       WITH holdings AS (
           SELECT
               COALESCE(ast.symbol, l.asset_id) AS symbol,
-              SUM(CAST(l.remaining_qty AS DOUBLE)) AS total_qty,
-              SUM(CAST(CAST(l.remaining_qty AS DOUBLE) * CAST(l.unit_cost_fiat AS DOUBLE) AS DOUBLE)) AS total_cost_fiat
+              SUM(CAST(l.remaining_qty AS DECIMAL(38,18))) AS total_qty,
+              SUM(CAST(CAST(l.unit_cost_fiat AS DECIMAL(38,18)) * CAST(l.remaining_qty AS DECIMAL(22,8)) AS DECIMAL(38,18))) AS total_cost_fiat
           FROM (${TRUSTWORTHY_OPEN_LOTS}) l
           LEFT JOIN ledger.assets ast ON l.asset_id = ast.id OR l.asset_id = ast.symbol
           GROUP BY COALESCE(ast.symbol, l.asset_id)
       ),
       latest_prices AS (
-          SELECT symbol, CAST(close AS DOUBLE) AS close
+          -- Decimal, because this price is multiplied into current_value_fiat below; a
+          -- DOUBLE here would put the money back into floating point one join later.
+          SELECT symbol, CAST(close AS DECIMAL(38,18)) AS close
           FROM historical_prices
           QUALIFY ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) = 1
       ),
@@ -230,12 +355,14 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
               h.symbol AS name,
               h.total_cost_fiat AS cost_fiat,
               CASE
-                  WHEN COALESCE(lp.close, 0.0) > 0 THEN h.total_qty * lp.close
+                  WHEN COALESCE(lp.close, CAST(0 AS DECIMAL(38,18))) > 0
+                      THEN CAST(lp.close * CAST(h.total_qty AS DECIMAL(22,8)) AS DECIMAL(38,18))
                   ELSE h.total_cost_fiat
               END AS current_value_fiat,
               SUM(
                   CASE
-                      WHEN COALESCE(lp.close, 0.0) > 0 THEN h.total_qty * lp.close
+                      WHEN COALESCE(lp.close, CAST(0 AS DECIMAL(38,18))) > 0
+                          THEN CAST(lp.close * CAST(h.total_qty AS DECIMAL(22,8)) AS DECIMAL(38,18))
                       ELSE h.total_cost_fiat
                   END
               ) OVER () AS total_portfolio_value
@@ -248,11 +375,15 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
               symbol,
               name,
               CASE
-                  WHEN total_portfolio_value > 0 THEN (current_value_fiat / total_portfolio_value) * 100.0
+                  -- A ratio, not a monetary amount, and DECIMAL / DECIMAL returns DOUBLE in
+                  -- DuckDB regardless. Cast explicitly so the type is stated rather than inferred.
+                  WHEN total_portfolio_value > 0
+                      THEN CAST((current_value_fiat / total_portfolio_value) * 100.0 AS DOUBLE)
                   ELSE 0.0
               END AS allocation_pct,
               CASE
-                  WHEN cost_fiat > 0 THEN ((current_value_fiat - cost_fiat) / cost_fiat) * 100.0
+                  WHEN cost_fiat > 0
+                      THEN CAST(((current_value_fiat - cost_fiat) / cost_fiat) * 100.0 AS DOUBLE)
                   ELSE 0.0
               END AS roi_pct
           FROM asset_performance
@@ -299,6 +430,8 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
     const sharpeDec = new Decimal(sharpeRes?.sharpe ?? '0.00');
 
     return {
+      ratesIncomplete: incompleteRes?.rates_incomplete === true,
+      pricesIncomplete: incompleteRes?.prices_incomplete === true,
       totalEquity: totalEquityDec.toFixed(2),
       totalCostBasis: totalCostDec.toFixed(2),
       totalUnrealizedPnl: unrealizedDec.toFixed(2),

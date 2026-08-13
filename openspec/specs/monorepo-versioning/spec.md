@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Monorepo Versioning Specification
+
+## Purpose
+
+Independent package versioning through Changesets, with the frontend version acting as the global one, and the agent workflow that keeps releases automated.
+
+## Requirements
 
 ### Requirement: Independent Package Versioning
 The system SHALL support versioning each workspace package independently, rather than keeping them in sync automatically.

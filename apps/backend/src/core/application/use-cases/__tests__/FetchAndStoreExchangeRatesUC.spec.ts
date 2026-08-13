@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FetchAndStoreExchangeRatesUC } from '../FetchAndStoreExchangeRatesUC';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort';
 import type { IExchangeRatePort } from '../../../domain/ports/IExchangeRatePort';
-import type { IFxRateLedgerPort, DailyExchangeRate } from '../../../domain/ports/IFxRateLedgerPort';
+import type {
+  IFxRateLedgerPort,
+  DailyExchangeRate,
+  StoredRateDateQuery,
+} from '../../../domain/ports/IFxRateLedgerPort';
 
 /** 1 / 1.0825 bounded to the 18 decimal places the DECIMAL(38,18) basis columns hold. */
 const LEDGER_RATE = '0.923787528868360277';
@@ -22,20 +26,38 @@ describe('FetchAndStoreExchangeRatesUC', () => {
     };
     exchangeRatePort = {
       getLatestRates: vi.fn(),
+      getHistoricalRates: vi.fn(),
     };
     stored = new Map();
     fxRateLedgerPort = {
-      // Mirrors INSERT OR IGNORE on (date, pair): a repeat is dropped, never a conflict.
+      // Mirrors the port's precedence rule on (date, pair): only a published rate superseding a
+      // carried-forward one writes over an existing row; everything else is dropped.
       upsertDailyExchangeRates: vi.fn(async (rates: readonly DailyExchangeRate[]) => {
-        let inserted = 0;
+        let written = 0;
         for (const rate of rates) {
           const key = `${rate.date}|${rate.pair}`;
-          if (stored.has(key)) continue;
+          const held = stored.get(key);
+          if (held && !(held.source === 'ECB_PRIOR_DAY' && rate.source === 'ECB')) continue;
           stored.set(key, rate);
-          inserted += 1;
+          written += 1;
         }
-        return inserted;
+        return written;
       }),
+      getRateAsOf: vi.fn(async (pair: string, date: string) => {
+        const candidates = [...stored.values()]
+          .filter((rate) => rate.pair === pair && rate.date <= date)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        return candidates.at(-1) ?? null;
+      }),
+      getStoredRateDates: vi.fn(async (query: StoredRateDateQuery) =>
+        [...stored.values()]
+          .filter(
+            (rate) =>
+              rate.pair === query.pair && rate.date >= query.from && rate.date <= query.to,
+          )
+          .map((rate) => rate.date)
+          .sort(),
+      ),
     };
     useCase = new FetchAndStoreExchangeRatesUC(
       userSettingsPort,

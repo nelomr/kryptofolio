@@ -3,32 +3,10 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DuckDbAdapter } from '@kryptofolio/database';
+import { DuckDbAdapter, applyMigrations } from '@kryptofolio/database';
 import { DuckDbTaxCalculatorAdapter } from '../DuckDbTaxCalculatorAdapter';
 
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql',
-  ),
-  'utf-8',
-);
 
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql',
-  ),
-  'utf-8',
-);
-const MIGRATION_004_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
-  'utf-8',
-);
-const MIGRATION_005_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/005_nullable_fiat_magnitudes.sql'),
-  'utf-8',
-);
 
 describe('DuckDbTaxCalculatorAdapter', () => {
   let sqlitePath: string;
@@ -40,10 +18,10 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     sqlitePath = path.join(os.tmpdir(), `test_ledger_tax_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_SQL);
-    sqliteDb.exec(MIGRATION_003_SQL);
-    sqliteDb.exec(MIGRATION_004_SQL);
-    sqliteDb.exec(MIGRATION_005_SQL);
+    // The full migration set, not a hand-picked prefix: the FIFO views bind against the current
+    // ledger schema, and a partially-migrated ledger is not a schema the adapters support. Three
+    // fixtures had to be converted mid-change after queries reached a column that arrives in 006.
+    applyMigrations(sqliteDb);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
@@ -61,7 +39,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
   });
 
   it('should return an empty tax report for a year with no transactions', async () => {
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.year).toBe(2023);
     expect(Number(report.savingsBaseYields)).toBe(0);
     expect(Number(report.generalBaseAirdrops)).toBe(0);
@@ -75,7 +53,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
   it('[SQL Injection] getSpanishTaxReport with malicious accountId returns empty report safely', async () => {
     const maliciousId = "'; DROP TABLE lot_history_events; --";
     // Should NOT throw and should return zero values
-    const report = await adapter.getSpanishTaxReport(2023, maliciousId);
+    const report = await adapter.getSpanishTaxReport(2023, maliciousId, 'EUR');
     expect(report.year).toBe(2023);
     expect(Number(report.savingsBaseYields)).toBe(0);
     expect(Number(report.generalBaseAirdrops)).toBe(0);
@@ -85,7 +63,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
   it('[SQL Injection] getSpanishTaxReport with SQL-injected year is handled safely', async () => {
     // year is a number type in TypeScript, but test the query handles a coerced bad value
     // In practice TypeScript enforces number, but the parameterized query must be safe
-    const report = await adapter.getSpanishTaxReport(2023, "acc' OR '1'='1");
+    const report = await adapter.getSpanishTaxReport(2023, "acc' OR '1'='1", 'EUR');
     expect(report.year).toBe(2023);
     expect(Number(report.savingsBaseYields)).toBe(0);
   });
@@ -139,18 +117,18 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('excludes non-taxable flagged events from spotCapitalGains', async () => {
     seedTaxableAndFlaggedEvents();
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(Number(report.spotCapitalGains)).toBe(100);
   });
 
   it('reports how many events were excluded alongside the total', async () => {
     seedTaxableAndFlaggedEvents();
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedFlaggedEvents).toBe(1);
   });
 
   it('reports zero exclusions when every event is taxable', async () => {
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedFlaggedEvents).toBe(0);
   });
 
@@ -180,13 +158,13 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('excludes an unresolved staking reward from savingsBaseYields', async () => {
     seedUnresolvedStaking();
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(Number(report.savingsBaseYields)).toBe(500);
   });
 
   it('counts the unresolved reward instead of letting it disappear from the total', async () => {
     seedUnresolvedStaking();
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedUnresolvedIncomeCount).toBe(1);
   });
 
@@ -196,7 +174,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
       UPDATE spot_transactions SET total_fiat = '600.00', price_fiat = '30000.00'
       WHERE id = 'tx-staking-unpriced';
     `);
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedUnresolvedIncomeCount).toBe(0);
   });
 

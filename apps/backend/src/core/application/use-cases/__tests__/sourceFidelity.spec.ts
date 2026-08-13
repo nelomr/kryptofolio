@@ -8,6 +8,7 @@ import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedg
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 const VENUE = '10000000-0000-0000-0000-000000000002';
 
@@ -69,7 +70,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
     db.exec('PRAGMA foreign_keys = ON;');
     adapter = new SQLiteLedgerAdapter(db);
     await adapter.initialize();
-    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort());
+    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort(), NO_BACKFILL_SCHEDULER);
   });
 
   afterEach(() => {

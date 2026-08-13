@@ -28,6 +28,7 @@ function makeUseCase(rows: FifoDataQualityRow[], needsRecalculation: string | nu
     getLotCustodyLocations: vi.fn().mockResolvedValue([]),
     getLotCustodyTimeline: vi.fn().mockResolvedValue([]),
     getDataQuality: vi.fn().mockResolvedValue(rows),
+    getConvertedDisposalEvents: vi.fn().mockResolvedValue([]),
   };
   const userSettingsPort: IUserSettingsPort = {
     getSetting: vi.fn().mockResolvedValue(needsRecalculation),

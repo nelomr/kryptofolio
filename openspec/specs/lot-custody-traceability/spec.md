@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Lot Custody Traceability Specification
+
+## Purpose
+
+Custody as a balanced double-entry ledger: the synthetic `ownwallet-<ASSET>` counterparty, signed diagnostic residuals, and the rule that a lot is never split, re-dated or relocated.
+
+## Requirements
 
 ### Requirement: Every Custody Movement Produces Balanced Double-Entry Records
 

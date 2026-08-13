@@ -31,16 +31,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-import { SUPPORTED_CURRENCIES } from '@kryptofolio/shared-types';
+import { supportedCurrencyOptions } from '../composables/useSupportedCurrencyOptions';
 
 const { t } = useI18n();
 
-// Supported currencies — mapped dynamically from shared configuration
-const supportedCurrencies: Array<{ code: FiatCurrency; labelKey: string }> = 
-  SUPPORTED_CURRENCIES.map(code => ({
-    code,
-    labelKey: `settings.currency.option_${code.toLowerCase()}`,
-  }));
+const supportedCurrencies = supportedCurrencyOptions();
 
 // Queries
 const { data: savedBaseCurrency, isLoading: isLoadingCurrency } = useBaseCurrencyQuery();

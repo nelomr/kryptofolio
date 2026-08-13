@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Turborepo Orchestration Specification
+
+## Purpose
+
+Orchestrating the workspace DAG, and caching it in CI/CD.
+
+## Requirements
 
 ### Requirement: Workspace DAG Orchestration
 The monorepo SHALL utilize Turborepo to define the task dependency graph (DAG), ensuring that internal packages (e.g., `@kryptofolio/database`, `@kryptofolio/core-domain`) are built before the applications that consume them.

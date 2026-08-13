@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Tax Audit Report Specification
+
+## Purpose
+
+Detailed FIFO lot traceability for the audit trail.
+
+## Requirements
 
 ### Requirement: Display detailed FIFO lot traceability
 

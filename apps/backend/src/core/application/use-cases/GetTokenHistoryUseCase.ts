@@ -1,3 +1,5 @@
+import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { ConvertedAmount } from '@kryptofolio/shared-types';
 import type {
   ITaxCalculatorPort,
   LotCustodyLocationRow,
@@ -14,6 +16,8 @@ import type {
 export interface GetTokenHistoryRequest {
   symbol: string;
   accountId?: string;
+  /** Absent means "whatever the user has configured"; resolved through the settings port, never assumed. */
+  targetCurrency?: string;
 }
 
 export interface TokenLotDto {
@@ -70,15 +74,21 @@ export interface TokenLotHistoryEventDto {
   id: string;
   disposal_date: string;
   amount_from_lot: number;
-  /** Null when no price could be resolved. Never coerced to `0`, which reads as a free disposal. */
-  sale_price_eur: number | null;
-  gain_loss_eur: number | null;
-  sale_fee_eur?: number;
+  /**
+   * The figure in the requested display currency, with its own conversion outcome.
+   *
+   * Null when no price was ever resolved — never coerced to `0`, which reads as a free disposal. An
+   * `UNCONVERTIBLE` outcome is the different case: the figure exists and no rate reached its date.
+   */
+  sale_price: ConvertedAmount | null;
+  gain_loss: ConvertedAmount | null;
+  sale_fee?: number;
   is_taxable: boolean;
   flag?: FiscalClassificationFlag | null;
   quality_flag?: FifoQualityFlag | null;
   value_provenance?: ManualValueProvenance;
-  fx_rate?: number | null;
+  /** The FIFO's own hop, not the display one — that rate travels inside the outcomes above. */
+  fx_rate?: string | null;
   fx_rate_date?: string | null;
   notes?: string;
   asset_symbol?: string;
@@ -99,17 +109,34 @@ export interface GetTokenHistoryResponse {
 
 export class GetTokenHistoryUseCase {
   private readonly taxCalculatorPort: ITaxCalculatorPort;
+  private readonly userSettingsPort: IUserSettingsPort;
 
-  constructor(taxCalculatorPort: ITaxCalculatorPort) {
+  constructor(taxCalculatorPort: ITaxCalculatorPort, userSettingsPort: IUserSettingsPort) {
     this.taxCalculatorPort = taxCalculatorPort;
+    this.userSettingsPort = userSettingsPort;
   }
 
   public async execute(req: GetTokenHistoryRequest): Promise<GetTokenHistoryResponse> {
     const { symbol, accountId } = req;
     const symbolUpper = symbol.toUpperCase();
 
-    const [{ lots, events }, custodyLocations, relocations] = await Promise.all([
+    // The portfolio's default display currency, unlike the tax report's EUR: this view is a
+    // portfolio reading, not a declaration, and `USD` is what the rest of the portfolio falls back to.
+    const targetCurrency =
+      req.targetCurrency ??
+      (await this.userSettingsPort.getSetting('base_currency')) ??
+      'USD';
+
+    // `calculateLotsAndEvents` still supplies the lots, which are native by design. The disposal
+    // figures a user reads come from the converted read — ALL_TIME, because a token's history is
+    // defined by the token and spans every year it existed.
+    const [{ lots }, convertedEvents, custodyLocations, relocations] = await Promise.all([
       this.taxCalculatorPort.calculateLotsAndEvents(accountId),
+      this.taxCalculatorPort.getConvertedDisposalEvents(
+        { kind: 'ALL_TIME' },
+        accountId,
+        targetCurrency,
+      ),
       this.taxCalculatorPort.getLotCustodyLocations(accountId),
       this.taxCalculatorPort.getLotCustodyTimeline(accountId),
     ]);
@@ -147,33 +174,33 @@ export class GetTokenHistoryUseCase {
 
     const historyMap: Record<string, TokenLotHistoryEventDto[]> = {};
 
-    for (const evt of events) {
+    for (const evt of convertedEvents) {
       const isMatch =
-        (evt.tax_lot_id && targetLotIds.has(evt.tax_lot_id)) ||
-        (evt.asset_symbol && evt.asset_symbol.toUpperCase() === symbolUpper);
+        (evt.taxLotId && targetLotIds.has(evt.taxLotId)) ||
+        (evt.assetSymbol && evt.assetSymbol.toUpperCase() === symbolUpper);
 
       if (isMatch) {
-        const lotIdKey = evt.tax_lot_id || 'unknown_lot';
+        const lotIdKey = evt.taxLotId || 'unknown_lot';
         if (!historyMap[lotIdKey]) {
           historyMap[lotIdKey] = [];
         }
 
         historyMap[lotIdKey].push({
-          id: evt.id || `evt-${evt.tax_lot_id}-${evt.disposal_date}`,
-          disposal_date: evt.disposal_date,
-          amount_from_lot: Number(evt.amount_from_lot),
-          sale_price_eur: evt.sale_price_fiat === null ? null : Number(evt.sale_price_fiat),
-          gain_loss_eur: evt.gain_loss_fiat === null ? null : Number(evt.gain_loss_fiat),
-          is_taxable: Boolean(evt.is_taxable),
-          flag: evt.flag ?? null,
-          quality_flag: evt.quality_flag ?? null,
-          value_provenance: evt.value_provenance,
-          fx_rate: evt.fx_rate === null ? null : Number(evt.fx_rate),
-          fx_rate_date: evt.fx_rate_date ?? null,
-          notes: evt.notes ?? undefined,
-          asset_symbol: evt.asset_symbol || symbolUpper,
-          exchange_name: evt.exchange_name || 'Exchange',
-          operation_type: evt.disposal_type,
+          id: evt.id || `evt-${evt.taxLotId}-${evt.disposalDate}`,
+          disposal_date: evt.disposalDate,
+          amount_from_lot: Number(evt.amountFromLot),
+          sale_price: evt.salePrice,
+          gain_loss: evt.gainLoss,
+          is_taxable: evt.isTaxable,
+          flag: evt.flag,
+          quality_flag: evt.qualityFlag,
+          value_provenance: evt.valueProvenance,
+          fx_rate: evt.fxRate,
+          fx_rate_date: evt.fxRateDate,
+          notes: evt.notes,
+          asset_symbol: evt.assetSymbol || symbolUpper,
+          exchange_name: evt.exchangeName || 'Exchange',
+          operation_type: evt.disposalType,
         });
       }
     }

@@ -13,6 +13,7 @@
 - [The unified fee model](#the-unified-fee-model)
 - [The custody double-entry ledger](#the-custody-double-entry-ledger)
 - [DuckDB read-side views](#duckdb-read-side-views)
+- [The two-stage currency chain](#the-two-stage-currency-chain)
 - [Data-quality flags vs. fiscal classification](#data-quality-flags-vs-fiscal-classification)
 - [Frontend: rendering a `null` gain honestly](#frontend-rendering-a-null-gain-honestly)
 - [Invariants worth remembering](#invariants-worth-remembering)
@@ -320,6 +321,102 @@ flowchart TD
 > financial column as `TEXT` behind a `GLOB` `CHECK` that admits no exponent form — a raw DuckDB
 > `DOUBLE` written back unformatted can silently emit scientific notation that violates the
 > constraint on write-back.
+
+## The two-stage currency chain
+
+A figure a user reads has crossed **two** conversions, and they are specified separately because they
+answer different questions and fail for different reasons.
+
+```
+  price series          transaction's own            what the user asked
+  (e.g. USD)            fiat_currency (e.g. EUR)     to see (e.g. USD)
+      │                          │                          │
+      │  stage 1                 │  stage 2                 │
+      └──[rate @ tx date]───────▶└──[rate @ figure's date]─▶│
+         materialisation-time        read-time
+         PERSISTED                   NEVER PERSISTED
+```
+
+| | Stage 1 — market price into transaction currency | Stage 2 — transaction currency into display currency |
+|---|---|---|
+| When | At materialisation, while building a lot's cost basis | At read time, per query |
+| Where | `v_flattened_fifo_events` | The read adapters, joining `v_fx_daily` |
+| Persisted | Yes — `fx_rate` / `fx_rate_date` on the row | **No.** The display currency is unknown when the row is written |
+| Failure means | The engine could not build this basis → `MISSING_FX_RATE`, a `quality_flag` | The lot is sound and the *view* cannot express it → an `UNCONVERTIBLE` conversion outcome |
+| Reversible | No. It is part of the recorded lot | Yes, at any moment, by asking for another currency |
+
+The two compose; neither replaces the other. Stage 1 is unchanged by the display-currency work.
+
+### Each figure converts at its own date
+
+Stage 2 never applies one rate to a whole result set. The rate date follows from what kind of figure
+it is:
+
+| Figure | Rate dated to |
+|---|---|
+| A lot's cost basis | its **acquisition** date |
+| A realized gain, and any per-event disposal figure | its **disposal** date |
+| Present value: equity, current value | the **latest** rate in the ledger |
+| A point of a daily series | that **point's own** date |
+| Unrealized PnL | *not converted at all* — derived by subtracting the two already-converted terms |
+
+The rule itself is a pure function (`resolveRateBasis`) in `packages/core-domain`, outside the query
+layer, so "a realized gain converts at its disposal date" is assertable without a database. The
+adapters *apply* a basis; they do not choose one.
+
+> [!WARNING]
+> Conversion happens **per row, before any aggregation**. Two lots of the same asset can differ in
+> both native currency and acquisition date, so converting the aggregate applies a single rate to
+> figures that each earn their own. That is the defect this chain exists to remove, and summing first
+> reinstates it.
+
+### The identity case is not a conversion
+
+When a figure is already in the requested currency, no rate is read at all: the identity is cut in
+the `JOIN` predicate rather than by a `CASE` over its result, and the outcome is `NATIVE` rather than
+`CONVERTED` with a rate of `1`.
+
+This is not cosmetic. `exchange_rates` holds `USD/EUR` only, so `EUR/USD` is an inversion bounded at
+twelve decimals; a USD figure round-tripped through EUR comes back changed in its last places. A
+conversion to the currency you were already in must be the identity function, and the type makes that
+visible instead of leaving it inferred from a rate value.
+
+### Three outcomes, and a fourth state the UI must hold
+
+`ConvertedAmount` (in `packages/shared-types`) is a closed union: `CONVERTED` carries its rate and
+rate date, `NATIVE` carries neither, and `UNCONVERTIBLE` carries the **native** amount and the
+currency it is really in — never zero, never the figure multiplied by a fallback of one.
+
+A per-event figure is additionally nullable, and `null` is a genuinely different state:
+
+| State | Means | Remedy |
+|---|---|---|
+| `null` | No price was ever resolved for this event | Value the event |
+| `UNCONVERTIBLE` | The figure exists; no rate covered its date | Fetch the missing rate |
+| `NATIVE` / `CONVERTED` | A figure the view can express | — |
+
+So a renderer decides among **four** outcomes, not three. `null >= 0` is `true` in JavaScript and
+`Number(undefined) >= 0` is `false`, which means an unguarded sign comparison reports an unresolved
+figure as a profit and a failed conversion as a *loss* — a loss the user never had, and one nobody
+disputes. `getEventVariant` in `useTaxCalculations.ts` is the reference ordering: activation → exempt
+→ unresolved → unconverted → gain/loss by sign.
+
+> [!NOTE]
+> A display conversion that fails is **not** a lot quality defect. `MISSING_FX_RATE` is persisted
+> under a SQLite `CHECK` and means the engine could not build the basis; a failed display conversion
+> is read-time, unpersistable in principle, and travels as a separate signal. The same lot must never
+> read as defective in EUR and healthy in USD.
+
+### The read that materialises is never converted
+
+`ITaxCalculatorPort` exposes two reads over the same events, and the split is load-bearing:
+
+- **`calculateLotsAndEvents`** — native figures, always. `FifoMaterializerService` persists from it.
+- **`getConvertedDisposalEvents`** — figures in a requested currency, for anything a user reads.
+
+Converting inside the first would write display-converted figures into `lot_history_events`, where
+they are indistinguishable from natively-denominated ones and therefore unrecoverable. A test fixes
+the native contract rather than leaving it to convention.
 
 ## Data-quality flags vs. fiscal classification
 

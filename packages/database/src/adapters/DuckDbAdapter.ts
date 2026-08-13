@@ -164,7 +164,66 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       // - asset_prices is superseded by historical_prices (Parquet federation + ASOF JOIN).
       // - live_prices real-time PnL is now computed in the Node.js layer, not DuckDB.
 
+      // -----------------------------------------------------------------------
+      //  FX resolution primitive
+      // -----------------------------------------------------------------------
+      // One row per (date, pair), direct rows preferred over reciprocal ones.
+      //
+      // The ECB publishes EUR-based rates only, so exchange_rates holds USD/EUR and never
+      // EUR/USD: a direct-only lookup would silently make any conversion EUR-only while
+      // appearing general. The reciprocal is a second-class result and is marked as such —
+      // inverting a rate published to six decimal places loses precision the direct rate
+      // would not, and DuckDB's decimal division degrades to DOUBLE, so the inversion is cast
+      // back to a bounded decimal rather than left as a float. ROW_NUMBER, not a COALESCE of
+      // two joins, is what makes "a direct rate is never inverted" true by construction when
+      // both directions exist.
+      //
+      // This lived as two CTEs inside v_flattened_fifo_events. It is a view because the display
+      // conversion needs the same resolution, and a second hand-written copy of it is precisely
+      // how the two would drift apart.
+      await this.connection.run(`
+        CREATE OR REPLACE VIEW v_fx_daily AS
+        SELECT rate_date, pair, rate, is_reciprocal
+        FROM (
+            SELECT
+                CAST(date AS DATE) AS rate_date,
+                pair,
+                rate,
+                is_reciprocal,
+                ROW_NUMBER() OVER (
+                    PARTITION BY rate_date, pair ORDER BY is_reciprocal
+                ) AS preference
+            FROM (
+                SELECT
+                    date,
+                    pair,
+                    CAST(rate AS DECIMAL(18,12)) AS rate,
+                    0 AS is_reciprocal
+                FROM ledger.exchange_rates
+
+                UNION ALL
+
+                SELECT
+                    date,
+                    SPLIT_PART(pair, '/', 2) || '/' || SPLIT_PART(pair, '/', 1) AS pair,
+                    -- DuckDB has no exact decimal division, so the inversion is computed and then
+                    -- rounded to twelve places. This is why a reciprocal is recorded as a
+                    -- second-class result: the direct rate is never derived, only read.
+                    CAST(1.0 / CAST(rate AS DOUBLE) AS DECIMAL(18,12)) AS rate,
+                    1 AS is_reciprocal
+                FROM ledger.exchange_rates
+                WHERE TRY_CAST(rate AS DECIMAL(38,18)) IS NOT NULL
+                  AND TRY_CAST(rate AS DECIMAL(38,18)) <> 0
+            )
+        )
+        WHERE preference = 1;
+      `);
+
       // Tax Base routing views
+      //
+      // `fiat_currency` is projected because `total_fiat` is denominated in it. A reader that has
+      // the figure but not its unit can only assume one, and the assumption it would make is that
+      // the figure is already in whatever currency was asked for.
       await this.connection.run(`
         CREATE OR REPLACE VIEW savings_base_yields AS
         SELECT
@@ -174,6 +233,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             asset_in_id,
             CAST(amount_in AS DECIMAL(38,18)) AS amount_in,
             CAST(total_fiat AS DECIMAL(38,18)) AS total_fiat,
+            fiat_currency,
             timestamp,
             SUBSTR(CAST(timestamp AS VARCHAR), 1, 4) AS year
         FROM ledger.spot_transactions
@@ -191,6 +251,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             asset_in_id,
             CAST(amount_in AS DECIMAL(38,18)) AS amount_in,
             CAST(total_fiat AS DECIMAL(38,18)) AS total_fiat,
+            fiat_currency,
             timestamp,
             SUBSTR(CAST(timestamp AS VARCHAR), 1, 4) AS year
         FROM ledger.spot_transactions
@@ -224,6 +285,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 END,
                 CAST(1 AS DECIMAL(26,12))
             ) AS DECIMAL(38,18)) AS fee_fiat,
+            ft.fiat_currency,
             ft.timestamp,
             SUBSTR(CAST(ft.timestamp AS VARCHAR), 1, 4) AS year
         FROM ledger.futures_transactions ft
@@ -266,51 +328,10 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         WITH fiat_assets AS MATERIALIZED (
             SELECT id FROM ledger.assets WHERE is_fiat = 1
         ),
-        -- One row per (date, pair), direct rows preferred over reciprocal ones.
-        --
-        -- The ECB publishes EUR-based rates only, so exchange_rates holds USD/EUR and never
-        -- EUR/USD: a direct-only lookup would silently make this feature EUR-only while appearing
-        -- general. The reciprocal is a second-class result and is marked as such — inverting a rate
-        -- published to six decimal places loses precision the direct rate would not, and DuckDB's
-        -- decimal division degrades to DOUBLE, so the inversion is cast back to a bounded decimal
-        -- rather than left as a float. ROW_NUMBER, not a COALESCE of two joins, is what makes
-        -- "a direct rate is never inverted" true by construction when both directions exist.
-        fx_rates_ranked AS MATERIALIZED (
-            SELECT
-                CAST(date AS DATE) AS rate_date,
-                pair,
-                rate,
-                is_reciprocal,
-                ROW_NUMBER() OVER (
-                    PARTITION BY rate_date, pair ORDER BY is_reciprocal
-                ) AS preference
-            FROM (
-                SELECT
-                    date,
-                    pair,
-                    CAST(rate AS DECIMAL(18,12)) AS rate,
-                    0 AS is_reciprocal
-                FROM ledger.exchange_rates
-
-                UNION ALL
-
-                SELECT
-                    date,
-                    SPLIT_PART(pair, '/', 2) || '/' || SPLIT_PART(pair, '/', 1) AS pair,
-                    -- DuckDB has no exact decimal division, so the inversion is computed and then
-                    -- rounded to twelve places. This is why a reciprocal is recorded as a
-                    -- second-class result: the direct rate is never derived, only read.
-                    CAST(1.0 / CAST(rate AS DOUBLE) AS DECIMAL(18,12)) AS rate,
-                    1 AS is_reciprocal
-                FROM ledger.exchange_rates
-                WHERE TRY_CAST(rate AS DECIMAL(38,18)) IS NOT NULL
-                  AND TRY_CAST(rate AS DECIMAL(38,18)) <> 0
-            )
-        ),
+        -- MATERIALIZED, not a bare reference to v_fx_daily: four ASOF joins below read this,
+        -- and a view read four times is re-scanned through the sqlite extension four times.
         fx_resolved AS MATERIALIZED (
-            SELECT rate_date, pair, rate, is_reciprocal
-            FROM fx_rates_ranked
-            WHERE preference = 1
+            SELECT rate_date, pair, rate, is_reciprocal FROM v_fx_daily
         ),
         tx_context AS MATERIALIZED (
             SELECT
@@ -502,10 +523,26 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             'ACQUISITION' AS event_type,
             qty_in AS amount,
             CAST(basis_fiat AS DECIMAL(38,18)) AS total_fiat,
-            -- The one irreducible division. DuckDB types DECIMAL / DECIMAL as DOUBLE, so a quotient
-            -- cannot be exact here; it is rounded straight back to the destination scale. The
-            -- authoritative figure is total_fiat, which stays exact decimal — this is derived from it.
-            CAST(basis_fiat / NULLIF(qty_in, CAST(0 AS DECIMAL(38,18))) AS DECIMAL(38,18)) AS price_fiat,
+            -- The one irreducible division. DuckDB types DECIMAL / DECIMAL as DOUBLE, so the
+            -- quotient arrives with binary residue around its sixteenth significant digit — and
+            -- this value becomes unit_cost_fiat, which gain_loss_fiat is computed from, so the
+            -- residue would land in a tax figure. Measured: 30015 / 1.5 returned
+            -- 20010.000000000001572864 and a gain of 4989.999999999998427136 for an exact 4990.
+            --
+            -- The bound is in SIGNIFICANT DIGITS (%g), not decimal places (%f), and that
+            -- distinction is the whole point. A unit cost here spans fifteen orders of magnitude:
+            -- 20010 for a BTC lot, 9.18695e-10 for a micro-cap. A fixed twelve-decimal-place bound
+            -- was tried and rounded that micro-price to 9.19e-10 — three significant digits left
+            -- out of six.
+            --
+            -- Sixteen, not fifteen: a stored basis of 1234.567890123456 carries sixteen significant
+            -- digits, and the display-currency-conversion spec requires a same-currency figure to come back
+            -- bit for bit. Fifteen rounded it to 1234.56789012346 and broke the identity. Sixteen
+            -- still absorbs the residue, which enters at the seventeenth digit.
+            -- The authoritative figure remains total_fiat, exact decimal.
+            CAST(PRINTF('%.16g',
+                basis_fiat / NULLIF(qty_in, CAST(0 AS DECIMAL(38,18)))
+            ) AS DECIMAL(38,18)) AS price_fiat,
             CAST(NULL AS VARCHAR) AS disposal_type,
             FALSE AS taxable_disposal,
             CASE WHEN NOT has_recorded_fiat AND override_unit_price IS NOT NULL THEN 'MANUAL'
@@ -900,11 +937,6 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
 
       // Gap-less daily running balances per asset using GENERATE_SERIES & Window SUM
       await this.connection.run(`
-        CREATE TABLE IF NOT EXISTS user_settings (
-            key VARCHAR PRIMARY KEY,
-            value VARCHAR
-        );
-        INSERT INTO user_settings (key, value) VALUES ('base_currency', 'USD') ON CONFLICT DO NOTHING;
 
         CREATE OR REPLACE VIEW v_daily_running_balances AS
         WITH daily_deltas AS (
@@ -968,43 +1000,60 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
 
       // Daily portfolio valuation via ASOF JOIN against historical_prices & exchange_rates
       await this.connection.run(`
+        -- Aggregated in canonical EUR, with no settings lookup of any kind.
+        --
+        -- This view used to read its target currency from a user_settings table DuckDB created for
+        -- itself and seeded with 'USD' — a second copy of a setting the UI writes elsewhere, which
+        -- nothing ever synchronised, so the series converted against a value the user never chose.
+        -- The copy is deleted rather than kept in step: a duplicate that must be synchronised is the
+        -- defect, not the fix. The display currency now arrives as a bound parameter at the outer
+        -- query, which converts EUR to it per date.
+        --
+        -- EUR is the unit because exchange_rates is ECB-quoted: it is the only currency reachable
+        -- from any other by a published rate rather than an inverted one. This view sums assets
+        -- whose price series are denominated differently, so it must reduce them to one unit before
+        -- summing, and that is the only place a double hop is accepted.
+        --
+        -- A price whose currency the provider never stated is NOT assumed to be in the target
+        -- currency. It was, via COALESCE(hp.currency, base_curr), which turned an unknown
+        -- denomination into a confident wrong number at a factor of 1. The FIFO path already
+        -- refuses that assumption; daily_value is NULL here.
+        --
+        -- The two ways daily_value can be NULL are reported separately because they have
+        -- different remedies: unpriced is fixed by seeding the price series, unconvertible
+        -- by seeding the FX ledger. One column carrying both sent a reader with full rate
+        -- coverage and one unpriced asset to the rate ledger. This is the same ordering the
+        -- FIFO path already keeps between MISSING_PRICE and MISSING_FX_RATE.
         CREATE OR REPLACE VIEW v_portfolio_daily_valuation AS
-        WITH target_setting AS (
-            SELECT COALESCE(MAX(value), 'USD') AS base_curr
-            FROM user_settings
-            WHERE key = 'base_currency'
-        )
         SELECT
             b.date,
             b.asset_id,
             a.symbol,
             b.running_balance,
             COALESCE(hp.close, CAST(0 AS DECIMAL(38,18))) AS close_price,
-            COALESCE(hp.currency, (SELECT base_curr FROM target_setting)) AS price_currency,
-            CAST(
-                CASE
-                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN CAST(1 AS DECIMAL(18,12))
-                    ELSE COALESCE(CAST(er.rate AS DECIMAL(18,12)), CAST(1 AS DECIMAL(18,12)))
-                END
-            AS DECIMAL(38,18)) AS fx_rate,
-            CAST(
-                CAST(
-                    CAST(b.running_balance AS DECIMAL(38,18)) *
-                    COALESCE(CAST(hp.close AS DECIMAL(26,12)), CAST(0 AS DECIMAL(26,12)))
-                AS DECIMAL(38,18)) *
-                CASE
-                    WHEN hp.currency IS NULL OR hp.currency = (SELECT base_curr FROM target_setting) THEN CAST(1 AS DECIMAL(26,12))
-                    ELSE COALESCE(CAST(er.rate AS DECIMAL(26,12)), CAST(1 AS DECIMAL(26,12)))
-                 END
-            AS DECIMAL(38,18)) AS daily_value
+            hp.currency AS price_currency,
+            CASE WHEN hp.currency = 'EUR' THEN CAST(1 AS DECIMAL(18,12)) ELSE fx.rate END AS fx_rate,
+            hp.currency IS NULL AS unpriced,
+            hp.currency IS NOT NULL AND hp.currency <> 'EUR' AND fx.rate IS NULL AS unconvertible,
+            CASE
+                WHEN hp.currency IS NULL THEN NULL
+                WHEN hp.currency = 'EUR'
+                    THEN CAST(CAST(hp.close AS DECIMAL(38,18)) * CAST(b.running_balance AS DECIMAL(22,8)) AS DECIMAL(38,18))
+                WHEN fx.rate IS NULL THEN NULL
+                ELSE CAST(
+                        CAST(CAST(hp.close AS DECIMAL(38,18)) * fx.rate AS DECIMAL(38,18))
+                        * CAST(b.running_balance AS DECIMAL(22,8))
+                     AS DECIMAL(38,18))
+            END AS daily_value
         FROM v_daily_running_balances b
         JOIN ledger.assets a ON b.asset_id = a.id
         ASOF LEFT JOIN historical_prices hp
           ON hp.symbol = a.symbol
          AND hp.date <= b.date
-        ASOF LEFT JOIN ledger.exchange_rates er
-          ON er.pair = (hp.currency || '/' || (SELECT base_curr FROM target_setting))
-         AND CAST(er.date AS DATE) <= b.date;
+        ASOF LEFT JOIN v_fx_daily fx
+          ON fx.pair = hp.currency || '/EUR'
+         AND hp.currency <> 'EUR'
+         AND fx.rate_date <= b.date;
       `);
 
       // Rolling ATH & Drawdown % view

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Crypto Drawdown Curve Specification
+
+## Purpose
+
+Retrieving and rendering the drawdown curve.
+
+## Requirements
 
 ### Requirement: Fetch Drawdown Curve Data
 The system SHALL provide a method to retrieve historical drawdown points for a given time range.

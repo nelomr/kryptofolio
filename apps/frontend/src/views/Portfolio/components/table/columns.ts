@@ -2,9 +2,10 @@ import { h } from 'vue'
 import { ChevronDown, ChevronRight } from 'lucide-vue-next'
 import { formatCurrency } from '@/composables/useFormatters'
 import type { CellContext } from '@tanstack/vue-table'
-import type { CryptoAssetEntity } from '@/core/domain/models/PortfolioEntities'
+import type { HoldingEntity } from '@/core/domain/models/PortfolioEntities'
 
 import AssetCell from './cells/AssetCell.vue'
+import CostBasisCell from './cells/CostBasisCell.vue'
 import PerformanceCell from './cells/PerformanceCell.vue'
 import LocationsCell from './cells/LocationsCell.vue'
 
@@ -16,7 +17,7 @@ export const createColumns = (
   {
     id: 'expander',
     header: () => null,
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => {
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => {
       return h('button', {
         onClick: (e: Event) => {
           e.stopPropagation()
@@ -34,7 +35,7 @@ export const createColumns = (
   {
     accessorKey: 'symbol',
     header: t('table.asset'),
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => h(AssetCell, { 
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => h(AssetCell, { 
       symbol: row.original.symbol, 
       onExpand 
     }),
@@ -43,7 +44,7 @@ export const createColumns = (
   {
     id: 'balance',
     header: () => h('div', { class: "text-right" }, t('table.balance')),
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => {
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => {
        const amount = row.original.amount || 0
        return h('div', { class: "text-right font-mono font-bold text-xs" }, amount.toFixed(4))
     }
@@ -51,15 +52,21 @@ export const createColumns = (
   {
     id: 'avg_cost',
     header: () => h('div', { class: "text-right" }, t('table.avg_cost')),
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => {
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => {
        const cost = formatCurrency(row.original.avgPriceFiat || row.original.costBasisFiat || 0, row.original.currency)
        return h('div', { class: "text-right font-mono text-muted-foreground text-xs tabular-nums" }, cost)
     }
   },
   {
+    id: 'cost_basis',
+    header: () => h('div', { class: "text-right" }, t('table.cost_basis')),
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) =>
+      h(CostBasisCell, { costBasis: row.original.costBasis })
+  },
+  {
     accessorKey: 'currentValueFiat',
     header: () => h('div', { class: "text-right" }, t('table.market_value')),
-    cell: ({ getValue, row }: CellContext<CryptoAssetEntity, unknown>) => {
+    cell: ({ getValue, row }: CellContext<HoldingEntity, unknown>) => {
         const val = (getValue() as number) || 0
         return h('div', { class: "text-right font-mono font-black text-sm tracking-tighter tabular-nums" }, formatCurrency(val, row.original.currency))
     },
@@ -67,11 +74,11 @@ export const createColumns = (
   {
     id: 'performance',
     header: () => h('div', { class: "text-right" }, t('table.performance')),
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => h(PerformanceCell, { row: row.original })
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => h(PerformanceCell, { row: row.original })
   },
   {
     id: 'locations',
     header: () => h('div', { class: "text-right" }, t('table.locations')),
-    cell: ({ row }: CellContext<CryptoAssetEntity, unknown>) => h(LocationsCell, { row: row.original, isLoading })
+    cell: ({ row }: CellContext<HoldingEntity, unknown>) => h(LocationsCell, { row: row.original, isLoading })
   }
 ]

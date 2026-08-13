@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Summary Cards Specification
+
+## Purpose
+
+The fiscal metrics grid.
+
+## Requirements
 
 ### Requirement: Display Fiscal Metrics Grid
 The system SHALL display a grid with key fiscal metrics: Capital Gains, Yields, Total Losses, and Estimated IRPF.

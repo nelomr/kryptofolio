@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Report Header Specification
+
+## Purpose
+
+The report header: display, wallet selection, and actions disabled with an explanatory tooltip.
+
+## Requirements
 
 ### Requirement: Header Display and Wallet Selection
 The system SHALL display the "Asistente Fiscal" title, a "Motor de Cumplimiento" badge, and a dropdown for Wallet Selection populated from configuration.

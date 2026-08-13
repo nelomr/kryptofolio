@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Vault Verifier Specification
+
+## Purpose
+
+Password verification for the vault.
+
+## Requirements
 
 ### Requirement: Password Verification
 The system SHALL verify the master password during the `/vault/unlock` operation by decrypting a known verification payload.

@@ -196,6 +196,9 @@ export class RestTaxAdapter implements ITaxPort {
     return {
       year: dto.year,
       method: dto.method,
+      currency: dto.currency,
+      conversion: dto.conversion,
+      unconvertibleEvents: dto.unconvertibleEvents,
       summary: dto.summary,
       auditTrail: dto.auditTrail as TaxReportEntity['auditTrail'],
       excludedFlaggedEvents: dto.excludedFlaggedEvents,
@@ -274,7 +277,7 @@ export class RestTaxAdapter implements ITaxPort {
     }
   }
 
-  async downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob> {
+  async downloadReport(year: number, format: 'csv'): Promise<Blob> {
     try {
       const res = await bffClient.api.tax.report.download.$get({ query: { year: year.toString(), format } })
       return await res.blob()

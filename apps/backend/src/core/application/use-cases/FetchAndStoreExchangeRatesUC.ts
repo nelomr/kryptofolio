@@ -17,6 +17,18 @@ export interface FetchAndStoreExchangeRatesInput {
 }
 
 /**
+ * The ECB quotes EUR→USD; `exchange_rates` stores USD/EUR, i.e. EUR = USD × rate.
+ *
+ * The reciprocal of a 4-decimal quote is non-terminating, and Decimal's default precision emits
+ * ~40 places — beyond the DECIMAL(38,18) the FIFO views multiply it into. Bounded here rather than
+ * left to a CAST no reader of the ledger can see, and defined once so the daily fetch and the
+ * historical backfill cannot drift into two different quotes for the same published rate.
+ */
+export function toUsdEurLedgerRate(ecbUsdQuote: string): string {
+  return new Decimal(1).div(new Decimal(ecbUsdQuote)).toDecimalPlaces(18).toString();
+}
+
+/**
  * Derives the ledger rows one fetch produces: the published rate at its own date, plus one
  * carried-forward row per day between publication and `asOfDate`.
  *
@@ -76,13 +88,9 @@ export class FetchAndStoreExchangeRatesUC {
       }
 
       const usdRate = new Decimal(usdRateStr);
-      // The ECB quotes EUR→USD; `exchange_rates` stores USD/EUR, i.e. EUR = USD × rate.
+      // The KV value keeps its full precision: it is displayed, never multiplied into a basis.
       const usdEur = new Decimal(1).div(usdRate);
-      // The reciprocal of a 4-decimal quote is non-terminating, and Decimal's default precision emits
-      // ~40 places — beyond the DECIMAL(38,18) the FIFO views multiply it into. Bounded here rather
-      // than left to a CAST no reader of the ledger can see. The KV value keeps its full precision:
-      // it is displayed, never multiplied into a basis.
-      const usdEurLedger = usdEur.toDecimalPlaces(18).toString();
+      const usdEurLedger = toUsdEurLedgerRate(usdRateStr);
 
       await this.userSettingsPort.setSetting(
         "exchange_rate_eur_usd",

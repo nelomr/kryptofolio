@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Mock Adapters Specification
+
+## Purpose
+
+Adapters that keep the app fully usable offline.
+
+## Requirements
 
 ### Requirement: Offline development capability
 The system SHALL provide mock adapters (`MockTaxAdapter`, `MockWalletRepository`, etc.) that implement their corresponding repository interfaces but use the Hono RPC client to fetch realistic dummy data from the BFF for offline UI development. Its internal state for write operations MAY be mutable within the BFF to allow observable updates.

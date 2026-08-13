@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Core Layout Specification
+
+## Purpose
+
+The dashboard shell: layout container, header, metrics row, and the global formatters every figure passes through.
+
+## Requirements
 
 ### Requirement: Portfolio Layout Container
 The system SHALL render `PortfolioView.vue` as the main layout container with a full-height column structure.

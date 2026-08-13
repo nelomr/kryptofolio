@@ -15,11 +15,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/composables/useFormatters";
+import { formatDate } from "@/composables/useFormatters";
 import { useI18n } from "@/composables/useI18n";
 import {
+  figureClass,
+  figureText,
+  figureTone,
+} from "@/composables/useConvertedAmountDisplay";
+import {
   disposalTypeLabelKey,
-  gainLossClass,
   mergeLotTimeline,
   qualityFlagExplanationKey,
   qualityFlagLabelKey,
@@ -48,17 +52,25 @@ const timeline = computed(() => mergeLotTimeline(props.events, props.relocations
 
 const getEventBadge = (
   event: TaxLotHistoryEvent,
-): { variant: "secondary" | "profit" | "loss"; label: string } => {
+): { variant: "secondary" | "profit" | "loss" | "warning"; label: string } => {
   if (event.flag === "WALLET_ACTIVATION")
     return { variant: "secondary", label: t("lot_events.badge_activation") };
   if (!event.isTaxable)
     return { variant: "secondary", label: t("lot_events.badge_exempt") };
-  // `null >= 0` is `true` in JavaScript, so an unresolved figure would render as a profit.
-  if (event.gainLossEur === null)
-    return { variant: "secondary", label: t("tax.audit.badge_unresolved") };
-  return event.gainLossEur >= 0
-    ? { variant: "profit", label: t("lot_events.badge_gain") }
-    : { variant: "loss", label: t("lot_events.badge_loss") };
+  // Four states, not three. `null >= 0` is `true` in JavaScript, and an unconvertible figure carries
+  // a native amount that is usually positive — either one, compared directly, renders as a profit.
+  switch (figureTone(event.gainLoss)) {
+    case "unconverted":
+      return { variant: "warning", label: t("tax.audit.badge_unconverted") };
+    case "gain":
+      return { variant: "profit", label: t("lot_events.badge_gain") };
+    case "loss":
+      return { variant: "loss", label: t("lot_events.badge_loss") };
+    default:
+      return event.gainLoss === null
+        ? { variant: "secondary", label: t("tax.audit.badge_unresolved") }
+        : { variant: "profit", label: t("lot_events.badge_gain") };
+  }
 };
 </script>
 
@@ -164,13 +176,13 @@ const getEventBadge = (
             </TableCell>
             <TableCell
               class="py-2 text-right font-mono text-[10px] tabular-nums"
-              >{{ formatCurrency(row.event.salePriceEur) }}</TableCell
+              >{{ figureText(row.event.salePrice) }}</TableCell
             >
             <TableCell
               data-testid="event-pnl"
               class="py-2 text-right font-mono text-[10px] tabular-nums font-bold"
-              :class="gainLossClass(row.event.gainLossEur)"
-              >{{ formatCurrency(row.event.gainLossEur) }}</TableCell
+              :class="figureClass(row.event.gainLoss)"
+              >{{ figureText(row.event.gainLoss) }}</TableCell
             >
             <TableCell class="py-2 text-right">
               <div

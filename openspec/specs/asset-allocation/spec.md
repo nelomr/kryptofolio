@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Asset Allocation Specification
+
+## Purpose
+
+Allocation visualisation, its custom legend, and the HHI diversification metric.
+
+## Requirements
 
 ### Requirement: Asset Allocation Visualization
 The system SHALL display a Donut chart visualizing the current asset allocation of the portfolio.

@@ -18,10 +18,10 @@ describe('TaxReportSummaryCards.vue', () => {
 
   it('renders provided metrics formatted as currency', () => {
     const metrics = {
-      capitalGains: 1234.56,
-      yields: 50.25,
-      totalLosses: 100.0,
-      estimatedIrpf: 250.0,
+      capitalGains: '1234.56',
+      yields: '50.25',
+      totalLosses: '100.0',
+      estimatedIrpf: '250.0',
       excludedFlaggedEvents: 0,
       excludedUnresolvedIncomeCount: 0,
     }
@@ -46,7 +46,7 @@ describe('TaxReportSummaryCards.vue', () => {
     const wrapper = mount(TaxReportSummaryCards, {
       props: {
         metrics: {
-          capitalGains: 0, yields: 0, totalLosses: 0, estimatedIrpf: 0,
+          capitalGains: '0', yields: '0', totalLosses: '0', estimatedIrpf: '0',
           excludedFlaggedEvents: 2, excludedUnresolvedIncomeCount: 0,
         },
       },
@@ -61,7 +61,7 @@ describe('TaxReportSummaryCards.vue', () => {
     const wrapper = mount(TaxReportSummaryCards, {
       props: {
         metrics: {
-          capitalGains: 0, yields: 0, totalLosses: 0, estimatedIrpf: 0,
+          capitalGains: '0', yields: '0', totalLosses: '0', estimatedIrpf: '0',
           excludedFlaggedEvents: 0, excludedUnresolvedIncomeCount: 5,
         },
       },

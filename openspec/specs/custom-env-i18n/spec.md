@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Custom Env I18N Specification
+
+## Purpose
+
+Translation by text key, and selecting the language from the environment.
+
+## Requirements
 
 ### Requirement: Text Key Translation
 The system MUST provide an interface (I18nPort) to translate text keys (e.g., "dashboard.title") to their corresponding string in the configured language, supporting basic interpolation.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Fiscal Domain Specification
+
+## Purpose
+
+The fiscal domain model: canonical lot status, typed disposal provenance with flag fields kept separate, custody location, and manual value provenance.
+
+## Requirements
 
 ### Requirement: Canonical Lot Status in the Domain Model
 

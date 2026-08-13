@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Duckdb Backend Base Specification
+
+## Purpose
+
+Backend initialisation of the analytical engine.
+
+## Requirements
 
 ### Requirement: Backend Initialization
 The workspace SHALL include a new backend application configured with a Hexagonal Architecture structure.

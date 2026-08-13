@@ -7,7 +7,7 @@ export class DownloadTaxReportUseCase {
     this.taxPort = taxPort
   }
 
-  async execute(year: number, format: 'pdf' | 'csv'): Promise<Blob> {
+  async execute(year: number, format: 'csv'): Promise<Blob> {
     return await this.taxPort.downloadReport(year, format)
   }
 }

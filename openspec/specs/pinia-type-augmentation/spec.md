@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Pinia Type Augmentation Specification
+
+## Purpose
+
+Augmenting `PiniaCustomProperties`, and validating injection at runtime rather than trusting the type alone.
+
+## Requirements
 
 ### Requirement: PiniaCustomProperties type augmentation
 

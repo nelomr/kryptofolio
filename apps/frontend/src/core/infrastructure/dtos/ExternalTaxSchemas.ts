@@ -26,9 +26,11 @@ import {
   FIFO_QUALITY_FLAGS,
   FISCAL_CLASSIFICATION_FLAGS,
   MANUAL_VALUE_PROVENANCE,
+  preciseAmountSchema,
+  convertedAmountSchema,
 } from "@kryptofolio/shared-types";
 import { LotIdSchema, AccountIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
-import { numericField, nullableNumericField, timestampToDate } from "./CommonSchemaHelpers";
+import { numericField, timestampToDate } from "./CommonSchemaHelpers";
 
 // ---------------------------------------------------------------------------
 // ExternalTaxTransactionSchema
@@ -165,34 +167,33 @@ export type ExternalTaxTransactionDTO = z.infer<
 // ExternalTaxReportSummarySchema — AEAT IRPF aggregate figures
 // ---------------------------------------------------------------------------
 
+/**
+ * The AEAT aggregate figures.
+ *
+ * Six required fields, not nineteen optional aliases falling back to `0`. The alias soup existed to
+ * tolerate backend drift, and it did the opposite: an absent figure became a declared zero, which is
+ * the fabrication this layer exists to refuse.
+ *
+ * Exact decimal strings, and no `_eur` in any name: the backend derives these from bases already
+ * converted to the display currency, so a field named for euros held dollars in a USD report.
+ */
 const ExternalTaxReportSummarySchema = z
   .object({
-    capitalGainsFiat: numericField.optional(),
-    capital_gains_eur: numericField.optional(),
-    spotCapitalGains: numericField.optional(),
-    spot_capital_gains: numericField.optional(),
-    capitalLossesFiat: numericField.optional(),
-    capital_losses_eur: numericField.optional(),
-    savingsBaseYieldsFiat: numericField.optional(),
-    savings_base_yields_eur: numericField.optional(),
-    savingsBaseYields: numericField.optional(),
-    savings_base_yields: numericField.optional(),
-    generalBaseAirdropsFiat: numericField.optional(),
-    general_base_airdrops_eur: numericField.optional(),
-    generalBaseAirdrops: numericField.optional(),
-    general_base_airdrops: numericField.optional(),
-    netPatrimonialResultFiat: numericField.optional(),
-    net_patrimonial_result_eur: numericField.optional(),
-    estimatedIrpfFiat: numericField.optional(),
-    estimated_irpf_eur: numericField.optional(),
+    capital_gains: preciseAmountSchema,
+    capital_losses: preciseAmountSchema,
+    savings_base_yields: preciseAmountSchema,
+    general_base_airdrops: preciseAmountSchema,
+    net_patrimonial_result: preciseAmountSchema,
+    estimated_irpf: preciseAmountSchema,
   })
+  .strict()
   .transform((raw) => ({
-    capitalGainsEur: raw.capitalGainsFiat ?? raw.capital_gains_eur ?? raw.spotCapitalGains ?? raw.spot_capital_gains ?? 0,
-    capitalLossesEur: raw.capitalLossesFiat ?? raw.capital_losses_eur ?? 0,
-    savingsBaseYieldsEur: raw.savingsBaseYieldsFiat ?? raw.savings_base_yields_eur ?? raw.savingsBaseYields ?? raw.savings_base_yields ?? 0,
-    generalBaseAirdropsEur: raw.generalBaseAirdropsFiat ?? raw.general_base_airdrops_eur ?? raw.generalBaseAirdrops ?? raw.general_base_airdrops ?? 0,
-    netPatrimonialResultEur: raw.netPatrimonialResultFiat ?? raw.net_patrimonial_result_eur ?? 0,
-    estimatedIrpfEur: raw.estimatedIrpfFiat ?? raw.estimated_irpf_eur ?? 0,
+    capitalGains: raw.capital_gains,
+    capitalLosses: raw.capital_losses,
+    savingsBaseYields: raw.savings_base_yields,
+    generalBaseAirdrops: raw.general_base_airdrops,
+    netPatrimonialResult: raw.net_patrimonial_result,
+    estimatedIrpf: raw.estimated_irpf,
   }));
 
 // ---------------------------------------------------------------------------
@@ -205,11 +206,17 @@ export const ExternalTaxLotHistoryShape = z.object({
     id: z.string().min(1),
     disposal_date: timestampToDate,
     amount_from_lot: numericField,
-    // Null when the backend could not resolve a price. Coercing to 0 here would read
-    // downstream as a genuine disposal at zero — the fabrication this change removes.
-    sale_price_eur: nullableNumericField,
-    gain_loss_eur: nullableNumericField,
-    sale_fee_eur: numericField.optional(),
+    // The figure in the currency the response states, with its own conversion outcome.
+    //
+    // Null when the backend resolved no price. Coercing to 0 would read downstream as a genuine
+    // disposal at zero — the fabrication this layer exists to refuse. An `UNCONVERTIBLE` outcome is
+    // the other case: the figure exists and no rate reached its date.
+    //
+    // A union, not a number: the amount stays an exact decimal string, because turning a monetary
+    // figure into a float here is the defect this change removes everywhere else.
+    sale_price: convertedAmountSchema.nullable(),
+    gain_loss: convertedAmountSchema.nullable(),
+    sale_fee: numericField.optional(),
     is_taxable: z.coerce.boolean().default(false),
     // Fiscal classification — orthogonal to quality_flag below, both may be present at once.
     flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
@@ -226,7 +233,9 @@ export const ExternalTaxLotHistoryShape = z.object({
     // from a hardcoded 'SELL' to the real disposal type, but the field was never renamed.
     // Required, and constrained to the canonical vocabulary: the backend always sends one.
     operation_type: z.enum(DISPOSAL_TYPES),
-    fx_rate: nullableNumericField.optional(),
+    // The FIFO's own hop — market-price currency into the transaction's currency — kept as an exact
+    // string. The display hop's rate travels inside the outcomes above, so the two never merge.
+    fx_rate: z.string().nullable().optional(),
     fx_rate_date: z.string().nullable().optional(),
 });
 
@@ -240,9 +249,9 @@ export const ExternalTaxLotHistorySchema = ExternalTaxLotHistoryShape
       id: raw.id,
       disposalDate: raw.disposal_date,
       amountFromLot: raw.amount_from_lot,
-      salePriceEur: raw.sale_price_eur,
-      gainLossEur: raw.gain_loss_eur,
-      saleFeeEur: raw.sale_fee_eur,
+      salePrice: raw.sale_price,
+      gainLoss: raw.gain_loss,
+      saleFeeEur: raw.sale_fee,
       isTaxable: raw.is_taxable,
       disposalType: raw.operation_type,
       flag: raw.flag ?? null,
@@ -394,31 +403,51 @@ export const ExternalTaxReportSchema = z
     spotCapitalGains: numericField.optional(),
     savingsBaseYields: numericField.optional(),
     generalBaseAirdrops: numericField.optional(),
-    summary: ExternalTaxReportSummarySchema.optional(),
+    // Required. The fallback that used to compute a summary from the top-level bases when this was
+    // absent was the same fabrication as a defaulted zero: a report without its declared bases is not
+    // a report, and inventing them here would hand the user figures no engine produced.
+    summary: ExternalTaxReportSummarySchema,
     audit_trail: z.array(ExternalTaxLotHistorySchema).optional().default([]),
     // Excluded from the totals above rather than folded into them, so an incomplete base is never
     // presented as complete. Two counts because a disposal-side defect and an unpriced income row
     // are different failures with different remedies.
     excludedFlaggedEvents: z.number().int().optional().default(0),
     excludedUnresolvedIncomeCount: z.number().int().optional().default(0),
+    // Required, unlike the counts above: a report whose currency is absent cannot be labelled, and
+    // rendering it unlabelled is the condition under which a USD total gets filed as a Spanish
+    // return. Absent means the payload is not a report this UI can display.
+    currency: z.string().min(3).max(3),
+    // A union, so an unrecognised outcome is rejected rather than coerced into the safer-looking
+    // arm. `NATIVE` and `CONVERTED` make different claims about the same numbers.
+    conversion: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("NATIVE") }).strict(),
+      z.object({ kind: z.literal("CONVERTED") }).strict(),
+    ]),
+    unconvertibleEvents: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            occurredOn: z.string(),
+            // Kept as the exact decimal string it arrived as. Parsing it into a number here would
+            // reintroduce the float-money defect this whole change exists to remove, on the one
+            // figure whose only job is to be the honest unconverted amount.
+            nativeAmount: preciseAmountSchema,
+            nativeCurrency: z.string().min(3).max(3),
+          })
+          .strict(),
+      )
+      .optional()
+      .default([]),
   })
   .transform((raw) => {
-    const spotGains = raw.spotCapitalGains ?? 0;
-    const gainsNum = Number(spotGains);
-
-    const summary = raw.summary ?? {
-      capitalGainsEur: gainsNum > 0 ? gainsNum : 0,
-      capitalLossesEur: gainsNum < 0 ? Math.abs(gainsNum) : 0,
-      savingsBaseYieldsEur: raw.savingsBaseYields ?? 0,
-      generalBaseAirdropsEur: raw.generalBaseAirdrops ?? 0,
-      netPatrimonialResultEur: gainsNum + (raw.savingsBaseYields ?? 0) + (raw.generalBaseAirdrops ?? 0),
-      estimatedIrpfEur: gainsNum > 0 ? gainsNum * 0.19 : 0,
-    };
-
     return {
       year: raw.year,
       method: raw.method,
-      summary,
+      currency: raw.currency,
+      conversion: raw.conversion,
+      unconvertibleEvents: raw.unconvertibleEvents,
+      summary: raw.summary,
       auditTrail: raw.audit_trail,
       excludedFlaggedEvents: raw.excludedFlaggedEvents,
       excludedUnresolvedIncomeCount: raw.excludedUnresolvedIncomeCount,

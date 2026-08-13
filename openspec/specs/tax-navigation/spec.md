@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Navigation Specification
+
+## Purpose
+
+Tab navigation within the fiscal surface.
+
+## Requirements
 
 ### Requirement: Tab Navigation
 The system SHALL provide tab navigation with options: `ledgers`, `report`, and `chat`.

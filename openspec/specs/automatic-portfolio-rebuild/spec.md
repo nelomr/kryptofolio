@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Automatic Portfolio Rebuild Specification
+
+## Purpose
+
+Running FIFO materialisation automatically once per ingestion batch, orchestrated from the application layer, with `needs_recalculation` as a retryable marker of pending work.
+
+## Requirements
 
 ### Requirement: Materialisation Runs Automatically Once Per Ingestion Batch
 

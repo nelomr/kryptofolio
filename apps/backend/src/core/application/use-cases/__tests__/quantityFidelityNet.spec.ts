@@ -28,6 +28,7 @@ import type { ILedgerPort, LedgerSpotTransaction, LedgerFuturesTransaction } fro
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 import {
   KRAKEN_SPOT_HEADERS, KRAKEN_SPOT_TRADE_EUR_LEG, KRAKEN_SPOT_TRADE_PLUME_LEG,
   KRAKEN_SPOT_DOUBLE_FEE_EUR_LEG, KRAKEN_SPOT_DOUBLE_FEE_ENA_LEG,
@@ -80,6 +81,7 @@ function makeUseCase(ledgerPort: Mocked<ILedgerPort>): CsvIngestionUseCase {
       getSetting: vi.fn().mockResolvedValue('EUR'),
       setSetting: vi.fn().mockResolvedValue(undefined),
     } as unknown as Mocked<IUserSettingsPort>,
+    NO_BACKFILL_SCHEDULER,
   );
 }
 

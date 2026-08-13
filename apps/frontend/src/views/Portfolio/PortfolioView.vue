@@ -17,15 +17,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import LotHierarchyTable from "./components/LotHierarchyTable.vue";
 import TokenDetailsModal from "./components/TokenDetailsModal.vue";
+import ConversionNotice from "./components/ConversionNotice.vue";
 
 // 1. Data Fetching & State
 const { t } = useI18n();
 
 const {
   isFetching,
+  loadError,
   isRebuilding,
   handleRebuild,
   filteredHoldings,
+  conversionSummary,
 
   // Modal & Details State (from Port/Adapter)
   isModalOpen,
@@ -72,10 +75,13 @@ const {
         <!-- Metrics dashboard -->
         <MetricsDashboard />
 
+        <ConversionNotice :summary="conversionSummary" />
+
         <!-- Holdings Table -->
         <LotHierarchyTable
           :data="filteredHoldings"
           :isLoading="isFetching"
+          :loadError="loadError"
           :onExpand="handleExpandSymbol"
           :detailsMap="expandedDetailsMap"
           @expandRow="handleRowExpand"

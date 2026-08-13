@@ -1,4 +1,10 @@
-## REMOVED Requirements
+# Portfolio Mock Data Specification
+
+## Purpose
+
+The portfolio fixture: all three hierarchy levels, edge cases as named exports, and injectable without transformation.
+
+## Requirements
 
 ### Requirement: Mock file exports a PortfolioData fixture
 **Reason**: Replaced by BFF-served mock data to allow realistic network latency and centralize mock data in the backend.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Ci Cd Pipelines Specification
+
+## Purpose
+
+CI path adaptation for the monorepo layout, and the CD deployment step.
+
+## Requirements
 
 ### Requirement: CI Pipeline Path Adaptation
 The continuous integration pipeline SHALL target the new `apps/frontend/` directory for all build, lint, and test steps.

@@ -1,5 +1,9 @@
 # Capability: Import Parsed Transactions
 
+## Purpose
+
+Submitting a parsed batch: deterministic row identifiers for idempotency, row aggregation, and the timezone context the rows require.
+
 ## Requirements
 
 ### Requirement: Submit Parsed Transactions Payload

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Chart Timeframe Filtering Specification
+
+## Purpose
+
+Filtering a chart by timeframe without refetching the whole series.
+
+## Requirements
 
 ### Requirement: Chart Timeframe Filtering
 The application SHALL provide timeframe filters (1D, 1W, 1M, YTD, ALL) for historical performance charts.

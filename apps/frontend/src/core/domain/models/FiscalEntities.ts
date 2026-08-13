@@ -12,6 +12,7 @@
 
 import type { TransactionId, LotId, AccountId } from './BrandedTypes'
 import type {
+  ConvertedAmount,
   TaxLotStatus,
   DisposalType,
   FifoQualityFlag,
@@ -218,9 +219,15 @@ export interface TaxLotHistoryEvent {
   /** Quantity disposed from this lot */
   amountFromLot: number
   /** Sale price per unit in EUR. Null when unresolved — never fabricated as 0. */
-  salePriceEur: number | null
+  /**
+   * The figure in the currency the report states, with its own conversion outcome.
+   *
+   * `null` means no price was ever resolved — a genuinely different state from a figure that exists
+   * and could not be converted, which arrives as `UNCONVERTIBLE`.
+   */
+  salePrice: ConvertedAmount | null
   /** Realized gain or loss in EUR. Null when unresolved — never fabricated as 0. */
-  gainLossEur: number | null
+  gainLoss: ConvertedAmount | null
   /** Fee portion attributable to this disposal in EUR */
   saleFeeEur?: number
   /** Whether this event is subject to IRPF taxation */
@@ -231,10 +238,16 @@ export interface TaxLotHistoryEvent {
   flag?: FiscalClassificationFlag | null
   /** Data-quality defect on this event's valuation, if any. Orthogonal to flag — both may be present. */
   qualityFlag?: FifoQualityFlag | null
-  /** Whether salePriceEur/gainLossEur came from the market or from a manual assignment */
+  /** Whether salePrice/gainLoss came from the market or from a manual assignment */
   valueProvenance?: ManualValueProvenance
   /** The conversion rate applied, if any. */
-  fxRate?: number | null
+  /**
+   * The FIFO's own conversion rate, as the exact decimal string it was recorded as.
+   *
+   * Not a number: a rate parsed into a float loses places, and this one is shown next to the figure
+   * it produced. The display conversion's rate is not here — it travels inside `gainLoss`/`salePrice`.
+   */
+  fxRate?: string | null
   /** The date of the conversion rate applied, if any. */
   fxRateDate?: string | null
   notes?: string
@@ -254,29 +267,59 @@ export interface TaxLotHistoryEvent {
 // TaxReportSummary — AEAT IRPF aggregate figures
 // ---------------------------------------------------------------------------
 
+/**
+ * The AEAT aggregate figures, in the currency the report states.
+ *
+ * Exact decimal strings, and no currency in the field names: the report follows the display selector,
+ * so these are whatever currency was asked for. A field named `…Eur` holding dollars is the
+ * misrepresentation this rename removes — the same one `$1 AS currency` was, further up the chain.
+ */
 export interface TaxReportSummary {
-  /** Total capital gains in EUR (ganancias patrimoniales) */
-  capitalGainsEur: number
-  /** Total capital losses in EUR (pérdidas patrimoniales) */
-  capitalLossesEur: number
-  /** Yields from savings base in EUR (rendimientos del capital) */
-  savingsBaseYieldsEur: number
-  /** Airdrops classified in the general base in EUR */
-  generalBaseAirdropsEur: number
-  /** Net patrimonial result in EUR */
-  netPatrimonialResultEur: number
-  /** Estimated IRPF tax liability in EUR */
-  estimatedIrpfEur: number
+  /** Ganancias patrimoniales */
+  capitalGains: string
+  /** Pérdidas patrimoniales */
+  capitalLosses: string
+  /** Rendimientos del capital (base del ahorro) */
+  savingsBaseYields: string
+  /** Airdrops classified in the general base */
+  generalBaseAirdrops: string
+  netPatrimonialResult: string
+  /** Estimated IRPF liability, derived from the net result at the savings-base rate */
+  estimatedIrpf: string
 }
 
 // ---------------------------------------------------------------------------
 // TaxReportEntity — full tax report for a given fiscal year
 // ---------------------------------------------------------------------------
 
+/**
+ * An event of the period no rate could express in the report's currency.
+ *
+ * `nativeAmount` stays a decimal string: it is the honest unconverted figure, and turning it into a
+ * float here would damage the one number whose whole purpose is to be exact.
+ */
+export interface UnconvertibleTaxEventEntity {
+  id: string
+  occurredOn: string
+  nativeAmount: string
+  nativeCurrency: string
+}
+
 export interface TaxReportEntity {
   year: number
   /** Calculation method, e.g. "FIFO" or "LIFO" */
   method: string
+  /** The currency every figure in this report is expressed in. */
+  currency: string
+  /**
+   * Whether those figures are a record or a derivation.
+   *
+   * A union rather than a boolean: the header must state the basis of a converted report, and
+   * putting a conversion notice on a native record is as wrong as omitting it from a converted one.
+   */
+  conversion: { kind: 'NATIVE' } | { kind: 'CONVERTED' }
+  /** Empty means the period is fully convertible; non-empty means the totals are short by these. */
+  unconvertibleEvents: readonly UnconvertibleTaxEventEntity[]
   summary: TaxReportSummary
   /** Detailed per-transaction audit trail for AEAT */
   auditTrail: TaxLotHistoryEvent[]

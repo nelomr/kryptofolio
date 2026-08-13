@@ -202,7 +202,7 @@ export function useDownloadTaxReportMutation() {
   const useCase = new DownloadTaxReportUseCase(port)
 
   return useMutation({
-    mutation: async (args: { year: number; format: 'pdf' | 'csv' }) => {
+    mutation: async (args: { year: number; format: 'csv' }) => {
       const blob = await useCase.execute(args.year, args.format)
       // Trigger browser file download
       const url = window.URL.createObjectURL(blob)

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Manual Fiscal Overrides Specification
+
+## Purpose
+
+User-declared figures as calculation inputs rather than edited outputs: manual price assignment, manual transfer destinations, and provenance that stays visible.
+
+## Requirements
 
 ### Requirement: Overrides Are Calculation Inputs, Never Edited Outputs
 

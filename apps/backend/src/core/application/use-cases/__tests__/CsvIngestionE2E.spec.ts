@@ -20,6 +20,7 @@ import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPor
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort';
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount';
 import type { SourceProfileId } from '@kryptofolio/shared-types';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 const ACCOUNT_ID = '10000000-0000-0000-0000-000000000001';
 
@@ -62,7 +63,7 @@ describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
       mockUserSettings
     );
 
-    ingestionUseCase = new CsvIngestionUseCase(sqliteAdapter, mockPriceProvider, mockUserSettings);
+    ingestionUseCase = new CsvIngestionUseCase(sqliteAdapter, mockPriceProvider, mockUserSettings, NO_BACKFILL_SCHEDULER);
     e2eUseCase = new IngestAndMaterializeUseCase(ingestionUseCase, materializerService, mockUserSettings);
     
     // Spy on materialization

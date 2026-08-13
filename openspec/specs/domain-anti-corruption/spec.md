@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Domain Anti Corruption Specification
+
+## Purpose
+
+The client boundary refusing to fabricate: an unknown value never becomes zero, frontend parsers are verified against real backend payloads, and ingested identifiers are derived rather than random.
+
+## Requirements
 
 ### Requirement: An Unknown Value Never Becomes Zero at the Client Boundary
 

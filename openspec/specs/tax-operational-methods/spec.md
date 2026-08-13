@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Operational Methods Specification
+
+## Purpose
+
+Operational actions executed as mutations rather than direct writes.
+
+## Requirements
 
 ### Requirement: Operational logic executed via mutations
 All operational actions (e.g. syncing Web3, deleting transactions, importing wallets) SHALL be executed through their respective Pinia Colada mutation composables rather than direct store actions.

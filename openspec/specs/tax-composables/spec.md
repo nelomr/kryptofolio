@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Composables Specification
+
+## Purpose
+
+Tax composables: async queries, async mutations, business logic decoupled from side effects, and the upload mutation.
+
+## Requirements
 
 ### Requirement: Tax Data Composables manage async queries
 The system SHALL provide `useTaxTransactionsQuery` and `useTaxReportQuery` to fetch and cache data using Pinia Colada.

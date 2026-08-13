@@ -6,6 +6,25 @@ export interface AssetKpiSummary {
 }
 
 export interface MetricsKpis {
+  /**
+   * Some figure feeding these totals could not be expressed in the requested currency.
+   *
+   * A total that silently omits an unconvertible figure is indistinguishable from one where that
+   * figure was genuinely zero, so the incompleteness travels with the total rather than being
+   * inferred from it.
+   */
+  ratesIncomplete: boolean;
+  /**
+   * Some asset holds a balance no price series ever valued, so its worth is absent from these
+   * totals.
+   *
+   * Reported apart from `ratesIncomplete` because the two have opposite remedies — a price gap is
+   * closed by seeding the price series, a rate gap by seeding the FX ledger — and a single flag
+   * covering both names the wrong one. `excludedFlaggedLots` does not cover this: it counts lots
+   * carrying a persisted quality flag, while an asset with a sound lot and no price row at all
+   * carries none.
+   */
+  pricesIncomplete: boolean;
   totalEquity: string;
   totalCostBasis: string;
   totalUnrealizedPnl: string;

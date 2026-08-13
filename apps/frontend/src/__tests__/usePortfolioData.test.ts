@@ -26,6 +26,8 @@ const mockSummary: PortfolioSummaryEntity = {
     roiPercentage: 11.1,
     isBullish: true,
     realizedIsPositive: true,
+    ratesIncomplete: false,
+    pricesIncomplete: false,
   },
   holdings: [
     {
@@ -39,6 +41,7 @@ const mockSummary: PortfolioSummaryEntity = {
       pnlFiat: 12_000,
       currency: 'USD',
       portfolioLocations: ['Kraken'],
+      costBasis: { kind: 'NATIVE', amount: '50000.00', currency: 'USD' },
     },
   ],
 }

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Portfolio Visualization Specification
+
+## Purpose
+
+Portfolio layout and theming.
+
+## Requirements
 
 ### Requirement: Portfolio Layout and Theme
 The portfolio charts MUST render using the "The Executive" Light Theme, prioritizing minimalism.

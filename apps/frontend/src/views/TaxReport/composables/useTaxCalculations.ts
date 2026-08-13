@@ -157,7 +157,13 @@ export function usePagination<T>(
 // without duplicating the domain logic.
 // ---------------------------------------------------------------------------
 
-export type EventBadgeVariant = 'gain' | 'loss' | 'exempt' | 'activation' | 'unresolved'
+export type EventBadgeVariant =
+  | 'gain'
+  | 'loss'
+  | 'exempt'
+  | 'activation'
+  | 'unresolved'
+  | 'unconverted'
 
 /**
  * Derives the visual badge variant from a single audit trail event.
@@ -170,8 +176,12 @@ export type EventBadgeVariant = 'gain' | 'loss' | 'exempt' | 'activation' | 'unr
 export function getEventVariant(event: TaxLotHistoryEvent): EventBadgeVariant {
   if (event.flag === 'WALLET_ACTIVATION') return 'activation'
   if (!event.isTaxable) return 'exempt'
-  if (event.gainLossEur === null) return 'unresolved'
-  return event.gainLossEur >= 0 ? 'gain' : 'loss'
+  if (event.gainLoss === null) return 'unresolved'
+  if (event.gainLoss.kind === 'UNCONVERTIBLE') return 'unconverted'
+  // Before the sign comparison, and for the same reason the null check precedes it: an
+  // unconvertible figure carries a native amount that is usually positive, so falling through would
+  // render a conversion that failed as a profit the user never made.
+  return Number(event.gainLoss.amount) >= 0 ? 'gain' : 'loss'
 }
 
 /** Tailwind class sets per badge variant — consistent across all fiscal tables. */
@@ -181,6 +191,7 @@ export const BADGE_CLASSES: Record<EventBadgeVariant, string> = {
   exempt: 'bg-info-soft text-info border-info/20',
   activation: 'bg-surface-3 text-muted border-border',
   unresolved: 'bg-surface-3 text-muted-foreground border-border',
+  unconverted: 'bg-warning-soft text-warning border-warning/20',
 }
 
 /**
@@ -193,6 +204,7 @@ export const BADGE_I18N_KEYS: Record<EventBadgeVariant, string> = {
   exempt: 'tax.audit.badge_exempt',
   activation: 'tax.audit.badge_activation',
   unresolved: 'tax.audit.badge_unresolved',
+  unconverted: 'tax.audit.badge_unconverted',
 }
 
 /**

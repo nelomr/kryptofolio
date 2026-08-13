@@ -35,6 +35,9 @@ import { CoinbaseMarketDataAdapter } from '../adapters/CoinbaseMarketDataAdapter
 import { Bit2MeMarketDataAdapter } from '../adapters/Bit2MeMarketDataAdapter.js';
 import { UpdateActiveMarketProviderUseCase } from '../../application/use-cases/UpdateActiveMarketProviderUseCase.js';
 import { CsvIngestionUseCase } from '../../application/use-cases/CsvIngestionUseCase.js';
+import { BackfillExchangeRateGapsUC } from '../../application/use-cases/BackfillExchangeRateGapsUC.js';
+import { DeferredBackfillSchedulerAdapter } from '../adapters/DeferredBackfillSchedulerAdapter.js';
+import type { IBackfillSchedulerPort } from '../../domain/ports/IBackfillSchedulerPort.js';
 import { InitializeLedgerUseCase } from '../../application/use-cases/InitializeLedgerUseCase.js';
 import { KrakenPriceProviderAdapter } from '../adapters/KrakenPriceProviderAdapter.js';
 import { IngestDailyPricesUseCase } from '../../application/use-cases/IngestDailyPricesUseCase.js';
@@ -105,6 +108,8 @@ export class DIContainer {
   /** Ledger & Ingestion */
   public readonly ledgerPort: ILedgerPort;
   public readonly csvIngestionUseCase: CsvIngestionUseCase;
+  public readonly backfillExchangeRateGapsUC: BackfillExchangeRateGapsUC;
+  public readonly backfillSchedulerPort: IBackfillSchedulerPort;
   public readonly initializeLedgerUseCase: InitializeLedgerUseCase;
 
   /** Analytical DuckDB Ports & Adapters */
@@ -178,7 +183,23 @@ export class DIContainer {
 
     // CSV Ingestion — uses Kraken as the historical price provider
     const priceProvider = new KrakenPriceProviderAdapter(this.krakenMarketDataAdapter);
-    this.csvIngestionUseCase = new CsvIngestionUseCase(this.ledgerPort, priceProvider, this.userSettingsPort);
+    this.backfillExchangeRateGapsUC = new BackfillExchangeRateGapsUC(
+      this.exchangeRatePort,
+      this.fxRateLedgerPort,
+    );
+    // The materializer is rebound when the analytical database initialises, so it is reached
+    // through the container rather than captured: a captured reference would rebuild the
+    // uninitialised guard forever.
+    this.backfillSchedulerPort = new DeferredBackfillSchedulerAdapter(
+      this.backfillExchangeRateGapsUC,
+      { recalculate: (force?: boolean) => this.fifoMaterializerService.recalculate(force) },
+    );
+    this.csvIngestionUseCase = new CsvIngestionUseCase(
+      this.ledgerPort,
+      priceProvider,
+      this.userSettingsPort,
+      this.backfillSchedulerPort,
+    );
     this.initializeLedgerUseCase = new InitializeLedgerUseCase(this.ledgerPort, this.userSettingsPort);
 
     // Analytical DuckDB Adapters (initially bound to uninitialized guard)
@@ -202,10 +223,12 @@ export class DIContainer {
 
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,
+      this.userSettingsPort,
     );
 
     this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
       this.taxCalculatorPort,
+      this.userSettingsPort,
     );
 
     this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
@@ -271,10 +294,12 @@ export class DIContainer {
 
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,
+      this.userSettingsPort,
     );
 
     this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
       this.taxCalculatorPort,
+      this.userSettingsPort,
     );
 
     this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(

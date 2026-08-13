@@ -89,8 +89,8 @@ describe('RestCryptoAdapter.getTokenHistory() — stale status vocabulary', () =
                 id: 'evt-1',
                 disposal_date: '2024-06-01',
                 amount_from_lot: 1,
-                sale_price_eur: null,
-                gain_loss_eur: null,
+                sale_price: null,
+                gain_loss: null,
                 is_taxable: false,
                 operation_type: 'FEE',
                 quality_flag: 'MISSING_PRICE',
@@ -104,7 +104,7 @@ describe('RestCryptoAdapter.getTokenHistory() — stale status vocabulary', () =
     const result = await adapter.getTokenHistory('XRP')
 
     expect(result.lots[0].status).toBe('OPEN')
-    expect(result.history['lot-1'][0].salePriceEur).toBeNull()
+    expect(result.history['lot-1'][0].salePrice).toBeNull()
     expect(result.history['lot-1'][0].disposalType).toBe('FEE')
   })
 })

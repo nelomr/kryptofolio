@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Bff Mock Routes Specification
+
+## Purpose
+
+The mock routes that serve summary, wallet, transaction and tax data for offline development.
+
+## Requirements
 
 ### Requirement: Serve Mock Summary Data
 The BFF SHALL expose a `GET /api/summary` endpoint returning a mock summary of the portfolio.

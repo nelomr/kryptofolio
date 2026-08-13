@@ -20,8 +20,10 @@ import type {
 import type {
   IFxRateLedgerPort,
   DailyExchangeRate,
+  DailyExchangeRateSource,
+  StoredRateDateQuery,
 } from '../../domain/ports/IFxRateLedgerPort.js';
-import { deriveSubAccountId } from '@kryptofolio/shared-types';
+import { deriveSubAccountId, dailyExchangeRateSourceSchema } from '@kryptofolio/shared-types';
 
 /** A value as SQLite accepts it. `null` is a first-class value here, not a missing one. */
 type SqlValue = string | number | null;
@@ -55,6 +57,20 @@ function readFxConversion(
 ): { rate: PreciseAmount; rateDate: string } | null {
   if (typeof rate !== 'string' || typeof rateDate !== 'string') return null;
   return { rate: toPreciseAmount(rate), rateDate };
+}
+
+/**
+ * Narrows the stored `source` to the two the domain knows.
+ *
+ * `exchange_rates.source` carries no CHECK constraint, and a CHECK cannot be added to a STRICT
+ * table without rebuilding it, so a value outside the domain's vocabulary is storable. Reading one
+ * back means the ledger disagrees with the domain about what a rate row can be, which is a defect to
+ * surface rather than to coerce into whichever arm happens to be nearest.
+ */
+function toDailyExchangeRateSource(value: unknown): DailyExchangeRateSource {
+  const parsed = dailyExchangeRateSourceSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new Error(`exchange_rates.source holds an unrecognised value: ${String(value)}`);
 }
 
 /**
@@ -839,19 +855,64 @@ export class SQLiteLedgerAdapter implements ILedgerPort, IFxRateLedgerPort {
   }
 
   async upsertDailyExchangeRates(rates: readonly DailyExchangeRate[]): Promise<number> {
-    // INSERT OR IGNORE, not ON CONFLICT DO UPDATE: (date, pair) is the table's primary key and a
-    // published rate is a historical fact. Overwriting one would silently move a tax figure that may
-    // already have been reported.
-    const insert = this.db.prepare(
-      `INSERT OR IGNORE INTO exchange_rates (date, pair, rate, source) VALUES (?, ?, ?, ?)`,
+    // The guarded DO UPDATE is the whole of Decision 6: a published rate is a historical fact and is
+    // never rewritten, while a carried-forward row is an approximation the real publication may
+    // supersede. A blind OR IGNORE would make that approximation permanent; a blind REPLACE would
+    // move a tax figure that has already been reported.
+    const upsert = this.db.prepare(
+      `INSERT INTO exchange_rates (date, pair, rate, source) VALUES (?, ?, ?, ?)
+         ON CONFLICT(date, pair) DO UPDATE SET rate = excluded.rate, source = excluded.source
+          WHERE exchange_rates.source = 'ECB_PRIOR_DAY' AND excluded.source = 'ECB'`,
     );
 
-    let inserted = 0;
-    for (const rate of rates) {
-      const result = insert.run(rate.date, rate.pair, rate.rate, rate.source);
-      inserted += Number(result.changes);
+    // SAVEPOINT rather than BEGIN: a multi-year backfill is thousands of rows, and one autocommit
+    // per row costs an fsync each, but the caller may already be inside a transaction and SQLite
+    // refuses a nested BEGIN.
+    this.db.exec('SAVEPOINT fx_rate_upsert');
+    try {
+      let written = 0;
+      for (const rate of rates) {
+        const result = upsert.run(rate.date, rate.pair, rate.rate, rate.source);
+        written += Number(result.changes);
+      }
+      this.db.exec('RELEASE fx_rate_upsert');
+      return written;
+    } catch (error) {
+      this.db.exec('ROLLBACK TO fx_rate_upsert');
+      this.db.exec('RELEASE fx_rate_upsert');
+      throw error;
     }
-    return inserted;
+  }
+
+  async getRateAsOf(pair: string, date: string): Promise<DailyExchangeRate | null> {
+    const row = this.db
+      .prepare(
+        `SELECT date, pair, rate, source FROM exchange_rates
+          WHERE pair = ? AND date <= ?
+          ORDER BY date DESC LIMIT 1`,
+      )
+      .get(pair, date) as Record<string, unknown> | undefined;
+
+    if (!row) return null;
+
+    return {
+      date: row.date as string,
+      pair: row.pair as string,
+      rate: row.rate as string,
+      source: toDailyExchangeRateSource(row.source),
+    };
+  }
+
+  async getStoredRateDates(query: StoredRateDateQuery): Promise<readonly string[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT date FROM exchange_rates
+          WHERE pair = ? AND date >= ? AND date <= ?
+          ORDER BY date ASC`,
+      )
+      .all(query.pair, query.from, query.to) as Record<string, unknown>[];
+
+    return rows.map((row) => row.date as string);
   }
 
   async removeManualPriceOverride(idHash: string): Promise<void> {

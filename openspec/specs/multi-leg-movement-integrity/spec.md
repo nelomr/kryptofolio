@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Multi Leg Movement Integrity Specification
+
+## Purpose
+
+Keeping a physical movement intact through ingestion: legs of a same-asset movement survive aggregation, direction is resolved before aggregation rather than after, both legs are linked in the ledger, and an unresolved fiat magnitude stays distinguishable from a genuine zero.
+
+## Requirements
 
 ### Requirement: Row Aggregation Preserves the Legs of a Same-Asset Movement
 

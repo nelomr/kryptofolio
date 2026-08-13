@@ -106,6 +106,11 @@ export const en: I18nDictionary = {
   "portfolio.metrics_tabs.risk.zones.loss": "LOSS",
 
   "portfolio.syncing": "(Syncing...)",
+  "portfolio.load_failed": "Could not load the portfolio. Check the backend and retry.",
+  "portfolio.conversion.notice": "Amounts converted for display to",
+  "portfolio.conversion.rate_basis": "rates dated",
+  "portfolio.conversion.incomplete": "holdings could not be converted and are shown in their own currency",
+  "portfolio.conversion.unconverted": "not converted",
   "portfolio.no_assets": "No assets found in the portfolio.",
   "portfolio.subtitle": "Portfolio Analytics",
   "portfolio.sync_btn": "Sync Portfolio",
@@ -206,6 +211,7 @@ export const en: I18nDictionary = {
   "table.asset_type_fiat": "Fiat Currency",
   "table.asset": "Asset",
   "table.balance": "Balance",
+  "table.cost_basis": "Cost Basis",
   "table.avg_cost": "Avg Cost",
   "table.market_value": "Market Value",
   "table.performance": "Performance",
@@ -313,6 +319,10 @@ export const en: I18nDictionary = {
   "pagination.aria_label": "Pagination",
 
   // Tax Domain
+  "tax.audit.badge_unconverted": "Unconverted",
+  "tax.currency.figures_in": "Figures in",
+  "tax.currency.converted_at_event_date": "converted at each event's own date",
+  "tax.currency.incomplete": "Incomplete: no exchange rate covers these events, so they are excluded from the totals above.",
   "tax.title": "Fiscal Report",
   "tax.subtitle": "AEAT IRPF Compliance • Transactions & Tax Report",
   "tax.transactions.title": "Fiscal Transactions",

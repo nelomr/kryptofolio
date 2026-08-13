@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Language Settings Specification
+
+## Purpose
+
+Selecting a language, persisting the preference, and translating the interface reactively.
+
+## Requirements
 
 ### Requirement: Language Selection Interface
 The system SHALL display a language selector in the Settings View allowing users to toggle between "English" and "Spanish". It SHALL also display a Save button next to the selector to persist the change.

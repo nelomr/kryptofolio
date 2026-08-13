@@ -29,14 +29,14 @@ const mockTx: TaxTransactionEntity = {
 
 const mockReport: TaxReportEntity = {
   year: 2026,
-  method: "FIFO",
+  method: "FIFO", currency: "EUR", conversion: { kind: "NATIVE" }, unconvertibleEvents: [],
   summary: {
-    capitalGainsEur: 1000,
-    capitalLossesEur: 0,
-    savingsBaseYieldsEur: 0,
-    generalBaseAirdropsEur: 0,
-    netPatrimonialResultEur: 1000,
-    estimatedIrpfEur: 190,
+    capitalGains: '1000',
+    capitalLosses: '0',
+    savingsBaseYields: '0',
+    generalBaseAirdrops: '0',
+    netPatrimonialResult: '1000',
+    estimatedIrpf: '190',
   },
   auditTrail: [],
   excludedFlaggedEvents: 0,

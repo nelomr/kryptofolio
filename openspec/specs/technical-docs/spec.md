@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Technical Docs Specification
+
+## Purpose
+
+The root README and the technical documentation scaffold.
+
+## Requirements
 
 ### Requirement: Root README Updates
 The project's root `README.md` and `README.es.md` SHALL be updated to reference the new `api-gateway` package, the `docs/` documentation structure, and the exact steps to spin up the local BFF mock environment.

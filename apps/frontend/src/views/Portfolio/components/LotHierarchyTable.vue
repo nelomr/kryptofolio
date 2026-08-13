@@ -41,6 +41,8 @@ interface HoldingDetails {
 const props = defineProps<{
   data: HoldingEntity[];
   isLoading?: boolean;
+  /** Present when the holdings read failed — a distinct state from an empty portfolio. */
+  loadError?: Error | null;
   onExpand?: (symbol: string) => void;
   detailsMap?: Record<string, HoldingDetails | undefined>;
 }>();
@@ -136,10 +138,26 @@ const totalSize = computed(() => virtualizer.value.getTotalSize());
           <TableSkeleton :count="5" />
         </template>
 
+        <!--
+          A failed load is not an empty portfolio. Collapsing the two told a user with a broken
+          backend that he owned nothing, which is the one reading he must never be given.
+        -->
+        <template v-else-if="props.loadError">
+          <TableRow>
+            <TableCell
+              :colspan="columns.length"
+              data-testid="holdings-load-error"
+              class="h-64 text-center text-warning uppercase tracking-widest text-[10px] font-black"
+            >
+              {{ t('portfolio.load_failed') }}
+            </TableCell>
+          </TableRow>
+        </template>
+
         <template v-else-if="table.getRowModel().rows.length === 0">
           <TableRow>
             <TableCell
-              colspan="7"
+              :colspan="columns.length"
               class="h-64 text-center text-muted-foreground uppercase tracking-widest text-[10px] font-black"
             >
               {{ t('portfolio.no_assets') }}

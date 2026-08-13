@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Fifo Materialization Reconciliation Specification
+
+## Purpose
+
+Materialisation as a full set reconciliation, scoped strictly to derived tables, atomic, and deterministic across recalculations.
+
+## Requirements
 
 ### Requirement: Full Set Reconciliation on Materialisation
 

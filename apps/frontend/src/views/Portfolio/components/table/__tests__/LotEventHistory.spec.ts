@@ -14,7 +14,11 @@ import type { LotRelocationEntity, TaxLotHistoryEvent } from '@/core/domain/mode
 import type { AccountId } from '@/core/domain/models/BrandedTypes'
 
 vi.mock('@/composables/useFormatters', () => ({
-  formatCurrency: (val: number | null) => (val === null ? '-' : `€${val.toFixed(2)}`),
+  // Mirrors the real signature, which takes `number | string`: a monetary figure now arrives as an
+  // exact decimal string, and a mock that only accepted numbers was asserting against a function
+  // this app does not have.
+  formatCurrency: (val: number | string | null) =>
+    val === null ? '-' : `€${Number(val).toFixed(2)}`,
   formatDate: () => '01 Jan 2024',
 }))
 vi.mock('@/lib/utils', () => ({ cn: (...args: ClassValue[]) => args.join(' ') }))
@@ -24,8 +28,8 @@ function event(overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEvent 
     id: 'evt-1',
     disposalDate: new Date('2026-01-25T00:00:00.000Z'),
     amountFromLot: 0.005,
-    salePriceEur: 12.5,
-    gainLossEur: 3.25,
+    salePrice: { kind: 'NATIVE', amount: '12.5', currency: 'EUR' },
+    gainLoss: { kind: 'NATIVE', amount: '3.25', currency: 'EUR' },
     isTaxable: true,
     disposalType: 'SELL',
     flag: null,
@@ -94,7 +98,7 @@ describe('LotEventHistory — a fee is not a sale', () => {
 describe('LotEventHistory — defects and provenance are visible', () => {
   it('renders the data-quality flag with its severity weight', () => {
     const wrapper = mountHistory([
-      event({ qualityFlag: 'MISSING_PRICE', isTaxable: false, salePriceEur: null, gainLossEur: null }),
+      event({ qualityFlag: 'MISSING_PRICE', isTaxable: false, salePrice: null, gainLoss: null }),
     ])
     const flag = wrapper.get('[data-testid="event-quality-flag"]')
 
@@ -151,7 +155,7 @@ describe('LotEventHistory — defects and provenance are visible', () => {
   })
 
   it('renders no P&L figure where the gain could not be resolved', () => {
-    const wrapper = mountHistory([event({ gainLossEur: null, salePriceEur: null })])
+    const wrapper = mountHistory([event({ gainLoss: null, salePrice: null })])
     const pnl = wrapper.get('[data-testid="event-pnl"]')
 
     expect(pnl.text()).not.toContain('€0.00')

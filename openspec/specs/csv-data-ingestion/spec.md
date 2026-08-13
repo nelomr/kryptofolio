@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Csv Data Ingestion Specification
+
+## Purpose
+
+Reading an exchange export without losing or inventing anything: sign normalisation, a fee's denomination resolved from its own source rather than assumed, whether an amount already includes the fee resolved per source, and source quantities surviving digit for digit.
+
+## Requirements
 
 ### Requirement: Fiat Magnitudes Are Sign-Normalised at Ingestion
 

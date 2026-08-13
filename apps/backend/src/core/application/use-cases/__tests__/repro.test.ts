@@ -6,6 +6,7 @@ import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
 
 import { DatabaseSync } from 'node:sqlite';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 /**
  * The three payloads below are verbatim production rows: they are what the ledger's non-negative
@@ -32,7 +33,7 @@ describe('Constraint Repro', () => {
     db = new DatabaseSync(':memory:');
     adapter = new SQLiteLedgerAdapter(db);
     await adapter.initialize();
-    uc = new CsvIngestionUseCase(adapter, priceProvider, userSettings);
+    uc = new CsvIngestionUseCase(adapter, priceProvider, userSettings, NO_BACKFILL_SCHEDULER);
     await adapter.ensureAccountExists({ accountId: ACCOUNT, name: 'TestAccount' });
   });
 

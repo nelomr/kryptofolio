@@ -47,30 +47,30 @@ describe('Spanish Tax Base Categorization (IRPF)', () => {
     // Insert mock spot transactions:
     // 1. Staking yield (Savings Base)
     sqliteDb.prepare(`
-      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, timestamp, status)
-      VALUES ('tx-staking', 'h1', 'acc-1', 'STAKING', 'BTC', '0.005', '150.00', '30000.00', '2023-05-10T12:00:00Z', 'COMPLETED')
+      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES ('tx-staking', 'h1', 'acc-1', 'STAKING', 'BTC', '0.005', '150.00', '30000.00', 'EUR', '2023-05-10T12:00:00Z', 'COMPLETED')
     `).run();
 
     // 2. Airdrop (General Base)
     sqliteDb.prepare(`
-      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, timestamp, status)
-      VALUES ('tx-airdrop', 'h2', 'acc-1', 'AIRDROP', 'ETH', '0.1', '200.00', '2000.00', '2023-06-15T15:00:00Z', 'COMPLETED')
+      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES ('tx-airdrop', 'h2', 'acc-1', 'AIRDROP', 'ETH', '0.1', '200.00', '2000.00', 'EUR', '2023-06-15T15:00:00Z', 'COMPLETED')
     `).run();
 
     // 3. Mining reward (General Base)
     sqliteDb.prepare(`
-      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, timestamp, status)
-      VALUES ('tx-mining', 'h3', 'acc-1', 'MINING', 'BTC', '0.01', '300.00', '30000.00', '2023-07-20T08:00:00Z', 'COMPLETED')
+      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES ('tx-mining', 'h3', 'acc-1', 'MINING', 'BTC', '0.01', '300.00', '30000.00', 'EUR', '2023-07-20T08:00:00Z', 'COMPLETED')
     `).run();
 
     // 4. Regular buy (Not in either yield base)
     sqliteDb.prepare(`
-      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, timestamp, status)
-      VALUES ('tx-buy', 'h4', 'acc-1', 'BUY', 'BTC', '0.5', '15000.00', '30000.00', '2023-08-01T10:00:00Z', 'COMPLETED')
+      INSERT INTO spot_transactions (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+      VALUES ('tx-buy', 'h4', 'acc-1', 'BUY', 'BTC', '0.5', '15000.00', '30000.00', 'EUR', '2023-08-01T10:00:00Z', 'COMPLETED')
     `).run();
 
     // Fetch report
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
 
     expect(Number(report.savingsBaseYields)).toBe(150);
     expect(Number(report.generalBaseAirdrops)).toBe(500);
@@ -85,12 +85,12 @@ describe('Spanish Tax Base Categorization (IRPF)', () => {
 
     // Insert closed futures transaction with realized PnL = 500 EUR, fee = 10 EUR
     sqliteDb.prepare(`
-      INSERT INTO futures_transactions (id, id_hash, account_id, tx_type, symbol, realized_pnl, fee_amount, fee_asset_id, settlement_asset_id, timestamp, status)
-      VALUES ('fut-1', 'h-fut', 'acc-1', 'TRADE', 'BTCUSDT', '500.00', '10.00', 'EUR', 'EUR', '2023-09-01T12:00:00Z', 'COMPLETED')
+      INSERT INTO futures_transactions (id, id_hash, account_id, tx_type, symbol, realized_pnl, fee_amount, fee_asset_id, settlement_asset_id, fiat_currency, timestamp, status)
+      VALUES ('fut-1', 'h-fut', 'acc-1', 'TRADE', 'BTCUSDT', '500.00', '10.00', 'EUR', 'EUR', 'EUR', '2023-09-01T12:00:00Z', 'COMPLETED')
     `).run();
 
     // Call getSpanishTaxReport via the calculator adapter
-    const report = await adapter.getSpanishTaxReport(2023);
+    const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
 
     // spotCapitalGains should reflect the 490 EUR net futures PnL (500 realized PnL - 10 fee)
     expect(Number(report.spotCapitalGains)).toBe(490);

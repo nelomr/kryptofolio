@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Derivatives Pnl Aggregator Specification
+
+## Purpose
+
+Aggregating realised profit and loss from derivatives positions.
+
+## Requirements
 
 ### Requirement: Derivatives Profit and Loss Aggregation
 The system SHALL calculate performance metrics for Futures and Derivatives directly by summing `realizedPnl`, `funding`, and `fees` grouped by contract/asset, entirely bypassing the Spot FIFO matching logic.

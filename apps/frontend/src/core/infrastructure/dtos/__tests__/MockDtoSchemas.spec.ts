@@ -53,8 +53,8 @@ describe('MockTaxLotHistorySchema — disposal provenance and nullable proceeds'
       id: 'lot-1',
       disposalDate: new Date('2024-06-01'),
       amountFromLot: 1,
-      salePriceEur: 2,
-      gainLossEur: 0.5,
+      salePrice: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gainLoss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       isTaxable: true,
       disposalType: 'FEE',
     })
@@ -70,8 +70,8 @@ describe('MockTaxLotHistorySchema — disposal provenance and nullable proceeds'
       id: 'lot-1',
       disposalDate: new Date('2024-06-01'),
       amountFromLot: 1,
-      salePriceEur: 2,
-      gainLossEur: 0.5,
+      salePrice: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gainLoss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       isTaxable: true,
     })
     expect(result.success).toBe(false)
@@ -82,15 +82,15 @@ describe('MockTaxLotHistorySchema — disposal provenance and nullable proceeds'
       id: 'lot-1',
       disposalDate: new Date('2024-06-01'),
       amountFromLot: 1,
-      salePriceEur: null,
-      gainLossEur: null,
+      salePrice: null,
+      gainLoss: null,
       isTaxable: false,
       disposalType: 'FEE',
       qualityFlag: 'MISSING_PRICE',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.salePriceEur).toBeNull()
+      expect(result.data.salePrice).toBeNull()
       expect(result.data.qualityFlag).toBe('MISSING_PRICE')
     }
   })

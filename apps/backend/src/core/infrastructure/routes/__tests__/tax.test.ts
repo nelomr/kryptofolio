@@ -4,26 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DuckDbAdapter, getLedgerDb, closeLedgerDb } from '@kryptofolio/database';
+import { DuckDbAdapter, getLedgerDb, closeLedgerDb, applyMigrations } from '@kryptofolio/database';
 import { DIContainer } from '../../di/container.js';
 import { createTaxApi } from '../tax.js';
-
-const MIGRATION_001_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/001_vault_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_004_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
-  'utf-8',
-);
 
 describe('Tax Route API', () => {
   let sqlitePath: string;
@@ -37,10 +20,10 @@ describe('Tax Route API', () => {
     closeLedgerDb();
     sqliteDb = getLedgerDb(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_001_SQL);
-    sqliteDb.exec(MIGRATION_SQL);
-    sqliteDb.exec(MIGRATION_003_SQL);
-    sqliteDb.exec(MIGRATION_004_SQL);
+    // The full migration set: the report reads `fx_rate`, which arrives in 006, and the FIFO views
+    // bind against the current schema — a partially-migrated ledger is not a schema the adapter
+    // supports.
+    applyMigrations(sqliteDb);
 
     process.env.MOCK_MODE = 'false';
     process.env.VAULT_DB_PATH = sqlitePath;

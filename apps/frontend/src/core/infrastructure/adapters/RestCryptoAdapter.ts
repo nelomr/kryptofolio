@@ -87,6 +87,7 @@ export class RestCryptoAdapter implements ICryptoPortfolioPort {
         pnlFiat: h.pnlFiat,
         currency: h.currency,
         portfolioLocations: h.portfolioLocations,
+        costBasis: h.costBasis,
       })),
     }
   }

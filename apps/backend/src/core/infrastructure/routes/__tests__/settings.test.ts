@@ -72,6 +72,54 @@ describe('Settings API', () => {
     });
   });
 
+  describe('base currency', () => {
+    it('persists the selected currency through the settings port', async () => {
+      // The save path had no test at all: the selector could round-trip through the UI while the
+      // value never reached storage, and every downstream read would silently fall back to USD.
+      const res = await app.request('/settings/base-currency', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseCurrency: 'EUR' }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, baseCurrency: 'EUR' });
+      expect(container.userSettingsPort.setSetting).toHaveBeenCalledWith('base_currency', 'EUR');
+    });
+
+    it('reads back the currency that was stored', async () => {
+      vi.mocked(container.userSettingsPort.getSetting).mockResolvedValue('EUR');
+
+      const res = await app.request('/settings/base-currency');
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ baseCurrency: 'EUR' });
+    });
+
+    it('falls back to USD only when nothing is stored', async () => {
+      // A default is correct here, but it must be reached by absence rather than by a failure to read
+      // what is present — otherwise a stored EUR could report as USD and be filed as one.
+      vi.mocked(container.userSettingsPort.getSetting).mockResolvedValue(null);
+
+      const res = await app.request('/settings/base-currency');
+
+      expect(await res.json()).toEqual({ baseCurrency: 'USD' });
+    });
+
+    it('refuses a currency outside the supported set instead of storing it', async () => {
+      // The port narrows on read, but a rejected write is what keeps an unserviceable code out of
+      // storage in the first place — nothing downstream can convert into it.
+      const res = await app.request('/settings/base-currency', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseCurrency: 'XAU' }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(container.userSettingsPort.setSetting).not.toHaveBeenCalled();
+    });
+  });
+
   describe('POST /settings/exchange-rate/sync', () => {
     it('should call FetchAndStoreExchangeRatesUC and return success', async () => {
 

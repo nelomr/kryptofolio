@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Account Hierarchy Specification
+
+## Purpose
+
+Exchange sub-wallets as first-class child accounts, including the naming contract for the synthetic counterparty custody resolves an unrecorded movement to, and how such accounts are marked and hidden.
+
+## Requirements
 
 ### Requirement: Exchange Sub-Wallets Are First-Class Child Accounts
 

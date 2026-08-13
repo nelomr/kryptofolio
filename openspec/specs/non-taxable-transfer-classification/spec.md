@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Non Taxable Transfer Classification Specification
+
+## Purpose
+
+A movement between the user's own accounts is not a disposal: fiat asset classification, explicit custody types from the normalizer, and fiscal meaning derived rather than read from the source.
+
+## Requirements
 
 ### Requirement: Fiat Asset Classification
 

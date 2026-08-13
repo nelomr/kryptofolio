@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Portfolio Types Specification
+
+## Purpose
+
+The portfolio type surface: metrics, holdings, tax lots and lot history events.
+
+## Requirements
 
 ### Requirement: PortfolioMetrics interface
 The system SHALL define a `PortfolioMetrics` TypeScript interface in `src/types/portfolio.ts` with fields: `total_equity_eur: number`, `total_realized_pnl_eur: number`, `total_unrealized_pnl_eur: number`.
@@ -68,8 +74,6 @@ The system SHALL define a `PortfolioData` root interface that wraps all domain t
 - **THEN** TypeScript reports a type error on the missing nested field
 
 
-
-## REMOVED Requirements
 
 ### Requirement: PortfolioMetrics interface
 **Reason**: The `PortfolioMetrics` interface in `src/types/portfolio.ts` uses legacy snake_case field names (`total_equity_eur`) that duplicate the proper `PortfolioMetricsEntity` domain model in `src/core/domain/models/PortfolioEntities.ts` which uses camelCase (`totalEquityEur`).

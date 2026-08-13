@@ -92,12 +92,12 @@ export const MOCK_TAX_REPORT = {
   year: 2024,
   method: 'FIFO',
   summary: {
-    capital_gains_eur: 3000, // From SOL sale
-    capital_losses_eur: 0,
-    savings_base_yields_eur: 35,
-    general_base_airdrops_eur: 0,
-    net_patrimonial_result_eur: 3000,
-    estimated_irpf_eur: 570, // 19% of 3000
+    capital_gains: '3000', // From SOL sale
+    capital_losses: '0',
+    savings_base_yields: '35',
+    general_base_airdrops: '0',
+    net_patrimonial_result: '3000',
+    estimated_irpf: '570', // 19% of 3000
   },
   audit_trail: [
     {

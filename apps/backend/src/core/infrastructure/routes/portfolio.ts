@@ -46,6 +46,7 @@ export function createPortfolioApi(container: DIContainer) {
       const history = await container.getTokenHistoryUseCase.execute({
         symbol,
         accountId,
+        targetCurrency: c.req.query('currency'),
       });
       return c.json(history, 200);
     })

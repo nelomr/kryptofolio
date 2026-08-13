@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Crypto Performance History Specification
+
+## Purpose
+
+Performance history retrieval, its chart, and time-range filtering.
+
+## Requirements
 
 ### Requirement: Performance History Data Retrieval
 The system SHALL provide an API endpoint or repository method to fetch historical performance points based on a given time range (1D, 1W, 1M, 1Y, ALL).

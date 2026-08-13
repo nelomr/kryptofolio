@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Market Data Fiat Normalization Specification
+
+## Purpose
+
+Normalising a crypto price into a fiat figure.
+
+## Requirements
 
 ### Requirement: Crypto Price Fiat Normalization
 The system SHALL normalize all crypto prices to the user's configured base fiat currency before broadcasting them to the frontend.

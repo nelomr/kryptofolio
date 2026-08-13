@@ -9,6 +9,7 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
+import type { ConvertedAmount } from '@kryptofolio/shared-types'
 import type { AssetId } from './BrandedTypes'
 import type { LotRelocationEntity, TaxLotEntity, TaxLotHistoryEvent } from './FiscalEntities'
 
@@ -41,8 +42,14 @@ export interface CryptoAssetEntity {
   portfolioLocations: string[]
 }
 
-// Alias for components that expect "HoldingEntity" naming
-export type HoldingEntity = CryptoAssetEntity
+/**
+ * A holding as the portfolio summary returns it — an asset plus the outcome of expressing its cost
+ * basis in the display currency. Separate from `CryptoAssetEntity` because only the summary read
+ * resolves a display currency; a single-asset read has none to report.
+ */
+export interface HoldingEntity extends CryptoAssetEntity {
+  costBasis: ConvertedAmount
+}
 
 // ---------------------------------------------------------------------------
 // PortfolioMetricsEntity — aggregate financial metrics
@@ -67,6 +74,10 @@ export interface PortfolioMetricsEntity {
   isBullish: boolean
   /** Indicates if realized PnL is positive or neutral */
   realizedIsPositive: boolean
+  /** A figure feeding these totals could not be expressed in the display currency. */
+  ratesIncomplete: boolean
+  /** An asset holds a balance no price series ever valued, so its worth is absent from these totals. */
+  pricesIncomplete: boolean
 }
 
 // ---------------------------------------------------------------------------

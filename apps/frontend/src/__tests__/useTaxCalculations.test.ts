@@ -30,8 +30,8 @@ const lotEvent = (overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEve
   id: `lot-${Math.random()}`,
   disposalDate: new Date('2025-01-01'),
   amountFromLot: 1,
-  salePriceEur: 100,
-  gainLossEur: 50,
+  salePrice: { kind: 'NATIVE', amount: '100', currency: 'EUR' },
+  gainLoss: { kind: 'NATIVE', amount: '50', currency: 'EUR' },
   isTaxable: true,
   disposalType: 'SELL',
   ...overrides,
@@ -127,27 +127,71 @@ describe('Tax Calculations Composables', () => {
 
   describe('getEventVariant', () => {
     it('returns "activation" for WALLET_ACTIVATION flag — highest priority', () => {
-      const event = lotEvent({ flag: 'WALLET_ACTIVATION', isTaxable: false, gainLossEur: 0 })
+      const event = lotEvent({ flag: 'WALLET_ACTIVATION', isTaxable: false, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
       expect(getEventVariant(event)).toBe('activation')
     })
 
     it('returns "exempt" for non-taxable events without WALLET_ACTIVATION flag', () => {
-      const event = lotEvent({ isTaxable: false, gainLossEur: 0 })
+      const event = lotEvent({ isTaxable: false, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
       expect(getEventVariant(event)).toBe('exempt')
     })
 
-    it('returns "gain" for taxable events with positive gainLossEur', () => {
-      const event = lotEvent({ isTaxable: true, gainLossEur: 200 })
+
+    it('returns "unconverted" for a figure no rate could express, never "gain"', () => {
+      // The fourth state. `UNCONVERTIBLE` carries a native amount that is usually positive, so a
+      // variant function that only knows three states falls through to the `>= 0` branch and paints
+      // a failed conversion as a profit — the same shape as the `null >= 0` bug this project shipped.
+      const event = lotEvent({
+        isTaxable: true,
+        gainLoss: {
+          kind: 'UNCONVERTIBLE',
+          nativeAmount: '200',
+          nativeCurrency: 'USD',
+          requested: 'EUR',
+        },
+      })
+      expect(getEventVariant(event)).toBe('unconverted')
+    })
+
+    it('keeps unresolved and unconverted apart', () => {
+      // Different causes, different remedies: no price was ever computed versus no rate reached the
+      // date. Collapsing them sends the user to fetch a rate when what is missing is a valuation.
+      expect(getEventVariant(lotEvent({ isTaxable: true, gainLoss: null }))).toBe('unresolved')
+      expect(
+        getEventVariant(
+          lotEvent({
+            isTaxable: true,
+            gainLoss: {
+              kind: 'UNCONVERTIBLE',
+              nativeAmount: '0',
+              nativeCurrency: 'USD',
+              requested: 'EUR',
+            },
+          }),
+        ),
+      ).toBe('unconverted')
+    })
+
+    it('has a badge class and an i18n key for every variant it can return', () => {
+      // A variant with no entry renders as an unstyled, unlabelled badge — visible only by eye.
+      for (const variant of ['gain', 'loss', 'exempt', 'activation', 'unresolved', 'unconverted'] as const) {
+        expect(BADGE_CLASSES[variant], `no badge class for ${variant}`).toBeTruthy()
+        expect(BADGE_I18N_KEYS[variant], `no i18n key for ${variant}`).toBeTruthy()
+      }
+    })
+
+    it('returns "gain" for taxable events with a positive gain', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '200', currency: 'EUR' } })
       expect(getEventVariant(event)).toBe('gain')
     })
 
-    it('returns "gain" for taxable events with zero gainLossEur (break-even)', () => {
-      const event = lotEvent({ isTaxable: true, gainLossEur: 0 })
+    it('returns "gain" for taxable events with a zero gain (break-even)', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '0', currency: 'EUR' } })
       expect(getEventVariant(event)).toBe('gain')
     })
 
-    it('returns "loss" for taxable events with negative gainLossEur', () => {
-      const event = lotEvent({ isTaxable: true, gainLossEur: -50 })
+    it('returns "loss" for taxable events with a negative gain', () => {
+      const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '-50', currency: 'EUR' } })
       expect(getEventVariant(event)).toBe('loss')
     })
   })

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import TaxReportView from './TaxReportView.vue'
 import TaxReportHeader from './components/TaxReportHeader.vue'
@@ -11,7 +12,9 @@ import PendingValuesReview from './components/PendingValuesReview.vue'
 vi.mock('./composables/useTaxReportPort', () => ({
   useTaxReportPort: () => ({
     isLoading: false,
-    report: { value: null },
+    // A real ref, as the composable returns: a bare `{ value: null }` is truthy in the
+    // template, so the currency statement rendered against an absent report.
+    report: ref(null),
     metrics: { capitalGains: 100, yields: 200, totalLosses: 50, estimatedIrpf: 300 },
     warnings: [],
     availableYears: [2024],

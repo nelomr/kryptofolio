@@ -153,10 +153,10 @@ export interface ITaxPort {
    * In MockTaxAdapter: generates a placeholder Blob for development.
    * In RestTaxAdapter: streams the file from /api/tax/report/download.
    * @param year - The fiscal year (e.g. 2024)
-   * @param format - The desired format ('pdf' | 'csv')
+   * @param format - The desired format ('csv')
    * @returns A Blob representing the generated file
    */
-  downloadReport(year: number, format: 'pdf' | 'csv'): Promise<Blob>
+  downloadReport(year: number, format: 'csv'): Promise<Blob>
 
   /**
    * The data-quality defects the calculation engine found, grouped by flag.

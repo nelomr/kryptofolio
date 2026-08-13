@@ -19,6 +19,7 @@ import Decimal from 'decimal.js';
 import crypto from 'node:crypto';
 import type { IPriceProviderPort } from '../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { IBackfillSchedulerPort } from '../../domain/ports/IBackfillSchedulerPort.js';
 import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 /**
@@ -208,6 +209,22 @@ function readWalletDesignation(row: IngestibleTransaction): string | undefined {
   return wallet && wallet.trim().length > 0 ? wallet : undefined;
 }
 
+/**
+ * The earliest UTC date a prepared batch touches, or `null` where none of its rows is dated.
+ *
+ * Taken from the normalised timestamps, so a file written in a non-UTC zone cannot request a span
+ * starting a day after the transaction it has to cover.
+ */
+export function oldestTransactionDate(rows: readonly IngestibleTransaction[]): string | null {
+  let oldest: string | null = null;
+  for (const row of rows) {
+    if (!row.timestamp) continue;
+    const date = normalizeIsoTimestamp(row.timestamp).slice(0, 10);
+    if (oldest === null || date < oldest) oldest = date;
+  }
+  return oldest;
+}
+
 function normalizeIsoTimestamp(raw?: string | null): string {
   if (!raw) return new Date().toISOString();
   try {
@@ -221,15 +238,18 @@ export class CsvIngestionUseCase {
   private ledgerPort: ILedgerPort;
   private priceProvider: IPriceProviderPort;
   private userSettingsPort: IUserSettingsPort;
+  private backfillScheduler: IBackfillSchedulerPort;
 
   constructor(
     ledgerPort: ILedgerPort,
     priceProvider: IPriceProviderPort,
-    userSettingsPort: IUserSettingsPort
+    userSettingsPort: IUserSettingsPort,
+    backfillScheduler: IBackfillSchedulerPort
   ) {
     this.ledgerPort = ledgerPort;
     this.priceProvider = priceProvider;
     this.userSettingsPort = userSettingsPort;
+    this.backfillScheduler = backfillScheduler;
   }
 
   /**
@@ -393,9 +413,35 @@ export class CsvIngestionUseCase {
 
     if (persisted > 0) {
       await this.userSettingsPort.setSetting('needs_recalculation', 'true');
+      this.requestFxCoverage(rows);
     }
 
     return { persisted, rejected, unresolvedFiat, pendingFeeReview, invariant };
+  }
+
+  /**
+   * Asks for FX coverage of the span this batch just reached back into.
+   *
+   * Requested on every ingestion, not only the first: a later import may reach further back than
+   * any before it, and "a backfill has already run" says nothing about the dates this batch needs.
+   * Deduplication is the scheduler's business — it can see the ledger, this cannot.
+   *
+   * Failure here is swallowed on purpose. The rows are already persisted, and a missing rate is
+   * already modelled: the affected figures report as unconvertible until the rates land. Letting it
+   * escape would turn a network problem into a failed import of data that is safely on disk.
+   */
+  private requestFxCoverage(rows: readonly IngestibleTransaction[]): void {
+    const oldest = oldestTransactionDate(rows);
+    if (oldest === null) return;
+
+    try {
+      this.backfillScheduler.requestFxBackfill({
+        from: oldest,
+        to: new Date().toISOString().slice(0, 10),
+      });
+    } catch (err) {
+      console.error('[CsvIngestionUseCase] Failed to request FX backfill', err);
+    }
   }
 
   /**

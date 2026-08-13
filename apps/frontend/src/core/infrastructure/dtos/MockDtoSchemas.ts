@@ -14,6 +14,7 @@ import {
   MANUAL_VALUE_PROVENANCE,
 } from '@kryptofolio/shared-types';
 import { nullableNumericField } from './CommonSchemaHelpers';
+import { convertedAmountSchema } from '@kryptofolio/shared-types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,12 +69,12 @@ export const MockTaxDerivativeSchema = z.object({
 
 
 export const MockTaxReportSummarySchema = z.object({
-  capitalGainsEur: numericField,
-  capitalLossesEur: numericField,
-  savingsBaseYieldsEur: numericField,
-  generalBaseAirdropsEur: numericField,
-  netPatrimonialResultEur: numericField,
-  estimatedIrpfEur: numericField,
+  capitalGains: numericField,
+  capitalLosses: numericField,
+  savingsBaseYields: numericField,
+  generalBaseAirdrops: numericField,
+  netPatrimonialResult: numericField,
+  estimatedIrpf: numericField,
 });
 
 export const MockTaxLotHistorySchema = z.object({
@@ -96,6 +97,10 @@ export const MockTaxLotHistorySchema = z.object({
   exchangeLogoUri: z.string().optional(),
   operationType: z.string().optional(),
   disposalType: z.enum(DISPOSAL_TYPES),
+  // Mock figures declare an outcome like the real ones do. A mock that skipped it would be the one
+  // payload shape the UI never has to handle a conversion state for.
+  salePrice: convertedAmountSchema.nullable().default(null),
+  gainLoss: convertedAmountSchema.nullable().default(null),
 }).transform((raw): TaxLotHistoryEvent => ({
   ...raw,
   flag: raw.flag ?? null,

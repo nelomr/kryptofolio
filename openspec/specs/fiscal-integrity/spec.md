@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Fiscal Integrity Specification
+
+## Purpose
+
+Surfacing consistency warnings so an incomplete figure is never presented as complete.
+
+## Requirements
 
 ### Requirement: Display Consistency Warnings
 The system SHALL display the "Fiscal Hospital" logic detailing any warnings or alerts regarding fiscal data consistency. The warnings SHALL be sourced exclusively from the backend's data-quality view via a Zod-validated DTO, and SHALL be grouped by the canonical data-quality vocabulary with a per-flag count, a severity, and an i18n-resolvable detail key. The component SHALL NOT derive or infer warnings from portfolio data on the client side. Rows requiring a value SHALL be presented as pending review with an affordance to assign that value by hand, and no warning SHALL block access to the portfolio or the tax report.

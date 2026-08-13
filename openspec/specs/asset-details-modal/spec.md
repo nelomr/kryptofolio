@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Asset Details Modal Specification
+
+## Purpose
+
+The per-asset modal: its rendering, and the active lots and sales history it shows.
+
+## Requirements
 
 ### Requirement: Render Asset Details Modal
 The system SHALL display a modal detailing the full FIFO heritage of a specific asset when requested.

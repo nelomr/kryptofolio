@@ -24,6 +24,7 @@ import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js'
 import { SOURCE_VOCABULARIES, type SourceVocabulary } from './fixtures/sourceTypeVocabularies.js';
 import { detectSourceProfile } from '@kryptofolio/core-domain';
 import type { SourceProfileId } from '@kryptofolio/shared-types';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
 const ACCOUNT = '10000000-0000-0000-0000-000000000001';
@@ -123,6 +124,7 @@ describe('every type label in every real export reaches a type the ledger accept
         getSetting: vi.fn().mockResolvedValue('EUR'),
         setSetting: vi.fn().mockResolvedValue(undefined),
       } as unknown as Mocked<IUserSettingsPort>,
+      NO_BACKFILL_SCHEDULER,
     );
   });
 

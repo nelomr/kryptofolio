@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Routing Specification
+
+## Purpose
+
+Application routing.
+
+## Requirements
 
 ### Requirement: Application Routing Management
 The system SHALL use Vue Router to manage application views and navigation transitions.

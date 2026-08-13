@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     date    TEXT NOT NULL,          -- ISO-8601 date (YYYY-MM-DD)
     pair    TEXT NOT NULL,          -- e.g. 'USD/EUR', 'GBP/EUR'
     rate    TEXT NOT NULL,          -- Decimal string, e.g. '0.91234'
-    source  TEXT NOT NULL,          -- e.g. 'ECB', 'manual'
+    source  TEXT NOT NULL,          -- 'ECB' (published that date) or 'ECB_PRIOR_DAY' (carried forward); no other value is readable
     PRIMARY KEY (date, pair)
 ) STRICT;
 

@@ -7,6 +7,7 @@ import type { ILedgerPort, LedgerSpotTransaction } from '../../../domain/ports/I
 import type { IPriceProviderPort } from '../../../domain/ports/IPriceProviderPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 };
 const ACCOUNT = '10000000-0000-0000-0000-000000000001';
@@ -66,6 +67,7 @@ describe('the real rows that the ingestion mapper used to reject', () => {
       ledgerPort,
       makeSilentPriceProvider(),
       makeUserSettingsPort(),
+      NO_BACKFILL_SCHEDULER,
     );
   });
 

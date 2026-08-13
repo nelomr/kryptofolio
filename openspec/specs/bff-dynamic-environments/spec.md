@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Bff Dynamic Environments Specification
+
+## Purpose
+
+Environment modes for the BFF and how secrets reach it without being embedded in the client.
+
+## Requirements
 
 ### Requirement: Dynamic Environment Modes
 The BFF SHALL support executing in different modes based on an environment variable, explicitly supporting a "DEMO/MOCK MODE" and a "PROD MODE".

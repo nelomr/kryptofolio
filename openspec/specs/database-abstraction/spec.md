@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Database Abstraction Specification
+
+## Purpose
+
+`IDatabasePort` as a pluggable seam, and the database package decoupled from any application code.
+
+## Requirements
 
 ### Requirement: Pluggable Database Port
 The system SHALL define generic database interfaces (Ports) in `apps/backend/src/core/domain/ports/` to completely abstract the underlying database engine from the business logic.

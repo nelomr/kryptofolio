@@ -134,6 +134,8 @@ const mockMetrics = {
   roiPercentage: 5,
   isBullish: true,
   realizedIsPositive: true,
+  ratesIncomplete: false,
+  pricesIncomplete: false,
 };
 
 import { I18N_PORT_KEY, CRYPTO_METRICS_PORT_KEY } from "@/core/injectionKeys";
@@ -152,6 +154,8 @@ function mountView(
     isRebuilding: computed(() => false),
     handleRebuild: vi.fn(),
     filteredHoldings: computed(() => []),
+    conversionSummary: computed(() => ({ kind: 'UNCONVERTED' }) as const),
+    loadError: computed(() => null),
     isModalOpen: ref(false),
     selectedSymbol: ref(""),
     selectedHolding: computed(() => undefined),

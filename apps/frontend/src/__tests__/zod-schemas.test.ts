@@ -106,6 +106,8 @@ describe('ExternalPortfolioSummarySchema', () => {
         total_unrealized_pnl_fiat: '25000',
         total_pnl_fiat: '30000',
         currency: 'USD',
+        rates_incomplete: false,
+        prices_incomplete: false,
       },
       holdings: [
         {
@@ -119,6 +121,7 @@ describe('ExternalPortfolioSummarySchema', () => {
           pnl_fiat: 12000,
           currency: 'USD',
           portfolio_locations: ['Ledger'],
+          cost_basis: { kind: 'NATIVE', amount: '50000.00', currency: 'USD' },
         },
       ],
     };
@@ -273,21 +276,24 @@ describe('ExternalTaxReportSchema', () => {
     const raw = {
       year: 2024,
       method: 'FIFO',
+      currency: 'EUR',
+      conversion: { kind: 'NATIVE' },
       summary: {
-        capital_gains_eur: '5000',
-        capital_losses_eur: '1000',
-        savings_base_yields_eur: '200',
-        general_base_airdrops_eur: '100',
-        net_patrimonial_result_eur: '4000',
-        estimated_irpf_eur: '800',
+        capital_gains: '5000',
+        capital_losses: '1000',
+        savings_base_yields: '200',
+        general_base_airdrops: '100',
+        net_patrimonial_result: '4000',
+        estimated_irpf: '800',
       },
       audit_trail: [],
     };
     const result = ExternalTaxReportSchema.safeParse(raw);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.summary.capitalGainsEur).toBe(5000);
-      expect(result.data.summary.estimatedIrpfEur).toBe(800);
+      // Exact strings: a declared tax base is not a float.
+      expect(result.data.summary.capitalGains).toBe('5000');
+      expect(result.data.summary.estimatedIrpf).toBe('800');
       expect(Array.isArray(result.data.auditTrail)).toBe(true);
     }
   });
@@ -298,9 +304,15 @@ describe('ExternalTaxReportSchema', () => {
     const raw = {
       year: 2024,
       method: 'FIFO',
+      currency: 'EUR',
+      conversion: { kind: 'NATIVE' },
       audit_trail: [],
       excludedFlaggedEvents: 2,
       excludedUnresolvedIncomeCount: 3,
+      summary: {
+        capital_gains: '0', capital_losses: '0', savings_base_yields: '0',
+        general_base_airdrops: '0', net_patrimonial_result: '0', estimated_irpf: '0',
+      },
     };
     const result = ExternalTaxReportSchema.safeParse(raw);
     expect(result.success).toBe(true);
@@ -310,8 +322,44 @@ describe('ExternalTaxReportSchema', () => {
     }
   });
 
+  it('rejects a report that does not say which currency its figures are in', () => {
+    // Not defaulted: a report rendered under an assumed currency is exactly the failure this
+    // change removes, and a default would reinstate it at the parsing boundary.
+    const result = ExternalTaxReportSchema.safeParse({
+      year: 2024, method: 'FIFO', conversion: { kind: 'NATIVE' }, audit_trail: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unrecognised conversion outcome instead of coercing it', () => {
+    // A third arm arriving from a newer backend must fail loudly here rather than be read as one of
+    // the two this UI knows how to label.
+    const result = ExternalTaxReportSchema.safeParse({
+      year: 2024, method: 'FIFO', currency: 'EUR',
+      conversion: { kind: 'PARTIALLY_CONVERTED' }, audit_trail: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a NATIVE outcome carrying a rate, rather than ignoring the extra field', () => {
+    // `.strict()` is what makes the two arms mean different things: a native figure was never
+    // multiplied, so a rate on it is a contradiction, not surplus detail.
+    const result = ExternalTaxReportSchema.safeParse({
+      year: 2024, method: 'FIFO', currency: 'EUR',
+      conversion: { kind: 'NATIVE', rate: '1' }, audit_trail: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('defaults both exclusion counts to zero when the backend omits them', () => {
-    const raw = { year: 2024, method: 'FIFO', audit_trail: [] };
+    const raw = {
+      year: 2024, method: 'FIFO', currency: 'EUR',
+      conversion: { kind: 'NATIVE' }, audit_trail: [],
+      summary: {
+        capital_gains: '0', capital_losses: '0', savings_base_yields: '0',
+        general_base_airdrops: '0', net_patrimonial_result: '0', estimated_irpf: '0',
+      },
+    };
     const result = ExternalTaxReportSchema.safeParse(raw);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -320,20 +368,28 @@ describe('ExternalTaxReportSchema', () => {
     }
   });
 
-  it('handles missing optional summary fields with zero defaults', () => {
-    const raw = {
+  it('refuses a partial summary rather than completing it with zeros', () => {
+    // This test asserted the opposite until the summary became required, and the assertion it made
+    // was the defect: an absent figure was filled with `0` — a declared tax base of zero that no
+    // engine ever computed. A partial declaration is not a smaller declaration, it is a wrong one.
+    const result = ExternalTaxReportSchema.safeParse({
       year: 2023,
       method: 'FIFO',
+      currency: 'EUR',
+      conversion: { kind: 'NATIVE' },
       summary: {
-        capital_gains_eur: '0',
-        capital_losses_eur: '0',
+        capital_gains: '0',
+        capital_losses: '0',
       },
-    };
-    const result = ExternalTaxReportSchema.safeParse(raw);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.summary.savingsBaseYieldsEur).toBe(0);
-      expect(result.data.auditTrail).toEqual([]);
-    }
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('refuses a report carrying no summary at all', () => {
+    const result = ExternalTaxReportSchema.safeParse({
+      year: 2023, method: 'FIFO', currency: 'EUR',
+      conversion: { kind: 'NATIVE' }, audit_trail: [],
+    });
+    expect(result.success).toBe(false);
   });
 });

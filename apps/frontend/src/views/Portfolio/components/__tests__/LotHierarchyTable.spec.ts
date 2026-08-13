@@ -74,8 +74,8 @@ describe('ExpandedLotsTable.vue', () => {
         disposalDate: new Date(1680000000 * 1000),
         isTaxable: true,
         amountFromLot: 0.2,
-        salePriceEur: 8000,
-        gainLossEur: 2000,
+        salePrice: { kind: 'NATIVE', amount: '8000', currency: 'EUR' },
+        gainLoss: { kind: 'NATIVE', amount: '2000', currency: 'EUR' },
         disposalType: 'SELL'
       }
     ]
@@ -126,7 +126,7 @@ describe('ExpandedLotsTable.vue', () => {
     const history = vm.getLotHistory('lot1')
 
     expect(history).toHaveLength(1)
-    expect(history[0].gainLossEur).toBe(2000)
+    expect(history[0].gainLoss).toEqual({ kind: 'NATIVE', amount: '2000', currency: 'EUR' })
   })
 
   it('renders the status it was given rather than one derived from quantities', () => {

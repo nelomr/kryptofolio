@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Database Migrations Specification
+
+## Purpose
+
+The `004_fifo_traceability` forward migration: its clean-slate purge of transactional and derived data, its seeded reference data, and marking the ledger pending afterwards.
+
+## Requirements
 
 ### Requirement: `004_fifo_traceability.sql` Forward Migration
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Portfolio Rebuild Sync Specification
+
+## Purpose
+
+Synchronising an explicit rebuild with the reads that depend on it.
+
+## Requirements
 
 ### Requirement: Explicit Rebuild Synchronization
 The backend SHALL synchronize the analytical database (DuckDB) with the transactional ledger (SQLite) when the `POST /api/portfolio/rebuild` endpoint is invoked.

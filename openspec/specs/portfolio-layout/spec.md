@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Portfolio Layout Specification
+
+## Purpose
+
+How the metrics tab arranges its content.
+
+## Requirements
 
 ### Requirement: Metrics Tab Content Arrangement
 The portfolio view SHALL include a specific `TabsContent value="metrics"` tab area that renders the new crypto performance history chart alongside any existing charts AND the new volatility heatmap.

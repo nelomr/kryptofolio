@@ -26,6 +26,7 @@ import type {
   EnsureAssetInput,
 } from '../ILedgerPort.js';
 import type { ITaxCalculatorPort, FifoDataQualityRow } from '../ITaxCalculatorPort.js';
+import type { IFxRateLedgerPort, DailyExchangeRate } from '../IFxRateLedgerPort.js';
 
 describe('ILedgerPort reconciliation surface', () => {
   it('declares reconciliation for every derived table', () => {
@@ -133,5 +134,22 @@ describe('ITaxCalculatorPort', () => {
     expectTypeOf<FifoDataQualityRow>().toHaveProperty('severity');
     expectTypeOf<FifoDataQualityRow>().toHaveProperty('detail_key');
     expectTypeOf<FifoDataQualityRow>().toHaveProperty('pending_review');
+  });
+});
+
+describe('IFxRateLedgerPort read surface', () => {
+  it('declares the reads rate resolution and gap detection need', () => {
+    expectTypeOf<IFxRateLedgerPort>().toHaveProperty('getRateAsOf');
+    expectTypeOf<IFxRateLedgerPort>().toHaveProperty('getStoredRateDates');
+  });
+
+  it('models "the ledger reaches no further back" as null, not as a zero rate', () => {
+    expectTypeOf<IFxRateLedgerPort['getRateAsOf']>()
+      .returns.resolves.toEqualTypeOf<DailyExchangeRate | null>();
+  });
+
+  it('hands back dates rather than rows, so the anti-join stays a pure computation', () => {
+    expectTypeOf<IFxRateLedgerPort['getStoredRateDates']>()
+      .returns.resolves.toEqualTypeOf<readonly string[]>();
   });
 });

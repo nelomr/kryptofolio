@@ -5,10 +5,11 @@
 import { computed, ref } from 'vue'
 import { usePortfolioSummaryQuery, useRebuildMutation, useTokenHistoryQuery, usePortfolioPort } from '@/composables/queries/usePortfolioQueries'
 import type { LotRelocationEntity, TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
+import { summariseConversion } from '@/composables/useConvertedAmountDisplay'
 
 export function usePortfolioData() {
   // Use Pinia Colada queries instead of the old store
-  const { data: summary, isLoading: isFetching } = usePortfolioSummaryQuery()
+  const { data: summary, isLoading: isFetching, error: loadError } = usePortfolioSummaryQuery()
   const { mutateAsync: rebuild, isLoading: isRebuilding } = useRebuildMutation()
   const port = usePortfolioPort()
 
@@ -71,11 +72,17 @@ export function usePortfolioData() {
     }
   }
 
+  const conversionSummary = computed(() =>
+    summariseConversion(filteredHoldings.value.map((holding) => holding.costBasis)),
+  )
+
   return {
     isFetching,
+    loadError,
     isRebuilding,
     metrics,
     filteredHoldings,
+    conversionSummary,
     handleRebuild,
     
     // Modal & Details

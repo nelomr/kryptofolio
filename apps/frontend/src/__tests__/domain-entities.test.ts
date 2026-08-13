@@ -122,6 +122,8 @@ describe('PortfolioSummaryEntity — domain shape', () => {
         roiPercentage: 11.1,
         isBullish: true,
         realizedIsPositive: true,
+        ratesIncomplete: false,
+        pricesIncomplete: false,
       },
       holdings: [],
     }
@@ -162,21 +164,21 @@ describe('TaxReportEntity — fiscal domain shape', () => {
   it('satisfies the TaxReportEntity interface shape', () => {
     const report: TaxReportEntity = {
       year: 2024,
-      method: 'FIFO',
+      method: 'FIFO', currency: 'EUR', conversion: { kind: 'NATIVE' }, unconvertibleEvents: [],
       summary: {
-        capitalGainsEur: 5000,
-        capitalLossesEur: 1000,
-        savingsBaseYieldsEur: 200,
-        generalBaseAirdropsEur: 100,
-        netPatrimonialResultEur: 4000,
-        estimatedIrpfEur: 800,
+        capitalGains: '5000',
+        capitalLosses: '1000',
+        savingsBaseYields: '200',
+        generalBaseAirdrops: '100',
+        netPatrimonialResult: '4000',
+        estimatedIrpf: '800',
       },
       auditTrail: [],
       excludedFlaggedEvents: 0,
       excludedUnresolvedIncomeCount: 0,
     }
-    expect(report.summary.capitalGainsEur).toBe(5000)
-    expect(report.summary.estimatedIrpfEur).toBe(800)
+    expect(report.summary.capitalGains).toBe('5000')
+    expect(report.summary.estimatedIrpf).toBe('800')
     expect(Array.isArray(report.auditTrail)).toBe(true)
   })
 })

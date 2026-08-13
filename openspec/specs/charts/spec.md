@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Charts Specification
+
+## Purpose
+
+The chart surface as a whole: performance and allocation visualisation, conditional rendering, and the TDD requirement that covers them.
+
+## Requirements
 
 ### Requirement: Performance Chart Visualization
 The system SHALL display an interactive area chart using `lightweight-charts` for portfolio performance.

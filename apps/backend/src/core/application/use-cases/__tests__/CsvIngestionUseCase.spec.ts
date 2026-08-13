@@ -45,6 +45,7 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
 }
 
 import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+import { NO_BACKFILL_SCHEDULER } from './support/noBackfillScheduler.js';
 
 function makeMockPriceProvider(price = '1000'): Mocked<IPriceProviderPort> {
   return {
@@ -73,7 +74,7 @@ describe('CsvIngestionUseCase — Unit Tests', () => {
     ledgerPort = makeMockLedgerPort();
     priceProvider = makeMockPriceProvider();
     userSettingsPort = makeMockUserSettingsPort();
-    useCase = new CsvIngestionUseCase(ledgerPort, priceProvider, userSettingsPort);
+    useCase = new CsvIngestionUseCase(ledgerPort, priceProvider, userSettingsPort, NO_BACKFILL_SCHEDULER);
   });
 
   it('flags needs_recalculation as true after successful ingestion', async () => {
@@ -312,7 +313,7 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
   let userSettingsPort: Mocked<IUserSettingsPort>;
 
   function makeUseCase(price = '1000'): CsvIngestionUseCase {
-    return new CsvIngestionUseCase(ledgerPort, makeMockPriceProvider(price), userSettingsPort);
+    return new CsvIngestionUseCase(ledgerPort, makeMockPriceProvider(price), userSettingsPort, NO_BACKFILL_SCHEDULER);
   }
 
   function row(overrides: Partial<SubmittedTransaction> = {}): SubmittedTransaction {
@@ -676,7 +677,7 @@ describe('CsvIngestionUseCase — the fee model', () => {
   let userSettingsPort: Mocked<IUserSettingsPort>;
 
   function makeUseCase(price = '1000'): CsvIngestionUseCase {
-    return new CsvIngestionUseCase(ledgerPort, makeMockPriceProvider(price), userSettingsPort);
+    return new CsvIngestionUseCase(ledgerPort, makeMockPriceProvider(price), userSettingsPort, NO_BACKFILL_SCHEDULER);
   }
 
   function row(overrides: Partial<SubmittedTransaction> = {}): SubmittedTransaction {
@@ -1031,7 +1032,7 @@ describe('CsvIngestionUseCase — E2E with Real Migration Schema', () => {
 
     adapter = new SQLiteLedgerAdapter(db);
     await adapter.initialize();
-    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort());
+    useCase = new CsvIngestionUseCase(adapter, makeMockPriceProvider(), makeMockUserSettingsPort(), NO_BACKFILL_SCHEDULER);
   });
 
   afterEach(() => {

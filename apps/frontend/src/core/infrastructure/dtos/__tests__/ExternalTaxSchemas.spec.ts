@@ -146,8 +146,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('parses operation_type as the typed disposalType field', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'FEE',
     })
     expect(result.success).toBe(true)
@@ -159,8 +159,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('requires operation_type', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
     })
     expect(result.success).toBe(false)
   })
@@ -168,8 +168,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('rejects an operation_type outside the canonical vocabulary', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'SELL_ALL',
     })
     expect(result.success).toBe(false)
@@ -178,16 +178,16 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('preserves an unresolved sale_price_eur as null rather than 0', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: null,
-      gain_loss_eur: null,
+      sale_price: null,
+      gain_loss: null,
       operation_type: 'FEE',
       is_taxable: false,
       quality_flag: 'MISSING_PRICE',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.salePriceEur).toBeNull()
-      expect(result.data.gainLossEur).toBeNull()
+      expect(result.data.salePrice).toBeNull()
+      expect(result.data.gainLoss).toBeNull()
       expect(result.data.qualityFlag).toBe('MISSING_PRICE')
     }
   })
@@ -195,8 +195,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('rejects an unrecognised quality_flag', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: null,
-      gain_loss_eur: null,
+      sale_price: null,
+      gain_loss: null,
       operation_type: 'FEE',
       quality_flag: 'NOT_A_REAL_FLAG',
     })
@@ -206,8 +206,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('keeps the existing WALLET_ACTIVATION fiscal-classification flag intact', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 0,
-      gain_loss_eur: 0,
+      sale_price: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
       operation_type: 'FEE',
       flag: 'WALLET_ACTIVATION',
     })
@@ -220,8 +220,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('rejects an unrecognised fiscal-classification flag', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 0,
-      gain_loss_eur: 0,
+      sale_price: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
       operation_type: 'FEE',
       flag: 'NOT_A_REAL_CLASSIFICATION',
     })
@@ -231,8 +231,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('parses a manual value_provenance as a typed union', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'FEE',
       value_provenance: 'MANUAL',
     })
@@ -244,8 +244,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('parses a MARKET_CONVERTED value_provenance', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'FEE',
       value_provenance: 'MARKET_CONVERTED',
     })
@@ -258,8 +258,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('parses a MISSING_FX_RATE quality_flag', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'FEE',
       quality_flag: 'MISSING_FX_RATE',
     })
@@ -269,18 +269,60 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
     }
   })
 
+
+  // One field at a time, on purpose. Asserting both at once passes as soon as *either* is strict,
+  // so a version of this test that sent two numbers stayed green while `sale_price` accepted them.
+  it.each([
+    ['sale_price', { sale_price: 2, gain_loss: null }],
+    ['gain_loss', { sale_price: null, gain_loss: 0.5 }],
+  ])('rejects a bare number for %s, where a conversion outcome is expected', (_field, figures) => {
+    // The shape this layer used to accept, and the reason the detail table was float money. A number
+    // carries no outcome, so the UI could not tell a converted figure from a native one — and had to
+    // guess, which is the guessing this change removes.
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      ...figures,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects an outcome whose kind it does not know', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price: { kind: 'PARTIALLY_CONVERTED', amount: '2', currency: 'EUR' },
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects a NATIVE figure carrying a rate', () => {
+    // `.strict()` is what keeps the two arms meaning different things: a native figure was never
+    // multiplied, so a rate on it is a contradiction rather than surplus detail.
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR', rate: '1' },
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(false)
+  })
+
   it('maps fx_rate and fx_rate_date to camelCase properties', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'SELL',
-      fx_rate: 1.05,
+      fx_rate: '1.05',
       fx_rate_date: '2024-03-01',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.fxRate).toBe(1.05)
+      // The exact string, not a float: a rate shown beside the figure it produced must not lose
+      // places on the way to the screen.
+      expect(result.data.fxRate).toBe('1.05')
       expect(result.data.fxRateDate).toBe('2024-03-01')
     }
   })
@@ -288,8 +330,8 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('preserves an unresolved fx_rate as null rather than coercing to 0', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'SELL',
       fx_rate: null,
       fx_rate_date: null,
@@ -304,25 +346,27 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
   it('rejects an unrecognised value_provenance', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 2,
-      gain_loss_eur: 0.5,
+      sale_price: { kind: 'NATIVE', amount: '2', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0.5', currency: 'EUR' },
       operation_type: 'FEE',
       value_provenance: 'GUESS',
     })
     expect(result.success).toBe(false)
   })
 
-  it('still parses a genuine zero sale_price_eur as 0, not null', () => {
+  it('still parses a genuine zero as an outcome carrying 0, not as null', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
       ...base,
-      sale_price_eur: 0,
-      gain_loss_eur: 0,
+      sale_price: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
+      gain_loss: { kind: 'NATIVE', amount: '0', currency: 'EUR' },
       operation_type: 'SPEND',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.salePriceEur).toBe(0)
-      expect(result.data.gainLossEur).toBe(0)
+      // A real zero keeps an outcome and an amount of '0'. Collapsing it to null would say the
+      // price was never resolved, which is a different fact about the same disposal.
+      expect(result.data.salePrice).toEqual({ kind: 'NATIVE', amount: '0', currency: 'EUR' })
+      expect(result.data.gainLoss).toEqual({ kind: 'NATIVE', amount: '0', currency: 'EUR' })
     }
   })
 })

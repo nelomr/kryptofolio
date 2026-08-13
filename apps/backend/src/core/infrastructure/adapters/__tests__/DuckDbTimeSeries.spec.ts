@@ -3,33 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DuckDbAdapter } from '@kryptofolio/database';
+import { DuckDbAdapter, applyMigrations } from '@kryptofolio/database';
 
-const MIGRATION_001_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/001_vault_schema.sql',
-  ),
-  'utf-8',
-);
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql',
-  ),
-  'utf-8',
-);
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql',
-  ),
-  'utf-8',
-);
-const MIGRATION_004_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
-  'utf-8',
-);
 
 function insertAccount(db: DatabaseSync, id: string, name: string) {
   db.prepare(
@@ -101,7 +76,11 @@ async function seedHistoricalPrice(
   symbol: string,
   date: string,
   close: string,
-  currency = 'USD',
+  // EUR, because v_portfolio_daily_valuation aggregates in canonical EUR. These prices were
+  // seeded in USD only because the view's target came from a DuckDB-local user_settings stub
+  // hardcoded to 'USD'; that stub is gone, and "same currency, no FX conversion" — which is what
+  // these cases are actually about — now means EUR.
+  currency = 'EUR',
 ) {
   await duckDb.execute(`INSERT INTO _price_seed (date, symbol, close, currency) VALUES (?, ?, ?, ?)`, [
     date,
@@ -130,15 +109,10 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
     sqlitePath = path.join(os.tmpdir(), `test_ts_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_001_SQL);
-    sqliteDb.exec(MIGRATION_SQL);
-    sqliteDb.exec(MIGRATION_003_SQL);
-    sqliteDb.exec(MIGRATION_004_SQL);
-    sqliteDb
-      .prepare(
-        `INSERT OR REPLACE INTO user_settings (key, value) VALUES ('base_currency', 'USD')`,
-      )
-      .run();
+    // The full migration set, not a hand-picked prefix: the FIFO views bind against the current
+    // ledger schema, and a partially-migrated ledger is not a schema the adapters support. Three
+    // fixtures had to be converted mid-change after queries reached a column that arrives in 006.
+    applyMigrations(sqliteDb);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';
@@ -227,7 +201,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '40000',
         acquisitionTimestamp: ds + 'T00:00:00.000Z',
       });
-      await seedHistoricalPrice(duckDb, 'BTC', ds, '50000', 'USD');
+      await seedHistoricalPrice(duckDb, 'BTC', ds, '50000');
       await refreshHistoricalPricesView(duckDb);
 
       const rows = await duckDb.queryMany<{ daily_value: string }>(
@@ -257,7 +231,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '40000',
         acquisitionTimestamp: fridayStr + 'T00:00:00.000Z',
       });
-      await seedHistoricalPrice(duckDb, 'BTC', fridayStr, '42000', 'USD');
+      await seedHistoricalPrice(duckDb, 'BTC', fridayStr, '42000');
       await refreshHistoricalPricesView(duckDb);
 
       const rows = await duckDb.queryMany<{ daily_value: string }>(
@@ -286,8 +260,8 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '50000',
         acquisitionTimestamp: d5s + 'T00:00:00.000Z',
       });
-      await seedHistoricalPrice(duckDb, 'BTC', d5s, '100000', 'USD');
-      await seedHistoricalPrice(duckDb, 'BTC', todayStr, '50000', 'USD');
+      await seedHistoricalPrice(duckDb, 'BTC', d5s, '100000');
+      await seedHistoricalPrice(duckDb, 'BTC', todayStr, '50000');
       await refreshHistoricalPricesView(duckDb);
 
       const rows = await duckDb.queryMany<{ drawdown_pct: string }>(
@@ -313,8 +287,8 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '90000',
         acquisitionTimestamp: d2s + 'T00:00:00.000Z',
       });
-      await seedHistoricalPrice(duckDb, 'BTC', d2s, '90000', 'USD');
-      await seedHistoricalPrice(duckDb, 'BTC', todayStr, '100000', 'USD');
+      await seedHistoricalPrice(duckDb, 'BTC', d2s, '90000');
+      await seedHistoricalPrice(duckDb, 'BTC', todayStr, '100000');
       await refreshHistoricalPricesView(duckDb);
 
       const rows = await duckDb.queryMany<{ drawdown_pct: string }>(
@@ -344,8 +318,8 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '80000',
         acquisitionTimestamp: d2s + 'T00:00:00.000Z',
       });
-      await seedHistoricalPrice(duckDb, 'BTC', d2s, '80000', 'USD');
-      await seedHistoricalPrice(duckDb, 'BTC', d1s, '100000', 'USD');
+      await seedHistoricalPrice(duckDb, 'BTC', d2s, '80000');
+      await seedHistoricalPrice(duckDb, 'BTC', d1s, '100000');
       await refreshHistoricalPricesView(duckDb);
 
       const rows = await duckDb.queryMany<{ daily_return: string }>(
@@ -365,7 +339,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
         const ds = d.toISOString().split('T')[0]!;
-        await seedHistoricalPrice(duckDb, 'BTC', ds, prices[4 - i]!, 'USD');
+        await seedHistoricalPrice(duckDb, 'BTC', ds, prices[4 - i]!);
         if (i === 4) {
           insertTaxLot(sqliteDb, {
             id: `lot-b${i}`,

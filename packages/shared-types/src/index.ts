@@ -3,6 +3,8 @@ export * from './ingestion/sourceProfileIds.js';
 export * from './market-data/models.js';
 export * from './market-data/schemas.js';
 export * from './money/models.js';
+export * from './money/converted-amount.js';
+export * from './schemas/exchange-rate-source.js';
 export * from './schemas/fiat-currencies.js';
 export * from './schemas/fifo-policy.js';
 export * from './schemas/ledger.js';

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Fifo Fx Conversion Specification
+
+## Purpose
+
+Converting a historical market price into the transaction's own reporting currency at materialisation time: backward-looking dated resolution, a missing rate reported as its own defect, and conversion applied at every valuation site.
+
+## Requirements
 
 ### Requirement: Historical Price Conversion To The Reporting Currency
 

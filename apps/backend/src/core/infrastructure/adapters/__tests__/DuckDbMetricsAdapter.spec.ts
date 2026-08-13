@@ -3,25 +3,9 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DuckDbAdapter } from '@kryptofolio/database';
+import { DuckDbAdapter, applyMigrations } from '@kryptofolio/database';
 import { DuckDbMetricsAdapter } from '../DuckDbMetricsAdapter.js';
 
-const MIGRATION_001_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/001_vault_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/002_ledger_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_003_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/003_currency_schema.sql'),
-  'utf-8',
-);
-const MIGRATION_004_SQL = fs.readFileSync(
-  path.resolve(__dirname, '../../../../../../../packages/database/migrations/sqlite/004_fifo_traceability.sql'),
-  'utf-8',
-);
 
 describe('DuckDbMetricsAdapter', () => {
   let sqlitePath: string;
@@ -33,10 +17,10 @@ describe('DuckDbMetricsAdapter', () => {
     sqlitePath = path.join(os.tmpdir(), `test_metrics_${Date.now()}.db`);
     sqliteDb = new DatabaseSync(sqlitePath);
     sqliteDb.exec('PRAGMA foreign_keys = ON;');
-    sqliteDb.exec(MIGRATION_001_SQL);
-    sqliteDb.exec(MIGRATION_SQL);
-    sqliteDb.exec(MIGRATION_003_SQL);
-    sqliteDb.exec(MIGRATION_004_SQL);
+    // The full migration set, not a hand-picked prefix: the FIFO views bind against the current
+    // ledger schema, and a partially-migrated ledger is not a schema the adapters support. Three
+    // fixtures had to be converted mid-change after queries reached a column that arrives in 006.
+    applyMigrations(sqliteDb);
 
     process.env.MOCK_MODE = 'false';
     process.env.DUCKDB_PATH = ':memory:';

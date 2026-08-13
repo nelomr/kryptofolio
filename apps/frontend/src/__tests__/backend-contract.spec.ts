@@ -56,36 +56,38 @@ describe('Backend contract — canonical status vocabulary', () => {
 })
 
 describe('Backend contract — a nullable field survives the round trip', () => {
-  it('preserves a null sale_price_eur from a payload shaped like TokenLotHistoryEventDto', () => {
+  it('preserves a null sale price from a payload shaped like TokenLotHistoryEventDto', () => {
     const event: TokenLotHistoryEventDto = {
       id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: 0.2,
-      sale_price_eur: null, gain_loss_eur: null, is_taxable: false,
+      sale_price: null, gain_loss: null, is_taxable: false,
       quality_flag: 'MISSING_PRICE', operation_type: 'FEE',
     }
     const result = ExternalTokenHistorySchema.safeParse({ lots: [], history: { 'lot-1': [event] } })
     expect(result.success).toBe(true)
     if (result.success) {
       const parsedEvent = result.data.history['lot-1'][0]
-      expect(parsedEvent.salePriceEur).toBeNull()
-      expect(parsedEvent.gainLossEur).toBeNull()
-      // The regression this test exists to prevent: a coercion turning the above into 0.
-      expect(parsedEvent.salePriceEur).not.toBe(0)
+      expect(parsedEvent.salePrice).toBeNull()
+      expect(parsedEvent.gainLoss).toBeNull()
+      // The regression this test exists to prevent: a coercion turning the above into 0, or into a
+      // conversion outcome wrapping a fabricated zero.
+      expect(parsedEvent.salePrice).not.toBe(0)
     }
   })
 
-  it('preserves a null sale_price_eur in the tax report audit trail too', () => {
+  it('preserves a null sale price in the tax report audit trail too', () => {
     const auditRow: TaxReportAuditTrailEventDto = {
       id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: '0.2',
-      sale_price_eur: null, gain_loss_eur: null, sale_fee_eur: 0, is_taxable: false,
+      sale_price: null, gain_loss: null, sale_fee: 0, is_taxable: false,
       operation_type: 'FEE',
     }
     const backendResponse: SpanishTaxReportResponse = {
       year: 2024, method: 'FIFO', spotCapitalGains: '0', savingsBaseYields: '0',
       generalBaseAirdrops: '0', excludedFlaggedEvents: 1, excludedUnresolvedIncomeCount: 0,
-      manuallyAssignedCount: 0,
+      manuallyAssignedCount: 0, currency: 'EUR', conversion: { kind: 'NATIVE' },
+      unconvertibleEvents: [],
       summary: {
-        capital_gains_eur: 0, capital_losses_eur: 0, savings_base_yields_eur: 0,
-        general_base_airdrops_eur: 0, net_patrimonial_result_eur: 0, estimated_irpf_eur: 0,
+        capital_gains: '0', capital_losses: '0', savings_base_yields: '0',
+        general_base_airdrops: '0', net_patrimonial_result: '0', estimated_irpf: '0',
       },
       audit_trail: [auditRow],
     }
@@ -93,7 +95,7 @@ describe('Backend contract — a nullable field survives the round trip', () => 
     const result = ExternalTaxReportSchema.safeParse(backendResponse)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.auditTrail[0].salePriceEur).toBeNull()
+      expect(result.data.auditTrail[0].salePrice).toBeNull()
     }
   })
 })
@@ -119,7 +121,7 @@ describe('Backend contract — a backend field with no frontend counterpart is c
   it('ExternalTaxLotHistoryShape declares every key TokenLotHistoryEventDto sends', () => {
     const sample: TokenLotHistoryEventDto = {
       id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: 1,
-      sale_price_eur: 1, gain_loss_eur: 1, is_taxable: true, operation_type: 'SELL',
+      sale_price: { kind: 'NATIVE', amount: '1', currency: 'EUR' }, gain_loss: { kind: 'NATIVE', amount: '1', currency: 'EUR' }, is_taxable: true, operation_type: 'SELL',
     }
     const backendKeys = Object.keys(sample).sort()
     const declaredKeys = Object.keys(ExternalTaxLotHistoryShape.shape).sort()

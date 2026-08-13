@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Duckdb Engine Setup Specification
+
+## Purpose
+
+DuckDB initialisation, the bulk ingestion interface, and the decimal casting every monetary column crosses.
+
+## Requirements
 
 ### Requirement: DuckDB Engine Initialization
 The infrastructure layer SHALL initialize an ephemeral DuckDB connection on application start and attach the primary SQLite ledger via the `sqlite` scanner extension.

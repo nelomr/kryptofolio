@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Source Format Profiles Specification
+
+## Purpose
+
+Each source declaring its own conventions once: a profile states only what reading and mapping cannot express, is selected on evidence rather than list order, supersedes guessing the market from a file name, and declares the fee's denomination.
+
+## Requirements
 
 ### Requirement: A Source Format Profile Declares Only What Reading and Mapping Cannot Express
 

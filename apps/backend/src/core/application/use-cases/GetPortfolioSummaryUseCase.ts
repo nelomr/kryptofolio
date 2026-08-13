@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import type { ConvertedAmount } from '@kryptofolio/shared-types';
 import type {
   IPortfolioAnalyticsPort,
   HoldingsSnapshot,
@@ -13,6 +14,10 @@ export interface GetPortfolioSummaryRequest {
 }
 
 export interface PortfolioSummaryMetricsDto {
+  /** Some figure feeding these totals could not be expressed in the requested currency. */
+  rates_incomplete: boolean;
+  /** Some asset holds a balance no price series ever valued, so its worth is absent here. */
+  prices_incomplete: boolean;
   total_equity_fiat: string;
   total_cost_basis_fiat: string;
   total_realized_pnl_fiat: string;
@@ -22,6 +27,8 @@ export interface PortfolioSummaryMetricsDto {
 }
 
 export interface PortfolioHoldingDto {
+  /** How the cost basis reached the requested currency, or why it could not. */
+  cost_basis: ConvertedAmount;
   id: string;
   symbol: string;
   amount: string;
@@ -117,6 +124,7 @@ export class GetPortfolioSummaryUseCase {
       amount: h.totalQty,
       avg_price_fiat: h.avgUnitCost,
       cost_basis_fiat: h.totalCostFiat,
+      cost_basis: h.costBasis,
       live_price: h.livePrice,
       current_value_fiat: h.currentValueFiat,
       unrealized_pnl_fiat: h.unrealizedPnlFiat,
@@ -129,15 +137,29 @@ export class GetPortfolioSummaryUseCase {
     if (this.metricsPort) {
       const kpis = await this.metricsPort.getKpis(currency);
       metrics = {
+        rates_incomplete: kpis.ratesIncomplete,
+        prices_incomplete: kpis.pricesIncomplete,
         total_equity_fiat: kpis.totalEquity,
         total_cost_basis_fiat: kpis.totalCostBasis,
         total_realized_pnl_fiat: kpis.totalRealizedPnl,
         total_unrealized_pnl_fiat: kpis.totalUnrealizedPnl,
-        total_pnl_fiat: kpis.totalUnrealizedPnl,
+        // Realized plus unrealized. This read `kpis.totalUnrealizedPnl`, so the total silently
+        // dropped every realized gain and was identical to the field above it. Harmless-looking
+        // while both were unconverted; not once the two convert at different rate dates — a
+        // disposal at its own date, a holding at the latest — because then one wrong number
+        // becomes two that visibly fail to reconcile.
+        //
+        // Summed here rather than taken from the adapter's optional `totalRoiFiat`: an optional
+        // field silently reverts to the defect for any port implementation that omits it.
+        total_pnl_fiat: new Decimal(kpis.totalRealizedPnl)
+          .add(new Decimal(kpis.totalUnrealizedPnl))
+          .toFixed(2),
         currency: kpis.currency,
       };
     } else {
       metrics = {
+        rates_incomplete: false,
+        prices_incomplete: false,
         total_equity_fiat: '0.00',
         total_cost_basis_fiat: '0.00',
         total_realized_pnl_fiat: '0.00',

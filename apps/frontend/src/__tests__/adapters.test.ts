@@ -102,12 +102,12 @@ vi.mock('../core/infrastructure/http/BffClient', () => {
                 year: 2024,
                 method: 'FIFO',
                 summary: {
-                  capitalGainsEur: 500,
-                  capitalLossesEur: 0,
-                  savingsBaseYieldsEur: 0,
-                  generalBaseAirdropsEur: 0,
-                  netPatrimonialResultEur: 500,
-                  estimatedIrpfEur: 100
+                  capitalGains: '500',
+                  capitalLosses: '0',
+                  savingsBaseYields: '0',
+                  generalBaseAirdrops: '0',
+                  netPatrimonialResult: '500',
+                  estimatedIrpf: '100'
                 },
                 auditTrail: []
               })

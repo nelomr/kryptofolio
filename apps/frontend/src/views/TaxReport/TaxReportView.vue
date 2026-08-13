@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import TaxReportHeader from "./components/TaxReportHeader.vue";
 import TaxReportSummaryCards from "./components/TaxReportSummaryCards.vue";
+import TaxReportCurrencyStatement from "./components/TaxReportCurrencyStatement.vue";
 
 import TaxReportTab from "./components/TaxReportTab.vue";
 import YearFilter from "./components/YearFilter.vue";
@@ -25,7 +26,7 @@ import { useI18n } from "@/composables/useI18n";
 import type { AccountId, TransactionIdHash } from "@/core/domain/models/BrandedTypes";
 
 const { t } = useI18n();
-const { metrics, syncWeb3, selectedYear, effectiveYear } = useTaxReportPort();
+const { metrics, syncWeb3, selectedYear, effectiveYear, report } = useTaxReportPort();
 
 // Declarative reads and writes only — no fiscal state is held in a global store.
 const {
@@ -137,6 +138,13 @@ const isUploadModalOpen = ref(false);
 
     <!-- Adapter orchestrating Dumb components -->
     <TaxReportHeader @sync="syncWeb3" @upload="isUploadModalOpen = true" />
+
+    <TaxReportCurrencyStatement
+      v-if="report"
+      :currency="report.currency"
+      :conversion="report.conversion"
+      :unconvertible-events="report.unconvertibleEvents"
+    />
 
     <Teleport to="body">
       <Transition name="modal">

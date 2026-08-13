@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Sqlite Transactional Ledger Specification
+
+## Purpose
+
+The transactional ledger: relational tables under STRICT mode with text storage, the asset fiat classification column, and the account hierarchy and synthetic markers.
+
+## Requirements
 
 ### Requirement: Relational Tables
 The database SHALL include `assets`, `accounts`, `spot_transactions`, `futures_transactions`, `tax_lots`, `lot_history_events`, `lot_custody_entries`, `manual_price_overrides`, `transfer_destination_overrides`, and `audit_log` tables matching frontend mock payload structures. Tables SHALL be partitioned into two classes with opposite lifecycles: **derived** tables (`tax_lots`, `lot_history_events`, `lot_custody_entries`), which are a pure function of their inputs and are freely reconciled; and **user-authored input** tables (`manual_price_overrides`, `transfer_destination_overrides`), which are never written by reconciliation.
@@ -49,8 +55,6 @@ The SQLite transactional ledger (`kryptofolio_ledger.db`) SHALL enforce STRICT m
 - **WHEN** `lot_custody_entries.qty_delta` is written with a negative value representing an outflow
 - **THEN** the write MUST succeed
 - **AND** the column's signed semantics MUST be documented in the schema
-
-## ADDED Requirements
 
 ### Requirement: Asset Fiat Classification Column
 

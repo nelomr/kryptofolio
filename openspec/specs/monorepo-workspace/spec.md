@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Monorepo Workspace Specification
+
+## Purpose
+
+Workspace initialisation, relocating the frontend into it, and the shared TypeScript configuration.
+
+## Requirements
 
 ### Requirement: Workspace Initialization
 The repository SHALL be configured as a pnpm workspace with an `apps/` and `packages/` directory structure.

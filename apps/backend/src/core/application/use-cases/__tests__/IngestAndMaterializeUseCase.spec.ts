@@ -253,9 +253,13 @@ describe('layer independence of the two composed steps', () => {
 
   it('keeps CsvIngestionUseCase independently invocable', async () => {
     const { CsvIngestionUseCase: Ingestion } = await import('../CsvIngestionUseCase.js');
-    // Three collaborators: the ledger, the price provider and the settings. A fourth would mean the
-    // materialiser had been injected after all.
-    expect(Ingestion.length).toBe(3);
+    // The ledger, the price provider, the settings and the backfill scheduler — each named in the
+    // constructor below, so a fifth collaborator, or a fourth that is not the scheduler port,
+    // fails here rather than passing on a count alone.
+    expect(Ingestion.length).toBe(4);
+    expect(source('CsvIngestionUseCase.ts')).toMatch(
+      /constructor\(\s*ledgerPort: ILedgerPort,\s*priceProvider: IPriceProviderPort,\s*userSettingsPort: IUserSettingsPort,\s*backfillScheduler: IBackfillSchedulerPort\s*\)/,
+    );
   });
 
   it('keeps the orchestrator free of any framework or HTTP dependency', () => {

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Project Branding Specification
+
+## Purpose
+
+Rebranding: the name, copyright-free thematic assets, multi-language documentation, and positioning.
+
+## Requirements
 
 ### Requirement: Project Rebranding
 The repository and application SHALL use "Kryptofolio" (display) and "kryptofolio" (package) as its primary identifier.

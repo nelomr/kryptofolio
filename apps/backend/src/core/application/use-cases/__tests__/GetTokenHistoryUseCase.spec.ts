@@ -1,11 +1,56 @@
 import { describe, it, expect, vi } from 'vitest';
 import { GetTokenHistoryUseCase } from '../GetTokenHistoryUseCase.js';
+import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import type {
+  ConvertedDisposalEvent,
   ITaxCalculatorPort,
   LotCustodyLocationRow,
   LotCustodyRelocationRow,
 } from '../../../domain/ports/ITaxCalculatorPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
+
+/**
+ * The converted read, derived from the same native events each case declares.
+ *
+ * These fixtures are denominated in the currency the use case resolves, so every figure takes the
+ * identity arm. Deriving it from `events` keeps each test's intent expressed once instead of forcing
+ * a parallel fixture that could drift from it.
+ */
+function toConvertedEvents(events: TaxLotEventType[]): ConvertedDisposalEvent[] {
+  return events.map((evt) => ({
+    id: evt.id ?? 'evt-unknown',
+    taxLotId: evt.tax_lot_id,
+    disposalDate: evt.disposal_date,
+    amountFromLot: String(evt.amount_from_lot),
+    salePrice:
+      evt.sale_price_fiat === null || evt.sale_price_fiat === undefined
+        ? null
+        : { kind: 'NATIVE', amount: String(evt.sale_price_fiat), currency: 'USD' },
+    gainLoss:
+      evt.gain_loss_fiat === null || evt.gain_loss_fiat === undefined
+        ? null
+        : { kind: 'NATIVE', amount: String(evt.gain_loss_fiat), currency: 'USD' },
+    isTaxable: Boolean(evt.is_taxable),
+    disposalType: evt.disposal_type,
+    flag: evt.flag ?? null,
+    qualityFlag: evt.quality_flag ?? null,
+    valueProvenance: evt.value_provenance,
+    fxRate: evt.fx_rate === null || evt.fx_rate === undefined ? null : String(evt.fx_rate),
+    fxRateDate: evt.fx_rate_date ?? null,
+    notes: evt.notes ?? undefined,
+    assetSymbol: evt.asset_symbol,
+    exchangeName: evt.exchange_name,
+  }));
+}
+
+/** The settings port the use case resolves its display currency through. */
+const settingsPort: IUserSettingsPort = {
+  getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn(),
+};
+
+const makeUseCase = (port: ITaxCalculatorPort): GetTokenHistoryUseCase =>
+  new GetTokenHistoryUseCase(port, settingsPort);
 
 function makePort(data: {
   lots?: TaxLotType[];
@@ -22,6 +67,7 @@ function makePort(data: {
     getLotCustodyLocations: vi.fn().mockResolvedValue(data.custody ?? []),
     getLotCustodyTimeline: vi.fn().mockResolvedValue(data.relocations ?? []),
     getDataQuality: vi.fn().mockResolvedValue([]),
+    getConvertedDisposalEvents: vi.fn().mockResolvedValue(toConvertedEvents(data.events ?? [])),
   };
 }
 
@@ -81,7 +127,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
       events: [XLM_EVENT],
     });
 
-    const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+    const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
     expect(result.lots).toHaveLength(1);
     expect(result.lots[0].id).toBe('lot-xlm-1');
@@ -105,7 +151,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         lots: [{ ...XLM_LOT, remaining_qty: '0', status: 'OPEN' }],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].status).toBe('OPEN');
     });
@@ -115,7 +161,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         lots: [{ ...XLM_LOT, remaining_qty: '0', status: 'CLOSED' }],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].status).toBe('CLOSED');
     });
@@ -125,7 +171,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         lots: [{ ...XLM_LOT, remaining_qty: '2000.0', status: 'OPEN' }],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].status).toBe('OPEN');
     });
@@ -138,7 +184,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       const statuses: string[] = result.lots.map((lot) => lot.status);
       expect(statuses).not.toContain('FULL');
@@ -153,7 +199,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         events: [{ ...XLM_EVENT, id: 'evt-fee', disposal_type: 'FEE' }],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.history['lot-xlm-1'][0].operation_type).toBe('FEE');
     });
@@ -168,7 +214,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.history['lot-xlm-1'].map((e) => e.operation_type)).toEqual([
         'SELL',
@@ -190,7 +236,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
       const event = result.history['lot-xlm-1'][0];
 
       expect(event.flag).toBe('WALLET_ACTIVATION');
@@ -212,11 +258,11 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
       const event = result.history['lot-xlm-1'][0];
 
-      expect(event.sale_price_eur).toBeNull();
-      expect(event.gain_loss_eur).toBeNull();
+      expect(event.sale_price).toBeNull();
+      expect(event.gain_loss).toBeNull();
       expect(event.is_taxable).toBe(false);
     });
 
@@ -233,10 +279,10 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
       const event = result.history['lot-xlm-1'][0];
 
-      expect(event.fx_rate).toBe(1.09);
+      expect(event.fx_rate).toBe('1.09');
       expect(event.fx_rate_date).toBe('2024-03-01');
       expect(event.value_provenance).toBe('MARKET_CONVERTED');
     });
@@ -268,7 +314,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].custody).toEqual([
         {
@@ -313,7 +359,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         ],
       });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].custody.map((c) => c.account_id)).toEqual(['acc-2']);
     });
@@ -321,7 +367,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('returns an empty custody list for a lot the projection knows nothing about', async () => {
       const port = makePort({ lots: [XLM_LOT], custody: [] });
 
-      const result = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(result.lots[0].custody).toEqual([]);
     });
@@ -329,7 +375,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('scopes the custody query to the requested account', async () => {
       const port = makePort({ lots: [XLM_LOT] });
 
-      await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-1' });
+      await makeUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-1' });
 
       expect(port.getLotCustodyLocations).toHaveBeenCalledWith('acc-1');
     });
@@ -353,7 +399,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('returns the relocations keyed by lot, alongside the disposals', async () => {
       const port = makePort({ lots: [XLM_LOT], events: [XLM_EVENT], relocations: [MOVE] });
 
-      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const res = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(res.relocations['lot-xlm-1']).toHaveLength(1);
       expect(res.history['lot-xlm-1']).toHaveLength(1);
@@ -362,7 +408,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('names both ends and marks a synthetic counterparty', async () => {
       const port = makePort({ lots: [XLM_LOT], relocations: [MOVE] });
 
-      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const res = await makeUseCase(port).execute({ symbol: 'XLM' });
       const move = res.relocations['lot-xlm-1']?.[0];
 
       expect(move?.from_account_name).toBe('Binance');
@@ -376,7 +422,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('carries no valuation on a relocation, since a movement realises nothing', async () => {
       const port = makePort({ lots: [XLM_LOT], relocations: [MOVE] });
 
-      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const res = await makeUseCase(port).execute({ symbol: 'XLM' });
       const move = res.relocations['lot-xlm-1']?.[0];
 
       expect(Object.keys(move ?? {})).not.toContain('sale_price_eur');
@@ -390,7 +436,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
         relocations: [MOVE, { ...MOVE, tax_lot_id: 'lot-btc-1', asset_id: 'BTC' }],
       });
 
-      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const res = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(Object.keys(res.relocations)).toEqual(['lot-xlm-1']);
     });
@@ -398,7 +444,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('reports no relocations for a lot that never moved', async () => {
       const port = makePort({ lots: [XLM_LOT], events: [XLM_EVENT] });
 
-      const res = await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM' });
+      const res = await makeUseCase(port).execute({ symbol: 'XLM' });
 
       expect(res.relocations).toEqual({});
     });
@@ -406,7 +452,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     it('scopes the timeline query to the requested account', async () => {
       const port = makePort({ lots: [XLM_LOT] });
 
-      await new GetTokenHistoryUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-9' });
+      await makeUseCase(port).execute({ symbol: 'XLM', accountId: 'acc-9' });
 
       expect(port.getLotCustodyTimeline).toHaveBeenCalledWith('acc-9');
     });

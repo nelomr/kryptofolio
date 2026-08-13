@@ -1,5 +1,9 @@
 # Capability: Vue Composables Wizard
 
+## Purpose
+
+The wizard's architecture: feature-sliced components, cohesive composables, and the TDD and Zod requirements preserved through the refactor.
+
 ## Requirements
 
 ### Requirement: Flattened UI Architecture (Feature-Sliced)

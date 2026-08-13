@@ -7,7 +7,7 @@
  *
  * Emits:
  *   - update:selectedYear(year: number): user changed the fiscal year.
- *   - download(year: number, format: 'pdf' | 'csv'): user requested a report download.
+ *   - download(year: number, format: 'csv'): user requested a report download.
  */
 
 import { ref, watch } from 'vue'

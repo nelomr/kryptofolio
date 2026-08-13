@@ -51,20 +51,20 @@ export function useTaxReportPort() {
   const metrics = computed(() => {
     if (!report.value) {
       return {
-        capitalGains: 0,
-        yields: 0,
-        totalLosses: 0,
-        estimatedIrpf: 0,
+        capitalGains: '0',
+        yields: '0',
+        totalLosses: '0',
+        estimatedIrpf: '0',
         excludedFlaggedEvents: 0,
         excludedUnresolvedIncomeCount: 0,
       }
     }
     const summary = report.value.summary
     return {
-      capitalGains: summary.capitalGainsEur,
-      yields: summary.savingsBaseYieldsEur,
-      totalLosses: summary.capitalLossesEur,
-      estimatedIrpf: summary.estimatedIrpfEur,
+      capitalGains: summary.capitalGains,
+      yields: summary.savingsBaseYields,
+      totalLosses: summary.capitalLosses,
+      estimatedIrpf: summary.estimatedIrpf,
       excludedFlaggedEvents: report.value.excludedFlaggedEvents,
       excludedUnresolvedIncomeCount: report.value.excludedUnresolvedIncomeCount,
     }

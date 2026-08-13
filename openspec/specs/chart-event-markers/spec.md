@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Chart Event Markers Specification
+
+## Purpose
+
+Marking fiscal and portfolio events on a time-series chart.
+
+## Requirements
 
 ### Requirement: Chart Event Markers
 The application SHALL display visual markers on the performance chart for significant events such as deposits and withdrawals.

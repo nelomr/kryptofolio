@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Monorepo Structure Specification
+
+## Purpose
+
+Extracting the shared packages and refactoring the frontend onto them.
+
+## Requirements
 
 ### Requirement: Shared Packages Extraction
 The system SHALL organize domain logic and types into isolated workspace packages.

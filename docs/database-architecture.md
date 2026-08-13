@@ -183,6 +183,82 @@ The tax pipeline aggregates all realized gains into strictly defined tax bases:
 - **`savings_base_yields` (Base del Ahorro):** Standard capital gains from trades, sales, staking, and futures/derivatives realized PnL.
 - **`general_base_airdrops` (Base General):** Earned income via airdrops or promotional tokens.
 
+### 5.4. FX Resolution: `v_fx_daily`
+
+Every dated rate lookup in the analytical layer goes through one view, so the resolution rule has a
+single definition rather than a copy per consumer.
+
+```sql
+CREATE OR REPLACE VIEW v_fx_daily AS
+SELECT rate_date, pair, rate, is_reciprocal
+FROM (
+    SELECT CAST(date AS DATE) AS rate_date, pair, rate, is_reciprocal,
+           ROW_NUMBER() OVER (PARTITION BY rate_date, pair ORDER BY is_reciprocal) AS preference
+    FROM (
+        -- Direct pairs, as the ECB publishes them
+        SELECT date, pair, CAST(rate AS DECIMAL(18,12)) AS rate, 0 AS is_reciprocal
+        FROM ledger.exchange_rates
+        UNION ALL
+        -- Synthesised inversions, second-class by construction
+        SELECT date, SPLIT_PART(pair, '/', 2) || '/' || SPLIT_PART(pair, '/', 1),
+               CAST(1.0 / CAST(rate AS DOUBLE) AS DECIMAL(18,12)), 1
+        FROM ledger.exchange_rates
+        WHERE TRY_CAST(rate AS DECIMAL(38,18)) IS NOT NULL
+          AND TRY_CAST(rate AS DECIMAL(38,18)) <> 0
+    )
+)
+WHERE preference = 1;
+```
+
+Three properties are load-bearing:
+
+| Property | Why it is that way |
+|---|---|
+| **Direct rates win over reciprocals** | `exchange_rates` is ECB-quoted and holds `USD/EUR`, not `EUR/USD`. The inversion is computed in `DOUBLE` and bounded at twelve decimals, so it is recorded with `is_reciprocal = 1` and ranked below any direct quote for the same date and pair. A direct rate is never derived, only read. |
+| **Resolution is backward-looking** | Consumers join with `ASOF LEFT JOIN … AND fx.rate_date <= <the figure's own date>`. A Sunday resolves the preceding Friday; a rate published *after* the target date is never returned. |
+| **One view, not a CTE per query** | It began as two CTEs inside `v_flattened_fifo_events`. The display conversion needs the same resolution, and a second hand-written copy is precisely how the two would drift apart. |
+
+> [!NOTE]
+> Reading `v_fx_daily` through the SQLite extension is not free. Adapters that join it more than once
+> per statement pin it into a `MATERIALIZED` CTE first — four ASOF joins over a bare view reference
+> re-scan the underlying table four times.
+
+### 5.5. Display Currency Is a Bound Parameter, Never Engine State
+
+DuckDB once carried its own `user_settings` table, seeded with `'USD'`, which
+`v_portfolio_daily_valuation` read to decide its output currency. It has been **removed**, and
+nothing in the analytical layer resolves a target currency from stored state.
+
+The reason is that DuckDB here is a derived cache: it is rebuilt from SQLite on demand and holds
+nothing SQLite does not already have. A settings row living only in DuckDB is therefore a second
+source of truth that survives no rebuild and can silently disagree with the SQLite `user_settings`
+the rest of the system reads.
+
+So the target currency reaches every query as a **bound parameter**, supplied per call by the use
+case:
+
+```
+                       SQLite user_settings.base_currency
+                                    │
+                                    ▼
+                            use case resolves it
+                                    │
+                                    ▼  bound as $1 / $2
+      adapter query ──ASOF JOIN──▶ v_fx_daily ──▶ figure in the display currency
+```
+
+`v_portfolio_daily_valuation` now aggregates in canonical **EUR** with no settings lookup at all,
+because it sums assets whose price series are denominated differently and must reduce them to one
+unit before summing; EUR is the only currency reachable from any other by a *published* ECB rate
+rather than an inverted one. The outer query converts EUR into the display currency **per date**, so
+a chart is never a single rate applied to all of history.
+
+> [!WARNING]
+> Never reintroduce a currency setting into the DuckDB schema. Two consequences follow immediately:
+> the value is lost on the next rebuild, and any view reading it becomes untestable against a
+> requested currency — which is how the same ledger came to return identical figures under two
+> different currency labels.
+
 ---
 
 ## 6. Performance Indices

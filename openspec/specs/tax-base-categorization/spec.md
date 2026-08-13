@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Tax Base Categorization Specification
+
+## Purpose
+
+Routing each realised figure to the Spanish tax base that governs it.
+
+## Requirements
 
 ### Requirement: Spanish Tax Law Base Routing
 The DuckDB views SHALL categorize taxable events based on the `operationType` to support Spanish IRPF declarations, strictly distinguishing between Savings Base and General Base income.

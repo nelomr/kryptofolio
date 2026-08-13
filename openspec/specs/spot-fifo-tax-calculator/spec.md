@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# Spot Fifo Tax Calculator Specification
+
+## Purpose
+
+Resolving spot FIFO lots, and generating the disposal a crypto-denominated fee causes.
+
+## Requirements
 
 ### Requirement: Spot FIFO Lots Resolution
 The system SHALL use SQL Window Functions (`SUM() OVER`) and/or `WITH RECURSIVE` queries in DuckDB to chronologically match disposal transactions (Sells, Swaps) against acquisition transactions (Buys) using the First-In, First-Out rule. Every cost basis and every disposal value the matching produces SHALL be stated in the transaction's reporting currency, converting a price series denominated otherwise per the `fifo-fx-conversion` capability.

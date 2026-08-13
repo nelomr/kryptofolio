@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Api Gateway Specification
+
+## Purpose
+
+The Hono BFF scaffold and the `AppType` export that gives the frontend end-to-end type safety over RPC.
+
+## Requirements
 
 ### Requirement: Scaffold Hono BFF
 The system SHALL have a new package `packages/api-gateway` initialized with Hono and a health-check endpoint.

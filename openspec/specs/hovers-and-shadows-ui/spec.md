@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Hovers And Shadows Ui Specification
+
+## Purpose
+
+Interactive elevation: cards on hover, semantic shadcn token mapping, and highlighted interactive text.
+
+## Requirements
 
 ### Requirement: Elevate Cards on Hover
 The system SHALL apply `--shadow-card` to all metric and summary cards when the user hovers over them, replacing border color changes or legacy shadows.

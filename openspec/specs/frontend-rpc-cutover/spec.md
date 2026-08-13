@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Frontend Rpc Cutover Specification
+
+## Purpose
+
+Fetching through Hono RPC, with the anti-corruption layer enforced at that boundary.
+
+## Requirements
 
 ### Requirement: Hono RPC Data Fetching
 All frontend infrastructure adapters SHALL utilize the typed Hono RPC client (`apiClient`) to perform data fetching from the BFF, eliminating any direct usage of Axios, `fetch`, or local mock data modules.

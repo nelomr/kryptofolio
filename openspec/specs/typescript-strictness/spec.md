@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Typescript Strictness Specification
+
+## Purpose
+
+No `any` in production code, branded types enforced at adapter boundaries, explicit strict mode, and a typed audit trail in the tax DTO.
+
+## Requirements
 
 ### Requirement: No any types in production code
 All production TypeScript files (`src/**/*.ts`, `src/**/*.vue`) SHALL have zero occurrences of the `any` type. Test files (`__tests__/**`) are exempt.

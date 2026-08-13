@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Crypto Volatility Heatmap Specification
+
+## Purpose
+
+The volatility heatmap and the UI standards it must meet.
+
+## Requirements
 
 ### Requirement: Volatility Heatmap Display
 The system SHALL display a volatility heatmap grid component within the metrics tab. The grid MUST map return percentages to predefined institutional semantic color tokens.

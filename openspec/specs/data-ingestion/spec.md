@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Data Ingestion Specification
+
+## Purpose
+
+The ingestion wizard: drag and drop, automatic column mapping, inline validation with highlighted errors, and inline cell editing.
+
+## Requirements
 
 ### Requirement: Drag and Drop Ingestion
 The system SHALL provide a dropzone area where users can upload CSV or Excel transaction files.

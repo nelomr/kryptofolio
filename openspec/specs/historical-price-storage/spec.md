@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Historical Price Storage Specification
+
+## Purpose
+
+In-memory temporary price storage, and what DuckDB requires of it.
+
+## Requirements
 
 ### Requirement: In-Memory Temporary Storage
 The system SHALL temporarily cache historical prices in memory, pending a robust DuckDB implementation.
