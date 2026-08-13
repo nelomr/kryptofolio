@@ -274,6 +274,9 @@ describe('custody double entry', () => {
     let forwardEntries: EntryRow[];
     let reversedEntries: EntryRow[];
 
+    // Two full harness() bootstraps back to back — roughly double the cost the package's 15s
+    // hookTimeout was tuned for a single one — so this hook alone gets double the budget rather
+    // than raising the ceiling for every test in the package.
     beforeAll(async () => {
       const specs = [BUY_10_BTC, transferOut(), transferIn()];
       const forward = await harness('order-fwd', specs);
@@ -285,7 +288,7 @@ describe('custody double entry', () => {
         forward.cleanup();
         reversed.cleanup();
       }
-    });
+    }, 30_000);
 
     it('derives identical entries regardless of the order the ledger was written in', () => {
       expect(forwardEntries.length).toBeGreaterThan(0);
