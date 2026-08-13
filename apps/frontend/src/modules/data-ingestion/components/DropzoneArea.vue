@@ -68,7 +68,7 @@ const handleFileInput = async (e: Event) => {
       <input
         type="file"
         class="hidden"
-        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         @change="handleFileInput"
       >
     </label>

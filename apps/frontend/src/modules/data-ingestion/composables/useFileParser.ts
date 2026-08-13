@@ -16,7 +16,7 @@ export function useFileParser() {
       
       if (file.name.endsWith('.csv')) {
         result = await parseCsv(file)
-      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      } else if (file.name.endsWith('.xlsx')) {
         result = await parseExcel(file)
       } else {
         parseErrors.value = ['ingestion.errors.unsupported_format']

@@ -41,6 +41,7 @@
     "papaparse": "5.4.1",
     "pinia": "^3.0.4",
     "radix-vue": "1.9.17",
+    "read-excel-file": "^9.3.10",
     "reka-ui": "^2.9.8",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
@@ -48,7 +49,6 @@
     "vue-chartjs": "5.3.3",
     "vue-router": "4.5.1",
     "vue-sonner": "^2.0.9",
-    "xlsx": "0.18.5",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -76,6 +76,7 @@
     "vite-plugin-compression2": "^2.5.3",
     "vite-plugin-image-optimizer": "^2.0.3",
     "vitest": "catalog:",
-    "vue-tsc": "^3.2.8"
+    "vue-tsc": "^3.2.8",
+    "write-excel-file": "^4.1.1"
   }
 }

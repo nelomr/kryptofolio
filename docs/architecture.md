@@ -177,7 +177,7 @@ flowchart LR
 ```
 
 ### Steps Breakdown:
-1. **File Parsing & Upload:** CSV/XLSX files are parsed in-browser using `PapaParse` or equivalent utilities.
+1. **File Parsing & Upload:** CSV files are parsed in-browser with `PapaParse`; `.xlsx` files with `read-excel-file`.
 2. **Column Auto-Mapping:** Mappings are matched automatically against aliases for Binance, Kraken, Coinbase, KuCoin, and Bitunix. If headers are unknown, they default to a `metadata` pass-through object rather than breaking the parser.
 3. **Manual Adjustments:** The user can manually map unassigned headers using a dropdown where options are sorted alphabetically based on their translated labels (ensuring quick scanning).
 4. **Validation:** Checks are run based on `marketType`:

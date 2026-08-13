@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import * as XLSX from 'xlsx'
+import writeXlsxFile from 'write-excel-file/node'
+import type { SheetData } from 'write-excel-file/node'
 import { parseExcel } from '../parsers'
 
 /** Matches what `preciseAmountSchema` accepts: a plain decimal, never exponential notation. */
@@ -13,12 +14,9 @@ const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/
  * which discards real recorded digits it mistook for float64 noise. The parser's only remaining job
  * is to render the stored value as a plain decimal, unrounded.
  */
-function workbookFile(rows: unknown[][]): File {
-  const sheet = XLSX.utils.aoa_to_sheet(rows)
-  const book = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(book, sheet, 'Sheet1')
-  const buffer: ArrayBuffer = XLSX.write(book, { type: 'array', bookType: 'xlsx' })
-  return new File([buffer], 'source.xlsx', {
+async function workbookFile(rows: SheetData, sheetName?: string): Promise<File> {
+  const buffer = await writeXlsxFile(rows, sheetName ? { sheet: sheetName } : undefined).toBuffer()
+  return new File([new Uint8Array(buffer)], 'source.xlsx', {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
 }
@@ -26,7 +24,7 @@ function workbookFile(rows: unknown[][]): File {
 describe('parseExcel numeric fidelity', () => {
   it('keeps every digit the source stored, not the digits a display format would show', async () => {
     // bit2me_spot_2025.xlsx!F72, F123, F339 — EUR fee valuations with 16-17 significant digits.
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Cantidad de origen', 'Comisión de la operación'],
       ['Withdrawal', 99.3, 0.15742981799999997],
       ['Withdrawal', 2.9997, 0.0007158659969999999],
@@ -46,7 +44,7 @@ describe('parseExcel numeric fidelity', () => {
 
   it('does not shorten a quantity a General display format would abbreviate to fewer digits', async () => {
     // bit2me_spot_2024.xlsx!B6 — a destination amount, 13 significant digits, real recorded data.
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Cantidad de destino'],
       ['Trade', 1244.13519942],
     ])
@@ -58,7 +56,7 @@ describe('parseExcel numeric fidelity', () => {
 
   it('does not resolve a near-integer to the round number a display format would show', async () => {
     // bit2me_spot_2025.xlsx!D71 — an origin amount of a Trade; 1.06e6 ULP away from 150, not noise.
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Cantidad de origen'],
       ['Trade', 149.99999997],
     ])
@@ -69,7 +67,7 @@ describe('parseExcel numeric fidelity', () => {
   })
 
   it('renders sub-microscopic quantities as plain decimals the amount schema can accept', async () => {
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Cantidad'],
       ['Withdrawal', 0.00000001],
       ['Withdrawal', 1e-12],
@@ -86,7 +84,7 @@ describe('parseExcel numeric fidelity', () => {
   })
 
   it('keeps every digit of a large integer that General formatting would abbreviate', async () => {
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Cantidad'],
       ['Deposit', 123456789012345],
     ])
@@ -97,7 +95,7 @@ describe('parseExcel numeric fidelity', () => {
   })
 
   it('leaves a non-numeric cell exactly as the source wrote it', async () => {
-    const file = workbookFile([
+    const file = await workbookFile([
       ['Tipo', 'Moneda', 'Fecha'],
       ['Withdrawal', 'HBAR', '2025-02-03 06:41'],
     ])
@@ -110,4 +108,32 @@ describe('parseExcel numeric fidelity', () => {
       Fecha: '2025-02-03 06:41',
     })
   })
+
+  it('reads a sheet named "1" — Bit2Me\'s actual shape, not an edge case', async () => {
+    const file = await workbookFile(
+      [
+        ['Tipo', 'Cantidad'],
+        ['Trade', 42],
+      ],
+      '1',
+    )
+
+    const result = await parseExcel(file)
+
+    expect(result.errors).toEqual([])
+    expect(result.data[0]).toEqual({ Tipo: 'Trade', Cantidad: '42' })
+  })
+
+  it('normalises an empty trailing cell to the empty string, never the literal text "null"', async () => {
+    const file = await workbookFile([
+      ['Tipo', 'Cantidad', 'Nota'],
+      ['Trade', 10, null],
+    ])
+
+    const result = await parseExcel(file)
+
+    expect(result.data[0]['Nota']).toBe('')
+    expect(result.data[0]['Nota']).not.toBe('null')
+  })
+
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import * as XLSX from 'xlsx'
+import writeXlsxFile from 'write-excel-file/node'
 import { preciseAmountSchema } from '@kryptofolio/shared-types'
 import { normalizeTransactionDirection } from '@kryptofolio/core-domain'
 import { parseExcel } from '../parsers'
@@ -10,8 +10,8 @@ import { parseExcel } from '../parsers'
  * float64 — not a display-formatted truncation of it — is what reaches the schema boundary, and that
  * a 17-significant-digit decimal is still schema-valid there.
  */
-function bit2meWorkbookFile(): File {
-  const sheet = XLSX.utils.aoa_to_sheet([
+async function bit2meWorkbookFile(): Promise<File> {
+  const rows = [
     [
       'Tipo',
       'Cantidad de origen',
@@ -23,16 +23,14 @@ function bit2meWorkbookFile(): File {
       'Fecha',
     ],
     ['Withdrawal', 99.3, 'HBAR', 100, 'HBAR', 0.15742981799999997, 'HBAR', '2025-02-03 06:41'],
-  ])
-  const book = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(book, sheet, 'Sheet1')
-  const buffer: ArrayBuffer = XLSX.write(book, { type: 'array', bookType: 'xlsx' })
-  return new File([buffer], 'bit2me_spot_2025.xlsx')
+  ]
+  const buffer = await writeXlsxFile(rows).toBuffer()
+  return new File([new Uint8Array(buffer)], 'bit2me_spot_2025.xlsx')
 }
 
 describe('a spreadsheet cell keeps the source digits all the way to the ledger contract', () => {
   it('carries the stored digits through the normalizer into a schema-valid amount', async () => {
-    const parsed = await parseExcel(bit2meWorkbookFile())
+    const parsed = await parseExcel(await bit2meWorkbookFile())
     const row = parsed.data[0]
 
     const normalized = normalizeTransactionDirection({

@@ -42,7 +42,6 @@
   "dependencies": {
     "@tanstack/vue-table": "8.21.3",
     "@tanstack/vue-virtual": "3.13.18",
-    "papaparse": "5.4.1",
-    "xlsx": "0.18.5"
+    "papaparse": "5.4.1"
   }
 }

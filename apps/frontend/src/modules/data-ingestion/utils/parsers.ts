@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
+import readXlsxFile from 'read-excel-file/browser'
 
 export interface ParseResult {
   data: Record<string, unknown>[]
@@ -19,7 +19,7 @@ export interface ParseResult {
  * budget and abbreviates beyond it (`149.99999997` shows as `150`), which is a statement about column
  * width, not about the recorded figure — do not reintroduce a preference for it.
  */
-function toPlainDecimalString(value: number): string {
+export function toPlainDecimalString(value: number): string {
   const text = String(value)
   const parts = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text)
   if (!parts) return text
@@ -31,6 +31,19 @@ function toPlainDecimalString(value: number): string {
   if (pointIndex <= 0) return `${sign}0.${'0'.repeat(-pointIndex)}${digits}`
   if (pointIndex >= digits.length) return `${sign}${digits}${'0'.repeat(pointIndex - digits.length)}`
   return `${sign}${digits.slice(0, pointIndex)}.${digits.slice(pointIndex)}`
+}
+
+/**
+ * `read-excel-file` represents an empty cell as `null`, where `xlsx`'s `defval: ''` produced `''`.
+ * `processRawRows` treats any non-`undefined` value as present, so an unnormalised `null` would become
+ * the literal four-character string `"null"` in a data column. Numbers are rendered through
+ * `toPlainDecimalString` for the same reason `xlsx`'s output was: `String()` on a stored float64 is
+ * already its shortest round-tripping decimal, not a display-formatted approximation of it.
+ */
+function normalizeCell(cell: unknown): unknown {
+  if (cell === null || cell === undefined) return ''
+  if (typeof cell === 'number' && Number.isFinite(cell)) return toPlainDecimalString(cell)
+  return cell
 }
 
 /**
@@ -126,38 +139,33 @@ export function parseExcel(file: File): Promise<ParseResult> {
     const reader = new FileReader()
     
     reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer)
-        const workbook = XLSX.read(data, { type: 'array' })
-        
-        if (workbook.SheetNames.length === 0) {
-          return resolve({ data: [], headers: [], errors: ['ingestion.errors.no_sheets'] })
-        }
+      const data = e.target?.result as ArrayBuffer
 
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
-        
-        const storedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
+      // `trim: false` — the library's default trims string cells and folds whatever trims to '' into
+      // `null`, silently discarding a whitespace-only cell's stored content (measured: the real corpus
+      // has one, `"str"`-typed with a literal single-space `<v>`). `xlsx` never trimmed; matching that
+      // is what "reads the stored value, not a display-formatted version of it" requires here too.
+      readXlsxFile(data, { trim: false })
+        .then((sheets) => {
+          if (sheets.length === 0) {
+            return resolve({ data: [], headers: [], errors: ['ingestion.errors.no_sheets'] })
+          }
 
-        const rawRows = storedRows.map(row =>
-          Array.isArray(row)
-            ? row.map(cell => (typeof cell === 'number' && Number.isFinite(cell) ? toPlainDecimalString(cell) : cell))
-            : row,
-        )
+          const rawRows = sheets[0].data.map(row => row.map(normalizeCell))
 
-        if (!rawRows || rawRows.length === 0) {
-          return resolve({ data: [], headers: [], errors: ['ingestion.errors.file_empty'] })
-        }
+          if (rawRows.length === 0) {
+            return resolve({ data: [], headers: [], errors: ['ingestion.errors.file_empty'] })
+          }
 
-        const processed = processRawRows(rawRows)
-        resolve(processed)
-      } catch (error) {
-        resolve({
-          data: [],
-          headers: [],
-          errors: [error instanceof Error ? error.message : 'ingestion.errors.unknown_parsing_error'],
+          resolve(processRawRows(rawRows))
         })
-      }
+        .catch((error) => {
+          resolve({
+            data: [],
+            headers: [],
+            errors: [error instanceof Error ? error.message : 'ingestion.errors.unknown_parsing_error'],
+          })
+        })
     }
 
     reader.onerror = () => {

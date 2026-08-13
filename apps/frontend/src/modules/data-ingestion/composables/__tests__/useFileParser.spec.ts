@@ -41,9 +41,19 @@ describe('useFileParser', () => {
   it('should handle unsupported file extensions', async () => {
     const { parseFile, parseErrors } = useFileParser()
     const file = new File([''], 'test.txt', { type: 'text/plain' })
-    
+
     await parseFile(file)
-    
+
     expect(parseErrors.value).toContain('ingestion.errors.unsupported_format')
+  })
+
+  it('should reject a legacy .xls upload as unsupported rather than reaching the parser', async () => {
+    const { parseFile, parseErrors } = useFileParser()
+    const file = new File([''], 'test.xls', { type: 'application/vnd.ms-excel' })
+
+    await parseFile(file)
+
+    expect(parseErrors.value).toContain('ingestion.errors.unsupported_format')
+    expect(parsers.parseExcel).not.toHaveBeenCalled()
   })
 })

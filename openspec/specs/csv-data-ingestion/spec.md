@@ -302,3 +302,41 @@ When the historical price provider cannot resolve a value, `CsvIngestionUseCase`
 - **THEN** ingestion MUST complete and persist them
 - **AND** the result MUST report the count pending manual review
 
+### Requirement: The Spreadsheet Reader Is Patchable and Owes Nothing to a Format Engine
+
+The `.xlsx` reader SHALL be a dependency resolvable and upgradable from the package registry the
+workspace already installs from. A reader whose security fixes are reachable only outside that registry
+SHALL NOT be depended upon, because no version bump can then close an advisory against it.
+
+The ingestion path SHALL NOT depend on a spreadsheet library's number-format engine. A cell's value is
+taken from what the file stores, per "Source Quantities Survive Ingestion Digit for Digit", so no
+rendering of a cell through its display format is required at any stage. This keeps the reader
+replaceable: the capability needed from it is reduced to returning stored values and sheet structure,
+which every maintained reader provides.
+
+#### Scenario: The workspace audit reaches zero for the ingestion dependencies
+
+- **WHEN** `pnpm audit` runs against the workspace
+- **THEN** it MUST report no advisory attributable to the spreadsheet reader or its transitive tree
+- **AND** any future advisory against that reader MUST be closable by a version bump from the registry, without vendoring a binary or depending on a third-party republication of another project's source
+
+#### Scenario: A reader is verified against the real corpus before it is adopted
+
+- **WHEN** the `.xlsx` reader is introduced or replaced
+- **THEN** it MUST be executed against the real workbooks and asserted to return each numeric cell identical to that cell's literal stored representation in the sheet XML
+- **AND** the verification MUST cover a quantity of more than eleven characters, a near-integer, and a value carrying sixteen or more significant digits
+- **AND** a reader that alters any of these MUST be rejected rather than compensated for downstream
+
+#### Scenario: A reader's own conventions are normalised at its own boundary
+
+- **WHEN** a reader represents an empty cell, or the shape of its return value, differently from the one it replaces
+- **THEN** the difference MUST be normalised inside the reader-specific function before the shared row-processing stage sees it
+- **AND** the shared stage used by both the CSV and `.xlsx` paths MUST NOT be widened to absorb one reader's convention
+- **AND** an empty cell MUST NOT reach a data column as the literal text of a null value
+
+#### Scenario: An offered file format is either read or not offered
+
+- **WHEN** the file-selection affordance, its `accept` attribute, or user-facing copy names a format
+- **THEN** the parser MUST actually support that format
+- **AND** a format the reader cannot parse MUST be removed from the affordance rather than left to fail at runtime
+
