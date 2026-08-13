@@ -9,7 +9,7 @@ catalog:
   "typescript": "~6.0.3"
   "vitest": "^4.1.8"
   "zod": "^3.25.76"
-  "hono": "^4.12.23"
+  "hono": "^4.12.34"
   "@hono/node-server": "^2.0.4"
   "luxon": "^3.7.2"
   "@types/luxon": "^3.7.1"
