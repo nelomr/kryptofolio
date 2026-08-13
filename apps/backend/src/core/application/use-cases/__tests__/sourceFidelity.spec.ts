@@ -140,11 +140,12 @@ describe('source fidelity from the normalizer to the ledger', () => {
   });
 
   /**
-   * The string is what `parseExcel` now yields for `bit2me_spot_2025.xlsx`'s HBAR withdrawal fee, whose
-   * cell stores `0.15742981799999997` behind a displayed `0.157429818`. Its own half of the chain is
-   * pinned in the frontend's `parseExcel.precision.spec.ts`; this asserts the digits survive storage.
+   * The string is what `parseExcel` yields for `bit2me_spot_2025.xlsx`'s HBAR withdrawal fee cell,
+   * which stores `0.15742981799999997` — the source's own stored figure, not a display-formatted
+   * truncation of it. Its own half of the chain is pinned in the frontend's
+   * `parseExcel.precision.spec.ts`; this asserts the digits survive storage.
    */
-  it('stores a spreadsheet amount with the digits the source displays', async () => {
+  it('stores a spreadsheet amount with the digits the source stored', async () => {
     const result = await useCase.execute(
       [
         toIngestible({
@@ -152,7 +153,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
           tx_type: 'withdrawal',
           amount: '-99.3',
           asset: 'HBAR',
-          fee_amount: '0.157429818',
+          fee_amount: '0.15742981799999997',
           fee_currency: 'HBAR',
           metadata: { subclass: 'crypto' },
         }),
@@ -163,7 +164,7 @@ describe('source fidelity from the normalizer to the ledger', () => {
 
     expect(result.rejected).toEqual([]);
     const saved = await adapter.getSpotTransactions(VENUE);
-    expect(saved[0].fee_amount?.toString()).toBe('0.157429818');
+    expect(saved[0].fee_amount?.toString()).toBe('0.15742981799999997');
     expect(saved[0].amount_out?.toString()).toBe('99.3');
   });
 });

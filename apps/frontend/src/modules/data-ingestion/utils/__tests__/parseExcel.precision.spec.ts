@@ -6,9 +6,12 @@ import { parseExcel } from '../parsers'
 const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/
 
 /**
- * The cells are the ones the real Bit2Me workbooks store. `bit2me_spot_2025.xlsx` literally holds
- * `<v>0.15742981799999997</v>` for a figure Excel displays as `0.157429818`, so the artefact is in the
- * file and the reader's only job is to not make it worse than what the source shows.
+ * The values below are transcribed from the literal `<v>` strings in the real Bit2Me workbooks'
+ * `xl/worksheets/sheet1.xml`, confirmed independently of SheetJS (Python `xml.etree`), not derived
+ * from writing and re-reading a workbook with the library under test. `preferDisplayedDigits` used
+ * to substitute Excel's General-format display text — an ~11-character budget — for these figures,
+ * which discards real recorded digits it mistook for float64 noise. The parser's only remaining job
+ * is to render the stored value as a plain decimal, unrounded.
  */
 function workbookFile(rows: unknown[][]): File {
   const sheet = XLSX.utils.aoa_to_sheet(rows)
@@ -21,7 +24,8 @@ function workbookFile(rows: unknown[][]): File {
 }
 
 describe('parseExcel numeric fidelity', () => {
-  it("keeps the digits the source displays rather than the float64 expansion behind them", async () => {
+  it('keeps every digit the source stored, not the digits a display format would show', async () => {
+    // bit2me_spot_2025.xlsx!F72, F123, F339 — EUR fee valuations with 16-17 significant digits.
     const file = workbookFile([
       ['Tipo', 'Cantidad de origen', 'Comisión de la operación'],
       ['Withdrawal', 99.3, 0.15742981799999997],
@@ -33,11 +37,35 @@ describe('parseExcel numeric fidelity', () => {
 
     expect(result.errors).toEqual([])
     expect(result.data.map(row => row['Comisión de la operación'])).toEqual([
-      '0.157429818',
-      '0.000715866',
-      '1.1341',
+      '0.15742981799999997',
+      '0.0007158659969999999',
+      '1.1340999999999999',
     ])
     expect(result.data.map(row => row['Cantidad de origen'])).toEqual(['99.3', '2.9997', '610'])
+  })
+
+  it('does not shorten a quantity a General display format would abbreviate to fewer digits', async () => {
+    // bit2me_spot_2024.xlsx!B6 — a destination amount, 13 significant digits, real recorded data.
+    const file = workbookFile([
+      ['Tipo', 'Cantidad de destino'],
+      ['Trade', 1244.13519942],
+    ])
+
+    const result = await parseExcel(file)
+
+    expect(result.data[0]['Cantidad de destino']).toBe('1244.13519942')
+  })
+
+  it('does not resolve a near-integer to the round number a display format would show', async () => {
+    // bit2me_spot_2025.xlsx!D71 — an origin amount of a Trade; 1.06e6 ULP away from 150, not noise.
+    const file = workbookFile([
+      ['Tipo', 'Cantidad de origen'],
+      ['Trade', 149.99999997],
+    ])
+
+    const result = await parseExcel(file)
+
+    expect(result.data[0]['Cantidad de origen']).toBe('149.99999997')
   })
 
   it('renders sub-microscopic quantities as plain decimals the amount schema can accept', async () => {

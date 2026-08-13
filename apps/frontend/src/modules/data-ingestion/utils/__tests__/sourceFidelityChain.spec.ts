@@ -5,10 +5,10 @@ import { normalizeTransactionDirection } from '@kryptofolio/core-domain'
 import { parseExcel } from '../parsers'
 
 /**
- * The reader, the normalizer and the anti-corruption layer live in three packages, and the precision
- * defect was invisible to each of them alone: the reader produced a float64 expansion, the normalizer
- * passed it through untouched, and the schema accepted it because it was still a well-formed decimal.
- * This drives the whole chain on the row shape `bit2me_spot_2025.xlsx` actually contains.
+ * The reader, the normalizer and the anti-corruption layer live in three packages. This drives the
+ * whole chain on the row shape `bit2me_spot_2025.xlsx` actually contains, asserting that the stored
+ * float64 — not a display-formatted truncation of it — is what reaches the schema boundary, and that
+ * a 17-significant-digit decimal is still schema-valid there.
  */
 function bit2meWorkbookFile(): File {
   const sheet = XLSX.utils.aoa_to_sheet([
@@ -31,7 +31,7 @@ function bit2meWorkbookFile(): File {
 }
 
 describe('a spreadsheet cell keeps the source digits all the way to the ledger contract', () => {
-  it('carries the displayed digits through the normalizer into a schema-valid amount', async () => {
+  it('carries the stored digits through the normalizer into a schema-valid amount', async () => {
     const parsed = await parseExcel(bit2meWorkbookFile())
     const row = parsed.data[0]
 
@@ -46,7 +46,7 @@ describe('a spreadsheet cell keeps the source digits all the way to the ledger c
     }, 'UTC')
 
     expect(normalized.tx_type).toBe('TRANSFER_OUT')
-    expect(normalized.fee_amount).toBe('0.157429818')
+    expect(normalized.fee_amount).toBe('0.15742981799999997')
     expect(normalized.fee_currency).toBe('HBAR')
 
     expect(preciseAmountSchema.safeParse(normalized.fee_amount).success).toBe(true)

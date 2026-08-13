@@ -3,9 +3,7 @@
 ## Purpose
 
 Reading an exchange export without losing or inventing anything: sign normalisation, a fee's denomination resolved from its own source rather than assumed, whether an amount already includes the fee resolved per source, and source quantities surviving digit for digit.
-
 ## Requirements
-
 ### Requirement: Fiat Magnitudes Are Sign-Normalised at Ingestion
 
 `CsvIngestionUseCase` SHALL persist `total_fiat` and `price_fiat` as non-negative magnitudes, applying `.abs()` symmetrically with the treatment already applied to `amount_in` and `amount_out`. Transaction direction SHALL be carried by `tx_type` and the directional asset fields only.
@@ -144,13 +142,26 @@ Every movement reduces to three quantities — **gross debited**, **net moved**,
 
 ### Requirement: Source Quantities Survive Ingestion Digit for Digit
 
-Every quantity, price, and fee SHALL reach the ledger with the precision the source recorded, carried as a decimal string end to end. No stage SHALL route a monetary or quantity value through a JavaScript `number`.
+Every quantity, price, and fee SHALL reach the ledger with the precision the source recorded, carried as a decimal string end to end. No stage SHALL perform arithmetic on a monetary or quantity value as a JavaScript `number`.
 
-#### Scenario: A spreadsheet cell is not degraded by a float round-trip
+A spreadsheet cell's numeric value SHALL be taken from what the file stores, rendered as a plain decimal. It SHALL NOT be taken from how a spreadsheet application would *display* that cell, and SHALL NOT be rounded to any digit count. Excel's General number format carries a display budget of roughly eleven characters and abbreviates beyond it — `149.99999997` displays as `150`, `1244.13519942` as `1244.135199` — so a display rendering is a statement about column width, not about the recorded figure.
+
+Reading a stored double and re-emitting it as a plain decimal is the one permitted `number` round-trip, and only because it is provably lossless: a workbook writer serialises a cell as the shortest decimal string that round-trips to the stored double, and that is exactly what emitting the double as a decimal string produces. Where a source is found whose serialisation does not have this property, the raw stored string SHALL be read directly rather than the rounding being reintroduced.
+
+#### Scenario: A spreadsheet cell is read from what the file stores, not from what it would display
 
 - **WHEN** an `.xlsx` numeric cell is read
-- **THEN** the value MUST reach the ledger with the source's own digits
-- **AND** it MUST NOT acquire float artefacts such as `0.15742981799999997` in place of `0.157429818`
+- **THEN** the ingested value MUST be the file's own stored figure rendered as a plain decimal
+- **AND** a value of more than eleven characters such as `1244.13519942` MUST NOT be shortened to `1244.135199`
+- **AND** a near-integer such as `149.99999997` MUST NOT be resolved to `150`
+- **AND** a figure the General format would abbreviate to scientific notation, such as `123456789012345`, MUST reach the ledger with every digit
+
+#### Scenario: A long stored figure is not mistaken for a float artefact to be cleaned
+
+- **WHEN** a source stores a figure carrying sixteen or seventeen significant digits, as Bit2Me's euro fee valuations do
+- **THEN** the value MUST be ingested as stored, because it is the figure the source recorded
+- **AND** it MUST NOT be rounded to a shorter form on the assumption that the extra digits are float noise
+- **AND** the parser's output for such a cell MUST agree with the openpyxl-derived domain fixtures in `packages/core-domain/src/__tests__/fixtures/`, which read the same cell straight from the workbook XML
 
 #### Scenario: A sub-microscopic amount is not turned into unparseable notation
 
@@ -164,6 +175,13 @@ Every quantity, price, and fee SHALL reach the ledger with the precision the sou
 - **THEN** it MUST drive a fixture derived from each real export shape — Kraken spot, Kraken futures, Bitvavo, Bitunix, Bit2Me, Tangem — through the real parser and normalizer
 - **AND** assert every amount, fee, and fee denomination digit for digit against the source
 - **AND** fail if any source's convention changes without the fixture being updated
+
+#### Scenario: A spreadsheet-reading assertion is not a fixed point of the spreadsheet library
+
+- **WHEN** a test asserts what the `.xlsx` parser yields for a given cell
+- **THEN** its expected values MUST be transcribed from the real workbook's stored representation, with the cell address and source file recorded
+- **AND** they MUST NOT be derived from reading back a workbook the same library wrote, which can only confirm that library agrees with itself
+- **AND** restoring the display-formatting rule MUST make the assertion fail on the specific truncated values, proving the test reaches the code under test
 
 ### Requirement: The Type Mapper Never Supplies a Direction the Domain Declined to Determine
 
@@ -283,3 +301,4 @@ When the historical price provider cannot resolve a value, `CsvIngestionUseCase`
 - **WHEN** many rows in a batch have unresolvable prices
 - **THEN** ingestion MUST complete and persist them
 - **AND** the result MUST report the count pending manual review
+

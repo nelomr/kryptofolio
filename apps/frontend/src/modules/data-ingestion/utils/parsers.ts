@@ -7,12 +7,17 @@ export interface ParseResult {
   errors: string[]
 }
 
-/** What the anti-corruption layer's `preciseAmountSchema` accepts. */
-const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/
-
 /**
  * Rewrites JavaScript's exponential rendering as a plain decimal. `String(0.00000001)` is `"1e-8"`,
  * which every downstream amount schema rejects, and satoshi- and gwei-scale quantities are ordinary.
+ *
+ * This is the only transform a numeric cell receives. A workbook writer serialises a cell as the
+ * shortest decimal string that round-trips to the stored double, and `String(number)` produces that
+ * same shortest round-tripping string — so reading the stored value back as a plain decimal is
+ * already an exact reproduction of the source's own digits, verified against the real Bit2Me
+ * workbooks. Excel's *displayed* text is a different thing: its General format has an ~11-character
+ * budget and abbreviates beyond it (`149.99999997` shows as `150`), which is a statement about column
+ * width, not about the recorded figure — do not reintroduce a preference for it.
  */
 function toPlainDecimalString(value: number): string {
   const text = String(value)
@@ -26,21 +31,6 @@ function toPlainDecimalString(value: number): string {
   if (pointIndex <= 0) return `${sign}0.${'0'.repeat(-pointIndex)}${digits}`
   if (pointIndex >= digits.length) return `${sign}${digits}${'0'.repeat(pointIndex - digits.length)}`
   return `${sign}${digits.slice(0, pointIndex)}.${digits.slice(pointIndex)}`
-}
-
-/**
- * Chooses between the number a spreadsheet stores and the text it displays.
- *
- * A workbook stores float64, so a figure written as `0.157429818` is held as `0.15742981799999997` and
- * the displayed text is the only place the source's own digits still exist. The displayed text is
- * preferred only when it is already a plain decimal: cell formatting can also abbreviate (`1.23457E+14`
- * for a fifteen-digit integer) or decorate (a thousands separator, a currency symbol, a date), and in
- * all of those the stored number is the more faithful reading.
- */
-function preferDisplayedDigits(storedValue: unknown, displayedText: unknown): unknown {
-  if (typeof storedValue !== 'number' || !Number.isFinite(storedValue)) return storedValue
-  if (typeof displayedText === 'string' && PLAIN_DECIMAL.test(displayedText)) return displayedText
-  return toPlainDecimalString(storedValue)
 }
 
 /**
@@ -147,19 +137,11 @@ export function parseExcel(file: File): Promise<ParseResult> {
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
         
-        // Use header: 1 to extract an array of arrays
         const storedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' })
-        const displayedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
-          header: 1,
-          defval: '',
-          raw: false,
-        })
 
-        const rawRows = storedRows.map((row, rowIndex) =>
+        const rawRows = storedRows.map(row =>
           Array.isArray(row)
-            ? row.map((cell, cellIndex) =>
-                preferDisplayedDigits(cell, displayedRows[rowIndex]?.[cellIndex]),
-              )
+            ? row.map(cell => (typeof cell === 'number' && Number.isFinite(cell) ? toPlainDecimalString(cell) : cell))
             : row,
         )
 
