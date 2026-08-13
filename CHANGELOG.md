@@ -3,6 +3,18 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.8](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.8) (2026-08-13)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.8)
+
+**Patch Changes**
+
+- [`d04162e`](https://github.com/nelomr/kryptofolio/commit/d04162e8b6fb6ba61d0c0fdd9072f7e7e83b9669) Thanks [@nelomr](https://github.com/nelomr)! - Replace the unpatchable `xlsx@0.18.5` dependency (two unfixed high-severity advisories, no version
+  reachable from npm) with `read-excel-file`/`write-excel-file`. Ingested `.xlsx` values are unchanged —
+  verified byte-for-byte against the full real workbook corpus. `.xls` uploads are no longer accepted;
+  that affordance was never documented, tested, or actually supported by any maintained reader.
+
+
 ## [1.16.7](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.7) (2026-08-13)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.7)

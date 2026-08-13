@@ -1,5 +1,14 @@
 # @kryptofolio/frontend
 
+## 1.16.8
+
+### Patch Changes
+
+- [`d04162e`](https://github.com/nelomr/kryptofolio/commit/d04162e8b6fb6ba61d0c0fdd9072f7e7e83b9669) Thanks [@nelomr](https://github.com/nelomr)! - Replace the unpatchable `xlsx@0.18.5` dependency (two unfixed high-severity advisories, no version
+  reachable from npm) with `read-excel-file`/`write-excel-file`. Ingested `.xlsx` values are unchanged —
+  verified byte-for-byte against the full real workbook corpus. `.xls` uploads are no longer accepted;
+  that affordance was never documented, tested, or actually supported by any maintained reader.
+
 ## 1.16.7
 
 ### Patch Changes
