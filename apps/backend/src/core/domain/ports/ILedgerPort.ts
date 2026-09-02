@@ -9,6 +9,7 @@
 import type {
   SpotTxType,
   FuturesTxType,
+  CollateralMovementType,
   TaxLotStatus,
   DisposalType,
   FifoQualityFlag,
@@ -74,6 +75,29 @@ export interface LedgerFuturesTransaction {
   fee_amount?: PreciseAmount;
   /** ISO-4217 currency code (e.g. 'EUR', 'USD'). Mandatory — never undefined. */
   fiat_currency: string;
+  timestamp: string; // ISO-8601
+  status: string;
+}
+
+/**
+ * A currency movement that funds or converts futures collateral — never a position event.
+ *
+ * `amount` is signed, unlike every other fiat magnitude on the ledger: the two legs of a conversion
+ * pair must sum to zero across currencies while remaining separable per currency, which only the
+ * signed value can express. `pair_id` links two legs once ingestion has confirmed they share an
+ * instant and oppose in sign; it stays `null` for a movement recorded one-sided — the absence of a
+ * counterpart is recorded, never inferred across files.
+ */
+export interface LedgerCollateralMovement {
+  id: string;
+  id_hash: string;
+  account_id: string;
+  movement_type: CollateralMovementType;
+  /** The currency this leg is denominated in ('EUR', 'USD', ...) — never a contract symbol. */
+  currency: string;
+  amount: PreciseAmount;
+  spread_pct?: PreciseAmount | null;
+  pair_id?: string | null;
   timestamp: string; // ISO-8601
   status: string;
 }
@@ -263,6 +287,10 @@ export interface ILedgerPort {
   // Futures Transactions
   getFuturesTransactions(accountId?: string): Promise<LedgerFuturesTransaction[]>;
   saveFuturesTransaction(tx: LedgerFuturesTransaction): Promise<void>;
+
+  // Futures Collateral Movements — never futures_transactions; see LedgerCollateralMovement.
+  getCollateralMovements(accountId?: string): Promise<LedgerCollateralMovement[]>;
+  saveCollateralMovement(movement: LedgerCollateralMovement): Promise<void>;
 
   // Tax Lots
   getTaxLots(accountId: string): Promise<LedgerTaxLot[]>;

@@ -20,6 +20,8 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
     saveSpotTransaction: vi.fn().mockResolvedValue(undefined),
     getFuturesTransactions: vi.fn().mockResolvedValue([]),
     saveFuturesTransaction: vi.fn().mockResolvedValue(undefined),
+    getCollateralMovements: vi.fn().mockResolvedValue([]),
+    saveCollateralMovement: vi.fn().mockResolvedValue(undefined),
     getTaxLots: vi.fn().mockResolvedValue([]),
     getAccounts: vi.fn().mockResolvedValue([]),
     createTaxLot: vi.fn().mockResolvedValue(undefined),

@@ -11,7 +11,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
+  <header class="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
     <div class="mx-auto max-w-[1600px] px-4 md:px-6">
       <div class="flex h-22 items-center justify-between">
         <div class="flex items-center gap-3">

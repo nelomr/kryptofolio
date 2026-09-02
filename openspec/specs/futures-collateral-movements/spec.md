@@ -1,5 +1,8 @@
-## ADDED Requirements
+# futures-collateral-movements Specification
 
+## Purpose
+TBD - created by archiving change add-futures-collateral-ledger. Update Purpose after archive.
+## Requirements
 ### Requirement: Collateral Movements Are Recorded Outside The Position Tables
 
 A currency movement that funds or converts futures collateral SHALL be recorded in a table of its own,
@@ -47,3 +50,4 @@ the signed movement amounts.
 
 - **WHEN** the balance view is read on a ledger containing trades, funding fees and liquidations
 - **THEN** none of those MUST contribute to it
+

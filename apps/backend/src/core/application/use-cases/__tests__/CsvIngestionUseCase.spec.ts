@@ -19,6 +19,8 @@ function makeMockLedgerPort(): Mocked<ILedgerPort> {
     saveSpotTransaction: vi.fn().mockResolvedValue(undefined),
     getFuturesTransactions: vi.fn().mockResolvedValue([]),
     saveFuturesTransaction: vi.fn().mockResolvedValue(undefined),
+    getCollateralMovements: vi.fn().mockResolvedValue([]),
+    saveCollateralMovement: vi.fn().mockResolvedValue(undefined),
     getTaxLots: vi.fn().mockResolvedValue([]),
     getAccounts: vi.fn().mockResolvedValue([]),
     createTaxLot: vi.fn().mockResolvedValue(undefined),
@@ -527,18 +529,6 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
       expect(result.persisted).toBe(3);
     });
 
-    it('rejects a collateral conversion rather than recording it as a position trade', async () => {
-      // `FuturesTxType` has no member meaning "collateral converted"; guessing one invents a trade.
-      const result = await makeUseCase().execute(
-        [row({ tx_type: 'CONVERSION', total_fiat: '1', price_fiat: '1' })],
-        'futures',
-        'generic', 'UTC',
-      );
-
-      expect(result.rejected).toHaveLength(1);
-      expect(result.rejected[0].reason).toContain('CONVERSION');
-    });
-
     it('rejects an unmapped futures type instead of defaulting it to a TRADE', async () => {
       const result = await makeUseCase().execute(
         [row({ tx_type: 'ADL_ASSIGNMENT', total_fiat: '100', price_fiat: '1' })],
@@ -577,6 +567,141 @@ describe('CsvIngestionUseCase — ingestion integrity', () => {
 
       expect(result.rejected).toHaveLength(0);
       expect(result.persisted).toBe(4);
+    });
+  });
+
+  describe('futures collateral movements are recorded, not rejected as position events', () => {
+    // `symbol` carries the currency ('eur'/'usd') on a collateral row, and `amount` carries the
+    // signed magnitude — Kraken's own `change` column. Neither is a directional spot leg.
+    function collateralRow(overrides: Partial<SubmittedTransaction> = {}): SubmittedTransaction {
+      return {
+        account_id: '10000000-0000-0000-0000-000000000002',
+        tx_type: 'CONVERSION',
+        timestamp: '2026-02-08T16:42:52.000Z',
+        symbol: 'eur',
+        amount: '-1.23100000000',
+        metadata: {},
+        ...overrides,
+      };
+    }
+
+    function savedCollateral(index = 0) {
+      const call = ledgerPort.saveCollateralMovement.mock.calls[index];
+      const movement = call[0];
+      return {
+        movement_type: movement.movement_type,
+        currency: movement.currency,
+        amount: movement.amount.toString(),
+        spread_pct: movement.spread_pct === undefined || movement.spread_pct === null ? null : movement.spread_pct.toString(),
+        pair_id: movement.pair_id ?? null,
+      };
+    }
+
+    it('persists a conversion leg as a collateral movement, not a futures_transactions row', async () => {
+      const result = await makeUseCase().execute([collateralRow()], 'futures', 'generic', 'UTC');
+
+      expect(result.rejected).toHaveLength(0);
+      expect(result.persisted).toBe(1);
+      expect(ledgerPort.saveCollateralMovement).toHaveBeenCalledTimes(1);
+      expect(ledgerPort.saveFuturesTransaction).not.toHaveBeenCalled();
+      expect(savedCollateral()).toMatchObject({ movement_type: 'CONVERSION', currency: 'EUR', amount: '-1.23100000000' });
+    });
+
+    it('persists a cross-exchange transfer as a collateral movement, one-sided', async () => {
+      const result = await makeUseCase().execute(
+        [collateralRow({ tx_type: 'CROSS-EXCHANGE TRANSFER', symbol: 'eur', amount: '200.00000000000' })],
+        'futures',
+        'generic', 'UTC',
+      );
+
+      expect(result.rejected).toHaveLength(0);
+      expect(result.persisted).toBe(1);
+      expect(savedCollateral()).toMatchObject({
+        movement_type: 'CROSS_EXCHANGE_TRANSFER',
+        currency: 'EUR',
+        amount: '200.00000000000',
+        pair_id: null,
+      });
+    });
+
+    it('preserves the conversion spread percentage rather than discarding it', async () => {
+      await makeUseCase().execute(
+        [collateralRow({ metadata: { 'conversion spread percentage': '0.15000000000' } })],
+        'futures',
+        'generic', 'UTC',
+      );
+
+      expect(savedCollateral().spread_pct).toBe('0.15000000000');
+    });
+
+    it('leaves spread_pct NULL when the source column is blank', async () => {
+      await makeUseCase().execute(
+        [collateralRow({ symbol: 'usd', amount: '1.45480000000', metadata: {} })],
+        'futures',
+        'generic', 'UTC',
+      );
+
+      expect(savedCollateral().spread_pct).toBeNull();
+    });
+
+    it('pairs two conversion legs sharing an instant with opposing signs', async () => {
+      await makeUseCase().execute(
+        [
+          collateralRow({ symbol: 'eur', amount: '-1.23100000000' }),
+          collateralRow({ symbol: 'usd', amount: '1.45480000000' }),
+        ],
+        'futures',
+        'generic', 'UTC',
+      );
+
+      const eurCall = savedCollateral(0);
+      const usdCall = savedCollateral(1);
+      expect(eurCall.pair_id).not.toBeNull();
+      expect(eurCall.pair_id).toBe(usdCall.pair_id);
+    });
+
+    it('leaves the single cross-venue transfer unpaired — its counterpart is in another file', async () => {
+      await makeUseCase().execute(
+        [collateralRow({ tx_type: 'CROSS-EXCHANGE TRANSFER', symbol: 'eur', amount: '200.00000000000' })],
+        'futures',
+        'generic', 'UTC',
+      );
+
+      expect(savedCollateral().pair_id).toBeNull();
+    });
+
+    it('rejects a row whose stated conversion spread cannot be parsed, without failing the rest of the batch', async () => {
+      const rows = [
+        collateralRow(),
+        collateralRow({
+          symbol: 'usd',
+          amount: '1.45480000000',
+          metadata: { 'conversion spread percentage': '0.15%' },
+        }),
+      ];
+
+      const result = await makeUseCase().execute(rows, 'futures', 'generic', 'UTC');
+
+      expect(result.persisted).toBe(1);
+      expect(result.rejected).toHaveLength(1);
+      expect(result.rejected[0].reason).toMatch(/invalid argument/i);
+      expect(ledgerPort.saveCollateralMovement).toHaveBeenCalledTimes(1);
+    });
+
+    it('persists the 785 position rows and the 315 collateral rows from one batch, none rejected', async () => {
+      const rows = [
+        ...Array.from({ length: 3 }, () => row({ tx_type: 'FUTURES TRADE', total_fiat: '1', price_fiat: '1' })),
+        collateralRow({ symbol: 'eur', amount: '-1.0' }),
+        collateralRow({ symbol: 'usd', amount: '1.0' }),
+        collateralRow({ tx_type: 'CROSS-EXCHANGE TRANSFER', symbol: 'eur', amount: '200.0' }),
+      ];
+
+      const result = await makeUseCase().execute(rows, 'futures', 'generic', 'UTC');
+
+      expect(result.rejected).toHaveLength(0);
+      expect(result.persisted).toBe(6);
+      expect(ledgerPort.saveFuturesTransaction).toHaveBeenCalledTimes(3);
+      expect(ledgerPort.saveCollateralMovement).toHaveBeenCalledTimes(3);
     });
   });
 

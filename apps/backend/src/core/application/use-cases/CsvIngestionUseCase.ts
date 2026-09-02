@@ -1,18 +1,25 @@
-import type { ILedgerPort, LedgerSpotTransaction, LedgerFuturesTransaction } from '../../domain/ports/ILedgerPort';
+import type {
+  ILedgerPort,
+  LedgerSpotTransaction,
+  LedgerFuturesTransaction,
+  LedgerCollateralMovement,
+} from '../../domain/ports/ILedgerPort';
 import type { TransactionMappedData } from '@kryptofolio/shared-types';
-import type { SpotTxType, FuturesTxType } from '@kryptofolio/shared-types';
+import type { SpotTxType, FuturesTxType, CollateralMovementType } from '@kryptofolio/shared-types';
 import { SPOT_TX_TYPES, FUTURES_TX_TYPES, isFiatCurrencyCode } from '@kryptofolio/shared-types';
 import {
   SOURCE_FORMAT_PROFILES,
   applyProfileToRow,
   checkProfileInvariant,
   generateIdHash,
+  pairCollateralLegs,
   prepareIngestionRows,
   resolveFeeDenomination,
   resolveGrossNetFee,
   resolveRowIdentity,
   routeFee,
 } from '@kryptofolio/core-domain';
+import type { CollateralLegCandidate } from '@kryptofolio/core-domain';
 import type { InvariantOutcome, SourceFormatProfile } from '@kryptofolio/core-domain';
 import type { SourceProfileId } from '@kryptofolio/shared-types';
 import Decimal from 'decimal.js';
@@ -169,6 +176,31 @@ function toSpotTxType(raw: string | null | undefined, timestamp: string): SpotTx
   return mapped;
 }
 
+/**
+ * The two futures labels that are not position events, keyed by the normalizer's uppercased text.
+ *
+ * Checked *before* `toFuturesTxType` is ever called: `FuturesTxType` has no member for either, by
+ * design — a collateral conversion or a cross-venue transfer is not a trade, and mapping one to
+ * `TRADE` would invent a position that was never opened.
+ */
+const COLLATERAL_LABELS: Readonly<Record<string, CollateralMovementType>> = {
+  CONVERSION: 'CONVERSION',
+  'CROSS-EXCHANGE TRANSFER': 'CROSS_EXCHANGE_TRANSFER',
+};
+
+/**
+ * The magnitude a source wrote, sign included.
+ *
+ * Every other fiat/quantity field on this path is split into an unsigned magnitude plus a
+ * direction carried by `tx_type` — `sourceMagnitude` above does exactly that. A collateral
+ * movement is the deliberate exception: its two legs must sum to zero across currencies, which only
+ * the signed value can express.
+ */
+function signedSourceMagnitude(text: string): string {
+  if (!new Decimal(text).isFinite()) throw new RangeError(`not a finite quantity: '${text}'`);
+  return text.trim();
+}
+
 function toFuturesTxType(raw: string | null | undefined, timestamp: string): FuturesTxType {
   const upper = (raw ?? '').toUpperCase() as FuturesTxType;
   if (FUTURES_TX_TYPES.includes(upper)) return upper;
@@ -285,6 +317,13 @@ export class CsvIngestionUseCase {
     const { rows, refused } = await this.prepare(submitted, profile, market, timezone);
     rejected.push(...refused);
 
+    // Computed once over the whole batch, before any row is persisted: pairing is a property of two
+    // legs together, and the guard (same instant, opposing signs) can only be evaluated with every
+    // candidate in view. See `pairCollateralLegs` — a leg with no partner stays unpaired rather than
+    // guessed.
+    const collateralPairIds: ReadonlyMap<string, string> =
+      market === 'futures' ? this.resolveCollateralPairIds(rows) : new Map();
+
     for (const rawRow of rows) {
       // Idempotent, so a row the wizard already applied it to reaches the identical figures.
       const row = applyProfileToRow(profile, rawRow);
@@ -292,6 +331,17 @@ export class CsvIngestionUseCase {
       const venueAccountId = row.account_id;
       if (!venueAccountId) {
         throw new Error('Account ID is required for ingestion. The frontend MUST inject it before calling this use case.');
+      }
+
+      const collateralType = market === 'futures' ? COLLATERAL_LABELS[(row.tx_type ?? '').toUpperCase()] : undefined;
+      if (collateralType) {
+        const rejection = await this.persistCollateralMovement(row, venueAccountId, collateralType, collateralPairIds);
+        if (rejection) {
+          rejected.push(rejection);
+        } else {
+          persisted += 1;
+        }
+        continue;
       }
 
       // The type is resolved before any foreign key is created, so a rejected row leaves nothing
@@ -522,6 +572,96 @@ export class CsvIngestionUseCase {
    * `amount` is a decimal string rather than a `number`; every figure on this path is monetary or a
    * quantity, and the sign survives because a negative fee is a rebate the venue credited.
    */
+  /**
+   * Pairs the batch's collateral legs up front, over every row regardless of which `IngestibleTransaction`
+   * ultimately persists — the guard only sees a genuine pair when both legs are in view together.
+   *
+   * Only `CONVERSION` labels are candidates: a `cross-exchange transfer` has no counterpart in this
+   * file by definition (its leg lives in a separate spot export), so it is never offered to the
+   * guard and always comes out unpaired.
+   */
+  private resolveCollateralPairIds(rows: readonly IngestibleTransaction[]): ReadonlyMap<string, string> {
+    const candidates: CollateralLegCandidate[] = [];
+    for (const row of rows) {
+      if ((row.tx_type ?? '').toUpperCase() !== 'CONVERSION') continue;
+      if (!row.symbol || !row.amount) continue;
+      candidates.push({
+        idHash: row.id_hash,
+        timestamp: normalizeIsoTimestamp(row.timestamp),
+        currency: row.symbol.toUpperCase(),
+        amount: signedSourceMagnitude(row.amount),
+      });
+    }
+    return pairCollateralLegs(candidates);
+  }
+
+  /**
+   * Persists one collateral leg (a conversion or a cross-venue transfer) and returns a rejection
+   * when the row cannot be read at all — an undenominated or unparseable movement, which nothing in
+   * the real corpus has produced but which the schema cannot silently accept either.
+   *
+   * `symbol` carries the currency here, never a contract: `futures_transactions.symbol` and this
+   * field share a name but not a meaning, which is exactly why a collateral row does not reach that
+   * table.
+   */
+  private async persistCollateralMovement(
+    row: IngestibleTransaction,
+    venueAccountId: string,
+    movementType: CollateralMovementType,
+    pairIds: ReadonlyMap<string, string>,
+  ): Promise<IngestionRejection | null> {
+    if (!row.symbol || !row.amount) {
+      return {
+        idHash: row.id_hash,
+        timestamp: row.timestamp ?? '',
+        txType: row.tx_type ?? null,
+        reason: `a collateral movement needs both a currency and a signed amount; got symbol='${row.symbol ?? ''}' amount='${row.amount ?? ''}'`,
+      };
+    }
+
+    let amount: string;
+    try {
+      amount = signedSourceMagnitude(row.amount);
+    } catch (error) {
+      return {
+        idHash: row.id_hash,
+        timestamp: row.timestamp ?? '',
+        txType: row.tx_type ?? null,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    const spreadRaw = row.metadata?.['conversion spread percentage'];
+    let spreadPct: string | null;
+    try {
+      spreadPct = isStatedMagnitude(spreadRaw) ? signedSourceMagnitude(spreadRaw as string) : null;
+    } catch (error) {
+      return {
+        idHash: row.id_hash,
+        timestamp: row.timestamp ?? '',
+        txType: row.tx_type ?? null,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    const accountId = await this.ensureAccountExists(venueAccountId, readWalletDesignation(row));
+
+    const movement: LedgerCollateralMovement = {
+      id: crypto.randomUUID(),
+      id_hash: row.id_hash,
+      account_id: accountId,
+      movement_type: movementType,
+      currency: row.symbol.toUpperCase(),
+      amount: toPreciseAmount(amount),
+      spread_pct: spreadPct === null ? undefined : toPreciseAmount(spreadPct),
+      pair_id: pairIds.get(row.id_hash) ?? null,
+      timestamp: normalizeIsoTimestamp(row.timestamp),
+      status: 'COMPLETED',
+    };
+    await this.ledgerPort.saveCollateralMovement(movement);
+    return null;
+  }
+
   private resolveFee(
     profile: SourceFormatProfile,
     row: IngestibleTransaction,

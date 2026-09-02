@@ -8,6 +8,7 @@ import type {
   LedgerInitializationSummary,
   LedgerSpotTransaction,
   LedgerFuturesTransaction,
+  LedgerCollateralMovement,
   LedgerTaxLot,
   LedgerTaxLotEvent,
   LedgerCustodyEntry,
@@ -303,6 +304,68 @@ export class SQLiteLedgerAdapter implements ILedgerPort, IFxRateLedgerPort {
       tx.fiat_currency,
       tx.timestamp,
       tx.status,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Futures Collateral Movements — separate table from futures_transactions; see
+  // LedgerCollateralMovement.
+  // ---------------------------------------------------------------------------
+
+  async getCollateralMovements(accountId?: string): Promise<LedgerCollateralMovement[]> {
+    const query = accountId
+      ? 'SELECT * FROM collateral_movements WHERE account_id = ? AND deleted_at IS NULL ORDER BY occurred_at ASC'
+      : 'SELECT * FROM collateral_movements WHERE deleted_at IS NULL ORDER BY occurred_at ASC';
+    const stmt = this.db.prepare(query);
+    const rows = (accountId ? stmt.all(accountId) : stmt.all()) as Record<string, unknown>[];
+
+    return rows.map(row => ({
+      id: row.id as string,
+      id_hash: row.id_hash as string,
+      account_id: row.account_id as string,
+      movement_type: row.movement_type as LedgerCollateralMovement['movement_type'],
+      currency: row.currency as string,
+      amount: toPreciseAmount(row.amount as string),
+      spread_pct: row.spread_pct ? toPreciseAmount(row.spread_pct as string) : undefined,
+      pair_id: row.pair_id as string | null,
+      timestamp: row.occurred_at as string,
+      status: row.status as string,
+    }));
+  }
+
+  async saveCollateralMovement(movement: LedgerCollateralMovement): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT INTO collateral_movements (
+        id, id_hash, account_id, movement_type, currency, amount, spread_pct, pair_id,
+        occurred_at, status
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?
+      )
+      ON CONFLICT(id_hash) DO UPDATE SET
+        account_id = excluded.account_id,
+        movement_type = excluded.movement_type,
+        currency = excluded.currency,
+        amount = excluded.amount,
+        spread_pct = excluded.spread_pct,
+        pair_id = excluded.pair_id,
+        occurred_at = excluded.occurred_at,
+        status = excluded.status,
+        updated_at = datetime('now', 'utc'),
+        deleted_at = NULL
+    `);
+
+    stmt.run(
+      movement.id,
+      movement.id_hash,
+      movement.account_id,
+      movement.movement_type,
+      movement.currency,
+      movement.amount.toString(),
+      movement.spread_pct?.toString() ?? null,
+      movement.pair_id ?? null,
+      movement.timestamp,
+      movement.status,
     );
   }
 

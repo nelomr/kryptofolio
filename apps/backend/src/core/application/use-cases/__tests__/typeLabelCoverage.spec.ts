@@ -30,11 +30,11 @@ const NO_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 
 const ACCOUNT = '10000000-0000-0000-0000-000000000001';
 
 /**
- * The two futures labels that stay rejected by decision: a collateral conversion and a venue-to-venue
- * transfer are not position events, and `futures_transactions` models position events. They move to
- * their own table in `add-futures-collateral-ledger`.
+ * The two futures labels routed to `collateral_movements` rather than `futures_transactions`: a
+ * collateral conversion and a venue-to-venue transfer are not position events, so neither reaches
+ * `saveFuturesTransaction` — see `add-futures-collateral-ledger`.
  */
-const DEFERRED_FUTURES_LABELS = ['conversion', 'cross-exchange transfer'] as const;
+const COLLATERAL_FUTURES_LABELS = ['conversion', 'cross-exchange transfer'] as const;
 
 /**
  * Labels whose direction is not in the label. This net submits one sample row per label, and a lone
@@ -54,6 +54,8 @@ function makeLedgerPort(): Mocked<ILedgerPort> {
     saveSpotTransaction: vi.fn().mockResolvedValue(undefined),
     getFuturesTransactions: vi.fn().mockResolvedValue([]),
     saveFuturesTransaction: vi.fn().mockResolvedValue(undefined),
+    getCollateralMovements: vi.fn().mockResolvedValue([]),
+    saveCollateralMovement: vi.fn().mockResolvedValue(undefined),
     getTaxLots: vi.fn().mockResolvedValue([]),
     getAccounts: vi.fn().mockResolvedValue([]),
     createTaxLot: vi.fn().mockResolvedValue(undefined),
@@ -132,10 +134,10 @@ describe('every type label in every real export reaches a type the ledger accept
     describe(vocabulary.source, () => {
       for (const sample of vocabulary.labels) {
         const deferred =
-          (vocabulary.market === 'futures' &&
-            (DEFERRED_FUTURES_LABELS as readonly string[]).includes(sample.label)) ||
-          (vocabulary.market === 'spot' &&
-            (PAIRED_SPOT_LABELS as readonly string[]).includes(sample.label));
+          vocabulary.market === 'spot' && (PAIRED_SPOT_LABELS as readonly string[]).includes(sample.label);
+        const collateral =
+          vocabulary.market === 'futures' &&
+          (COLLATERAL_FUTURES_LABELS as readonly string[]).includes(sample.label);
 
         it(`${deferred ? 'rejects by decision' : 'accepts'} '${sample.label}' (${sample.count} rows)`, async () => {
           const result = await useCase.execute(
@@ -157,6 +159,16 @@ describe('every type label in every real export reaches a type the ledger accept
             `'${sample.label}' from ${vocabulary.source} was rejected`,
           ).toEqual([]);
           expect(result.persisted).toBe(1);
+
+          if (collateral) {
+            // A collateral movement is not a position event: it must never reach
+            // futures_transactions, only collateral_movements.
+            expect(ledgerPort.saveCollateralMovement).toHaveBeenCalledTimes(1);
+            expect(ledgerPort.saveFuturesTransaction).not.toHaveBeenCalled();
+          } else if (vocabulary.market === 'futures') {
+            expect(ledgerPort.saveFuturesTransaction).toHaveBeenCalledTimes(1);
+            expect(ledgerPort.saveCollateralMovement).not.toHaveBeenCalled();
+          }
         });
       }
 

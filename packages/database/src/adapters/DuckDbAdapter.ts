@@ -300,6 +300,40 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
           AND ft.deleted_at IS NULL;
       `);
 
+      // Per-account, per-currency collateral balance — a plain signed SUM, deliberately. A
+      // conversion's two legs are two rows in two different currencies (`GROUP BY currency` is what
+      // keeps them from ever cancelling each other), and `pair_id` links them for traceability only:
+      // it plays no role in this balance, which is why an unpaired cross-exchange transfer sums the
+      // same way as a paired conversion leg. Reads `ledger.collateral_movements` only — never
+      // `futures_transactions` — so no position event can reach it, and nothing here feeds
+      // `v_flattened_fifo_events`, `v_calculated_tax_lots` or `v_futures_realized_pnl`: a collateral
+      // movement is a currency fact about the venue's margin, not a taxable disposal.
+      await this.connection.run(`
+        CREATE OR REPLACE VIEW v_collateral_balances AS
+        WITH summed AS (
+            SELECT
+                account_id,
+                currency,
+                CAST(SUM(CAST(amount AS DECIMAL(38,18))) AS VARCHAR) AS raw_balance
+            FROM ledger.collateral_movements
+            WHERE status = 'COMPLETED'
+              AND deleted_at IS NULL
+            GROUP BY ALL
+        )
+        -- Trailing-zero trimming via string ops, not a DOUBLE round-trip: the balance is a SUM of
+        -- decimal TEXT already, and this is display formatting, not arithmetic — the exact value
+        -- lives in the DECIMAL(38,18) SUM, this only reformats its VARCHAR cast.
+        SELECT
+            account_id,
+            currency,
+            CASE
+                WHEN regexp_replace(raw_balance, '0+$', '') LIKE '%.'
+                    THEN regexp_replace(raw_balance, '0+$', '') || '0'
+                ELSE regexp_replace(raw_balance, '0+$', '')
+            END AS balance
+        FROM summed;
+      `);
+
       await this.seedFifoEventPolicy();
       await this.seedFifoFlagSeverity();
       await this.createAccountNamingMacros();
@@ -896,7 +930,8 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 WHEN matched_qty > CAST(0 AS DECIMAL(38,18)) THEN 'PARTIAL'
                 ELSE 'OPEN'
             END AS status
-        FROM lot_base;
+        FROM lot_base
+        ORDER BY acquisition_timestamp, source_tx_id;
       `);
 
       await this.connection.run(`
@@ -928,7 +963,8 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         JOIN v_acquisitions a ON m.acquisition_tx_id = a.tx_id AND m.asset_id = a.asset_id
         LEFT JOIN ledger.spot_transactions dis_tx ON m.disposal_tx_id = dis_tx.id
         LEFT JOIN ledger.assets ast ON m.asset_id = ast.id OR m.asset_id = ast.symbol
-        LEFT JOIN ledger.accounts acc ON m.account_id = acc.id;
+        LEFT JOIN ledger.accounts acc ON m.account_id = acc.id
+        ORDER BY m.disposal_date, m.id;
       `);
 
       // -----------------------------------------------------------------------

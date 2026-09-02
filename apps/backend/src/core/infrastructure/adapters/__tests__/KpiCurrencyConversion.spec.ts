@@ -23,7 +23,7 @@ import Decimal from 'decimal.js';
 import { DuckDbAdapter } from '@kryptofolio/database';
 import { DuckDbMetricsAdapter } from '../DuckDbMetricsAdapter';
 
-const MIGRATIONS = ['002_ledger_schema', '003_currency_schema', '004_fifo_traceability'].map((name) =>
+const MIGRATIONS = ['002_ledger_schema', '003_currency_schema', '004_fifo_traceability', '007_futures_collateral_movements'].map((name) =>
   fs.readFileSync(
     path.resolve(__dirname, `../../../../../../../packages/database/migrations/sqlite/${name}.sql`),
     'utf-8',

@@ -24,6 +24,15 @@ export const FUTURES_TX_TYPES = [
 
 export type FuturesTxType = typeof FUTURES_TX_TYPES[number];
 
+/**
+ * A currency movement that funds or converts futures collateral — never a position event, and never
+ * a member of `FuturesTxType`. `futures_transactions.symbol` names a contract; storing a currency
+ * there would misread as a position in it, so a collateral movement is recorded in its own table
+ * under its own vocabulary.
+ */
+export const COLLATERAL_MOVEMENT_TYPES = ['CONVERSION', 'CROSS_EXCHANGE_TRANSFER'] as const;
+export type CollateralMovementType = typeof COLLATERAL_MOVEMENT_TYPES[number];
+
 export const TAX_LOT_STATUSES = ['OPEN', 'PARTIAL', 'CLOSED'] as const;
 export type TaxLotStatus = typeof TAX_LOT_STATUSES[number];
 
@@ -81,6 +90,21 @@ export const FuturesTransactionSchema = z.object({
   /** ISO-4217 currency code — required. Resolution: CSV field → base_currency setting → 'USD'. */
   fiat_currency: z.string().min(3).max(3),
   exchange: z.string().optional(),
+  status: z.string().default('COMPLETED'),
+});
+
+export const CollateralMovementSchema = z.object({
+  account_id: z.string().uuid('account_id must be a valid UUID'),
+  timestamp: z.string().datetime(),
+  movement_type: z.enum(COLLATERAL_MOVEMENT_TYPES),
+  /** The currency this leg is denominated in ('EUR', 'USD', ...) — never a contract symbol. */
+  currency: z.string().min(1),
+  /** Signed: the two legs of a conversion pair must sum to zero across currencies. */
+  amount: preciseAmountSchema,
+  /** Stated only on some legs (Kraken: the EUR side of a conversion). Absent elsewhere. */
+  spread_pct: preciseAmountSchema.nullable().optional(),
+  /** Shared by both legs of a matched conversion pair; NULL for a one-sided movement. */
+  pair_id: z.string().nullable().optional(),
   status: z.string().default('COMPLETED'),
 });
 
@@ -209,6 +233,7 @@ export const TaxLotEventSchema = z.object({
 // TypeScript types inferred from schemas
 export type SpotTransactionType = z.infer<typeof SpotTransactionSchema>;
 export type FuturesTransactionType = z.infer<typeof FuturesTransactionSchema>;
+export type CollateralMovementRecord = z.infer<typeof CollateralMovementSchema>;
 export type TaxLotType = z.infer<typeof TaxLotSchema>;
 export type TaxLotEventType = z.infer<typeof TaxLotEventSchema>;
 

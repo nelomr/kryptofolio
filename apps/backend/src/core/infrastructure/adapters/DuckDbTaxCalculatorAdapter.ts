@@ -128,6 +128,14 @@ export class DuckDbTaxCalculatorAdapter implements ITaxCalculatorPort {
       eventsQuery += ` WHERE account_id = $1`;
     }
 
+    // Both source views already carry this same ORDER BY in their own definitions, but DuckDB does
+    // not guarantee a view's internal order survives an outer `SELECT * ... WHERE ...` — the WHERE
+    // filter especially can produce a different physical plan than the view alone. This method's
+    // callers (`GetTokenHistoryUseCase`, the FIFO materializer) render the returned arrays as-is,
+    // with no re-sort of their own, so the guarantee has to be restated here.
+    lotsQuery += ' ORDER BY acquisition_timestamp, source_tx_id';
+    eventsQuery += ' ORDER BY disposal_date, id';
+
     const lots = (await this.db.queryMany(lotsQuery, params)) as TaxLotType[];
     const events = (await this.db.queryMany(
       eventsQuery,

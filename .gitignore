@@ -39,6 +39,7 @@ dist-ssr
 opencode.json
 propuestas/
 CLAUDE.md
+listadoTransacciones/*
 
 # OpenSpec — only track live specs and config, not change history
 openspec/changes/archive/

@@ -111,6 +111,8 @@ function makeMockLedger(): Mocked<ILedgerPort> {
     saveSpotTransaction: vi.fn(),
     getFuturesTransactions: vi.fn(),
     saveFuturesTransaction: vi.fn(),
+    getCollateralMovements: vi.fn(),
+    saveCollateralMovement: vi.fn(),
     getTaxLots: vi.fn(),
     createTaxLot: vi.fn(),
     getLotHistoryEvents: vi.fn(),

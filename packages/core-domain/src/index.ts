@@ -9,3 +9,4 @@ export * from "./domain/models/MoneyEntities";
 export * from "./domain/models/FxRateBasis";
 export * from "./value-objects/Money";
 export * from "./domain/services/sourceProfile";
+export * from "./domain/services/collateralPairing";
