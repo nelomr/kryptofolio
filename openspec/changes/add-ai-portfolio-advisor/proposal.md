@@ -9,11 +9,13 @@ This change adds Phase 0 of an AI advisor: a walking skeleton, strictly read-onl
 - **New read-only advisor agent** built on `@mastra/core`, exposing exactly three tools — thin wrappers over `GetPortfolioSummaryUseCase`, `GetFiscalIntegrityUseCase`, `GetTokenHistoryUseCase`. No new calculation of any kind lives in the AI layer.
 - **No write tools exist in Phase 0.** The invariant "the advisor never modifies a quantity, an asset, or a fiscal figure" holds by construction, not by prompt instruction.
 - **Tool results are pre-aggregated, compact DTOs under an explicit token budget.** The full ledger is never handed to a model.
-- **Streaming chat**: SSE from a dedicated Hono route, consumed in the frontend by a composable over `ReadableStream`. Pinia Colada is deliberately not used for the token stream (it caches request/response pairs, not incremental streams); it stays the tool for any non-streaming advisor metadata.
+- **Ranking happens in a pure domain service, never in the AI layer.** The portfolio snapshot arrives unordered and a holding's value can be absent or unconvertible, so a `core-domain` service ranks by value through the `Money` value object and returns unvalued holdings as an explicit third list. The AI subtree performs no comparison and no arithmetic on money, and the incompleteness flags the use case already computes (`rates_incomplete`, `prices_incomplete`) travel with the figures so the advisor cannot present a partial total as authoritative.
+- **Streaming chat**: SSE from a dedicated Hono route. On the frontend the transport lives in `RestAdvisorAdapter` behind a domain port that exposes the run as an `AsyncIterable`, exactly as `IMarketDataPort.subscribeToStream` already does for prices; the composable only holds reactive state. Pinia Colada is deliberately not used for the token stream (it caches request/response pairs, not incremental streams); it stays the tool for the advisor config.
+- **Multi-turn conversation**: Mastra `Memory` on the advisor's own store, `resource: 'local'`, bounded message history, with observational memory and semantic recall off — those would pull in an embedding model and a vector store, which this phase excludes.
 - **Global chat panel UI** built on `DESIGN.md` tokens. Per-view embedded insights are a later phase.
 - **Multi-provider model selection with a fallback chain.** Cloud default; Ollama available locally via `ollama-ai-provider-v2`. OpenAI / Anthropic / Google / OpenCode go through Mastra's model router with no extra package.
 - **BYO API keys stored encrypted** by reusing `IVaultCredentialsPort` + `ICryptographyPort`. No plaintext keys in `.env`.
-- **One agent, dynamic instructions.** `instructions` is a function of `RequestContext` (locale from Settings, base currency, verbosity) rather than N duplicated prompts. A stable system prefix enables prompt caching; volatile data appears only inside tool results.
+- **One agent, dynamic instructions.** `instructions` is a function of `RequestContext` (locale from Settings, base currency) rather than N duplicated prompts. A stable system prefix enables prompt caching; volatile data appears only inside tool results.
 - **The "not financial advice" guardrail is a Mastra output processor**, not a sentence in the prompt — so it cannot be argued away by the conversation.
 - **Per-run audit trail**: model used, tools called, token counts.
 - Single-user self-hosted, so `resource`/`thread` scoping is trivial.
@@ -37,13 +39,18 @@ Mastra is consumed as a **library**, not via `@mastra/hono`. Routes are hand-wri
 
 **Code — backend (`apps/backend`, no new package):**
 - `core/domain/ports/IAdvisorPort.ts` — new, LLM-agnostic.
+- `core/domain/ports/IAdvisorRunLogPort.ts` — new; the audit write, so the use case never touches SQLite.
 - `core/application/use-cases/AskAdvisorUC.ts` — new.
 - `core/infrastructure/adapters/MastraAdvisorAdapter.ts` — the **only** file permitted to import `@mastra/*`.
 - `core/infrastructure/ai/{agents,tools,prompts,models}/` — new subtree.
 - `core/infrastructure/dtos/` — Zod schemas for everything crossing the boundary.
 - `core/infrastructure/routes/` — advisor routes.
 
-**Code — frontend (`apps/frontend`):** new `ITaxPort`-style advisor port + `Rest…Adapter`, a streaming composable, and a global chat panel component.
+**Code — `packages/core-domain`:** `Money.compare` (additive, pure) and a `rankHoldingsByValue` domain service. Framework-agnostic, no new dependency, and the only business logic this change places outside `apps/backend`.
+
+**Code — `packages/shared-types`:** `advisor-stream.ts` — the wire event union plus the closed vocabularies `ADVISOR_TOOL_NAMES`, `ADVISOR_FAILURE_CODES`, `ADVISOR_TOOL_ERROR_CODES`, `AI_PROVIDER_IDS`, and `modelChainSchema`.
+
+**Code — frontend (`apps/frontend`):** new `ITaxPort`-style advisor port + `RestAdvisorAdapter` owning the `fetch`/`ReadableStream`/SSE-frame transport and reporting to the `errorBus`, a state-only chat composable, and a global chat panel component.
 
 **Dependencies:** `@mastra/core`, `@mastra/libsql`, `ollama-ai-provider-v2`. `zod` is already present. No vector store, no RAG dependency.
 
@@ -54,7 +61,7 @@ Mastra is consumed as a **library**, not via `@mastra/hono`. Routes are hand-wri
 - **Rule 3 (domain imports nothing external)** — `IAdvisorPort` must not import `@mastra/*`, Zod, or `decimal.js`. Zod lives in `infrastructure/dtos/` only.
 - **Rule 2 (hexagonal)** — exactly one adapter touches the LLM SDK; the use case orchestrates through the port.
 - **Rule 6 (FIFO vs custody)** — the advisor reads already-materialized fiscal results through existing use cases. It introduces **no** new ordering, no new partitioning, and nothing that can reorder a tax FIFO queue. No AI-layer code may compute a fiscal figure.
-- **Rule 4 (money is never a raw float)** — tool-result DTOs carry `PreciseAmount`-derived strings; no figure is re-formatted through float arithmetic on its way to the model.
+- **Rule 4 (money is never a raw float)** — the source use cases return plain `string` figures, some optional, one wrapped in a `ConvertedAmount` union; applying `preciseAmountSchema` at the tool boundary is the re-typing step, an absent figure is reported as unvalued rather than defaulted to `'0'`, and monetary comparison happens only inside `Money`.
 - **Rule 5 (discriminated unions)** — provider/model configuration and stream events are modelled as `kind`-discriminated unions, not flag-plus-optional-payload bags.
 
 **Testing:** TDD throughout, and per rule 3 of "Working method", each new test must be proven able to fail — a deliberate break must land on a line the target case actually reaches. Streaming and processor-abort paths are the likeliest vacuous-pass shapes here.
