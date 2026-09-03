@@ -1,4 +1,6 @@
+@layer theme, base, components, vendor, utilities;
 @import "tailwindcss";
+@import "vue-sonner/style.css" layer(vendor);
 @import "./styles/theme.css";
 @import "./styles/responsive-fixes.css";
 

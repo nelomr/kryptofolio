@@ -17,7 +17,7 @@ const delegatedProps = reactiveOmit(props, "toastOptions")
     class="toaster group"
     :toast-options="{
       classes: {
-        toast: 'group toast relative flex items-start text-left group-[.toaster]:bg-surface group-[.toaster]:text-fg group-[.toaster]:border group-[.toaster]:border-border-soft group-[.toaster]:shadow-modal group-[.toaster]:rounded-xl font-sans !p-4 !pr-12 gap-3 !w-max !max-w-[60vw]',
+        toast: 'group toast flex items-start text-left group-[.toaster]:bg-surface group-[.toaster]:text-fg group-[.toaster]:border group-[.toaster]:border-border-soft group-[.toaster]:shadow-modal group-[.toaster]:rounded-xl font-sans !p-4 !pr-12 gap-3 !w-max !max-w-[60vw]',
         content: 'flex flex-col gap-1',
         title: 'font-semibold text-sm text-fg text-left leading-5',
         description: 'group-[.toast]:text-muted text-sm text-left',
