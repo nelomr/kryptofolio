@@ -18,9 +18,14 @@ toast container falls back to static, in-flow rendering.
   library's own positioning, stacking and offset custom properties actually apply.
 - Toast notifications consequently render as a fixed overlay in the configured `top-right` corner, above
   page content, without contributing to document height or creating scroll.
-- No change to the `Toaster` wrapper (`apps/frontend/src/components/ui/sonner/Sonner.vue`), to its mount
-  point (`apps/frontend/src/App.vue:71`), or to any call site of `toast()`. The dependency is already
-  correctly configured; only the stylesheet wiring is missing.
+- No change to the `Toaster`'s mount point (`apps/frontend/src/App.vue:71`) or to any call site of
+  `toast()`. The dependency is already correctly configured; the stylesheet wiring was the only piece
+  missing.
+- One follow-up change to the `Toaster` wrapper (`apps/frontend/src/components/ui/sonner/Sonner.vue`,
+  see design.md D5): a hardcoded `relative` class on the toast item, added when no vendor CSS applied,
+  collided with the vendor sheet's `position: absolute` once restored and caused the toast to overflow
+  its container's width. Removed — `position: absolute` alone is a sufficient positioning context for
+  the close button.
 - Not breaking. No API, DTO, port, or domain change.
 
 Explicitly out of scope: the inline `<Alert>` banner for CSV parse errors in

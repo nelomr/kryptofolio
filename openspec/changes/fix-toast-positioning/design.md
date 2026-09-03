@@ -38,7 +38,8 @@ Current state, verified in this repo:
 
 **Non-Goals**
 
-- No change to `Sonner.vue`, to its mount in `App.vue:71`, or to any `toast()` call site.
+- No change to `Toaster`'s mount in `App.vue:71`, or to any `toast()` call site. (`Sonner.vue` itself
+  did end up changing — see D5 — once D1 exposed a real collision the initial framing missed.)
 - No new Tailwind class, token, or design decision (`DESIGN.md` is unchanged).
 - The inline `<Alert>` in `DataIngestionWizard.vue` stays inline — out of scope per the proposal.
 - No dark-theme work: the vendor sheet's `[data-sonner-theme='dark']` rules are inert here because
@@ -165,8 +166,9 @@ the vendor sheet now that it's active), same file family.
 
 ## Migration Plan
 
-Single edit to `apps/frontend/src/style.css`; no data, schema, API, or config migration. Rollback is
-deleting the two added lines. Nothing persists and no other package is affected.
+Two edits: `apps/frontend/src/style.css` (D1, two added lines) and `apps/frontend/src/components/ui/sonner/Sonner.vue`
+(D5, one removed class). No data, schema, API, or config migration. Rollback is reverting both. Nothing
+persists and no other package is affected.
 
 ## Open Questions
 
