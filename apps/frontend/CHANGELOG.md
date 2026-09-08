@@ -1,5 +1,11 @@
 # @kryptofolio/frontend
 
+## 1.16.10
+
+### Patch Changes
+
+- [`a9bb725`](https://github.com/nelomr/kryptofolio/commit/a9bb7259e206759390a580804d3683bd7e4a6af7) Thanks [@nelomr](https://github.com/nelomr)! - Fixed the tax report's Futures & Derivatives table always rendering zero rows. The frontend parser required fields (`id`, snake_case transaction keys) that its route never sent — it was pointed at a per-symbol aggregate with no transaction identity. The route now serves per-transaction futures data instead, and the parser is rewritten against that data's real shape. A row that fails validation is now reported (instead of silently vanishing) for every adapter loop that parses a list.
+
 ## 1.16.9
 
 ### Patch Changes
