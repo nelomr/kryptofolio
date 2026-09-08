@@ -16,12 +16,41 @@
 import { describe, it, expect } from 'vitest'
 import type { TokenLotDto, TokenLotHistoryEventDto, GetTokenHistoryResponse } from '@kryptofolio/backend/src/core/application/use-cases/GetTokenHistoryUseCase.js'
 import type { SpanishTaxReportResponse, TaxReportAuditTrailEventDto } from '@kryptofolio/backend/src/core/application/use-cases/GetSpanishTaxReportUseCase.js'
+import type { LedgerFuturesTransaction } from '@kryptofolio/backend/src/core/domain/ports/ILedgerPort.js'
 import {
   ExternalTokenHistorySchema,
   ExternalTaxReportSchema,
   ExternalTaxLotShape,
   ExternalTaxLotHistoryShape,
 } from '@/core/infrastructure/dtos/ExternalTaxSchemas'
+import { CexFuturesLedgerShape } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
+
+/**
+ * Compile-time guard, closing what the runtime `Object.keys(sample)` checks below cannot: `sample`
+ * is a literal typed as the backend interface `T`, and TypeScript only forces an object literal to
+ * populate `T`'s *required* members — an optional key can be dropped from `sample` with no compile
+ * error, so the runtime check built from it never sees that key either. `fee_amount`,
+ * `funding_amount` and `trade_price` are exactly that class of field, and an undeclared optional key
+ * is how this file's own defect (an emitter field silently stripped) went uncaught. This type
+ * resolves to `true` only when every key of `T` — required or optional — is present in `S`; any
+ * other outcome is a compile error naming the missing key(s).
+ */
+type ShapeDeclaresEveryKeyOf<T, S> = Exclude<keyof T, keyof S> extends never
+  ? true
+  : { missingFromShape: Exclude<keyof T, keyof S> }
+
+/**
+ * The other half of the same contract: a shape SHALL NOT declare a key no emitter produces, since
+ * tolerance for a shape with no producer is dead code that reads as a contract — which is how the
+ * derivatives schema stayed green for years against a payload its route never sent.
+ *
+ * Applied below only to the derivatives pair, where it holds today. It is deliberately *not*
+ * file-wide: `ExternalTaxLotShape` declares `asset_logo_uri` and `exchange_logo_uri`, whose only
+ * producer is a mock, so asserting it there would fail on a question this change does not own.
+ */
+type ShapeDeclaresNoKeyBeyond<T, S> = Exclude<keyof S, keyof T> extends never
+  ? true
+  : { extraInShape: Exclude<keyof S, keyof T> }
 
 describe('Backend contract — canonical status vocabulary', () => {
   it('parses OPEN/PARTIAL/CLOSED from a payload shaped like GetTokenHistoryResponse', () => {
@@ -116,6 +145,10 @@ describe('Backend contract — a backend field with no frontend counterpart is c
     for (const key of backendKeys) {
       expect(declaredKeys).toContain(key)
     }
+    // Third guard, covering `value_provenance` and every other optional member the two runtime
+    // checks above cannot see through a required-only literal.
+    const typeCheck: ShapeDeclaresEveryKeyOf<TokenLotDto, typeof ExternalTaxLotShape.shape> = true
+    expect(typeCheck).toBe(true)
   })
 
   it('ExternalTaxLotHistoryShape declares every key TokenLotHistoryEventDto sends', () => {
@@ -129,5 +162,33 @@ describe('Backend contract — a backend field with no frontend counterpart is c
     for (const key of backendKeys) {
       expect(declaredKeys).toContain(key)
     }
+    const typeCheck: ShapeDeclaresEveryKeyOf<TokenLotHistoryEventDto, typeof ExternalTaxLotHistoryShape.shape> = true
+    expect(typeCheck).toBe(true)
+  })
+
+  it('CexFuturesLedgerShape declares every key LedgerFuturesTransaction sends', () => {
+    const sample: LedgerFuturesTransaction = {
+      id: 'ftx-1', id_hash: 'hash-1', account_id: 'acc-1', tx_type: 'TRADE',
+      symbol: 'pf_btcusd', fiat_currency: 'EUR', timestamp: '2024-03-10T10:00:00Z',
+      status: 'COMPLETED',
+    }
+    const backendKeys = Object.keys(sample).sort()
+    const declaredKeys = Object.keys(CexFuturesLedgerShape.shape).sort()
+
+    // If LedgerFuturesTransaction gains a field, `sample` above fails to compile until it is
+    // added here — that is the primary guard. This assertion is the secondary, runtime one.
+    for (const key of backendKeys) {
+      expect(declaredKeys).toContain(key)
+    }
+    // Third guard: `settlement_asset_id` and `fee_asset_id` are optional at the emitter, so a
+    // required-only `sample` never exercises them — this is the check that would still catch
+    // either one going undeclared, unlike the two runtime checks above.
+    const declaresEveryKey: ShapeDeclaresEveryKeyOf<LedgerFuturesTransaction, typeof CexFuturesLedgerShape.shape> = true
+    expect(declaresEveryKey).toBe(true)
+    // Fourth guard, the converse: no declared key may outlive its producer. This is the direction
+    // that would have caught the fourteen aliases this schema carried for a shape its route never
+    // sent.
+    const declaresNoExtraKey: ShapeDeclaresNoKeyBeyond<LedgerFuturesTransaction, typeof CexFuturesLedgerShape.shape> = true
+    expect(declaresNoExtraKey).toBe(true)
   })
 })

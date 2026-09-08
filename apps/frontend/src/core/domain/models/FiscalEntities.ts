@@ -28,7 +28,8 @@ import type {
 export type FuturesTransactionType =
   | 'FUTURES_TRADE'
   | 'FUTURES_FUNDING'
-  | 'CONVERSION'
+  | 'FUTURES_SETTLEMENT'
+  | 'FUTURES_LIQUIDATION'
   | 'UNKNOWN'
 
 // ---------------------------------------------------------------------------

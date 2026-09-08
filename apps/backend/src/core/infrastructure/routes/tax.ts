@@ -107,15 +107,6 @@ export function createTaxApi(container: DIContainer) {
       const txs = await container.ledgerPort.getFuturesTransactions(accountId);
       return c.json(txs, 200);
     })
-    .get('/transactions/futures-derivatives', async (c) => {
-      const accountId = c.req.query('accountId');
-      const targetCurrency = c.req.query('currency');
-      const pnl = await container.portfolioAnalyticsPort.getDerivativesPnl(
-        accountId,
-        targetCurrency,
-      );
-      return c.json(pnl, 200);
-    })
     .get('/transactions/invalid', (c) => c.json([], 200))
     .get('/report', async (c) => {
       const params = parseReportParams(

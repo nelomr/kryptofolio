@@ -72,8 +72,10 @@ export function getTypeBadgeClass(type: FuturesTransactionType): string {
       return 'bg-primary/10 text-primary border-none'
     case 'FUTURES_FUNDING':
       return 'bg-warning-soft text-warning border-none'
-    case 'CONVERSION':
+    case 'FUTURES_SETTLEMENT':
       return 'bg-info-soft text-info border-none'
+    case 'FUTURES_LIQUIDATION':
+      return 'bg-loss-soft text-loss border-none'
     default:
       return 'bg-background text-muted-foreground border-none'
   }

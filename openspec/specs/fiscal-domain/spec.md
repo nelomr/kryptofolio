@@ -3,9 +3,7 @@
 ## Purpose
 
 The fiscal domain model: canonical lot status, typed disposal provenance with flag fields kept separate, custody location, and manual value provenance.
-
 ## Requirements
-
 ### Requirement: Canonical Lot Status in the Domain Model
 
 `TaxLotEntity.status` SHALL be typed as the canonical `'OPEN' | 'PARTIAL' | 'CLOSED'` union and SHALL be required, not optional. The `'FULL' | 'PARTIAL' | 'EMPTY'` union SHALL be removed from the domain model and from every DTO schema.
@@ -116,3 +114,38 @@ The fiscal domain models and all new value objects SHALL contain no framework de
 - **WHEN** the fiscal domain and its DTO schemas are type-checked
 - **THEN** no `any` type MUST appear
 - **AND** `unknown` with narrowing MUST be used where a dynamic value is unavoidable
+
+### Requirement: Derivative Operation Type Is a Total Image of the Emitter's Closed Enum
+
+`FuturesTransactionType` SHALL be exactly the emitter's four `FuturesTxType` values under the entity's existing `FUTURES_`-prefixed naming, plus `UNKNOWN`: `'FUTURES_TRADE' | 'FUTURES_FUNDING' | 'FUTURES_SETTLEMENT' | 'FUTURES_LIQUIDATION' | 'UNKNOWN'`. Excepting `UNKNOWN` itself, it SHALL NOT carry a member with no possible producer on the per-transaction futures route.
+
+`UNKNOWN` is deliberately kept even though the real route's own mapping cannot produce it: a second, unvalidated producer still inhabits it — a bare `z.string().transform(val => val as FuturesTransactionType)` cast on a mock schema, admitting any string into the union at that boundary. That cast is a distinct anti-corruption gap, outside this route and outside this requirement's fix; closing it, and with it the question of whether `UNKNOWN` still needs a member once no producer reaches it, is a follow-up.
+
+The mapping from the emitter's `tx_type` to this union SHALL be total and exhaustive by type: every value of `FuturesTxType` SHALL have a distinct, meaningful destination, and adding a fifth `FuturesTxType` value upstream SHALL fail this mapping's own typecheck rather than silently degrade to `UNKNOWN`. A `tx_type` value outside the closed enum SHALL be a parse rejection, never a value admitted and typed `UNKNOWN`.
+
+A collateral conversion SHALL NOT be represented as a `FuturesTransactionType`: it is not a `FuturesTxType` at its own emitter, and folding it into this union — whether as its own member or by collapsing it onto an existing one — would either resurrect a member no producer can reach or invent a position that was never opened.
+
+#### Scenario: Every emitter type reaches its own entity value
+
+- **WHEN** a row is produced for each of `TRADE`, `FUNDING_FEE`, `SETTLEMENT`, `LIQUIDATION`
+- **THEN** `TaxDerivativeEntity.type` MUST be `FUTURES_TRADE`, `FUTURES_FUNDING`, `FUTURES_SETTLEMENT`, `FUTURES_LIQUIDATION` respectively
+- **AND** none of the four MUST be typed `UNKNOWN`
+
+#### Scenario: A fifth emitter value fails the typecheck, not the runtime
+
+- **WHEN** `FuturesTxType` gains a value the mapping does not enumerate
+- **THEN** the mapping SHALL fail to compile
+- **AND** the failure SHALL NOT first appear as a runtime `UNKNOWN` on a real row
+
+#### Scenario: An off-vocabulary value is rejected, not admitted as UNKNOWN
+
+- **WHEN** a row's `tx_type` is outside the closed `FuturesTxType` enum
+- **THEN** the row MUST be rejected at the parsing boundary
+- **AND** it MUST NOT be typed `UNKNOWN` and rendered as though it parsed
+
+#### Scenario: A collateral conversion has no member in this union
+
+- **WHEN** the derivative operation-type union is inspected
+- **THEN** it SHALL NOT contain a member meaning "conversion"
+- **AND** a collateral movement SHALL continue to be represented by its own `CollateralMovementType`, never folded into `FuturesTransactionType`
+

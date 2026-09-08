@@ -1,20 +1,16 @@
 /**
- * ExternalFuturesSchemas — Anti-Corruption Layer for CEX Futures/Derivatives API responses.
+ * ExternalFuturesSchemas — Anti-Corruption Layer for the per-transaction futures ledger.
  *
- * Handles the shape of futures ledger data from CEX providers like Kraken Futures:
- *   - Parses contract symbols (e.g. pf_xrpusd) and extracts the underlying asset
- *   - Coerces string numbers to native numbers with safe fallback to 0
- *   - Normalizes timestamps to native Date objects
- *   - Maps snake_case exchange field names to camelCase domain entities
- *   - Isolates FUTURES_TRADE vs FUTURES_FUNDING vs CONVERSION detection
- *
- * AEAT Compliance: realized_pnl is the primary taxable concept for derivatives
- * under LIRPF — this layer ensures it is never silently dropped or zero-defaulted.
+ * Parses `LedgerFuturesTransaction` (`ILedgerPort.ts:62-80`), served verbatim by
+ * `/api/tax/transactions/futures` — the same route `getFuturesTransactions` reads.
+ * Every declared key and its optionality come from that emitter, measured, not
+ * from an assumed CEX shape.
  *
  * @see src/core/domain/models/FiscalEntities.ts (TaxDerivativeEntity)
  */
 
 import { z } from 'zod'
+import { FUTURES_TX_TYPES, type FuturesTxType } from '@kryptofolio/shared-types'
 import type { TaxDerivativeEntity, FuturesTransactionType } from '@/core/domain/models/FiscalEntities'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
@@ -92,106 +88,103 @@ export function extractUnderlyingAsset(contractSymbol: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// mapFuturesType — normalizes raw string to FuturesTransactionType
+// mapFuturesType — total map from the emitter's closed enum to the entity's
+//
+// `FUNDING_FEE` is the emitter's spelling; `FUTURES_FUNDING` is the entity's.
+// Total over `FuturesTxType` so a fifth value added upstream fails this file's
+// own typecheck instead of silently falling through to a catch-all.
 // ---------------------------------------------------------------------------
 
-const FUTURES_TYPE_MAP: Record<string, FuturesTransactionType> = {
-  futures_trade: 'FUTURES_TRADE',
-  trade: 'FUTURES_TRADE',
-  futures_funding: 'FUTURES_FUNDING',
-  funding: 'FUTURES_FUNDING',
-  funding_rate: 'FUTURES_FUNDING',
-  conversion: 'CONVERSION',
+const FUTURES_TYPE_MAP: Record<FuturesTxType, FuturesTransactionType> = {
+  TRADE: 'FUTURES_TRADE',
+  FUNDING_FEE: 'FUTURES_FUNDING',
+  SETTLEMENT: 'FUTURES_SETTLEMENT',
+  LIQUIDATION: 'FUTURES_LIQUIDATION',
 }
 
-function mapFuturesType(raw: string | undefined): FuturesTransactionType {
-  if (!raw) return 'UNKNOWN'
-  return FUTURES_TYPE_MAP[raw.toLowerCase()] ?? 'UNKNOWN'
+function mapFuturesType(txType: FuturesTxType): FuturesTransactionType {
+  return FUTURES_TYPE_MAP[txType]
 }
 
 // ---------------------------------------------------------------------------
-// CexFuturesLedgerSchema — THE CORE TRANSFORMATION
+// CexFuturesLedgerShape — THE CORE TRANSFORMATION
 //
-// Parses a raw futures ledger entry (from API response or CSV-based payload)
-// into a clean TaxDerivativeEntity domain model.
+// Parses `LedgerFuturesTransaction` into `TaxDerivativeEntity`. Every key the
+// emitter constructs (`ILedgerPort.ts:62-80`, `SQLiteLedgerAdapter.ts:240-257`)
+// is declared here with the emitter's own optionality, even the ones this
+// layer carries nowhere — a key that goes undeclared is a key an added-field
+// contract test cannot see, which is how a real drift goes unnoticed. No
+// alias with no producer survives.
 //
-// Field mapping (CEX raw → Domain entity):
+// Field mapping (emitter → Domain entity):
 //   id              → id (TransactionId branded)
-//   type/tx_type    → type (FuturesTransactionType)
-//   symbol/contract → contractSymbol + underlyingAsset (auto-extracted)
-//   change/amount   → amount
+//   tx_type         → type (FuturesTransactionType, via the total map above)
+//   symbol          → contractSymbol + underlyingAsset (auto-extracted)
+//   amount          → amount
 //   trade_price     → tradePrice
 //   realized_pnl    → realizedPnl (NEVER silently dropped)
-//   fee/fee_eur     → fees
-//   realized_funding→ funding
-//   timestamp/date  → timestamp (native Date)
+//   fee_amount      → fees
+//   funding_amount  → funding
+//   timestamp       → timestamp (native Date)
 //   exchange        → exchange
-//   ref_id          → refId
 //   status          → status
+//
+// `id_hash`, `account_id`, `settlement_asset_id`, `fee_asset_id` and
+// `fiat_currency` are parsed and carried nowhere: `TaxDerivativeEntity` has no
+// field for any of them, and adding one is a display change this contract fix
+// does not smuggle in. They stay declared so the mismatch is visible at the
+// boundary rather than silently dropped.
+//
+// Named separately from the transformed export so a contract test can
+// enumerate the wire keys this layer actually declares, without reaching into
+// ZodEffects internals — see `backend-contract.spec.ts`.
 // ---------------------------------------------------------------------------
 
-export const CexFuturesLedgerSchema = z
-  .object({
-    id: z.string().min(1),
-    type: z.string().optional(),
-    tx_type: z.string().optional(),
-    // Contract symbol — accepts 'symbol', 'contract', or 'pair'
-    symbol: z.string().optional(),
-    contract: z.string().optional(),
-    pair: z.string().optional(),
-    // Position size / contracts traded
-    change: numericField.optional(),
-    amount: numericField.optional(),
-    // Execution price
-    trade_price: numericField.optional(),
-    price: numericField.optional(),
-    price_eur: numericField.optional(),
-    // Realized PnL — CRITICAL fiscal field for AEAT
-    realized_pnl: numericField.optional(),
-    pnl: numericField.optional(),
-    // Fees
-    fee: numericField.optional(),
-    fee_eur: numericField.optional(),
-    // Funding rate
-    realized_funding: numericField.optional(),
-    funding: numericField.optional(),
-    // Timestamp
-    timestamp: timestampToDate.optional(),
-    date: timestampToDate.optional(),
-    // Metadata
-    exchange: z.string().optional(),
-    ref_id: z.string().optional(),
-    refid: z.string().optional(),
-    status: z.string().optional(),
-  })
+export const CexFuturesLedgerShape = z.object({
+  id: z.string().min(1),
+  id_hash: z.string(),
+  account_id: z.string(),
+  tx_type: z.enum(FUTURES_TX_TYPES),
+  symbol: z.string(),
+  // Position size / contracts traded
+  amount: numericField.optional(),
+  // Execution price
+  trade_price: numericField.optional(),
+  // Realized PnL — CRITICAL fiscal field for AEAT
+  realized_pnl: numericField.optional(),
+  settlement_asset_id: z.string().optional(),
+  funding_amount: numericField.optional(),
+  fee_asset_id: z.string().optional(),
+  fee_amount: numericField.optional(),
+  fiat_currency: z.string(),
+  timestamp: timestampToDate,
+  exchange: z.string().optional(),
+  status: z.string(),
+})
+
+export const CexFuturesLedgerSchema = CexFuturesLedgerShape
   .transform((raw): TaxDerivativeEntity => {
-    const rawType = raw.type ?? raw.tx_type
-    const type = mapFuturesType(rawType)
-
-    const contractSymbol = raw.symbol ?? raw.contract ?? raw.pair ?? ''
+    const type = mapFuturesType(raw.tx_type)
+    const contractSymbol = raw.symbol
     const underlyingAsset = extractUnderlyingAsset(contractSymbol)
-
-    const amount = raw.change ?? raw.amount ?? 0
-    const tradePrice = raw.trade_price ?? raw.price ?? raw.price_eur ?? 0
-    const realizedPnl = raw.realized_pnl ?? raw.pnl ?? 0
-    const fees = raw.fee_eur ?? raw.fee ?? 0
-    const funding = raw.realized_funding ?? raw.funding ?? 0
-    const timestamp = raw.timestamp ?? raw.date ?? new Date(0)
-    const refId = raw.ref_id ?? raw.refid
 
     return {
       id: TransactionIdSchema.parse(raw.id),
       type,
       contractSymbol,
       underlyingAsset,
-      amount,
-      tradePrice,
-      realizedPnl,
-      fees,
-      funding,
-      timestamp,
+      // The entity's fields stay `number` here; a missing wire value still
+      // falls back to `0`, unchanged from before this file's rewrite. That
+      // fallback is the next thing to fix, not this one — retyping to a
+      // value object that can represent "unresolved" is a separate change.
+      amount: raw.amount ?? 0,
+      tradePrice: raw.trade_price ?? 0,
+      realizedPnl: raw.realized_pnl ?? 0,
+      fees: raw.fee_amount ?? 0,
+      funding: raw.funding_amount ?? 0,
+      timestamp: raw.timestamp,
       exchange: raw.exchange,
-      refId,
+      refId: undefined,
       status: raw.status,
     }
   })

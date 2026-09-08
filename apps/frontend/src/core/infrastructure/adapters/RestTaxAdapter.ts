@@ -70,6 +70,14 @@ function toIngestionPayloadRow(row: TransactionRow) {
   }
 }
 
+function emitValidationError(context: string, details: unknown): void {
+  errorBus.emit('validation-error', {
+    message: 'errors.validation.api_malformed_data',
+    context,
+    details,
+  })
+}
+
 function parseOrFail<T>(
   schema: { safeParse: (data: unknown) => { success: boolean; data?: T; error?: unknown } },
   rawData: unknown,
@@ -77,14 +85,45 @@ function parseOrFail<T>(
 ): T {
   const result = schema.safeParse(rawData)
   if (!result.success) {
-    errorBus.emit('validation-error', { 
-      message: 'errors.validation.api_malformed_data',
-      context: context, 
-      details: result.error 
-    })
+    emitValidationError(context, result.error)
     throw new DomainValidationError(context, result.error)
   }
   return result.data!
+}
+
+/**
+ * Parses a list response row by row. A row that fails validation is skipped, never thrown on —
+ * throwing here would turn one malformed row into an empty result, indistinguishable from "no
+ * data", which is the failure mode this exists to prevent. Every rejection is logged to the
+ * console individually for diagnosis; the user-facing `errorBus` notification is aggregated to
+ * one event per call (not one per row), since the actionable fact is "N of M rows were rejected".
+ */
+function collectValidRows<Dto, Entity>(
+  rows: unknown,
+  schema: { safeParse: (data: unknown) => { success: boolean; data?: Dto; error?: unknown } },
+  context: string,
+  toEntity: (dto: Dto) => Entity,
+): Entity[] {
+  const parsed: Entity[] = []
+  let rejectedCount = 0
+  let firstError: unknown
+
+  for (const rawRow of Array.isArray(rows) ? rows : []) {
+    const result = schema.safeParse(rawRow)
+    if (result.success) {
+      parsed.push(toEntity(result.data as Dto))
+    } else {
+      rejectedCount += 1
+      if (firstError === undefined) firstError = result.error
+      console.warn(`[RestTaxAdapter] Skipping invalid row in ${context}:`, result.error, rawRow)
+    }
+  }
+
+  if (rejectedCount > 0) {
+    emitValidationError(context, { rejected: rejectedCount, accepted: parsed.length, error: firstError })
+  }
+
+  return parsed
 }
 
 export class RestTaxAdapter implements ITaxPort {
@@ -92,100 +131,67 @@ export class RestTaxAdapter implements ITaxPort {
     const res = await bffClient.api.tax.transactions.spot.$get()
     const rawArray = await res.json()
 
-    const parsed: TaxTransactionEntity[] = []
-    for (const rawTx of (Array.isArray(rawArray) ? rawArray : [])) {
-      const result = ExternalTaxTransactionSchema.safeParse(rawTx)
-      if (result.success) {
-        const dto = result.data
-        parsed.push({
-          id: TransactionIdSchema.parse(dto.id),
-          type: dto.type,
-          symbol: dto.symbol,
-          amount: dto.amount,
-          totalEur: dto.totalEur,
-          priceEur: dto.priceEur,
-          feeEur: dto.feeEur,
-          timestamp: dto.timestamp,
-          assetIn: dto.assetIn,
-          assetOut: dto.assetOut,
-          amountIn: dto.amountIn,
-          amountOut: dto.amountOut,
-          exchange: dto.exchange,
-          refId: dto.refId,
-        })
-      } else {
-        console.warn('[RestTaxAdapter] Skipping invalid transaction:', result.error, rawTx)
-      }
-    }
-    return parsed
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getSpotTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+      assetIn: dto.assetIn,
+      assetOut: dto.assetOut,
+      amountIn: dto.amountIn,
+      amountOut: dto.amountOut,
+      exchange: dto.exchange,
+      refId: dto.refId,
+    }))
   }
 
   async getFuturesTransactions(): Promise<TaxTransactionEntity[]> {
     const res = await bffClient.api.tax.transactions.futures.$get()
     const rawArray = await res.json()
 
-    const parsed: TaxTransactionEntity[] = []
-    for (const rawTx of (Array.isArray(rawArray) ? rawArray : [])) {
-      const result = ExternalTaxTransactionSchema.safeParse(rawTx)
-      if (result.success) {
-        const dto = result.data
-        parsed.push({
-          id: TransactionIdSchema.parse(dto.id),
-          type: dto.type,
-          symbol: dto.symbol,
-          amount: dto.amount,
-          totalEur: dto.totalEur,
-          priceEur: dto.priceEur,
-          feeEur: dto.feeEur,
-          timestamp: dto.timestamp,
-          assetIn: dto.assetIn,
-          assetOut: dto.assetOut,
-          amountIn: dto.amountIn,
-          amountOut: dto.amountOut,
-          exchange: dto.exchange,
-          refId: dto.refId,
-        })
-      }
-    }
-    return parsed
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getFuturesTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+      assetIn: dto.assetIn,
+      assetOut: dto.assetOut,
+      amountIn: dto.amountIn,
+      amountOut: dto.amountOut,
+      exchange: dto.exchange,
+      refId: dto.refId,
+    }))
   }
 
   async getFuturesDerivatives(): Promise<TaxDerivativeEntity[]> {
-    const res = await bffClient.api.tax.transactions['futures-derivatives'].$get()
+    const res = await bffClient.api.tax.transactions.futures.$get()
     const rawArray = await res.json()
 
-    const parsed: TaxDerivativeEntity[] = []
-    for (const rawTx of (Array.isArray(rawArray) ? rawArray : [])) {
-      const result = CexFuturesLedgerSchema.safeParse(rawTx)
-      if (result.success) {
-        parsed.push(result.data)
-      }
-    }
-    return parsed
+    return collectValidRows(rawArray, CexFuturesLedgerSchema, 'getFuturesDerivatives', (dto) => dto)
   }
 
   async getInvalidTransactions(): Promise<TaxTransactionEntity[]> {
     const res = await bffClient.api.tax.transactions.invalid.$get()
     const rawArray = await res.json()
-    const parsed: TaxTransactionEntity[] = []
 
-    for (const rawTx of (Array.isArray(rawArray) ? rawArray : [])) {
-      const result = ExternalTaxTransactionSchema.safeParse(rawTx)
-      if (result.success) {
-        const dto = result.data
-        parsed.push({
-          id: TransactionIdSchema.parse(dto.id),
-          type: dto.type,
-          symbol: dto.symbol,
-          amount: dto.amount,
-          totalEur: dto.totalEur,
-          priceEur: dto.priceEur,
-          feeEur: dto.feeEur,
-          timestamp: dto.timestamp,
-        })
-      }
-    }
-    return parsed
+    return collectValidRows(rawArray, ExternalTaxTransactionSchema, 'getInvalidTransactions', (dto) => ({
+      id: TransactionIdSchema.parse(dto.id),
+      type: dto.type,
+      symbol: dto.symbol,
+      amount: dto.amount,
+      totalEur: dto.totalEur,
+      priceEur: dto.priceEur,
+      feeEur: dto.feeEur,
+      timestamp: dto.timestamp,
+    }))
   }
 
   async getReport(year: number, method: string): Promise<TaxReportEntity> {
