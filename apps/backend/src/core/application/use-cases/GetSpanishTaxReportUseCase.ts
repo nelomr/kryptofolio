@@ -60,7 +60,7 @@ export interface TaxReportAuditTrailEventDto {
    */
   sale_price: ConvertedAmount | null;
   gain_loss: ConvertedAmount | null;
-  sale_fee: number;
+  sale_fee: ConvertedAmount | null;
   is_taxable: boolean;
   /** Why the lot was consumed: a network fee is not a sale. */
   operation_type: DisposalType;
@@ -187,7 +187,7 @@ export class GetSpanishTaxReportUseCase {
         amount_from_lot: evt.amountFromLot,
         sale_price: evt.salePrice,
         gain_loss: evt.gainLoss,
-        sale_fee: 0,
+        sale_fee: null,
         is_taxable: evt.isTaxable,
         operation_type: evt.disposalType,
         flag: evt.flag,

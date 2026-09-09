@@ -13,20 +13,11 @@ import { z } from 'zod'
 import { FUTURES_TX_TYPES, type FuturesTxType } from '@kryptofolio/shared-types'
 import type { TaxDerivativeEntity, FuturesTransactionType } from '@/core/domain/models/FiscalEntities'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
+import { nullableMoneyField } from '@/core/infrastructure/dtos/CommonSchemaHelpers'
 
 // ---------------------------------------------------------------------------
 // Helpers — reused from ExternalTaxSchemas pattern
 // ---------------------------------------------------------------------------
-
-/** Coerces any numeric-like value to a number, with 0 as fallback */
-const numericField = z.preprocess(
-  (val) => {
-    if (val === null || val === undefined) return 0
-    const n = typeof val === 'string' ? parseFloat(val.replace(/[^0-9.-]/g, '')) : Number(val)
-    return isNaN(n) ? 0 : n
-  },
-  z.number(),
-)
 
 /** Normalizes various timestamp formats to a native Date object */
 const timestampToDate = z.preprocess((val) => {
@@ -147,15 +138,15 @@ export const CexFuturesLedgerShape = z.object({
   tx_type: z.enum(FUTURES_TX_TYPES),
   symbol: z.string(),
   // Position size / contracts traded
-  amount: numericField.optional(),
+  amount: nullableMoneyField.optional(),
   // Execution price
-  trade_price: numericField.optional(),
+  trade_price: nullableMoneyField.optional(),
   // Realized PnL — CRITICAL fiscal field for AEAT
-  realized_pnl: numericField.optional(),
+  realized_pnl: nullableMoneyField.optional(),
   settlement_asset_id: z.string().optional(),
-  funding_amount: numericField.optional(),
+  funding_amount: nullableMoneyField.optional(),
   fee_asset_id: z.string().optional(),
-  fee_amount: numericField.optional(),
+  fee_amount: nullableMoneyField.optional(),
   fiat_currency: z.string(),
   timestamp: timestampToDate,
   exchange: z.string().optional(),
@@ -173,15 +164,14 @@ export const CexFuturesLedgerSchema = CexFuturesLedgerShape
       type,
       contractSymbol,
       underlyingAsset,
-      // The entity's fields stay `number` here; a missing wire value still
-      // falls back to `0`, unchanged from before this file's rewrite. That
-      // fallback is the next thing to fix, not this one — retyping to a
-      // value object that can represent "unresolved" is a separate change.
-      amount: raw.amount ?? 0,
-      tradePrice: raw.trade_price ?? 0,
-      realizedPnl: raw.realized_pnl ?? 0,
-      fees: raw.fee_amount ?? 0,
-      funding: raw.funding_amount ?? 0,
+      // All five carriers are optional at the emitter and a stated zero survives as `Money('0')`
+      // (`SQLiteLedgerAdapter.ts:247-253`'s `row.x ? … : undefined` gate) — so absence here means
+      // genuinely unknown/unstated, never a fabricated zero (D15).
+      amount: raw.amount ?? null,
+      tradePrice: raw.trade_price ?? null,
+      realizedPnl: raw.realized_pnl ?? null,
+      fees: raw.fee_amount ?? null,
+      funding: raw.funding_amount ?? null,
       timestamp: raw.timestamp,
       exchange: raw.exchange,
       refId: undefined,

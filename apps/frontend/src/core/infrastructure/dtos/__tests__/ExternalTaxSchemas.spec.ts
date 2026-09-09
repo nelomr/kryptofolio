@@ -7,6 +7,7 @@
  * its own fixtures against the retired FULL|PARTIAL|EMPTY vocabulary.
  */
 import { describe, it, expect } from 'vitest'
+import { Money } from '@kryptofolio/core-domain'
 import {
   ExternalTaxLotSchema,
   ExternalTaxLotHistorySchema,
@@ -111,7 +112,56 @@ describe('ExternalTaxLotSchema — canonical status vocabulary', () => {
     if (result.success) {
       expect(result.data.currentLocations).toHaveLength(2)
       expect(result.data.currentLocations[1].isSynthetic).toBe(true)
-      expect(result.data.currentLocations[1].qty).toBe(79.11)
+      expect(result.data.currentLocations[1].qty.equals(new Money('79.11'))).toBe(true)
+    }
+  })
+
+  it('preserves the four lot fields and a custody qty past the float-precision boundary', () => {
+    const PRECISE = '0.000000010000000001'
+    const result = ExternalTaxLotSchema.safeParse({
+      id: 'lot-1',
+      symbol: 'XRP',
+      date: '2024-01-01',
+      exchange: 'Kraken',
+      original_qty: PRECISE,
+      remaining_qty: PRECISE,
+      unit_cost: PRECISE,
+      total_cost: PRECISE,
+      status: 'OPEN',
+      custody: [
+        { account_id: 'acc-binance', account_name: 'Binance', is_synthetic: false, parent_account_id: null, qty: PRECISE },
+      ],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      const expected = new Money(PRECISE)
+      expect(result.data.originalQty.equals(expected)).toBe(true)
+      expect(result.data.remainingQty.equals(expected)).toBe(true)
+      expect(result.data.unitCost.equals(expected)).toBe(true)
+      expect(result.data.totalCost.equals(expected)).toBe(true)
+      expect(result.data.currentLocations[0].qty.equals(expected)).toBe(true)
+    }
+  })
+
+  it('keeps a flagged lot\'s forced-zero basis as a Money("0"), never undefined', () => {
+    const result = ExternalTaxLotSchema.safeParse({
+      id: 'lot-1',
+      symbol: 'XRP',
+      date: '2024-01-01',
+      exchange: 'Kraken',
+      original_qty: 100,
+      remaining_qty: 100,
+      unit_cost: 0,
+      total_cost: 0,
+      status: 'OPEN',
+      quality_flag: 'MISSING_PRICE',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.unitCost).toBeInstanceOf(Money)
+      expect(result.data.unitCost.equals(new Money('0'))).toBe(true)
+      expect(result.data.totalCost.equals(new Money('0'))).toBe(true)
+      expect(result.data.qualityFlag).toBe('MISSING_PRICE')
     }
   })
 
@@ -139,9 +189,64 @@ describe('ExternalTaxLotHistorySchema — provenance, quality flags, nullable pr
     id: 'evt-1',
     disposal_date: '2024-06-01',
     amount_from_lot: 10,
-    sale_fee_eur: 0.5,
     is_taxable: true,
   }
+
+  it('preserves amount_from_lot past the float-precision boundary', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      amount_from_lot: '0.000000010000000001',
+      sale_price: null,
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.amountFromLot.equals(new Money('0.000000010000000001'))).toBe(true)
+    }
+  })
+
+  it('maps an absent sale_fee to null, never a fabricated Money("0")', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_price: null,
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.saleFeeEur).toBeNull()
+    }
+  })
+
+  it('maps an explicit wire null sale_fee to null, same as an absent key', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_fee: null,
+      sale_price: null,
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.saleFeeEur).toBeNull()
+    }
+  })
+
+  it('preserves a resolved sale_fee as a Money, not a bare number', () => {
+    const result = ExternalTaxLotHistorySchema.safeParse({
+      ...base,
+      sale_fee: '1.5',
+      sale_price: null,
+      gain_loss: null,
+      operation_type: 'SELL',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.saleFeeEur).toBeInstanceOf(Money)
+      expect(result.data.saleFeeEur?.equals(new Money('1.5'))).toBe(true)
+    }
+  })
 
   it('parses operation_type as the typed disposalType field', () => {
     const result = ExternalTaxLotHistorySchema.safeParse({
@@ -394,9 +499,22 @@ describe('ExternalTokenHistorySchema — the custody timeline arrives beside the
     expect(result.success).toBe(true)
     const move = result.data?.relocations['lot-1']?.[0]
     expect(move?.occurredAt).toBeInstanceOf(Date)
-    expect(move?.qty).toBe(50)
+    expect(move?.qty).toBeInstanceOf(Money)
+    expect(move?.qty.toString()).toBe('50')
     expect(move?.fromAccountName).toBe('Kraken')
     expect(move?.toIsSynthetic).toBe(true)
+  })
+
+  it('preserves a relocation quantity past the float-precision boundary', () => {
+    const result = ExternalTokenHistorySchema.safeParse({
+      lots: [],
+      history: {},
+      relocations: { 'lot-1': [{ ...RELOCATION, qty: '0.0000012345678901234567891' }] },
+    })
+
+    expect(result.success).toBe(true)
+    const move = result.data?.relocations['lot-1']?.[0]
+    expect(move?.qty.toString()).toBe('0.0000012345678901234567891')
   })
 
   it('declares no valuation key on a relocation', () => {

@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { Money } from '@kryptofolio/core-domain';
 import {
   ExternalAssetSchema,
   ExternalPortfolioSummarySchema,
@@ -153,8 +154,8 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
       asset_out_id: 'EUR',
       amount_in: '0.5',
       amount_out: '31000',
-      price_eur: '62000',
-      fee_eur: '5',
+      price_fiat: '62000',
+      fee_fiat: '5',
       timestamp: '2024-01-15 12:30:00',
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -162,9 +163,9 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
     if (result.success) {
       expect(result.data.type).toBe('BUY');
       expect(result.data.symbol).toBe('BTC');
-      expect(result.data.amount).toBe(0.5);
-      expect(result.data.totalEur).toBe(31000);
-      expect(result.data.feeEur).toBe(5);
+      expect(result.data.amount?.equals(new Money('0.5'))).toBe(true);
+      expect(result.data.totalEur?.equals(new Money('31000'))).toBe(true);
+      expect(result.data.feeEur?.equals(new Money('5'))).toBe(true);
       expect(result.data.timestamp).toBeInstanceOf(Date);
     }
   });
@@ -177,8 +178,8 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
       asset_out_id: 'BTC',
       amount_in: '31000',
       amount_out: '0.5',
-      price_eur: '62000',
-      fee_eur: '5',
+      price_fiat: '62000',
+      fee_fiat: '5',
       timestamp: '2024-06-01 09:00:00',
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -186,18 +187,19 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
     if (result.success) {
       expect(result.data.type).toBe('SELL');
       expect(result.data.symbol).toBe('BTC');
-      expect(result.data.amount).toBe(0.5);
-      expect(result.data.totalEur).toBe(31000); // EUR received (proceeds)
+      expect(result.data.amount?.equals(new Money('0.5'))).toBe(true);
+      expect(result.data.totalEur?.equals(new Money('31000'))).toBe(true); // EUR received (proceeds)
     }
   });
 
-  it('correctly resolves a DEPOSIT transaction', () => {
+  it('a DEPOSIT with a resolved total_fiat passes the valuation through, not a forced zero', () => {
     const raw = {
       id: 'tx-003',
       tx_type: 'DEPOSIT',
       asset_in_id: 'ETH',
       amount_in: '2.0',
-      fee_eur: '0',
+      total_fiat: '4200',
+      fee_fiat: '0',
       timestamp: '2024-03-10 10:00:00',
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -205,8 +207,27 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
     if (result.success) {
       expect(result.data.type).toBe('DEPOSIT');
       expect(result.data.symbol).toBe('ETH');
-      expect(result.data.amount).toBe(2.0);
-      expect(result.data.totalEur).toBe(0);
+      expect(result.data.amount?.equals(new Money('2.0'))).toBe(true);
+      // D11: DEPOSIT/TRANSFER_IN no longer force Money('0') — resolveFiatMagnitudes
+      // resolves a market valuation for every row regardless of type, so a stated
+      // total_fiat must pass through instead of being discarded.
+      expect(result.data.totalEur?.equals(new Money('4200'))).toBe(true);
+    }
+  });
+
+  it('a DEPOSIT with no resolved total_fiat yields null, never a fabricated zero', () => {
+    const raw = {
+      id: 'tx-003b',
+      tx_type: 'DEPOSIT',
+      asset_in_id: 'ETH',
+      amount_in: '2.0',
+      fee_fiat: '0',
+      timestamp: '2024-03-10 10:00:00',
+    };
+    const result = ExternalTaxTransactionSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.totalEur).toBeNull();
     }
   });
 
@@ -216,7 +237,7 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
       tx_type: 'WITHDRAWAL',
       asset_out_id: 'BTC',
       amount_out: '0.1',
-      fee_eur: '2',
+      fee_fiat: '2',
       timestamp: '2024-04-01 08:00:00',
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -233,7 +254,7 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
       tx_type: 'BUY',
       asset_in_id: 'SOL',
       amount_in: '10',
-      fee_eur: '1',
+      fee_fiat: '1',
       timestamp: '2024-05-20 14:30:00',
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -250,7 +271,7 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
       tx_type: 'DEPOSIT',
       asset_in_id: 'BTC',
       amount_in: '0.01',
-      fee_eur: '0',
+      fee_fiat: '0',
       timestamp: 1716220200, // Unix seconds
     };
     const result = ExternalTaxTransactionSchema.safeParse(raw);
@@ -264,6 +285,82 @@ describe('ExternalTaxTransactionSchema — type-based symbol/amount resolution',
     const result = ExternalTaxTransactionSchema.safeParse(null);
     expect(result.success).toBe(false);
     expect(() => ExternalTaxTransactionSchema.safeParse(null)).not.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // A precision string past the float boundary survives exactly
+  // -------------------------------------------------------------------------
+  it('preserves an exact decimal total_fiat past the float-precision boundary', () => {
+    const raw = {
+      id: 'tx-precision',
+      tx_type: 'SWAP',
+      asset_in_id: 'ETH',
+      asset_out_id: 'BTC',
+      total_fiat: '0.000000010000000001',
+      timestamp: '2024-01-01 00:00:00',
+    };
+    const result = ExternalTaxTransactionSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Decimal.toString() renders this magnitude in exponential form, so the exact-decimal
+      // assertion goes through .equals(), not string identity.
+      expect(result.data.totalEur?.equals(new Money('0.000000010000000001'))).toBe(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // amountIn/amountOut absence stays undefined, never Money('0')
+  // -------------------------------------------------------------------------
+  it('leaves amountIn/amountOut undefined when the wire omits them, never a Money of zero', () => {
+    const raw = {
+      id: 'tx-noleg',
+      tx_type: 'BUY',
+      asset_in_id: 'BTC',
+      amount_out: '31000',
+      timestamp: '2024-01-01 00:00:00',
+    };
+    const result = ExternalTaxTransactionSchema.safeParse(raw);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.amountIn).toBeUndefined();
+      expect(result.data.amountOut?.equals(new Money('31000'))).toBe(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // The per-branch table: passthrough-or-null, never a forced zero
+  // -------------------------------------------------------------------------
+  describe('totalEur per-branch resolution: resolved passes through, absent is null', () => {
+    const cases: Array<{ type: string; extra: Record<string, string> }> = [
+      { type: 'SWAP', extra: { asset_in_id: 'ETH', asset_out_id: 'BTC' } },
+      { type: 'MIGRATION_SWAP', extra: { asset_in_id: 'ETH', asset_out_id: 'BTC' } },
+      { type: 'DEPOSIT', extra: { asset_in_id: 'ETH' } },
+      { type: 'TRANSFER_IN', extra: { asset_in_id: 'ETH' } },
+      { type: 'WITHDRAWAL', extra: { asset_out_id: 'ETH' } },
+      { type: 'TRANSFER_OUT', extra: { asset_out_id: 'ETH' } },
+      { type: 'AIRDROP', extra: { asset_in_id: 'ETH' } },
+      { type: 'REWARD', extra: { asset_in_id: 'ETH' } },
+      { type: 'FEE', extra: { asset_out_id: 'ETH' } },
+      { type: 'UNKNOWN', extra: {} },
+    ];
+
+    it.each(cases)('$type: a resolved total_fiat passes through', ({ type, extra }) => {
+      const raw = { id: `tx-${type}-r`, tx_type: type, total_fiat: '77', timestamp: '2024-01-01 00:00:00', ...extra };
+      const result = ExternalTaxTransactionSchema.safeParse(raw);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.totalEur?.equals(new Money('77'))).toBe(true);
+      }
+    });
+
+    it.each(cases)('$type: an absent total_fiat yields null, not a forced zero', ({ type, extra }) => {
+      const raw = { id: `tx-${type}-a`, tx_type: type, timestamp: '2024-01-01 00:00:00', ...extra };
+      const result = ExternalTaxTransactionSchema.safeParse(raw);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.totalEur).toBeNull();
+      }
+    });
   });
 });
 

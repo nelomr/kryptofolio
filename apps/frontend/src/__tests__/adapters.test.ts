@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { Money } from '@kryptofolio/core-domain'
 import { RestCryptoAdapter } from '@/core/infrastructure/adapters/RestCryptoAdapter'
 import { RestTaxAdapter } from '@/core/infrastructure/adapters/RestTaxAdapter'
 import { errorBus } from '@/core/infrastructure/errors/errorBus'
@@ -193,7 +194,7 @@ describe('RestTaxAdapter.getFuturesDerivatives — one bad row does not empty th
 
     expect(result).toHaveLength(1)
     expect(result[0].contractSymbol).toBe('pf_btcusd')
-    expect(result[0].realizedPnl).toBe(2000)
+    expect(result[0].realizedPnl?.equals(new Money('2000'))).toBe(true)
     expect(errorListener).toHaveBeenCalledTimes(1)
     expect(errorListener).toHaveBeenCalledWith(
       expect.objectContaining({

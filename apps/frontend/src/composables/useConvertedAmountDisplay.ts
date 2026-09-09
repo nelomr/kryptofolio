@@ -6,7 +6,7 @@
  * second — wrong, plausible-looking — answer.
  */
 
-import type { ConvertedAmount, FiatCurrency } from '@kryptofolio/shared-types'
+import { compareDecimalStrings, type ConvertedAmount, type FiatCurrency } from '@kryptofolio/shared-types'
 import { formatCurrency } from '@/composables/useFormatters'
 
 export type ConvertedAmountDisplay =
@@ -114,9 +114,9 @@ export function figureTone(
 ): 'gain' | 'loss' | 'neutral' | 'unconverted' {
   if (figure === null) return 'neutral'
   if (figure.kind === 'UNCONVERTIBLE') return 'unconverted'
-  const amount = Number(figure.amount)
-  if (amount > 0) return 'gain'
-  return amount < 0 ? 'loss' : 'neutral'
+  const sign = compareDecimalStrings(figure.amount, '0')
+  if (sign > 0) return 'gain'
+  return sign < 0 ? 'loss' : 'neutral'
 }
 
 const TONE_CLASSES: Record<ReturnType<typeof figureTone>, string> = {

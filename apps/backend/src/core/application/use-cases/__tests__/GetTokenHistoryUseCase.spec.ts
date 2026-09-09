@@ -132,13 +132,13 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
     expect(result.lots).toHaveLength(1);
     expect(result.lots[0].id).toBe('lot-xlm-1');
     expect(result.lots[0].symbol).toBe('XLM');
-    expect(result.lots[0].original_qty).toBe(2000.0);
-    expect(result.lots[0].remaining_qty).toBe(1573.45);
+    expect(result.lots[0].original_qty).toBe('2000.0');
+    expect(result.lots[0].remaining_qty).toBe('1573.45');
     expect(result.lots[0].status).toBe('PARTIAL');
 
     expect(result.history['lot-xlm-1']).toHaveLength(1);
     expect(result.history['lot-xlm-1'][0].id).toBe('evt-1');
-    expect(result.history['lot-xlm-1'][0].amount_from_lot).toBe(426.55);
+    expect(result.history['lot-xlm-1'][0].amount_from_lot).toBe('426.55');
     expect(result.history['lot-xlm-1'][0].asset_symbol).toBe('XLM');
   });
 
@@ -322,14 +322,14 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
           account_name: 'Binance',
           is_synthetic: false,
           parent_account_id: null,
-          qty: 1073.45,
+          qty: '1073.45',
         },
         {
           account_id: 'ownwallet-XLM',
           account_name: 'ownwallet-XLM',
           is_synthetic: true,
           parent_account_id: null,
-          qty: 500,
+          qty: '500.00',
         },
       ]);
     });
@@ -379,6 +379,37 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
 
       expect(port.getLotCustodyLocations).toHaveBeenCalledWith('acc-1');
     });
+
+    it('does not drop a tiny non-zero holding that Number() would underflow to zero', async () => {
+      const tinyQty = `0.${'0'.repeat(400)}1`;
+      const port = makePort({
+        lots: [XLM_LOT],
+        custody: [
+          {
+            tax_lot_id: 'lot-xlm-1',
+            asset_id: 'XLM',
+            account_id: 'acc-1',
+            account_name: 'Binance',
+            is_synthetic: false,
+            parent_account_id: null,
+            qty: tinyQty,
+          },
+        ],
+      });
+
+      expect(Number(tinyQty)).toBe(0);
+      const result = await makeUseCase(port).execute({ symbol: 'XLM' });
+
+      expect(result.lots[0].custody).toEqual([
+        {
+          account_id: 'acc-1',
+          account_name: 'Binance',
+          is_synthetic: false,
+          parent_account_id: null,
+          qty: tinyQty,
+        },
+      ]);
+    });
   });
 
   describe('custody timeline — where the lot has been', () => {
@@ -415,7 +446,7 @@ describe('[Strict Hexagonal] GetTokenHistoryUseCase', () => {
       expect(move?.to_account_name).toBe('ownwallet-XLM');
       expect(move?.from_is_synthetic).toBe(false);
       expect(move?.to_is_synthetic).toBe(true);
-      expect(move?.qty).toBe(500);
+      expect(move?.qty).toBe('500.0');
       expect(move?.occurred_at).toBe('2024-03-01T10:00:00Z');
     });
 

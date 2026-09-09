@@ -13,7 +13,7 @@ import {
   FISCAL_CLASSIFICATION_FLAGS,
   MANUAL_VALUE_PROVENANCE,
 } from '@kryptofolio/shared-types';
-import { nullableNumericField } from './CommonSchemaHelpers';
+import { nullableNumericField, nullableMoneyField, moneyField } from './CommonSchemaHelpers';
 import { convertedAmountSchema } from '@kryptofolio/shared-types';
 
 // ---------------------------------------------------------------------------
@@ -43,10 +43,13 @@ export const MockTaxTransactionSchema = z.object({
   id: TransactionIdSchema,
   type: z.string().transform(val => val as TaxTransactionType),
   symbol: z.string(),
-  amount: numericField,
-  totalEur: numericField,
-  priceEur: numericField,
-  feeEur: numericField,
+  // Matches FiscalEntities.ts's TaxTransactionEntity: a mock on numericField would fabricate a
+  // Money('0') the real adapter never sends (feeEur has no producer at all; the others go null
+  // whenever the source resolved nothing).
+  amount: nullableMoneyField,
+  totalEur: nullableMoneyField,
+  priceEur: nullableMoneyField,
+  feeEur: nullableMoneyField,
   timestamp: timestampToDate,
   exchange: z.string().optional(),
 });
@@ -56,11 +59,11 @@ export const MockTaxDerivativeSchema = z.object({
   type: z.string().transform(val => val as FuturesTransactionType),
   contractSymbol: z.string(),
   underlyingAsset: z.string(),
-  amount: numericField,
-  tradePrice: numericField,
-  realizedPnl: numericField,
-  fees: numericField,
-  funding: numericField,
+  amount: nullableMoneyField,
+  tradePrice: nullableMoneyField,
+  realizedPnl: nullableMoneyField,
+  fees: nullableMoneyField,
+  funding: nullableMoneyField,
   timestamp: timestampToDate,
   exchange: z.string().optional(),
   refId: z.string().optional(),
@@ -80,12 +83,14 @@ export const MockTaxReportSummarySchema = z.object({
 export const MockTaxLotHistorySchema = z.object({
   id: LotIdSchema,
   disposalDate: timestampToDate,
-  amountFromLot: numericField,
+  amountFromLot: moneyField,
   // Nullable, matching the real schema — a mock representing an unresolved price must be able to
   // say so, or it is not a substitute for what the real adapter can send.
   salePriceEur: nullableNumericField,
   gainLossEur: nullableNumericField,
-  saleFeeEur: numericField.optional(),
+  // No `.optional()`: the real entity's `saleFeeEur` lost its `?` — an absent mock
+  // key and an explicit `null` both collapse to `null` here too.
+  saleFeeEur: nullableMoneyField,
   isTaxable: z.boolean().default(false),
   flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
   qualityFlag: z.enum(FIFO_QUALITY_FLAGS).nullable().optional(),
@@ -199,10 +204,10 @@ export const MockTaxLotSchema = z.object({
   symbol: z.string(),
   date: timestampToDate,
   exchange: z.string(),
-  original_qty: numericField,
-  remaining_qty: numericField,
-  unit_cost: numericField,
-  total_cost: numericField,
+  original_qty: moneyField,
+  remaining_qty: moneyField,
+  unit_cost: moneyField,
+  total_cost: moneyField,
   status: z.enum(TAX_LOT_STATUSES),
 }).transform((raw): TaxLotEntity => ({
   id: raw.id,
@@ -224,7 +229,7 @@ export const MockTaxLotSchema = z.object({
 const legacyMockEventSchema = z.object({
   id: z.string(),
   disposal_date: z.union([z.string(), z.number(), z.date()]),
-  amount_from_lot: numericField,
+  amount_from_lot: moneyField,
   sale_price_eur: nullableNumericField,
   gain_loss_eur: nullableNumericField,
   is_taxable: z.boolean().default(false),

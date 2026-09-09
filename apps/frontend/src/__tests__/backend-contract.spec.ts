@@ -16,6 +16,15 @@
 import { describe, it, expect } from 'vitest'
 import type { TokenLotDto, TokenLotHistoryEventDto, GetTokenHistoryResponse } from '@kryptofolio/backend/src/core/application/use-cases/GetTokenHistoryUseCase.js'
 import type { SpanishTaxReportResponse, TaxReportAuditTrailEventDto } from '@kryptofolio/backend/src/core/application/use-cases/GetSpanishTaxReportUseCase.js'
+import type { PreciseAmount } from '@kryptofolio/backend/src/core/domain/value-objects/PreciseAmount.js'
+
+/**
+ * `PreciseAmount` is a branded string, and this file's fixtures are typed as the exact backend
+ * interfaces (see file docstring) — so a plain string literal needs this local cast to satisfy the
+ * brand, the same way `toPreciseAmount()` does at the backend boundary. Type-only: erased at build,
+ * no backend runtime code executes.
+ */
+const asPreciseAmount = (value: string): PreciseAmount => value as PreciseAmount
 import type { LedgerFuturesTransaction } from '@kryptofolio/backend/src/core/domain/ports/ILedgerPort.js'
 import {
   ExternalTokenHistorySchema,
@@ -56,10 +65,11 @@ describe('Backend contract — canonical status vocabulary', () => {
   it('parses OPEN/PARTIAL/CLOSED from a payload shaped like GetTokenHistoryResponse', () => {
     const openLot: TokenLotDto = {
       id: 'lot-1', symbol: 'XRP', date: '2024-01-01', exchange: 'Kraken',
-      original_qty: 179.11, remaining_qty: 179.11, unit_cost: 1.6724, total_cost: 299.46,
+      original_qty: asPreciseAmount('179.11'), remaining_qty: asPreciseAmount('179.11'),
+      unit_cost: asPreciseAmount('1.6724'), total_cost: asPreciseAmount('299.46'),
       status: 'OPEN', quality_flag: null, custody: [],
     }
-    const closedLot: TokenLotDto = { ...openLot, id: 'lot-2', status: 'CLOSED', remaining_qty: 0 }
+    const closedLot: TokenLotDto = { ...openLot, id: 'lot-2', status: 'CLOSED', remaining_qty: asPreciseAmount('0') }
     const backendResponse: GetTokenHistoryResponse = {
       lots: [openLot, closedLot], history: {}, relocations: {},
     }
@@ -87,7 +97,7 @@ describe('Backend contract — canonical status vocabulary', () => {
 describe('Backend contract — a nullable field survives the round trip', () => {
   it('preserves a null sale price from a payload shaped like TokenLotHistoryEventDto', () => {
     const event: TokenLotHistoryEventDto = {
-      id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: 0.2,
+      id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: '0.2',
       sale_price: null, gain_loss: null, is_taxable: false,
       quality_flag: 'MISSING_PRICE', operation_type: 'FEE',
     }
@@ -106,7 +116,7 @@ describe('Backend contract — a nullable field survives the round trip', () => 
   it('preserves a null sale price in the tax report audit trail too', () => {
     const auditRow: TaxReportAuditTrailEventDto = {
       id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: '0.2',
-      sale_price: null, gain_loss: null, sale_fee: 0, is_taxable: false,
+      sale_price: null, gain_loss: null, sale_fee: null, is_taxable: false,
       operation_type: 'FEE',
     }
     const backendResponse: SpanishTaxReportResponse = {
@@ -133,7 +143,8 @@ describe('Backend contract — a backend field with no frontend counterpart is c
   it('ExternalTaxLotShape declares every key TokenLotDto sends', () => {
     const sample: TokenLotDto = {
       id: 'x', symbol: 'BTC', date: '2024-01-01', exchange: 'Kraken',
-      original_qty: 1, remaining_qty: 1, unit_cost: 1, total_cost: 1,
+      original_qty: asPreciseAmount('1'), remaining_qty: asPreciseAmount('1'),
+      unit_cost: asPreciseAmount('1'), total_cost: asPreciseAmount('1'),
       status: 'OPEN', quality_flag: null, custody: [],
     }
     const backendKeys = Object.keys(sample).sort()
@@ -153,7 +164,7 @@ describe('Backend contract — a backend field with no frontend counterpart is c
 
   it('ExternalTaxLotHistoryShape declares every key TokenLotHistoryEventDto sends', () => {
     const sample: TokenLotHistoryEventDto = {
-      id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: 1,
+      id: 'evt-1', disposal_date: '2024-06-01', amount_from_lot: '1',
       sale_price: { kind: 'NATIVE', amount: '1', currency: 'EUR' }, gain_loss: { kind: 'NATIVE', amount: '1', currency: 'EUR' }, is_taxable: true, operation_type: 'SELL',
     }
     const backendKeys = Object.keys(sample).sort()

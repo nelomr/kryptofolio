@@ -172,7 +172,7 @@ const getEventBadge = (
             <TableCell
               class="py-2 text-right font-mono text-[10px] tabular-nums text-muted-foreground"
             >
-              -{{ (row.event.amountFromLot || 0).toFixed(8) }}
+              -{{ row.event.amountFromLot.toFixed(8) }}
             </TableCell>
             <TableCell
               class="py-2 text-right font-mono text-[10px] tabular-nums"

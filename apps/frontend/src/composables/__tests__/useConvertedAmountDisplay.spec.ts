@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { describeConvertedAmount } from '@/composables/useConvertedAmountDisplay'
+import { describeConvertedAmount, figureTone } from '@/composables/useConvertedAmountDisplay'
 
 describe('describeConvertedAmount (task 9.3)', () => {
   it('renders a converted figure with the requested currency symbol', () => {
@@ -89,6 +89,24 @@ describe('describeConvertedAmount (task 9.3)', () => {
 
     expect(display.kind).toBe('CONVERTED')
     expect(display.text).toContain('0')
+  })
+})
+
+describe('figureTone', () => {
+  it('classifies a tiny negative amount as a loss even where Number() underflows it to zero', () => {
+    const tinyLoss = `-0.${'0'.repeat(400)}1`
+    expect(Number(tinyLoss)).toBe(-0)
+    expect(figureTone({ kind: 'NATIVE', amount: tinyLoss, currency: 'EUR' })).toBe('loss')
+  })
+
+  it('classifies a null figure as neutral, and never reaches the sign comparison', () => {
+    expect(figureTone(null)).toBe('neutral')
+  })
+
+  it('classifies an unconvertible figure as unconverted regardless of its native sign', () => {
+    expect(
+      figureTone({ kind: 'UNCONVERTIBLE', nativeAmount: '200', nativeCurrency: 'USD', requested: 'EUR' }),
+    ).toBe('unconverted')
   })
 })
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
+import { Money } from '@kryptofolio/core-domain'
 import {
   useSmartYearLogic,
   usePagination,
@@ -15,10 +16,10 @@ const dummyTx = (year: number): TaxTransactionEntity => ({
   id: TransactionIdSchema.parse(`tx-${Math.random()}`),
   type: 'BUY',
   symbol: 'BTC',
-  amount: 1,
-  totalEur: 1000,
-  priceEur: 1000,
-  feeEur: 0,
+  amount: new Money('1'),
+  totalEur: new Money('1000'),
+  priceEur: new Money('1000'),
+  feeEur: new Money('0'),
   timestamp: new Date(`${year}-06-15T10:00:00Z`),
 })
 
@@ -29,9 +30,10 @@ const dummyTx = (year: number): TaxTransactionEntity => ({
 const lotEvent = (overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEvent => ({
   id: `lot-${Math.random()}`,
   disposalDate: new Date('2025-01-01'),
-  amountFromLot: 1,
+  amountFromLot: new Money('1'),
   salePrice: { kind: 'NATIVE', amount: '100', currency: 'EUR' },
   gainLoss: { kind: 'NATIVE', amount: '50', currency: 'EUR' },
+  saleFeeEur: null,
   isTaxable: true,
   disposalType: 'SELL',
   ...overrides,
@@ -40,13 +42,13 @@ const lotEvent = (overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEve
 describe('Tax Calculations Composables', () => {
   describe('useSmartYearLogic', () => {
     it('returns current year if no transactions exist', () => {
-      const txs = ref<TaxTransactionEntity[]>([])
+      const txs = shallowRef<TaxTransactionEntity[]>([])
       const { smartYear } = useSmartYearLogic(txs)
       expect(smartYear.value).toBe(new Date().getFullYear())
     })
 
     it('returns the year with the most transactions', () => {
-      const txs = ref<TaxTransactionEntity[]>([
+      const txs = shallowRef<TaxTransactionEntity[]>([
         dummyTx(2023),
         dummyTx(2024),
         dummyTx(2024),
@@ -59,7 +61,7 @@ describe('Tax Calculations Composables', () => {
     })
 
     it('returns the most recent year if there is a tie', () => {
-      const txs = ref<TaxTransactionEntity[]>([
+      const txs = shallowRef<TaxTransactionEntity[]>([
         dummyTx(2024),
         dummyTx(2024),
         dummyTx(2025),
@@ -192,6 +194,18 @@ describe('Tax Calculations Composables', () => {
 
     it('returns "loss" for taxable events with a negative gain', () => {
       const event = lotEvent({ isTaxable: true, gainLoss: { kind: 'NATIVE', amount: '-50', currency: 'EUR' } })
+      expect(getEventVariant(event)).toBe('loss')
+    })
+
+    it('classifies a tiny negative gain as a loss even where Number() underflows it to zero', () => {
+      // Number('-0.000...(400 zeros)...1') underflows to -0, and -0 >= 0 is true in JavaScript, so
+      // the float path misclassifies a real (if minuscule) loss as a gain.
+      const tinyLoss = `-0.${'0'.repeat(400)}1`
+      expect(Number(tinyLoss)).toBe(-0)
+      const event = lotEvent({
+        isTaxable: true,
+        gainLoss: { kind: 'NATIVE', amount: tinyLoss, currency: 'EUR' },
+      })
       expect(getEventVariant(event)).toBe('loss')
     })
   })

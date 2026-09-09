@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { compareDecimalStrings } from '@kryptofolio/shared-types'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { formatCurrency } from '@/composables/useFormatters'
 import { AlertTriangle, TrendingUp, TrendingDown, PiggyBank, Receipt } from 'lucide-vue-next'
@@ -46,11 +47,11 @@ const props = withDefaults(defineProps<{
 /**
  * Whether a decimal-string figure is above zero, for the colour class only.
  *
- * `'0' > 0` does not typecheck and `'0.00' > 0` would be a string comparison if it did; the figure is
- * parsed here and nowhere else, because a CSS class is the one use where losing the last places is
- * harmless. The displayed number goes through `formatCurrency` on the exact string.
+ * Compared as an exact decimal, not `Number(figure) > 0`: a figure that underflows to `0` as a
+ * double must still classify correctly. The displayed number goes through `formatCurrency` on the
+ * exact string.
  */
-const isPositive = (figure: string): boolean => Number(figure) > 0
+const isPositive = (figure: string): boolean => compareDecimalStrings(figure, '0') > 0
 
 const hasExclusions = computed(
   () => props.metrics.excludedFlaggedEvents > 0 || props.metrics.excludedUnresolvedIncomeCount > 0,

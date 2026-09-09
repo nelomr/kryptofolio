@@ -57,6 +57,21 @@ describe('TaxReportSummaryCards.vue', () => {
     expect(wrapper.find('[data-testid="excluded-unresolved-income"]').exists()).toBe(false)
   })
 
+  it('classifies a tiny positive capitalGains as positive even where Number() underflows it to zero', () => {
+    const tinyPositive = `0.${'0'.repeat(400)}1`
+    expect(Number(tinyPositive)).toBe(0)
+    const wrapper = mount(TaxReportSummaryCards, {
+      props: {
+        metrics: {
+          capitalGains: tinyPositive, yields: '0', totalLosses: '0', estimatedIrpf: '0',
+          excludedFlaggedEvents: 0, excludedUnresolvedIncomeCount: 0,
+        },
+      },
+    })
+    const card = wrapper.findAll('.text-2xl')[0]
+    expect(card.classes()).toContain('text-profit')
+  })
+
   it('shows the count of income rows excluded for an unresolved price', () => {
     const wrapper = mount(TaxReportSummaryCards, {
       props: {

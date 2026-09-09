@@ -15,15 +15,16 @@ import type {
   TaxReportEntity,
 } from "@/core/domain/models/FiscalEntities";
 import { TransactionIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
+import { Money } from "@kryptofolio/core-domain";
 
 const mockTx: TaxTransactionEntity = {
   id: TransactionIdSchema.parse("tx-mock"),
   type: "BUY",
   symbol: "BTC",
-  amount: 1,
-  priceEur: 50000,
-  feeEur: 10,
-  totalEur: 50010,
+  amount: new Money("1"),
+  priceEur: new Money("50000"),
+  feeEur: new Money("10"),
+  totalEur: new Money("50010"),
   timestamp: new Date("2026-06-02T10:00:00Z"),
 };
 

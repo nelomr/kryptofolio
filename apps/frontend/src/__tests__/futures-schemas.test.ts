@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { Money } from '@kryptofolio/core-domain'
 import {
   CexFuturesLedgerSchema,
   extractUnderlyingAsset,
@@ -92,15 +93,15 @@ describe('CexFuturesLedgerSchema — against LedgerFuturesTransaction, the real 
     expect(result.data.contractSymbol).toBe('pf_btcusd')
     expect(result.data.underlyingAsset).toBe('btc')
     expect(result.data.type).toBe('FUTURES_TRADE')
-    expect(result.data.amount).toBe(0.5)
-    expect(result.data.tradePrice).toBe(60000)
-    expect(result.data.realizedPnl).toBe(2000)
+    expect(result.data.amount?.equals(new Money('0.5'))).toBe(true)
+    expect(result.data.tradePrice?.equals(new Money('60000'))).toBe(true)
+    expect(result.data.realizedPnl?.equals(new Money('2000'))).toBe(true)
     // These are the assertions that must be watched red first: today's schema
     // never reads `fee_amount`/`funding_amount`, so `fees`/`funding` come back
     // `0` while `success` is `true` — a bare `expect(success).toBe(true)`
     // would pass today and hide it.
-    expect(result.data.fees).toBe(5)
-    expect(result.data.funding).toBe(-1.5)
+    expect(result.data.fees?.equals(new Money('5.0'))).toBe(true)
+    expect(result.data.funding?.equals(new Money('-1.5'))).toBe(true)
     expect(result.data.timestamp).toBeInstanceOf(Date)
     expect(result.data.exchange).toBe('Kraken Futures')
     expect(result.data.status).toBe('CLOSED')
@@ -108,12 +109,8 @@ describe('CexFuturesLedgerSchema — against LedgerFuturesTransaction, the real 
 
   it('parses a FUNDING_FEE row with no position size and no execution price on the wire', () => {
     // The emitter's spelling is `FUNDING_FEE`; the entity's is `FUTURES_FUNDING`.
-    // `row.x ? … : undefined` makes absence reachable on the wire. The entity's
-    // fields stay `number` here, and the existing `?? 0` fallback is unchanged
-    // behaviour — the view's own `tx.amount !== 0 ? … : '---'` sentinel already
-    // treats a genuine zero the same as an absent one, a pre-existing defect
-    // this change records but does not fix. What must hold is that a value no
-    // route sends (`FUTURES_FUNDING` as *input*) is never what makes this pass.
+    // `row.x ? … : undefined` makes absence reachable on the wire, and all five carriers are
+    // `Money | null` — absence must map to `null`, never to `Money('0')`.
     const raw = {
       id: 'ftx-002',
       id_hash: 'hash-002',
@@ -129,11 +126,49 @@ describe('CexFuturesLedgerSchema — against LedgerFuturesTransaction, the real 
     expect(result.success).toBe(true)
     if (!result.success) return
     expect(result.data.type).toBe('FUTURES_FUNDING')
-    expect(result.data.amount).toBe(0)
-    expect(result.data.tradePrice).toBe(0)
-    expect(result.data.realizedPnl).toBe(0)
-    expect(result.data.funding).toBe(0)
-    expect(result.data.fees).toBe(0)
+    expect(result.data.amount).toBeNull()
+    expect(result.data.tradePrice).toBeNull()
+    expect(result.data.realizedPnl).toBeNull()
+    expect(result.data.funding).toBeNull()
+    expect(result.data.fees).toBeNull()
+  })
+
+  it('preserves a stated zero as Money("0"), not as null, on a resolved fee', () => {
+    const raw = {
+      id: 'ftx-003',
+      id_hash: 'hash-003',
+      account_id: 'acc-1',
+      tx_type: 'TRADE',
+      symbol: 'pf_btcusd',
+      amount: '1',
+      fee_amount: '0',
+      fiat_currency: 'EUR',
+      timestamp: '2024-03-10T16:00:00Z',
+      status: 'CLOSED',
+    }
+    const result = CexFuturesLedgerSchema.safeParse(raw)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.fees).not.toBeNull()
+    expect(result.data.fees?.equals(new Money('0'))).toBe(true)
+  })
+
+  it('preserves exact precision past the float boundary for realizedPnl', () => {
+    const raw = {
+      id: 'ftx-004',
+      id_hash: 'hash-004',
+      account_id: 'acc-1',
+      tx_type: 'TRADE',
+      symbol: 'pf_btcusd',
+      realized_pnl: '0.000000010000000001',
+      fiat_currency: 'EUR',
+      timestamp: '2024-03-10T16:00:00Z',
+      status: 'CLOSED',
+    }
+    const result = CexFuturesLedgerSchema.safeParse(raw)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+    expect(result.data.realizedPnl?.equals(new Money('0.000000010000000001'))).toBe(true)
   })
 
   it.each([
@@ -199,8 +234,8 @@ describe('CexFuturesLedgerSchema — against LedgerFuturesTransaction, the real 
     const result = CexFuturesLedgerSchema.safeParse(raw)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.realizedPnl).toBe(-500)
-      expect(result.data.funding).toBe(-0.8)
+      expect(result.data.realizedPnl?.equals(new Money('-500'))).toBe(true)
+      expect(result.data.funding?.equals(new Money('-0.8'))).toBe(true)
     }
   })
 })

@@ -1,10 +1,12 @@
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import type { ConvertedAmount } from '@kryptofolio/shared-types';
+import { compareDecimalStrings } from '@kryptofolio/shared-types';
 import type {
   ITaxCalculatorPort,
   LotCustodyLocationRow,
   LotCustodyRelocationRow,
 } from '../../domain/ports/ITaxCalculatorPort.js';
+import { toPreciseAmount, type PreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 import type {
   DisposalType,
   FifoQualityFlag,
@@ -25,10 +27,10 @@ export interface TokenLotDto {
   symbol: string;
   date: string;
   exchange: string;
-  original_qty: number;
-  remaining_qty: number;
-  unit_cost: number;
-  total_cost: number;
+  original_qty: PreciseAmount;
+  remaining_qty: PreciseAmount;
+  unit_cost: PreciseAmount;
+  total_cost: PreciseAmount;
   status: TaxLotStatus;
   /**
    * Defect on this lot's own basis, if any.
@@ -49,7 +51,7 @@ export interface TokenLotCustodyDto {
   account_name: string;
   is_synthetic: boolean;
   parent_account_id: string | null;
-  qty: number;
+  qty: string;
 }
 
 /**
@@ -61,7 +63,7 @@ export interface TokenLotCustodyDto {
 export interface TokenLotRelocationDto {
   id: string;
   occurred_at: string;
-  qty: number;
+  qty: string;
   from_account_id: string;
   from_account_name: string;
   from_is_synthetic: boolean;
@@ -73,7 +75,7 @@ export interface TokenLotRelocationDto {
 export interface TokenLotHistoryEventDto {
   id: string;
   disposal_date: string;
-  amount_from_lot: number;
+  amount_from_lot: string;
   /**
    * The figure in the requested display currency, with its own conversion outcome.
    *
@@ -82,7 +84,6 @@ export interface TokenLotHistoryEventDto {
    */
   sale_price: ConvertedAmount | null;
   gain_loss: ConvertedAmount | null;
-  sale_fee?: number;
   is_taxable: boolean;
   flag?: FiscalClassificationFlag | null;
   quality_flag?: FifoQualityFlag | null;
@@ -157,10 +158,10 @@ export class GetTokenHistoryUseCase {
         symbol: lot.symbol || lot.asset_id,
         date: lot.acquisition_timestamp,
         exchange: lot.exchange_location || 'Unknown',
-        original_qty: Number(lot.original_qty),
-        remaining_qty: Number(lot.remaining_qty),
-        unit_cost: Number(lot.unit_cost_fiat),
-        total_cost: Number(lot.total_cost_fiat),
+        original_qty: toPreciseAmount(lot.original_qty),
+        remaining_qty: toPreciseAmount(lot.remaining_qty),
+        unit_cost: toPreciseAmount(lot.unit_cost_fiat),
+        total_cost: toPreciseAmount(lot.total_cost_fiat),
         status: lot.status,
         quality_flag: lot.quality_flag ?? null,
         value_provenance: lot.value_provenance,
@@ -188,7 +189,7 @@ export class GetTokenHistoryUseCase {
         historyMap[lotIdKey].push({
           id: evt.id || `evt-${evt.taxLotId}-${evt.disposalDate}`,
           disposal_date: evt.disposalDate,
-          amount_from_lot: Number(evt.amountFromLot),
+          amount_from_lot: evt.amountFromLot,
           sale_price: evt.salePrice,
           gain_loss: evt.gainLoss,
           is_taxable: evt.isTaxable,
@@ -230,7 +231,7 @@ function groupRelocationsByLot(
     bucket.push({
       id: `${row.spot_transaction_id ?? row.occurred_at}-${row.tax_lot_id}-${row.to_account_id}`,
       occurred_at: row.occurred_at,
-      qty: Number(row.qty),
+      qty: row.qty,
       from_account_id: row.from_account_id,
       from_account_name: row.from_account_name,
       from_is_synthetic: row.from_is_synthetic,
@@ -254,8 +255,7 @@ function groupCustodyByLot(
   const byLot = new Map<string, TokenLotCustodyDto[]>();
 
   for (const row of rows) {
-    const qty = Number(row.qty);
-    if (qty === 0) continue;
+    if (compareDecimalStrings(row.qty, '0') === 0) continue;
 
     const existing = byLot.get(row.tax_lot_id) ?? [];
     existing.push({
@@ -263,7 +263,7 @@ function groupCustodyByLot(
       account_name: row.account_name,
       is_synthetic: row.is_synthetic,
       parent_account_id: row.parent_account_id,
-      qty,
+      qty: row.qty,
     });
     byLot.set(row.tax_lot_id, existing);
   }

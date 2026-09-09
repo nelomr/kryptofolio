@@ -106,7 +106,6 @@ export const MOCK_TAX_REPORT = {
       amount_from_lot: 100,
       sale_price_eur: 5000,
       gain_loss_eur: 3000,
-      sale_fee_eur: 5,
       is_taxable: true,
       notes: 'FIFO: Lot tx-003 partial (100 SOL @ 20 EUR cost)',
       asset_symbol: 'SOL',

@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import type { Money } from "@kryptofolio/core-domain";
 import type {
   TaxTransactionType,
   TaxLotHistoryEvent,
@@ -30,7 +31,13 @@ import {
   convertedAmountSchema,
 } from "@kryptofolio/shared-types";
 import { LotIdSchema, AccountIdSchema } from "@/core/infrastructure/dtos/BrandedTypeSchemas";
-import { numericField, timestampToDate } from "./CommonSchemaHelpers";
+import {
+  numericField,
+  timestampToDate,
+  nullableMoneyField,
+  optionalMoneyField,
+  moneyField,
+} from "./CommonSchemaHelpers";
 
 // ---------------------------------------------------------------------------
 // ExternalTaxTransactionSchema
@@ -67,14 +74,11 @@ export const ExternalTaxTransactionSchema = z
     asset_out_id: z.string().optional(),
     asset_out_symbol: z.string().optional(),
     symbol: z.string().optional(),
-    amount_in: numericField.optional(),
-    amount_out: numericField.optional(),
-    price_fiat: numericField.optional(),
-    price_eur: numericField.optional(),
-    fee_fiat: numericField.optional(),
-    fee_eur: numericField.optional(),
-    total_fiat: numericField.optional(),
-    total_eur: numericField.optional(),
+    amount_in: optionalMoneyField,
+    amount_out: optionalMoneyField,
+    price_fiat: nullableMoneyField.optional(),
+    fee_fiat: nullableMoneyField.optional(),
+    total_fiat: nullableMoneyField.optional(),
     fiat_currency: z.string().optional(),
     timestamp: timestampToDate,
     exchange: z.string().optional(),
@@ -96,19 +100,24 @@ export const ExternalTaxTransactionSchema = z
     const rawAssetOut = raw.asset_out_symbol || raw.asset_out_id;
 
     let symbol = raw.symbol ?? "";
-    let amount = 0;
-    let totalEur = raw.total_fiat ?? raw.total_eur ?? 0;
+    let amount: Money | null = raw.amount_in ?? null;
+    // totalEur is re-derived per operation type, but no branch forces a fabricated
+    // Money('0') any more — resolveFiatMagnitudes (backend) resolves a market valuation for
+    // every ingested row regardless of tx_type, so an absent total_fiat means genuinely
+    // unresolved, not "this operation has no fiat value". Every branch below is therefore a
+    // passthrough of the leg that defines it, falling to raw.total_fiat, falling to null.
+    let totalEur = raw.total_fiat ?? null;
 
     switch (type) {
       case "BUY":
         symbol = rawAssetIn ?? "";
-        amount = raw.amount_in ?? 0;
+        amount = raw.amount_in ?? null;
         totalEur = raw.amount_out ?? totalEur;
         break;
 
       case "SELL":
         symbol = rawAssetOut ?? "";
-        amount = raw.amount_out ?? 0;
+        amount = raw.amount_out ?? null;
         totalEur = raw.amount_in ?? totalEur;
         break;
 
@@ -117,28 +126,28 @@ export const ExternalTaxTransactionSchema = z
       case "REWARD":
       case "TRANSFER_IN":
         symbol = rawAssetIn ?? "";
-        amount = raw.amount_in ?? 0;
-        totalEur = 0;
+        amount = raw.amount_in ?? null;
+        totalEur = raw.total_fiat ?? null;
         break;
 
       case "WITHDRAWAL":
       case "FEE":
       case "TRANSFER_OUT":
         symbol = rawAssetOut ?? "";
-        amount = raw.amount_out ?? 0;
-        totalEur = 0;
+        amount = raw.amount_out ?? null;
+        totalEur = raw.total_fiat ?? null;
         break;
 
       case "SWAP":
       case "MIGRATION_SWAP":
         symbol = rawAssetOut ?? rawAssetIn ?? "";
-        amount = raw.amount_out ?? raw.amount_in ?? 0;
-        totalEur = raw.total_fiat ?? raw.total_eur ?? 0;
+        amount = raw.amount_out ?? raw.amount_in ?? null;
+        totalEur = raw.total_fiat ?? null;
         break;
 
       default:
         symbol = raw.symbol ?? rawAssetIn ?? rawAssetOut ?? "";
-        amount = raw.amount_in ?? raw.amount_out ?? 0;
+        amount = raw.amount_in ?? raw.amount_out ?? null;
     }
 
     return {
@@ -147,8 +156,10 @@ export const ExternalTaxTransactionSchema = z
       symbol,
       amount,
       totalEur,
-      priceEur: raw.price_fiat ?? raw.price_eur ?? 0,
-      feeEur: raw.fee_fiat ?? raw.fee_eur ?? 0,
+      priceEur: raw.price_fiat ?? null,
+      // fee_fiat has no producer on the emitter side today — the field is always null on a
+      // real payload, never a Money('0').
+      feeEur: raw.fee_fiat ?? null,
       timestamp: raw.timestamp,
       assetIn: rawAssetIn,
       assetOut: rawAssetOut,
@@ -205,7 +216,7 @@ const ExternalTaxReportSummarySchema = z
 export const ExternalTaxLotHistoryShape = z.object({
     id: z.string().min(1),
     disposal_date: timestampToDate,
-    amount_from_lot: numericField,
+    amount_from_lot: moneyField,
     // The figure in the currency the response states, with its own conversion outcome.
     //
     // Null when the backend resolved no price. Coercing to 0 would read downstream as a genuine
@@ -216,7 +227,9 @@ export const ExternalTaxLotHistoryShape = z.object({
     // figure into a float here is the defect this change removes everywhere else.
     sale_price: convertedAmountSchema.nullable(),
     gain_loss: convertedAmountSchema.nullable(),
-    sale_fee: numericField.optional(),
+    // An absent key and an explicit wire `null` both collapse to `null` here —
+    // `nullableMoneyField` already treats both the same way, so no `.optional()` is added.
+    sale_fee: nullableMoneyField,
     is_taxable: z.coerce.boolean().default(false),
     // Fiscal classification — orthogonal to quality_flag below, both may be present at once.
     flag: z.enum(FISCAL_CLASSIFICATION_FLAGS).nullable().optional(),
@@ -281,7 +294,7 @@ const ExternalLotCustodyLocationSchema = z
       .string()
       .nullable()
       .transform((val) => (val === null ? null : AccountIdSchema.parse(val))),
-    qty: numericField,
+    qty: moneyField,
   })
   .transform(
     (raw): LotCustodyLocation => ({
@@ -303,7 +316,7 @@ const ExternalLotRelocationSchema = z
   .object({
     id: z.string().min(1),
     occurred_at: timestampToDate,
-    qty: numericField,
+    qty: moneyField,
     from_account_id: z.string().min(1).transform((val) => AccountIdSchema.parse(val)),
     from_account_name: z.string(),
     from_is_synthetic: z.coerce.boolean(),
@@ -336,10 +349,10 @@ export const ExternalTaxLotShape = z.object({
     symbol: z.string().optional().default(""),
     date: timestampToDate,
     exchange: z.string().optional().default(""),
-    original_qty: numericField,
-    remaining_qty: numericField,
-    unit_cost: numericField,
-    total_cost: numericField,
+    original_qty: moneyField,
+    remaining_qty: moneyField,
+    unit_cost: moneyField,
+    total_cost: moneyField,
     // Canonical OPEN|PARTIAL|CLOSED, passed through unchanged from the calculation engine.
     // Required: a lot with no status is not a valid lot.
     status: z.enum(TAX_LOT_STATUSES),

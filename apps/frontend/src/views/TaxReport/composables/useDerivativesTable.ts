@@ -10,6 +10,7 @@
 
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
+import type { Money } from '@kryptofolio/core-domain'
 import type { TaxDerivativeEntity, FuturesTransactionType } from '@/core/domain/models/FiscalEntities'
 import { usePagination } from './useTaxCalculations'
 
@@ -35,11 +36,16 @@ export function useDerivativesSort(transactions: Ref<TaxDerivativeEntity[]> | Co
   const sorted = computed(() => {
     const items = [...transactions.value]
     return items.sort((a, b) => {
-      const aVal =
-        sortKey.value === 'timestamp' ? new Date(a.timestamp).getTime() : a.realizedPnl
-      const bVal =
-        sortKey.value === 'timestamp' ? new Date(b.timestamp).getTime() : b.realizedPnl
-      return sortOrder.value === 'asc' ? aVal - bVal : bVal - aVal
+      if (sortKey.value === 'timestamp') {
+        const cmp = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        return sortOrder.value === 'asc' ? cmp : -cmp
+      }
+      // Unresolved sorts last in both directions: an unresolved PnL is not "smaller" than a loss.
+      if (a.realizedPnl === null && b.realizedPnl === null) return 0
+      if (a.realizedPnl === null) return 1
+      if (b.realizedPnl === null) return -1
+      const cmp = a.realizedPnl.compareTo(b.realizedPnl)
+      return sortOrder.value === 'asc' ? cmp : -cmp
     })
   })
 
@@ -82,9 +88,10 @@ export function getTypeBadgeClass(type: FuturesTransactionType): string {
 }
 
 /** CSS classes for the PnL cell (AEAT taxable event highlight) */
-export function getPnlClass(pnl: number): string {
-  if (pnl > 0) return 'text-profit font-bold font-mono'
-  if (pnl < 0) return 'text-loss font-bold font-mono'
+export function getPnlClass(pnl: Money | null): string {
+  if (pnl === null) return 'text-muted-foreground font-mono'
+  if (pnl.isPositive()) return 'text-profit font-bold font-mono'
+  if (pnl.isNegative()) return 'text-loss font-bold font-mono'
   return 'text-muted-foreground font-mono'
 }
 
@@ -97,9 +104,10 @@ export function getStatusBadgeClass(status: string | undefined): string {
   return 'bg-background text-muted-foreground border border-border/40'
 }
 
-/** Net cost impact of fees and funding on a position (signed) */
-export function getNetImpact(tx: TaxDerivativeEntity): number {
-  return -tx.fees + tx.funding
+/** Net cost impact of fees and funding on a position (signed). `null` if either operand is unresolved — summing only the resolved component would be `?? 0` under another name. */
+export function getNetImpact(tx: TaxDerivativeEntity): Money | null {
+  if (tx.fees === null || tx.funding === null) return null
+  return tx.funding.sub(tx.fees)
 }
 
 /** Formats raw contract symbols (e.g., pf_ethusd) into readable names (e.g., ETH/USD Perp) */

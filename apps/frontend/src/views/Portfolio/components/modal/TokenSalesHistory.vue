@@ -36,7 +36,7 @@ defineProps<{
         <tbody class="divide-y divide-border/10">
           <tr v-for="disp in history" :key="disp.id" class="hover:bg-accent transition-colors">
             <td class="px-4 py-3 text-muted-foreground">{{ formatDate(disp.disposalDate) }}</td>
-            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(disp.amountFromLot) }}</td>
+            <td class="px-4 py-3 text-right font-mono text-foreground font-medium tabular-nums">{{ formatNumber(disp.amountFromLot.toString()) }}</td>
             <td class="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">
               {{ figureText(disp.salePrice) }}
             </td>

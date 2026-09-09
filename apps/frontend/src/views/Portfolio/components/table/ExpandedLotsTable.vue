@@ -20,6 +20,8 @@ import ExpandedLotsSkeleton from "./ExpandedLotsSkeleton.vue";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/composables/useFormatters";
 import { useI18n } from "@/composables/useI18n";
+import { preciseAmountFromNumber } from "@kryptofolio/shared-types";
+import { Money } from "@kryptofolio/core-domain";
 import {
   hasTrustworthyBasis,
   qualityFlagExplanationKey,
@@ -86,8 +88,12 @@ const LOT_STATUS_VARIANT: Record<TaxLotStatus, "outline" | "secondary"> = {
 const isLotInLoss = (lot: TaxLotEntity) => {
   if (!hasTrustworthyBasis(lot)) return false;
   if (!props.assetAmount || !props.assetCurrentValueEur) return false;
-  const currentPrice = props.assetCurrentValueEur / props.assetAmount;
-  return lot.unitCost > currentPrice;
+  // The one legitimate mixed-type comparison in this phase (D7): assetAmount/assetCurrentValueEur
+  // stay `number` on PortfolioEntities.ts, out of scope, so the boundary cast happens only here.
+  const currentValue = new Money(preciseAmountFromNumber(props.assetCurrentValueEur));
+  const amount = new Money(preciseAmountFromNumber(props.assetAmount));
+  const currentPrice = currentValue.div(amount);
+  return lot.unitCost.compareTo(currentPrice) > 0;
 };
 
 /** Severity of the lot's own defect, or `null` when its basis needs no caveat. */
@@ -284,7 +290,7 @@ const custodyOf = (lot: TaxLotEntity) => lot.currentLocations ?? [];
                 >
                   <div class="flex items-center justify-end gap-2">
                     <div
-                      v-if="isLotInLoss(lot) && lot.remainingQty > 0"
+                      v-if="isLotInLoss(lot) && lot.remainingQty.isPositive()"
                       data-testid="lot-tax-loss-hint"
                       class="group/tooltip relative cursor-help flex items-center"
                     >
@@ -335,7 +341,7 @@ const custodyOf = (lot: TaxLotEntity) => lot.currentLocations ?? [];
                         :title="t('value_provenance.manual_desc')"
                         >{{ t("value_provenance.manual") }}</Badge
                       >
-                      {{ formatCurrency(lot.unitCost) }}
+                      {{ formatCurrency(lot.unitCost.toString()) }}
                     </template>
                   </div>
                 </TableCell>
@@ -343,7 +349,7 @@ const custodyOf = (lot: TaxLotEntity) => lot.currentLocations ?? [];
                   data-testid="lot-total-cost"
                   class="py-2 text-right font-mono text-[10px] tabular-nums"
                   >{{
-                    lotDefectSeverity(lot) ? "—" : formatCurrency(lot.totalCost)
+                    lotDefectSeverity(lot) ? "—" : formatCurrency(lot.totalCost.toString())
                   }}</TableCell
                 >
               </TableRow>

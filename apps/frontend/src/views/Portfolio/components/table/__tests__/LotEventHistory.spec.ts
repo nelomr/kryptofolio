@@ -10,6 +10,7 @@ import { mount } from '@vue/test-utils'
 import type { ClassValue } from 'clsx'
 import LotEventHistory from '../LotEventHistory.vue'
 import { I18N_PORT_KEY } from '@/core/injectionKeys'
+import { Money } from '@kryptofolio/core-domain'
 import type { LotRelocationEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
 import type { AccountId } from '@/core/domain/models/BrandedTypes'
 
@@ -27,9 +28,10 @@ function event(overrides: Partial<TaxLotHistoryEvent> = {}): TaxLotHistoryEvent 
   return {
     id: 'evt-1',
     disposalDate: new Date('2026-01-25T00:00:00.000Z'),
-    amountFromLot: 0.005,
+    amountFromLot: new Money('0.005'),
     salePrice: { kind: 'NATIVE', amount: '12.5', currency: 'EUR' },
     gainLoss: { kind: 'NATIVE', amount: '3.25', currency: 'EUR' },
+    saleFeeEur: null,
     isTaxable: true,
     disposalType: 'SELL',
     flag: null,
@@ -42,7 +44,7 @@ function relocation(overrides: Partial<LotRelocationEntity> = {}): LotRelocation
   return {
     id: 'rel-1',
     occurredAt: new Date('2026-02-10T00:00:00.000Z'),
-    qty: 0.5,
+    qty: new Money('0.5'),
     fromAccountId: 'kraken' as AccountId,
     fromAccountName: 'Kraken',
     fromIsSynthetic: false,
@@ -245,11 +247,25 @@ describe('LotEventHistory — Level 3 merges disposals and relocations', () => {
   })
 
   it('carries the relocated quantity in mono, as a magnitude rather than a signed disposal', () => {
-    const wrapper = mountHistory([], [relocation({ qty: 0.5 })])
+    const wrapper = mountHistory([], [relocation({ qty: new Money('0.5') })])
     const qty = wrapper.get('[data-testid="relocation-qty"]')
 
     expect(qty.text()).toContain('0.5')
     expect(qty.text()).not.toContain('-0.5')
     expect(qty.classes().join(' ')).toContain('font-mono')
+  })
+
+  it('renders the relocated quantity as an unseparated eight-decimal string', () => {
+    const wrapper = mountHistory([], [relocation({ qty: new Money('1234.5') })])
+    const qty = wrapper.get('[data-testid="relocation-qty"]')
+
+    expect(qty.text()).toBe('1234.50000000')
+  })
+
+  it('renders a disposal amountFromLot as an unseparated, negated eight-decimal string (task 7.5)', () => {
+    const wrapper = mountHistory([event({ amountFromLot: new Money('1234.5') })])
+    const row = wrapper.get('[data-kind="DISPOSAL"]')
+
+    expect(row.text()).toContain('-1234.50000000')
   })
 })

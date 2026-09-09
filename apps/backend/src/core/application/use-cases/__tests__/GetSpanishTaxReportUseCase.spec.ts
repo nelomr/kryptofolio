@@ -218,6 +218,14 @@ describe('[Strict Hexagonal] GetSpanishTaxReportUseCase', () => {
     expect(result.audit_trail[0].gain_loss).toBeNull();
   });
 
+  it('reports sale_fee as null, since no fee is ever computed', async () => {
+    const useCase = makeUseCase(makePort([BASE_EVENT]));
+
+    const result = await useCase.execute({ year: 2024 });
+
+    expect(result.audit_trail[0].sale_fee).toBeNull();
+  });
+
   it('carries fx_rate and fx_rate_date when a conversion occurred', async () => {
     const useCase = makeUseCase(
       makePort([

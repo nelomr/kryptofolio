@@ -11,6 +11,7 @@ import { mount } from '@vue/test-utils'
 import type { ClassValue } from 'clsx'
 import ExpandedLotsTable from '../ExpandedLotsTable.vue'
 import { I18N_PORT_KEY } from '@/core/injectionKeys'
+import { Money } from '@kryptofolio/core-domain'
 import type {
   LotRelocationEntity,
   TaxLotEntity,
@@ -21,7 +22,7 @@ import type { LotId, AccountId } from '@/core/domain/models/BrandedTypes'
 vi.mock('@/components/ui/skeleton/Skeleton.vue', () => ({ default: { template: '<div></div>' } }))
 vi.mock('@/components/common/CryptoIcon', () => ({ CryptoIcon: { template: '<div></div>' } }))
 vi.mock('@/composables/useFormatters', () => ({
-  formatCurrency: (val: number | null) => (val === null ? '-' : `€${val.toFixed(2)}`),
+  formatCurrency: (val: string | null) => (val === null ? '-' : `€${Number(val).toFixed(2)}`),
   formatPercent: (val: number) => `${val.toFixed(2)}%`,
   formatDate: () => '01 Jan 2024',
 }))
@@ -33,10 +34,10 @@ function lot(overrides: Partial<TaxLotEntity> = {}): TaxLotEntity {
     symbol: 'XRP',
     date: new Date('2025-12-15T00:00:00.000Z'),
     exchange: 'Kraken:spot',
-    originalQty: 179.11,
-    remainingQty: 179.11,
-    unitCost: 1.6724,
-    totalCost: 299.55,
+    originalQty: new Money('179.11'),
+    remainingQty: new Money('179.11'),
+    unitCost: new Money('1.6724'),
+    totalCost: new Money('299.55'),
     status: 'OPEN',
     currentLocations: [],
     qualityFlag: null,
@@ -75,7 +76,7 @@ function mountTable(
 
 describe('ExpandedLotsTable — canonical lot status', () => {
   it('labels a CLOSED lot as closed, never as open', () => {
-    const wrapper = mountTable([lot({ status: 'CLOSED', remainingQty: 0 })])
+    const wrapper = mountTable([lot({ status: 'CLOSED', remainingQty: new Money('0') })])
     const badge = wrapper.get('[data-testid="lot-status-badge"]')
 
     expect(badge.text()).toBe('lot_status.closed')
@@ -83,7 +84,7 @@ describe('ExpandedLotsTable — canonical lot status', () => {
   })
 
   it('does not paint a CLOSED lot with the profit variant', () => {
-    const wrapper = mountTable([lot({ status: 'CLOSED', remainingQty: 0 })])
+    const wrapper = mountTable([lot({ status: 'CLOSED', remainingQty: new Money('0') })])
     const badge = wrapper.get('[data-testid="lot-status-badge"]')
 
     expect(badge.classes().join(' ')).not.toContain('profit')
@@ -105,7 +106,7 @@ describe('ExpandedLotsTable — canonical lot status', () => {
   })
 
   it('labels a PARTIAL lot as partial', () => {
-    const wrapper = mountTable([lot({ status: 'PARTIAL', remainingQty: 79.11 })])
+    const wrapper = mountTable([lot({ status: 'PARTIAL', remainingQty: new Money('79.11') })])
 
     expect(wrapper.get('[data-testid="lot-status-badge"]').text()).toBe('lot_status.partial')
   })
@@ -122,7 +123,7 @@ describe('ExpandedLotsTable — canonical lot status', () => {
             accountName: 'Ledger',
             isSynthetic: false,
             parentAccountId: null,
-            qty: 179.11,
+            qty: new Money('179.11'),
           },
         ],
       }),
@@ -132,7 +133,7 @@ describe('ExpandedLotsTable — canonical lot status', () => {
   })
 
   it('does not dim an OPEN lot whose quantity has all moved away', () => {
-    const wrapper = mountTable([lot({ status: 'OPEN', remainingQty: 179.11 })])
+    const wrapper = mountTable([lot({ status: 'OPEN', remainingQty: new Money('179.11') })])
 
     expect(wrapper.get('[data-testid="lot-row"]').classes().join(' ')).not.toContain('grayscale')
   })
@@ -140,41 +141,41 @@ describe('ExpandedLotsTable — canonical lot status', () => {
 
 describe('ExpandedLotsTable — a basis we could not resolve is not a profit or a loss', () => {
   it('renders the data-quality indicator for a MISSING_PRICE lot', () => {
-    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: 0, totalCost: 0 })])
+    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: new Money('0'), totalCost: new Money('0') })])
 
     expect(wrapper.find('[data-testid="lot-quality-flag"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('fifo_quality.missing_price.label')
   })
 
   it('suppresses the tax-loss suggestion on a MISSING_PRICE lot', () => {
-    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: 0, totalCost: 0 })])
+    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: new Money('0'), totalCost: new Money('0') })])
 
     expect(wrapper.find('[data-testid="lot-tax-loss-hint"]').exists()).toBe(false)
   })
 
   it('suppresses the tax-loss suggestion on a NEGATIVE_COST_BASIS lot', () => {
-    const wrapper = mountTable([lot({ qualityFlag: 'NEGATIVE_COST_BASIS', unitCost: 0 })])
+    const wrapper = mountTable([lot({ qualityFlag: 'NEGATIVE_COST_BASIS', unitCost: new Money('0') })])
 
     expect(wrapper.find('[data-testid="lot-tax-loss-hint"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="lot-quality-flag"]').exists()).toBe(true)
   })
 
   it('renders the indicator rather than a judgement when the basis is zero and unflagged', () => {
-    const wrapper = mountTable([lot({ unitCost: 0, totalCost: 0 })])
+    const wrapper = mountTable([lot({ unitCost: new Money('0'), totalCost: new Money('0') })])
 
     expect(wrapper.find('[data-testid="lot-quality-flag"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="lot-tax-loss-hint"]').exists()).toBe(false)
   })
 
   it('shows no resolved figure where an unreliable basis was forced to zero', () => {
-    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: 0, totalCost: 0 })])
+    const wrapper = mountTable([lot({ qualityFlag: 'MISSING_PRICE', unitCost: new Money('0'), totalCost: new Money('0') })])
 
     // '€0.00' would read as a free acquisition, which is the fabrication the flag exists to prevent.
     expect(wrapper.get('[data-testid="lot-unit-cost"]').text()).not.toContain('€0.00')
   })
 
   it('still offers the tax-loss affordance on a lot whose basis is trustworthy', () => {
-    const wrapper = mountTable([lot({ unitCost: 1.6724 })])
+    const wrapper = mountTable([lot({ unitCost: new Money('1.6724') })])
 
     expect(wrapper.find('[data-testid="lot-tax-loss-hint"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="lot-quality-flag"]').exists()).toBe(false)
@@ -202,14 +203,14 @@ describe('ExpandedLotsTable — split custody per account', () => {
         accountName: 'Binance',
         isSynthetic: false,
         parentAccountId: null,
-        qty: 100,
+        qty: new Money('100'),
       },
       {
         accountId: 'acc-ownwallet-xrp' as AccountId,
         accountName: 'ownwallet-XRP',
         isSynthetic: true,
         parentAccountId: null,
-        qty: 79.11,
+        qty: new Money('79.11'),
       },
     ],
   })
@@ -248,7 +249,7 @@ describe('ExpandedLotsTable — split custody per account', () => {
             accountName: 'Kraken:earn',
             isSynthetic: false,
             parentAccountId: 'acc-kraken' as AccountId,
-            qty: 179.11,
+            qty: new Money('179.11'),
           },
         ],
       }),
@@ -270,7 +271,7 @@ describe('ExpandedLotsTable — Level 3 opens for a lot that only moved', () => 
   const MOVE: LotRelocationEntity = {
     id: 'rel-1',
     occurredAt: new Date('2026-01-05T00:00:00.000Z'),
-    qty: 100,
+    qty: new Money('100'),
     fromAccountId: 'kraken' as AccountId,
     fromAccountName: 'Kraken',
     fromIsSynthetic: false,
@@ -289,5 +290,38 @@ describe('ExpandedLotsTable — Level 3 opens for a lot that only moved', () => 
     const wrapper = mountTable([lot()], {}, {})
 
     expect(wrapper.find('[data-testid="lot-row"] button').exists()).toBe(false)
+  })
+})
+
+describe('ExpandedLotsTable — quantity cells render an unseparated four-decimal string (task 7.5)', () => {
+  it('renders originalQty and remainingQty as plain four-decimal strings, not grouped', () => {
+    const wrapper = mountTable([
+      lot({ originalQty: new Money('12345.6789'), remainingQty: new Money('12345.6789') }),
+    ])
+    const row = wrapper.get('[data-testid="lot-row"]')
+
+    // formatNumber's Intl grouping would render '12,345.6789' — this cell must not use it.
+    expect(row.text()).toContain('12345.6789')
+    expect(row.text()).not.toContain('12,345.6789')
+  })
+
+  it('renders a raw custody qty identically before and after the Money retype (D7b)', () => {
+    const wrapper = mountTable([
+      lot({
+        currentLocations: [
+          {
+            accountId: 'acc-binance' as AccountId,
+            accountName: 'Binance',
+            isSynthetic: false,
+            parentAccountId: null,
+            qty: new Money('79.11'),
+          },
+        ],
+      }),
+    ])
+
+    // Plain interpolation of a Money already calls its overridden toString() — no .toString()
+    // was added at this call site, and the rendered text must be unchanged from the number era.
+    expect(wrapper.get('[data-testid="lot-custody-entry"]').text()).toContain('79.11')
   })
 })

@@ -12,6 +12,7 @@
  */
 
 import { computed } from "vue";
+import { Money } from "@kryptofolio/core-domain";
 import type { TaxDerivativeEntity } from "@/core/domain/models/FiscalEntities";
 import {
   Table,
@@ -210,13 +211,13 @@ const {
 
               <!-- Amount -->
               <TableCell class="text-right font-mono text-muted-foreground">
-                {{ tx.amount !== 0 ? formatNumber(tx.amount) : "---" }}
+                {{ tx.amount === null ? "—" : formatNumber(tx.amount.toString()) }}
               </TableCell>
 
               <!-- Trade Price -->
               <TableCell class="text-right font-mono text-muted-foreground">
                 {{
-                  tx.tradePrice !== 0 ? formatCurrency(tx.tradePrice) : "---"
+                  tx.tradePrice === null ? "—" : formatCurrency(tx.tradePrice.toString())
                 }}
               </TableCell>
 
@@ -226,15 +227,17 @@ const {
                   :class="getPnlClass(tx.realizedPnl)"
                   class="flex items-center justify-end gap-1"
                 >
-                  <TrendingUp
-                    v-if="tx.realizedPnl > 0"
-                    class="h-3 w-3 text-profit"
-                  />
-                  <TrendingDown
-                    v-else-if="tx.realizedPnl < 0"
-                    class="h-3 w-3 text-loss"
-                  />
-                  {{ formatCurrency(tx.realizedPnl) }}
+                  <template v-if="tx.realizedPnl !== null">
+                    <TrendingUp
+                      v-if="tx.realizedPnl.isPositive()"
+                      class="h-3 w-3 text-profit"
+                    />
+                    <TrendingDown
+                      v-else-if="tx.realizedPnl.isNegative()"
+                      class="h-3 w-3 text-loss"
+                    />
+                  </template>
+                  {{ tx.realizedPnl === null ? "—" : formatCurrency(tx.realizedPnl.toString()) }}
                 </span>
               </TableCell>
 
@@ -242,20 +245,22 @@ const {
               <TableCell class="text-right">
                 <span
                   :class="
-                    getNetImpact(tx) >= 0
-                      ? 'text-profit font-mono text-xs'
-                      : 'text-loss font-mono text-xs'
+                    getNetImpact(tx) === null
+                      ? 'text-muted-foreground font-mono text-xs'
+                      : getNetImpact(tx)!.compareTo(new Money('0')) >= 0
+                        ? 'text-profit font-mono text-xs'
+                        : 'text-loss font-mono text-xs'
                   "
                   class="block"
                 >
-                  {{ formatCurrency(getNetImpact(tx)) }}
+                  {{ getNetImpact(tx) === null ? "—" : formatCurrency(getNetImpact(tx)!.toString()) }}
                 </span>
                 <span
-                  v-if="tx.fees !== 0 || tx.funding !== 0"
+                  v-if="tx.fees !== null || tx.funding !== null"
                   class="text-[9px] text-muted-foreground opacity-60 block"
                 >
-                  f:{{ formatCurrency(tx.fees) }} / r:{{
-                    formatCurrency(tx.funding)
+                  f:{{ tx.fees === null ? "—" : formatCurrency(tx.fees.toString()) }} / r:{{
+                    tx.funding === null ? "—" : formatCurrency(tx.funding.toString())
                   }}
                 </span>
               </TableCell>

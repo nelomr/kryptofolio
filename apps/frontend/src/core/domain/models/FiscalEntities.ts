@@ -10,6 +10,7 @@
  * @see openspec/specs/fiscal-domain/spec.md
  */
 
+import type { Money } from '@kryptofolio/core-domain'
 import type { TransactionId, LotId, AccountId } from './BrandedTypes'
 import type {
   ConvertedAmount,
@@ -49,16 +50,16 @@ export interface TaxDerivativeEntity {
   contractSymbol: string
   /** Underlying asset extracted from the contract (e.g. xrp from pf_xrpusd) */
   underlyingAsset: string
-  /** Size of the position / number of contracts traded */
-  amount: number
-  /** Execution price of the operation in EUR */
-  tradePrice: number
-  /** Realized PnL in EUR — the primary taxable figure for AEAT IRPF */
-  realizedPnl: number
-  /** Transaction fee in EUR */
-  fees: number
-  /** Realized funding rate cost/gain in EUR */
-  funding: number
+  /** Size of the position / number of contracts traded. `null` when the source never stated one (e.g. a funding row). */
+  amount: Money | null
+  /** Execution price of the operation in EUR. `null` when unresolved — no ingestion writer currently populates this. */
+  tradePrice: Money | null
+  /** Realized PnL in EUR — the primary taxable figure for AEAT IRPF. `null` when the source stated no realized result for this row. */
+  realizedPnl: Money | null
+  /** Transaction fee in EUR. `null` when unresolved, distinct from a stated zero fee. */
+  fees: Money | null
+  /** Realized funding rate cost/gain in EUR. `null` when unresolved, distinct from a stated zero. */
+  funding: Money | null
   /** Native Date object for the transaction */
   timestamp: Date
   /** Exchange or wallet source (e.g. Kraken) */
@@ -100,24 +101,24 @@ export interface TaxTransactionEntity {
   type: TaxTransactionType
   /** Unified asset symbol (replaces asset_in/asset_out conditional logic) */
   symbol: string
-  /** Normalized quantity (replaces amount_in/amount_out conditional logic) */
-  amount: number
-  /** EUR value of the operation (cost or proceeds, depending on type) */
-  totalEur: number
-  /** Price per unit in EUR at time of transaction */
-  priceEur: number
-  /** Transaction fee in EUR */
-  feeEur: number
+  /** Normalized quantity (replaces amount_in/amount_out conditional logic). `null` when the defining leg is absent from the wire — never a fabricated zero. */
+  amount: Money | null
+  /** EUR value of the operation (cost or proceeds, depending on type). `null` when the source stated no resolvable valuation for this row — a stated zero is a fact and stays `Money('0')`, an absence is `null` (D11). */
+  totalEur: Money | null
+  /** Price per unit in EUR at time of transaction. `null` when unresolved. */
+  priceEur: Money | null
+  /** Transaction fee in EUR. `null` when unresolved — `resolveFee` has no producer for `fee_fiat` today, so this is `null` on every parsed row until one exists. */
+  feeEur: Money | null
   /** Native Date object (replaces "YYYY-MM-DD HH:MM:SS" string format) */
   timestamp: Date
   /** For SWAP/MIGRATION_SWAP: the incoming asset */
   assetIn?: string
   /** For SWAP/MIGRATION_SWAP: the outgoing asset */
   assetOut?: string
-  /** For SWAP/MIGRATION_SWAP: the incoming quantity */
-  amountIn?: number
-  /** For SWAP/MIGRATION_SWAP: the outgoing quantity */
-  amountOut?: number
+  /** For SWAP/MIGRATION_SWAP: the incoming quantity. Absent stays `undefined`, never `Money('0')`, so "no leg" stays distinguishable from "a leg of exactly zero". */
+  amountIn?: Money
+  /** For SWAP/MIGRATION_SWAP: the outgoing quantity. Same absence rule as `amountIn`. */
+  amountOut?: Money
   /** Exchange or wallet source */
   exchange?: string
   /** Optional notes or reference ID from exchange */
@@ -137,7 +138,7 @@ export interface LotCustodyLocation {
   isSynthetic: boolean
   parentAccountId: AccountId | null
   /** Quantity of the lot currently held at this account. Zero-quantity rows are filtered upstream. */
-  qty: number
+  qty: Money
 }
 
 // ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ export interface LotRelocationEntity {
   id: string
   occurredAt: Date
   /** Magnitude moved, never signed: a relocation consumes nothing. */
-  qty: number
+  qty: Money
   fromAccountId: AccountId
   fromAccountName: string
   fromIsSynthetic: boolean
@@ -187,13 +188,13 @@ export interface TaxLotEntity {
   /** Exchange or wallet where acquired — the acquiring venue, not necessarily where it sits now */
   exchange: string
   /** Original quantity when lot was opened */
-  originalQty: number
+  originalQty: Money
   /** Remaining quantity not yet disposed of */
-  remainingQty: number
+  remainingQty: Money
   /** Cost per unit at acquisition in EUR */
-  unitCost: number
+  unitCost: Money
   /** Total remaining cost basis in EUR */
-  totalCost: number
+  totalCost: Money
   /** Canonical lot status, passed through from the calculation engine unchanged */
   status: TaxLotStatus
   /**
@@ -218,7 +219,7 @@ export interface TaxLotHistoryEvent {
   /** Date of disposal as a native Date */
   disposalDate: Date
   /** Quantity disposed from this lot */
-  amountFromLot: number
+  amountFromLot: Money
   /** Sale price per unit in EUR. Null when unresolved — never fabricated as 0. */
   /**
    * The figure in the currency the report states, with its own conversion outcome.
@@ -229,8 +230,8 @@ export interface TaxLotHistoryEvent {
   salePrice: ConvertedAmount | null
   /** Realized gain or loss in EUR. Null when unresolved — never fabricated as 0. */
   gainLoss: ConvertedAmount | null
-  /** Fee portion attributable to this disposal in EUR */
-  saleFeeEur?: number
+  /** Fee portion attributable to this disposal in EUR. `null` when unresolved — never `undefined`, no reader distinguishes an absent key from an explicit wire `null`. */
+  saleFeeEur: Money | null
   /** Whether this event is subject to IRPF taxation */
   isTaxable: boolean
   /** Why the lot was consumed: a network fee is not a sale. */

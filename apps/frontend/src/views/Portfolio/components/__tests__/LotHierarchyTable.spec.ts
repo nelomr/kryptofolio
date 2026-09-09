@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import type { ClassValue } from 'clsx'
+import { Money } from '@kryptofolio/core-domain'
 import ExpandedLotsTable from '../table/ExpandedLotsTable.vue'
 import { I18N_PORT_KEY } from '@/core/injectionKeys'
 import type { TaxLotEntity, TaxLotHistoryEvent } from '@/core/domain/models/FiscalEntities'
@@ -33,7 +34,7 @@ vi.mock('@tanstack/vue-virtual', () => {
 vi.mock('@/components/ui/skeleton/Skeleton.vue', () => ({ default: { template: '<div></div>' } }))
 vi.mock('@/components/common/CryptoIcon', () => ({ CryptoIcon: { template: '<div></div>' } }))
 vi.mock('@/composables/useFormatters', () => ({
-  formatCurrency: (val: number) => `€${val.toFixed(2)}`,
+  formatCurrency: (val: string) => `€${Number(val).toFixed(2)}`,
   formatPercent: (val: number) => `${val.toFixed(2)}%`,
   formatDate: () => '01 Jan 2024'
 }))
@@ -44,10 +45,10 @@ describe('ExpandedLotsTable.vue', () => {
     {
       id: 'lot1' as LotId,
       date: new Date(1672531200 * 1000),
-      originalQty: 1.0,
-      remainingQty: 1.0,
-      unitCost: 30000,
-      totalCost: 30000,
+      originalQty: new Money('1.0'),
+      remainingQty: new Money('1.0'),
+      unitCost: new Money('30000'),
+      totalCost: new Money('30000'),
       exchange: 'Kraken',
       symbol: 'BTC',
       status: 'OPEN',
@@ -56,10 +57,10 @@ describe('ExpandedLotsTable.vue', () => {
     {
       id: 'lot2' as LotId,
       date: new Date(1675209600 * 1000),
-      originalQty: 0.5,
-      remainingQty: 0.5,
-      unitCost: 32000,
-      totalCost: 16000,
+      originalQty: new Money('0.5'),
+      remainingQty: new Money('0.5'),
+      unitCost: new Money('32000'),
+      totalCost: new Money('16000'),
       exchange: 'Kraken',
       symbol: 'BTC',
       status: 'PARTIAL',
@@ -73,7 +74,8 @@ describe('ExpandedLotsTable.vue', () => {
         id: 'event1',
         disposalDate: new Date(1680000000 * 1000),
         isTaxable: true,
-        amountFromLot: 0.2,
+        amountFromLot: new Money('0.2'),
+        saleFeeEur: null,
         salePrice: { kind: 'NATIVE', amount: '8000', currency: 'EUR' },
         gainLoss: { kind: 'NATIVE', amount: '2000', currency: 'EUR' },
         disposalType: 'SELL'

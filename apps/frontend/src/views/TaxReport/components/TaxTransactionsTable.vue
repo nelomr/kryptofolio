@@ -77,15 +77,18 @@ function toggleSort(key: SortKey) {
 const sortedTransactions = computed(() => {
   const items = [...props.transactions];
   return items.sort((a, b) => {
-    const aVal =
-      sortKey.value === "timestamp"
-        ? new Date(a.timestamp).getTime()
-        : a.priceEur;
-    const bVal =
-      sortKey.value === "timestamp"
-        ? new Date(b.timestamp).getTime()
-        : b.priceEur;
-    return sortOrder.value === "asc" ? aVal - bVal : bVal - aVal;
+    if (sortKey.value === "timestamp") {
+      const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      return sortOrder.value === "asc" ? diff : -diff;
+    }
+    // priceEur is nullable (D11): a null sorts after every resolved value, in both directions,
+    // since "unresolved" carries no ordering information — it is never less-than or
+    // greater-than a real figure.
+    if (a.priceEur === null && b.priceEur === null) return 0;
+    if (a.priceEur === null) return 1;
+    if (b.priceEur === null) return -1;
+    const cmp = a.priceEur.compareTo(b.priceEur);
+    return sortOrder.value === "asc" ? cmp : -cmp;
   });
 });
 
@@ -298,19 +301,19 @@ function getAssetTypeLabel(symbol: string | undefined): string {
 
               <!-- Amount -->
               <TableCell class="text-right font-mono text-muted-foreground">
-                {{ formatNumber(tx.amount) }}
+                {{ tx.amount === null ? "—" : formatNumber(tx.amount.toString()) }}
               </TableCell>
 
               <!-- Price -->
               <TableCell class="text-right font-mono text-muted-foreground">
-                {{ formatCurrency(tx.priceEur) }}
+                {{ tx.priceEur === null ? "—" : formatCurrency(tx.priceEur.toString()) }}
               </TableCell>
 
               <!-- Total — highlighted like legacy "indigo" column -->
               <TableCell
                 class="text-right font-mono font-semibold text-foreground"
               >
-                {{ formatCurrency(tx.totalEur) }}
+                {{ tx.totalEur === null ? "—" : formatCurrency(tx.totalEur.toString()) }}
               </TableCell>
 
               <!-- Actions — revealed on hover, same UX as legacy -->

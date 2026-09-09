@@ -41,4 +41,24 @@ export class Money {
   equals(other: Money): boolean {
     return this.amount.equals(other.amount);
   }
+
+  compareTo(other: Money): -1 | 0 | 1 {
+    return this.amount.comparedTo(other.amount) as -1 | 0 | 1;
+  }
+
+  isNegative(): boolean {
+    return this.amount.isNegative() && !this.amount.isZero();
+  }
+
+  isZero(): boolean {
+    return this.amount.isZero();
+  }
+
+  isPositive(): boolean {
+    return this.amount.isPositive() && !this.amount.isZero();
+  }
+
+  toFixed(dp?: number): string {
+    return this.amount.toFixed(dp);
+  }
 }

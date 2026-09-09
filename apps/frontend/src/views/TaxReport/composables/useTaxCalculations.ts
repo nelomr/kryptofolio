@@ -8,7 +8,8 @@
 
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
-import { FLAG_SEVERITY } from '@kryptofolio/shared-types'
+import type { Money } from '@kryptofolio/core-domain'
+import { compareDecimalStrings, FLAG_SEVERITY } from '@kryptofolio/shared-types'
 import type { DisposalType, FifoQualityFlag, FlagSeverity } from '@kryptofolio/shared-types'
 import type {
   LotRelocationEntity,
@@ -181,7 +182,7 @@ export function getEventVariant(event: TaxLotHistoryEvent): EventBadgeVariant {
   // Before the sign comparison, and for the same reason the null check precedes it: an
   // unconvertible figure carries a native amount that is usually positive, so falling through would
   // render a conversion that failed as a profit the user never made.
-  return Number(event.gainLoss.amount) >= 0 ? 'gain' : 'loss'
+  return compareDecimalStrings(event.gainLoss.amount, '0') >= 0 ? 'gain' : 'loss'
 }
 
 /** Tailwind class sets per badge variant — consistent across all fiscal tables. */
@@ -315,9 +316,9 @@ export function mergeLotTimeline(
  * resolve. Either way it cannot support a comparison against the current price.
  */
 export function hasTrustworthyBasis(lot: {
-  unitCost: number
+  unitCost: Money
   qualityFlag?: FifoQualityFlag | null
 }): boolean {
   if (lot.qualityFlag) return false
-  return lot.unitCost > 0
+  return lot.unitCost.isPositive()
 }

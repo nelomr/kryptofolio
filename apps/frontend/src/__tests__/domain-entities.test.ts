@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { Money } from '@kryptofolio/core-domain'
 import {
   AssetIdSchema,
   TransactionIdSchema,
@@ -139,10 +140,10 @@ describe('TaxTransactionEntity — fiscal domain shape', () => {
       id: TransactionIdSchema.parse('tx-001'),
       type: 'BUY' as TaxTransactionType,
       symbol: 'BTC',
-      amount: 0.5,
-      totalEur: 31000,
-      priceEur: 62000,
-      feeEur: 5,
+      amount: new Money('0.5'),
+      totalEur: new Money('31000'),
+      priceEur: new Money('62000'),
+      feeEur: new Money('5'),
       timestamp: new Date('2024-01-15T12:00:00Z'),
     }
     expect(tx.symbol).toBe('BTC')
@@ -190,15 +191,41 @@ describe('TaxLotEntity — fiscal domain shape', () => {
       symbol: 'BTC',
       date: new Date('2024-01-01T00:00:00Z'),
       exchange: 'Kraken',
-      originalQty: 1.0,
-      remainingQty: 0.5,
-      unitCost: 45000,
-      totalCost: 45000,
+      originalQty: new Money('1.0'),
+      remainingQty: new Money('0.5'),
+      unitCost: new Money('45000'),
+      totalCost: new Money('45000'),
       status: 'PARTIAL',
       currentLocations: [],
     }
-    expect(lot.originalQty).toBe(1.0)
-    expect(lot.remainingQty).toBe(0.5)
+    expect(lot.originalQty.equals(new Money('1.0'))).toBe(true)
+    expect(lot.remainingQty.equals(new Money('0.5'))).toBe(true)
     expect(lot.date).toBeInstanceOf(Date)
+  })
+
+  it('sums many lots totalCost without float precision loss — the precision spec applied to this entity', () => {
+    // Each of these three figures individually round-trips through a JS float without visible
+    // damage; only their sum exposes it. `0.1 + 0.2 + 0.3` as native floats is
+    // 0.6000000000000001, not 0.6 — the exact defect Money exists to remove from this entity.
+    const lots: TaxLotEntity[] = [
+      { unitCost: new Money('0'), totalCost: new Money('0.1') },
+      { unitCost: new Money('0'), totalCost: new Money('0.2') },
+      { unitCost: new Money('0'), totalCost: new Money('0.3') },
+    ].map((partial, i) => ({
+      id: LotIdSchema.parse(`lot-sum-${i}`),
+      symbol: 'BTC',
+      date: new Date('2024-01-01T00:00:00Z'),
+      exchange: 'Kraken',
+      originalQty: new Money('1'),
+      remainingQty: new Money('1'),
+      status: 'OPEN',
+      currentLocations: [],
+      ...partial,
+    }))
+
+    const total = lots.reduce((acc, lot) => acc.add(lot.totalCost), new Money('0'))
+
+    expect(total.equals(new Money('0.6'))).toBe(true)
+    expect(total.toString()).toBe('0.6')
   })
 })

@@ -218,7 +218,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                     <span
                       class="text-[9px] text-muted-foreground uppercase leading-none font-bold tracking-widest opacity-60"
                     >
-                      {{ formatNumber(event.amountFromLot) }}
+                      {{ formatNumber(event.amountFromLot.toString()) }}
                       {{ getAssetTypeLabel(event.assetSymbol) }}
                     </span>
                   </div>
@@ -284,7 +284,7 @@ function getAssetTypeLabel(symbol: string | undefined): string {
               <TableCell class="text-right font-mono text-muted-foreground">
                 {{
                   event.saleFeeEur != null
-                    ? formatCurrency(event.saleFeeEur)
+                    ? formatCurrency(event.saleFeeEur.toString())
                     : '—'
                 }}
               </TableCell>
