@@ -70,7 +70,7 @@
     "happy-dom": "^20.9.0",
     "semantic-release": "^25.0.3",
     "sharp": "^0.35.3",
-    "svgo": "^4.0.2",
+    "svgo": "^4.1.0",
     "typescript": "catalog:",
     "vite": "^8.0.12",
     "vite-plugin-compression2": "^2.5.3",
