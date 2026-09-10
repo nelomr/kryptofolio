@@ -19,8 +19,8 @@ catalogs:
       specifier: ^10.5.0
       version: 10.5.0
     hono:
-      specifier: ^4.12.34
-      version: 4.13.0
+      specifier: ^4.13.5
+      version: 4.13.7
     luxon:
       specifier: ^3.7.2
       version: 3.7.2
@@ -92,10 +92,10 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.1.0(hono@4.13.0)
+        version: 2.1.0(hono@4.13.7)
       '@hono/zod-validator':
         specifier: ^0.8.0
-        version: 0.8.0(hono@4.13.0)(zod@3.25.76)
+        version: 0.8.0(hono@4.13.7)(zod@3.25.76)
       '@kryptofolio/core-domain':
         specifier: workspace:*
         version: link:../../packages/core-domain
@@ -116,7 +116,7 @@ importers:
         version: 5.10.1
       hono:
         specifier: 'catalog:'
-        version: 4.13.0
+        version: 4.13.7
       luxon:
         specifier: 'catalog:'
         version: 3.7.2
@@ -189,7 +189,7 @@ importers:
         version: 10.5.0
       hono:
         specifier: 'catalog:'
-        version: 4.13.0
+        version: 4.13.7
       lightweight-charts:
         specifier: ^5.2.0
         version: 5.2.0
@@ -2530,8 +2530,8 @@ packages:
   highlight.js@10.7.3:
     resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
 
-  hono@4.13.0:
-    resolution: {integrity: sha512-jhunvfHWxd7J5EFfSgH4xsYJzSe/lfqbUCxiyyeaQasUsXeEHXtzVid+7EOGByc5JnFa23SSFL3Y2RV/z1T+eQ==}
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
     engines: {node: '>=16.9.0'}
 
   hook-std@4.0.0:
@@ -4611,13 +4611,13 @@ snapshots:
       - '@vue/composition-api'
       - vue
 
-  '@hono/node-server@2.1.0(hono@4.13.0)':
+  '@hono/node-server@2.1.0(hono@4.13.7)':
     dependencies:
-      hono: 4.13.0
+      hono: 4.13.7
 
-  '@hono/zod-validator@0.8.0(hono@4.13.0)(zod@3.25.76)':
+  '@hono/zod-validator@0.8.0(hono@4.13.7)(zod@3.25.76)':
     dependencies:
-      hono: 4.13.0
+      hono: 4.13.7
       zod: 3.25.76
 
   '@img/colour@1.1.0': {}
@@ -6318,7 +6318,7 @@ snapshots:
 
   highlight.js@10.7.3: {}
 
-  hono@4.13.0: {}
+  hono@4.13.7: {}
 
   hook-std@4.0.0: {}
 
