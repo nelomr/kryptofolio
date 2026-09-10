@@ -69,7 +69,7 @@
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "happy-dom": "^20.9.0",
     "semantic-release": "^25.0.3",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "svgo": "^4.1.0",
     "typescript": "catalog:",
     "vite": "^8.0.12",
