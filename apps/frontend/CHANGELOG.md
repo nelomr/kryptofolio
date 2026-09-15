@@ -1,5 +1,11 @@
 # @kryptofolio/frontend
 
+## 1.16.12
+
+### Patch Changes
+
+- [`ea99406`](https://github.com/nelomr/kryptofolio/commit/ea9940658281667cec3152069c47a82252526c08) Thanks [@nelomr](https://github.com/nelomr)! - Redesign application header to a minimalist 56px institutional terminal layout with the geometric dragon mark and decoupled settings action.
+
 ## 1.16.11
 
 ### Patch Changes
