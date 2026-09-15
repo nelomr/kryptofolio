@@ -3,9 +3,7 @@
 ## Purpose
 
 Rebranding: the name, copyright-free thematic assets, multi-language documentation, and positioning.
-
 ## Requirements
-
 ### Requirement: Project Rebranding
 The repository and application SHALL use "Kryptofolio" (display) and "kryptofolio" (package) as its primary identifier.
 
@@ -14,7 +12,7 @@ The repository and application SHALL use "Kryptofolio" (display) and "kryptofoli
 - **THEN** the browser tab title MUST display "Kryptofolio"
 
 ### Requirement: Thematic Copyright-Free Assets
-The application SHALL include a custom favicon and application logo based on the provided `favicon.png` and `screen-tp.png` assets.
+The application SHALL include a custom favicon and application logo based on the provided `favicon.png` and `favicon.svg` assets.
 
 #### Scenario: Tab Favicon
 - **WHEN** user loads the application in a browser
@@ -22,7 +20,7 @@ The application SHALL include a custom favicon and application logo based on the
 
 #### Scenario: Application Logo
 - **WHEN** user views the application UI
-- **THEN** they MUST see the `screen-tp.png` logo displayed in the header/branding areas
+- **THEN** they MUST see the geometric dragon mark from `favicon.svg` or `favicon.png` displayed in the header/branding areas without drop shadows or legacy wrappers
 
 ### Requirement: Multi-language Documentation
 The repository SHALL provide documentation in both English and Spanish, with English as the primary default.
@@ -43,3 +41,4 @@ The English README SHALL highlight the robust FIFO data presentation system and 
 #### Scenario: Feature Discovery
 - **WHEN** a developer reads the README features section
 - **THEN** they MUST find clear references to the FIFO data logic and Mastra/Vercel AI SDK integration readiness
+
