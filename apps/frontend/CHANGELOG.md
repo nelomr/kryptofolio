@@ -1,5 +1,13 @@
 # @kryptofolio/frontend
 
+## 1.16.13
+
+### Patch Changes
+
+- [`4971761`](https://github.com/nelomr/kryptofolio/commit/4971761caa26b7925699113c1ca24753e5b93532) Thanks [@nelomr](https://github.com/nelomr)! - Materialized the six derived FIFO relations (flattened events, matches, calculated tax lots, lot history events, daily running balances, daily portfolio valuation) as physical DuckDB tables instead of views recomputed on every read, cutting the dashboard's nine-request fan-out from ~13.7s to under 1s on the real ledger. Each relation is now a `v_<name>__def` definition rebuilt into an `m_<name>` table inside one transaction, published behind an unchanged public `v_<name>` name — no call site changes. A new `FifoChainFreshnessService` owns on-demand freshness: reads coalesce onto a single in-flight rebuild, and every mutation path (ingestion, price/transfer overrides, the manual rebuild endpoint, scheduled FX jobs) goes through it. DuckDB access moved from one shared connection to a fixed-size connection pool (`DUCKDB_POOL_SIZE`, default 4). Frontend metrics queries now include the display currency in their cache key and set an explicit stale time, so switching currency or dashboards no longer refetches or serves the wrong currency's cached figures.
+
+  Also fixes a real incident found after the above landed: `FifoChainFreshnessService` now owns the entire derived-state pipeline end to end — rebuild the DuckDB chain, reconcile the SQLite-derived tables from it, and only then clear the pending-recalculation flag — instead of letting the SQLite reconciliation run independently. Previously, a process restart (which resets the derived tables to empty) followed by any forced materialization (the manual rebuild button, a scheduled FX sync, or an import immediately after) could reconcile SQLite against an empty chain and soft-delete every tax lot, lot history event and custody entry. Soft-deleted rows are restored automatically the next time the pipeline runs over an unchanged ledger.
+
 ## 1.16.12
 
 ### Patch Changes
