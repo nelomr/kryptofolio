@@ -3,11 +3,9 @@ import type {
   IngestionResult,
   SubmittedTransaction,
 } from './CsvIngestionUseCase.js';
-import type {
-  FifoMaterializerService,
-  MaterializationSummary,
-} from '../services/FifoMaterializerService.js';
+import type { MaterializationSummary } from '../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../services/FifoChainFreshnessService.js';
 import type { SourceProfileId } from '@kryptofolio/shared-types';
 
 export interface IngestAndMaterializeInput {
@@ -43,17 +41,17 @@ export interface IngestAndMaterializeResult {
  */
 export class IngestAndMaterializeUseCase {
   private readonly ingestion: CsvIngestionUseCase;
-  private readonly materializer: FifoMaterializerService;
   private readonly userSettingsPort: IUserSettingsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
   constructor(
     ingestion: CsvIngestionUseCase,
-    materializer: FifoMaterializerService,
     userSettingsPort: IUserSettingsPort,
+    freshnessService: FifoChainFreshnessService,
   ) {
     this.ingestion = ingestion;
-    this.materializer = materializer;
     this.userSettingsPort = userSettingsPort;
+    this.freshnessService = freshnessService;
   }
 
   async execute(input: IngestAndMaterializeInput): Promise<IngestAndMaterializeResult> {
@@ -76,7 +74,9 @@ export class IngestAndMaterializeUseCase {
     }
 
     try {
-      const materialization = await this.materializer.recalculate();
+      // `refresh()`, not `ensureFresh()`: this request must observe its own batch, so it may not
+      // join a pipeline that started before the batch committed (design D4a).
+      const { materialization } = await this.freshnessService.refresh();
       return { ingestion, materialization, materialized: true, materializationError: null };
     } catch (error) {
       // The batch is not rolled back: the rows are valid and recorded, only the projection over them

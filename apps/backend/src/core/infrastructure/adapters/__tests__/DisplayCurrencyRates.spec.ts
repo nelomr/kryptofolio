@@ -136,12 +136,14 @@ describe('display currency conversion', () => {
     process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     // A live price for the unrealized-PnL reconciliation, denominated in EUR like the lot.
     await duckDb.execute(`
       INSERT INTO _price_seed (date, asset_id, symbol, open, high, low, close, volume, currency, year)
       VALUES (DATE '2025-12-01', 'EURPNL', 'EURPNL', 1000, 1000, 1000, 1000, 0, 'EUR', 2025);
     `);
+    await duckDb.rebuildDerivedChain();
 
     analytics = new DuckDbPortfolioAnalyticsAdapter(duckDb);
   });

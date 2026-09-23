@@ -36,9 +36,10 @@ influencing "which lot does a sale consume" — because those are different ques
 legally-mandated answers, and the previous code answered both with the same events.
 
 > [!NOTE]
-> The FIFO matching algorithm itself — a cumulative-interval-overlap join in `v_fifo_matches` — was
-> already correct and is unchanged. Everything described here sits around it: what counts as an
-> event in the first place, and what happens to an asset that never generates one.
+> The FIFO matching algorithm itself — a cumulative-interval-overlap join, now in `v_fifo_matches__def`
+> and materialized into `m_fifo_matches` — was already correct and is unchanged. Everything described
+> here sits around it: what counts as an event in the first place, and what happens to an asset that
+> never generates one.
 
 ## Two orderings, deliberately never merged
 
@@ -55,7 +56,7 @@ transfer reorder which lot a future sale consumes.
   orders:  acquisition_timestamp       orders:  acquisition_timestamp
   drives:  which lot a SALE consumes   drives:  which lot's quantity MOVES
   effect:  fiscal — gain/loss          effect:  none — attribution only
-  view:    v_fifo_matches (unchanged)  view:    v_lot_custody_allocation
+  view:    v_fifo_matches (m_*)        view:    v_lot_custody_allocation
 ```
 
 A prior design considered pairing outbound and inbound transfer legs by a time window plus an
@@ -262,15 +263,32 @@ without touching what the user declared.
 All of this is computed in `packages/database/src/adapters/DuckDbAdapter.ts`, attached in-memory to
 the SQLite ledger, never in application-layer JavaScript loops.
 
+Four of the relations diagrammed below — `v_flattened_fifo_events`, `v_fifo_matches`,
+`v_calculated_tax_lots`, and `v_calculated_lot_history_events` — are **materialized**, not
+recomputed on every read. (Two more outside this diagram, `v_daily_running_balances` and
+`v_portfolio_daily_valuation` — see
+[`docs/architecture/duckdb-metrics-time-series.md`](architecture/duckdb-metrics-time-series.md) —
+are materialized the same way, for six in total across the whole derived chain.) Each materialized
+relation exists in three layers: `v_<name>__def` holds the real SQL (the logic described below),
+`m_<name>` is a table populated from it, and the public `v_<name>` is a thin
+`SELECT * FROM m_<name>`. A rebuild (`DuckDbAdapter.rebuildDerivedChain()`) reruns all six `__def`s
+into their `m_<name>` tables inside one transaction, and only runs when the chain is stale —
+coalesced and triggered by `FifoChainFreshnessService`
+(`apps/backend/src/core/application/services/FifoChainFreshnessService.ts`) ahead of any read or
+write that depends on it, never on a timer. `v_acquisitions`, `v_disposals`, and every custody-chain
+relation below them (`v_lot_custody_timeline` onward) stay plain views, recomputed on every read —
+they are cheap window-function/CTE passes over already-derived data, not the FIFO matcher itself, so
+materializing them bought nothing.
+
 ```mermaid
 flowchart TD
-    FEP[fifo_event_policy] --> FFE[v_flattened_fifo_events]
+    FEP[fifo_event_policy] --> FFE["v_flattened_fifo_events (m_*)"]
     FFE --> ACQ[v_acquisitions]
     FFE --> DIS[v_disposals]
-    ACQ --> FM[v_fifo_matches]
+    ACQ --> FM["v_fifo_matches (m_*)"]
     DIS --> FM
-    FM --> CTL[v_calculated_tax_lots]
-    FM --> CLHE[v_calculated_lot_history_events]
+    FM --> CTL["v_calculated_tax_lots (m_*)"]
+    FM --> CLHE["v_calculated_lot_history_events (m_*)"]
     ACQ --> LCT[v_lot_custody_timeline]
     DIS --> LCT
     FM --> LCT
@@ -283,6 +301,8 @@ flowchart TD
     FM --> FDQ
 ```
 
+`(m_*)` marks the four materialized relations; everything else is a plain view.
+
 - **`fifo_event_policy`** — a DuckDB table seeded once at bootstrap from the compile-time-exhaustive
   `FIFO_EVENT_POLICY: Record<SpotTxType, FifoEventPolicy>` in `@kryptofolio/shared-types`. Each
   `tx_type` declares four independent booleans — `generatesAcquisition`, `generatesDisposal`,
@@ -291,14 +311,16 @@ flowchart TD
   `TRANSFER_IN`, `TRANSFER_OUT` and `MIGRATION_SWAP` all generate **no** principal acquisition and
   **no** principal disposal — but still generate a fee disposal, because a crypto network fee paid
   while transferring is still a real disposal of that crypto.
-- **`v_flattened_fifo_events`** — joins every completed transaction against the policy table and
-  emits `ACQUISITION` / `DISPOSAL` rows per branch. Historical prices are resolved via `ASOF LEFT JOIN` against `ledger.exchange_rates` to convert prices into the reporting currency (falling back to a reciprocal rate if a direct pair is absent). Emits `NULL` whenever a price can't be resolved or converted, plus a `value_provenance` (`MANUAL`, `MARKET`, or `MARKET_CONVERTED`) and a `currency_mismatch` boolean per row. If `MARKET_CONVERTED`, the FX rate and its date are persisted for strict auditability.
-- **`v_acquisitions` / `v_disposals`** — global per-asset FIFO ordering via window functions
+- **`v_flattened_fifo_events`** (materialized) — joins every completed transaction against the policy table and
+  emits `ACQUISITION` / `DISPOSAL` rows per branch. Historical prices are resolved via `ASOF LEFT JOIN` against `ledger.exchange_rates` to convert prices into the reporting currency (falling back to a reciprocal rate if a direct pair is absent). Emits `NULL` whenever a price can't be resolved or converted, plus a `value_provenance` (`MANUAL`, `MARKET`, or `MARKET_CONVERTED`) and a `currency_mismatch` boolean per row. If `MARKET_CONVERTED`, the FX rate and its date are persisted for strict auditability. The logic lives in `v_flattened_fifo_events__def`; the public name reads from `m_flattened_fifo_events`.
+- **`v_acquisitions` / `v_disposals`** (plain views) — global per-asset FIFO ordering via window functions
   (`SUM(amount) OVER (PARTITION BY asset_id ORDER BY timestamp, tx_id)`), producing the cumulative
-  quantity intervals the matcher joins against.
-- **`v_fifo_matches`** — the actual FIFO matcher: a cumulative-interval-overlap join between
-  acquisitions and disposals. Unchanged by this work; it was already correct.
-- **`v_calculated_lot_history_events`** — drives the frontend's lot history view. `flag` is read
+  quantity intervals the matcher joins against. Cheap enough over the materialized flattened events
+  that they were left unmaterialized.
+- **`v_fifo_matches`** (materialized) — the actual FIFO matcher: a cumulative-interval-overlap join between
+  acquisitions and disposals. Its SQL is unchanged by this work — it was already correct — but it now
+  reads from `v_fifo_matches__def`/`m_fifo_matches` instead of recomputing on every query.
+- **`v_calculated_lot_history_events`** (materialized) — drives the frontend's lot history view. `flag` is read
   verbatim from the source transaction (e.g. `WALLET_ACTIVATION` for a Tangem wallet-activation
   receipt) rather than recomputed, so the existing AEAT fiscal-classification audit trail survives
   untouched. `is_taxable` is `1` only when `quality_flag IS NULL AND taxable_disposal`.

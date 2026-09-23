@@ -15,10 +15,11 @@ import type {
   LedgerManualPriceOverride,
 } from '../../../../domain/ports/ILedgerPort.js';
 import type {
-  FifoMaterializerService,
   MaterializationSummary,
 } from '../../../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../../services/FifoChainFreshnessService.js';
+import type { FifoBuildId } from '../../../../domain/models/FifoChainState.js';
 import { toPreciseAmount } from '../../../../domain/value-objects/PreciseAmount.js';
 
 const EMPTY_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 } as const;
@@ -43,7 +44,7 @@ class SettingsStub implements IUserSettingsPort {
 
 interface Harness {
   ledger: ILedgerPort;
-  materializer: FifoMaterializerService;
+  freshnessService: FifoChainFreshnessService;
   settings: SettingsStub;
   calls: string[];
   written: LedgerManualPriceOverride[];
@@ -81,9 +82,26 @@ function harness(recalculateOutcome: MaterializationSummary | Error = SUMMARY): 
     },
   } as unknown as ILedgerPort;
 
+  // `refresh()` is the only entry point the override use cases call (design D4a); it owns the
+  // rebuild-then-reconcile pipeline, so the double models that shape rather than the materialiser
+  // directly.
+  const freshnessService = {
+    refresh: async () => {
+      const materialization = await recalculate();
+      return {
+        chain: {
+          kind: 'fresh' as const,
+          buildId: 'test-build' as FifoBuildId,
+          builtAt: new Date().toISOString(),
+        },
+        materialization,
+      };
+    },
+  } as unknown as FifoChainFreshnessService;
+
   return {
     ledger,
-    materializer: { recalculate } as unknown as FifoMaterializerService,
+    freshnessService,
     settings: new SettingsStub(),
     calls,
     written,
@@ -106,7 +124,11 @@ describe('SetManualPriceOverrideUseCase', () => {
   });
 
   const useCase = (given: Harness = h) =>
-    new SetManualPriceOverrideUseCase(given.ledger, given.materializer, given.settings);
+    new SetManualPriceOverrideUseCase(
+      given.ledger,
+      given.settings,
+      given.freshnessService,
+    );
 
   it('writes the declared value with its currency and rebuilds once', async () => {
     const result = await useCase().execute([price('hash-staking', '0.42')]);
@@ -136,14 +158,6 @@ describe('SetManualPriceOverrideUseCase', () => {
     await useCase().execute([price('hash-a', '0.42')]);
 
     expect(h.calls).toEqual(['begin', 'set', 'commit', 'recalculate']);
-  });
-
-  it('runs the rebuild forced, so a cleared pending marker cannot skip it', async () => {
-    await h.settings.setSetting('needs_recalculation', 'false');
-
-    await useCase().execute([price('hash-a', '0.42')]);
-
-    expect(h.recalculate).toHaveBeenCalledWith(true);
   });
 
   it('leaves recalculation pending when the rebuild fails, and keeps the override', async () => {
@@ -208,7 +222,11 @@ describe('RemoveManualPriceOverrideUseCase', () => {
   });
 
   const useCase = (given: Harness = h) =>
-    new RemoveManualPriceOverrideUseCase(given.ledger, given.materializer, given.settings);
+    new RemoveManualPriceOverrideUseCase(
+      given.ledger,
+      given.settings,
+      given.freshnessService,
+    );
 
   it('removes the override and rebuilds so the derived value reverts', async () => {
     const result = await useCase().execute([createTransactionIdHash('hash-staking')]);

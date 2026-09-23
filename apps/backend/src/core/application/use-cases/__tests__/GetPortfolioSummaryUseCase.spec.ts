@@ -4,6 +4,15 @@ import { GetPortfolioSummaryUseCase } from '../GetPortfolioSummaryUseCase.js';
 import type { IPortfolioAnalyticsPort } from '../../../domain/ports/IPortfolioAnalyticsPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import type { IMetricsPort } from '../../../domain/ports/IMetricsPort.js';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
+
+const fakeFreshnessService = {
+  ensureFresh: vi.fn().mockResolvedValue({
+    kind: 'fresh',
+    buildId: 'test-build',
+    builtAt: '2026-01-01T00:00:00Z',
+  }),
+} as unknown as FifoChainFreshnessService;
 
 describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
   it('should fetch holdings and calculate real-time unrealized PnL with Decimal.js precision', async () => {
@@ -55,6 +64,7 @@ describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
 
     const useCase = new GetPortfolioSummaryUseCase(
       mockAnalyticsPort,
+      fakeFreshnessService,
       mockUserSettingsPort,
       mockMetricsPort,
     );
@@ -104,7 +114,11 @@ describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
       setSetting: vi.fn().mockResolvedValue(undefined),
     };
 
-    const useCase = new GetPortfolioSummaryUseCase(mockAnalyticsPort, mockUserSettingsPort);
+    const useCase = new GetPortfolioSummaryUseCase(
+      mockAnalyticsPort,
+      fakeFreshnessService,
+      mockUserSettingsPort,
+    );
 
     const summary = await useCase.execute({
       targetCurrency: 'EUR',
@@ -164,6 +178,7 @@ describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
 
     const useCase = new GetPortfolioSummaryUseCase(
       mockAnalyticsPort,
+      fakeFreshnessService,
       mockUserSettingsPort,
       mockMetricsPort,
     );

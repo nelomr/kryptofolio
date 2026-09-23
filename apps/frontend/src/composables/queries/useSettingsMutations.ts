@@ -99,13 +99,13 @@ export function useUpdateBaseCurrencyMutation() {
     onSuccess: (currency) => {
       queryCache.invalidateQueries({ key: ['settings', 'base_currency'] });
       queryCache.invalidateQueries({ key: ['settings', 'exchange_rate'] });
-      queryCache.invalidateQueries({ key: ['portfolio-summary'] });
-      queryCache.invalidateQueries({ key: ['crypto-metrics-kpis'] });
-      queryCache.invalidateQueries({ key: ['crypto-performance-history'] });
-      queryCache.invalidateQueries({ key: ['crypto-asset-allocation'] });
-      queryCache.invalidateQueries({ key: ['crypto-volatility-heatmap'] });
-      queryCache.invalidateQueries({ key: ['crypto-risk-metrics'] });
-      queryCache.invalidateQueries({ key: ['crypto-drawdown-curve'] });
+      // The portfolio/metrics queries below are NOT invalidated here on purpose: currency is
+      // now its own segment of each of those keys (design D10), so switching currency changes
+      // which key the component reads rather than staling the one it just left. Invalidating
+      // the whole ['portfolio-summary'] prefix here would destroy the *other* currency's still-
+      // valid cache entry — exactly the "neither having overwritten the other" property this
+      // change exists to provide. Only a ledger-dirtying mutation (ingestion, overrides,
+      // rebuild — see useTaxMutations.ts) has a reason to invalidate every currency variant.
       const label = i18nPort?.translate('settings.currency.success') ?? `Base currency set to ${currency}`;
       toast.success(label);
     },

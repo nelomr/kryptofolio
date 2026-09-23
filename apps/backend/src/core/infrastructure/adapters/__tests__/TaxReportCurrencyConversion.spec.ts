@@ -123,6 +123,7 @@ describe('tax report display-currency conversion', () => {
     process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     taxCalculator = new DuckDbTaxCalculatorAdapter(duckDb);
   });
@@ -323,6 +324,7 @@ describe('tax report display-currency conversion', () => {
         )
         .run();
 
+      await duckDb.rebuildDerivedChain();
       const rows = await taxCalculator.getConvertedDisposalEvents({ kind: 'FISCAL_YEAR', year: YEAR }, undefined, 'EUR');
       const unresolved = rows.find((r) => r.id === 'evt-noprice');
 
@@ -384,6 +386,7 @@ describe('tax report display-currency conversion', () => {
       // present before the views are built.
       duckDb = new DuckDbAdapter();
       await duckDb.initialize(sqlitePath);
+      await duckDb.rebuildDerivedChain();
       taxCalculator = new DuckDbTaxCalculatorAdapter(duckDb);
     });
 

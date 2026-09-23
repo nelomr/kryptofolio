@@ -2,7 +2,7 @@
  * usePortfolioQueries — Composable description.
  */
 
-import { inject } from "vue";
+import { inject, computed } from "vue";
 import { useQuery, useMutation, useQueryCache } from "@pinia/colada";
 import { PORTFOLIO_PORT_KEY } from "@/core/injectionKeys";
 import type { ICryptoPortfolioPort } from "@/core/domain/ports/ICryptoPortfolioPort";
@@ -10,6 +10,13 @@ import type { PortfolioSummaryEntity } from "@/core/domain/models/PortfolioEntit
 import { GetPortfolioSummaryUseCase } from "@/core/application/use-cases/GetPortfolioSummaryUseCase";
 import { GetTokenHistoryUseCase } from "@/core/application/use-cases/GetTokenHistoryUseCase";
 import { TriggerRebuildUseCase } from "@/core/application/use-cases/TriggerRebuildUseCase";
+import { useBaseCurrencyQuery } from "./useSettingsQueries";
+
+/**
+ * Explicit, not Pinia Colada's 5s default (design D10) — see useCryptoMetricsQueries.ts for
+ * the full rationale; the two files share the same policy.
+ */
+const PORTFOLIO_STALE_TIME_MS = 60 * 1000;
 
 /**
  * Helper to securely inject the portfolio port.
@@ -32,11 +39,13 @@ export function usePortfolioPort(): ICryptoPortfolioPort {
 export function usePortfolioSummaryQuery() {
   const port = usePortfolioPort();
   const useCase = new GetPortfolioSummaryUseCase(port);
+  const { data: baseCurrency } = useBaseCurrencyQuery();
+  const currency = computed(() => baseCurrency.value ?? "USD");
 
   return useQuery<PortfolioSummaryEntity>({
-    key: ["portfolio-summary"],
-    query: () => useCase.execute(),
-    // Colada handles deduplication, caching, and state out of the box
+    key: () => ["portfolio-summary", currency.value],
+    query: () => useCase.execute(currency.value),
+    staleTime: PORTFOLIO_STALE_TIME_MS,
   });
 }
 
@@ -53,6 +62,7 @@ export function useTokenHistoryQuery(symbol: import("vue").Ref<string>) {
     key: () => ["token-history", symbol.value],
     query: () => useCase.execute(symbol.value),
     enabled: () => !!symbol.value,
+    staleTime: PORTFOLIO_STALE_TIME_MS,
   });
 }
 

@@ -15,7 +15,6 @@ import { deriveSyntheticAccountName } from '@kryptofolio/shared-types';
 import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedgerAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 import { FifoMaterializerService } from '../FifoMaterializerService.js';
-import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 
 const ACCOUNTS = {
   kraken: 'acc-kraken',
@@ -152,7 +151,6 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   let ledgerAdapter: SQLiteLedgerAdapter;
   let duckDbAdapter: DuckDbAdapter;
   let taxCalculator: DuckDbTaxCalculatorAdapter;
-  let userSettings: IUserSettingsPort;
   let service: FifoMaterializerService;
 
   /** Every column of a table, soft-deleted rows included, ordered so two runs are comparable. */
@@ -194,18 +192,10 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
     process.env.DUCKDB_PATH = ':memory:';
     duckDbAdapter = new DuckDbAdapter();
     await duckDbAdapter.initialize(sqliteDbPath);
+    await duckDbAdapter.rebuildDerivedChain();
     taxCalculator = new DuckDbTaxCalculatorAdapter(duckDbAdapter);
 
-    let needsRecalculation = 'true';
-    userSettings = {
-      getSetting: async (key: string) =>
-        key === 'needs_recalculation' ? needsRecalculation : null,
-      setSetting: async (key: string, value: string) => {
-        if (key === 'needs_recalculation') needsRecalculation = value;
-      },
-    };
-
-    service = new FifoMaterializerService(ledgerAdapter, taxCalculator, userSettings);
+    service = new FifoMaterializerService(ledgerAdapter, taxCalculator);
   });
 
   afterEach(() => {
@@ -216,7 +206,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('creates the synthetic ownwallet counterparty on demand with is_synthetic = 1', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     const syntheticId = deriveSyntheticAccountName('XRP');
     const account = sqliteDb
@@ -236,7 +226,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('persists disposal_type, provenance and quality flags for every derived row', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     const events = sqliteDb
       .prepare(
@@ -266,7 +256,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('returns per-table counts plus the flagged and pending-review totals', async () => {
-    const summary = await service.recalculate(true);
+    const summary = await service.recalculate();
 
     for (const table of ['taxLots', 'lotHistoryEvents', 'custodyEntries'] as const) {
       expect(summary[table].inserted).toBeGreaterThan(0);
@@ -281,7 +271,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('produces zero writes and no audit rows on an unchanged second run', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     const before = {
       tax_lots: stableSnapshot('tax_lots'),
@@ -290,7 +280,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
     };
     const auditBefore = DERIVED_TABLES.map(auditCount);
 
-    const summary = await service.recalculate(true);
+    const summary = await service.recalculate();
 
     for (const table of ['taxLots', 'lotHistoryEvents', 'custodyEntries'] as const) {
       expect(summary[table]).toEqual({
@@ -308,7 +298,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('records a changed quantity as one in-place update, not a delete and an insert', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     const lotId = (
       sqliteDb
@@ -325,7 +315,8 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       .prepare("UPDATE spot_transactions SET amount_out = '120.00', total_fiat = '240.00' WHERE id = ?")
       .run(TX.sell);
 
-    const summary = await service.recalculate(true);
+    await duckDbAdapter.rebuildDerivedChain();
+    const summary = await service.recalculate();
     expect(summary.taxLots.updated).toBe(1);
     expect(summary.taxLots.retired).toBe(0);
     expect(summary.taxLots.inserted).toBe(0);
@@ -353,7 +344,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('retires the lot of a soft-deleted transaction without removing the row', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     const lotId = (
       sqliteDb
@@ -365,7 +356,8 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       .prepare("UPDATE spot_transactions SET deleted_at = datetime('now','utc') WHERE id = ?")
       .run(TX.buy);
 
-    const summary = await service.recalculate(true);
+    await duckDbAdapter.rebuildDerivedChain();
+    const summary = await service.recalculate();
 
     expect(summary.taxLots.retired).toBeGreaterThan(0);
 
@@ -381,7 +373,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   });
 
   it('retires a phantom lot together with the events and custody entries referencing it', async () => {
-    await service.recalculate(true);
+    await service.recalculate();
 
     // A zero-cost lot derived from a crypto DEPOSIT: what the pre-policy engine materialised and
     // what the recomputed set no longer contains.
@@ -423,7 +415,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       )
       .run(ACCOUNTS.ledger, TX.cryptoDeposit);
 
-    const summary = await service.recalculate(true);
+    const summary = await service.recalculate();
 
     expect(summary.taxLots.retired).toBe(1);
     expect(summary.lotHistoryEvents.retired).toBe(1);
@@ -449,7 +441,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
     let retiredLotId: string;
 
     beforeEach(async () => {
-      await service.recalculate(true);
+      await service.recalculate();
       retiredLotId = (
         sqliteDb
           .prepare('SELECT id FROM tax_lots WHERE spot_transaction_id = ?')
@@ -459,12 +451,14 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       sqliteDb
         .prepare("UPDATE spot_transactions SET deleted_at = datetime('now','utc') WHERE id = ?")
         .run(TX.buy);
-      await service.recalculate(true);
+      await duckDbAdapter.rebuildDerivedChain();
+      await service.recalculate();
     });
 
     it('reactivates the existing row when a retired transaction is restored', async () => {
       sqliteDb.prepare('UPDATE spot_transactions SET deleted_at = NULL WHERE id = ?').run(TX.buy);
-      const summary = await service.recalculate(true);
+      await duckDbAdapter.rebuildDerivedChain();
+      const summary = await service.recalculate();
 
       expect(summary.taxLots.reactivated).toBeGreaterThan(0);
       expect(summary.taxLots.inserted).toBe(0);
@@ -478,8 +472,8 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
     });
   });
 
-  it('rolls back and leaves needs_recalculation true when a derived write fails', async () => {
-    await service.recalculate(true);
+  it('rolls back the derived write transaction atomically when a write fails', async () => {
+    await service.recalculate();
     const before = stableSnapshot('tax_lots');
 
     const honest = taxCalculator.calculateLotsAndEvents.bind(taxCalculator);
@@ -493,21 +487,13 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       };
     };
 
-    await userSettings.setSetting('needs_recalculation', 'true');
-    await expect(service.recalculate(true)).rejects.toThrow();
+    await expect(service.recalculate()).rejects.toThrow();
 
     expect(stableSnapshot('tax_lots')).toEqual(before);
-    expect(await userSettings.getSetting('needs_recalculation')).toBe('true');
     const orphan = sqliteDb
       .prepare("SELECT COUNT(*) AS count FROM lot_history_events WHERE id = 'orphan-event'")
       .get() as { count: number };
     expect(orphan.count).toBe(0);
-  });
-
-  it('clears needs_recalculation only after a successful run', async () => {
-    await userSettings.setSetting('needs_recalculation', 'true');
-    await service.recalculate();
-    expect(await userSettings.getSetting('needs_recalculation')).toBe('false');
   });
 
   it('leaves the user-authored override tables byte-identical across a rebuild', async () => {
@@ -533,7 +519,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       auditCount('transfer_destination_overrides'),
     ];
 
-    await service.recalculate(true);
+    await service.recalculate();
 
     expect(snapshot('manual_price_overrides', 'id_hash')).toEqual(before.prices);
     expect(snapshot('transfer_destination_overrides', 'id_hash')).toEqual(before.destinations);
@@ -556,13 +542,15 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
           "UPDATE spot_transactions SET deleted_at = datetime('now','utc') WHERE id IN (?, ?)",
         )
         .run(TX.sell, TX.buyLater);
-      await service.recalculate(true);
+      await duckDbAdapter.rebuildDerivedChain();
+      await service.recalculate();
       const partial = stableSnapshot('tax_lots');
 
       sqliteDb
         .prepare('UPDATE spot_transactions SET deleted_at = NULL WHERE id IN (?, ?)')
         .run(TX.sell, TX.buyLater);
-      const amended = await service.recalculate(true);
+      await duckDbAdapter.rebuildDerivedChain();
+      const amended = await service.recalculate();
 
       amendedTheEarlierRun = amended.taxLots.inserted + amended.taxLots.updated > 0;
       differedFromPartial =
@@ -583,7 +571,7 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       sqliteDb.exec('DELETE FROM lot_history_events');
       sqliteDb.exec('DELETE FROM tax_lots');
 
-      await service.recalculate(true);
+      await service.recalculate();
 
       expect(stableSnapshot('tax_lots')).toEqual(incremental.tax_lots);
       expect(stableSnapshot('lot_history_events')).toEqual(incremental.lot_history_events);

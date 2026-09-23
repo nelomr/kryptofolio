@@ -94,6 +94,7 @@ async function harness(label: string, specs: readonly TxSpec[]): Promise<Harness
     `INSERT INTO _price_seed (symbol, close, date, currency)
      VALUES ('XRP', 2.0, DATE '2025-06-01', 'EUR')`
   );
+  await duckDb.rebuildDerivedChain();
 
   return {
     duckDb,

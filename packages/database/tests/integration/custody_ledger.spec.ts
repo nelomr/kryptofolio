@@ -95,6 +95,7 @@ async function harness(label: string, specs: readonly TxSpec[]): Promise<Harness
   process.env.DUCKDB_PATH = ':memory:';
   const duckDb = new DuckDbAdapter();
   await duckDb.initialize(sqlitePath);
+  await duckDb.rebuildDerivedChain();
 
   return {
     sqliteDb,

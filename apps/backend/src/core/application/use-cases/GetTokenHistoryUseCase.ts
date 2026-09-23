@@ -1,4 +1,5 @@
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../services/FifoChainFreshnessService.js';
 import type { ConvertedAmount } from '@kryptofolio/shared-types';
 import { compareDecimalStrings } from '@kryptofolio/shared-types';
 import type {
@@ -111,13 +112,21 @@ export interface GetTokenHistoryResponse {
 export class GetTokenHistoryUseCase {
   private readonly taxCalculatorPort: ITaxCalculatorPort;
   private readonly userSettingsPort: IUserSettingsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
-  constructor(taxCalculatorPort: ITaxCalculatorPort, userSettingsPort: IUserSettingsPort) {
+  constructor(
+    taxCalculatorPort: ITaxCalculatorPort,
+    userSettingsPort: IUserSettingsPort,
+    freshnessService: FifoChainFreshnessService,
+  ) {
     this.taxCalculatorPort = taxCalculatorPort;
     this.userSettingsPort = userSettingsPort;
+    this.freshnessService = freshnessService;
   }
 
   public async execute(req: GetTokenHistoryRequest): Promise<GetTokenHistoryResponse> {
+    await this.freshnessService.ensureFresh();
+
     const { symbol, accountId } = req;
     const symbolUpper = symbol.toUpperCase();
 

@@ -22,29 +22,28 @@ import { generateAssetColor } from '@kryptofolio/shared-types';
 const UNTRUSTWORTHY_BASIS_FLAGS = "('NEGATIVE_COST_BASIS', 'MISSING_PRICE')";
 
 /**
- * The dual-source lot set: the materialised lots plus any calculated lot the materialiser has not
- * caught up with. Identical in both places it is used, so the two aggregations cannot disagree about
- * which lots they are counting.
+ * Open lots with their data-quality verdict, read directly from the materialized relation.
+ *
+ * `v_calculated_tax_lots` already unions in `v_external_tax_lots` at the definition (design
+ * D5/section 6) — a ledger.tax_lots row whose transaction never produced a FIFO event is
+ * folded in once per rebuild there, not duplicated here per query. The dual-source lag
+ * hedge this constant used to carry (a defensive union with `ledger.tax_lots`, guarding
+ * against the DuckDB chain lagging behind SQLite) is gone: the chain is materialized and
+ * kept fresh before every read, so there is no lag left to hedge against (rule 8).
  */
 const OPEN_LOTS_WITH_QUALITY = `
     SELECT asset_id, remaining_qty, original_qty, unit_cost_fiat, total_cost_fiat, fiat_currency,
            CAST(acquisition_timestamp AS DATE) AS acquired_on, status, quality_flag
     FROM v_calculated_tax_lots
-    UNION ALL
-    SELECT asset_id, remaining_qty, original_qty, unit_cost_fiat, total_cost_fiat, fiat_currency,
-           CAST(acquisition_timestamp AS DATE) AS acquired_on, status, quality_flag
-    FROM ledger.tax_lots
-    WHERE spot_transaction_id IS NULL OR spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
 `;
 
-/** The dual-source event set, identical wherever realized PnL is summed. */
+/**
+ * Realized events, read directly from the materialized relation — no more emptiness-gated
+ * fallback to `ledger.lot_history_events` (rule 8: no build-stamp predicate at query time).
+ */
 const REALIZED_EVENTS = `
     SELECT gain_loss_fiat, fiat_currency, CAST(disposal_date AS DATE) AS disposal_on
-    FROM ledger.lot_history_events
-    UNION ALL
-    SELECT gain_loss_fiat, fiat_currency, CAST(disposal_date AS DATE) AS disposal_on
     FROM v_calculated_lot_history_events
-    WHERE (SELECT COUNT(*) FROM ledger.lot_history_events) = 0
 `;
 
 /**
@@ -66,17 +65,6 @@ const REALIZED_EVENTS_CONVERTED = (param: string) => `
      AND fx.rate_date <= e.disposal_on
 `;
 
-/**
- * The three shared sources, pinned into temp tables once per call.
- *
- * Measured on an empty ledger: eleven statements each re-planning and re-executing the FIFO chain
- * cost ~1390 ms; pinning the shared sources first brings the same eleven statements to ~910 ms.
- * Collapsing them into a single statement was tried instead and measured 1.5x WORSE — the cost is
- * per-statement work over a deep view chain, not one expensive scan, so the fix is to make the chain
- * run once, not to make the plan bigger.
- *
- * Refreshed on every call: a cached table would report figures from before the last rebuild.
- */
 /**
  * The daily series, converted at each point's OWN date.
  *
@@ -104,16 +92,8 @@ const VALUATION_CONVERTED = `
      AND fx.rate_date <= v.date
 `;
 
-const PINNED_SOURCES: ReadonlyArray<readonly [string, string]> = [
-  ['kpi_open_lots', OPEN_LOTS_WITH_QUALITY],
-  ['kpi_valuation', VALUATION_CONVERTED],
-  ['kpi_events', REALIZED_EVENTS],
-  // Read by both the volatility and the Sharpe statement, so pinning it pays for itself once.
-  ['kpi_returns_volatility', 'SELECT * FROM v_portfolio_returns_volatility'],
-];
-
 const TRUSTWORTHY_OPEN_LOTS = `
-    SELECT * FROM kpi_open_lots
+    SELECT * FROM (${OPEN_LOTS_WITH_QUALITY}) open_lots_src
     WHERE status IN ('OPEN', 'PARTIAL')
       AND COALESCE(quality_flag, '') NOT IN ${UNTRUSTWORTHY_BASIS_FLAGS}
 `;
@@ -127,21 +107,18 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
 
   public async getKpis(targetCurrency?: string): Promise<MetricsKpis> {
     const displayCurrency = targetCurrency ?? 'EUR';
-    for (const [table, source] of PINNED_SOURCES) {
-      // Only the sources that actually reference $1 are given one: DuckDB rejects a bound value
-      // a statement has no placeholder for, so passing it unconditionally fails to bind.
-      const params = source.includes('$1') ? [displayCurrency] : undefined;
-      await this.db.execute(`CREATE OR REPLACE TEMP TABLE ${table} AS ${source}`, params);
-    }
 
     const valuation = await this.db.queryOne<{
       total_equity: string;
-    }>(`
+    }>(
+      `
       SELECT
           CAST(COALESCE(SUM(daily_value), 0.0) AS VARCHAR) AS total_equity
-      FROM kpi_valuation
-      WHERE date = (SELECT MAX(date) FROM kpi_valuation)
-    `);
+      FROM (${VALUATION_CONVERTED}) v
+      WHERE date = (SELECT MAX(date) FROM (${VALUATION_CONVERTED}) v2)
+    `,
+      [displayCurrency],
+    );
 
     const costRes = await this.db.queryOne<{
       total_cost: string;
@@ -201,7 +178,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       `
       SELECT
           (
-              EXISTS (SELECT 1 FROM kpi_valuation WHERE unconvertible)
+              EXISTS (SELECT 1 FROM (${VALUATION_CONVERTED}) v WHERE unconvertible)
               OR EXISTS (
                   SELECT 1 FROM (${TRUSTWORTHY_OPEN_LOTS}) t
                   ASOF LEFT JOIN v_fx_daily fx
@@ -211,7 +188,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
                   WHERE t.fiat_currency <> $1 AND fx.rate IS NULL
               )
           ) AS rates_incomplete,
-          EXISTS (SELECT 1 FROM kpi_valuation WHERE unpriced) AS prices_incomplete
+          EXISTS (SELECT 1 FROM (${VALUATION_CONVERTED}) v2 WHERE unpriced) AS prices_incomplete
     `,
       [displayCurrency],
     );
@@ -220,17 +197,18 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       flagged_lots: number;
     }>(`
       SELECT CAST(COUNT(*) AS INTEGER) AS flagged_lots
-      FROM kpi_open_lots
+      FROM (${OPEN_LOTS_WITH_QUALITY}) open_lots_src
       WHERE status IN ('OPEN', 'PARTIAL')
         AND COALESCE(quality_flag, '') IN ${UNTRUSTWORTHY_BASIS_FLAGS}
     `);
 
     const delta24hRes = await this.db.queryOne<{
       delta_24h: string;
-    }>(`
+    }>(
+      `
       WITH daily_totals AS (
           SELECT date, SUM(daily_value) AS portfolio_value
-          FROM kpi_valuation
+          FROM (${VALUATION_CONVERTED}) v
           GROUP BY date
           ORDER BY date DESC
           LIMIT 2
@@ -245,7 +223,9 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
           0.0
       ) AS VARCHAR) AS delta_24h
       FROM ranked
-    `);
+    `,
+      [displayCurrency],
+    );
 
     const athDrawdown = await this.db.queryOne<{
       ath: string;
@@ -266,7 +246,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
 
     const vol = await this.db.queryOne<{ vol: string }>(`
       SELECT CAST(COALESCE(annualized_volatility_all, 0.0) AS VARCHAR) AS vol
-      FROM kpi_returns_volatility
+      FROM v_portfolio_returns_volatility
       ORDER BY date DESC
       LIMIT 1
     `);
@@ -293,7 +273,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
             ELSE 0.0
           END AS VARCHAR
         ) AS sharpe
-      FROM kpi_returns_volatility
+      FROM v_portfolio_returns_volatility
       ORDER BY date DESC
       LIMIT 1
     `);
@@ -306,7 +286,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       average_r: number;
     }>(`
       WITH all_trades AS (
-          SELECT CAST(gain_loss_fiat AS DECIMAL(38,18)) AS pnl FROM kpi_events
+          SELECT CAST(gain_loss_fiat AS DECIMAL(38,18)) AS pnl FROM (${REALIZED_EVENTS}) events_src
           UNION ALL
           SELECT CAST(CAST(pnl_fiat AS DECIMAL(38,18)) - CAST(fee_fiat AS DECIMAL(38,18)) AS DECIMAL(38,18)) AS pnl
           FROM v_futures_realized_pnl
@@ -511,6 +491,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
           CAST(daily_value AS VARCHAR) AS value_fiat,
           CAST(total_portfolio AS VARCHAR) AS total_portfolio
       FROM latest_val
+      ORDER BY asset_id
     `);
 
     return rows.map((r, idx) => {

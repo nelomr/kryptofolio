@@ -4,6 +4,7 @@ import type {
   UnconvertibleTaxEvent,
 } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../services/FifoChainFreshnessService.js';
 import Decimal from 'decimal.js';
 import type {
   ConvertedAmount,
@@ -105,13 +106,21 @@ export interface SpanishTaxReportResponse {
 export class GetSpanishTaxReportUseCase {
   private readonly taxCalculatorPort: ITaxCalculatorPort;
   private readonly userSettingsPort: IUserSettingsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
-  constructor(taxCalculatorPort: ITaxCalculatorPort, userSettingsPort: IUserSettingsPort) {
+  constructor(
+    taxCalculatorPort: ITaxCalculatorPort,
+    userSettingsPort: IUserSettingsPort,
+    freshnessService: FifoChainFreshnessService,
+  ) {
     this.taxCalculatorPort = taxCalculatorPort;
     this.userSettingsPort = userSettingsPort;
+    this.freshnessService = freshnessService;
   }
 
   async execute(request: GetSpanishTaxReportRequest): Promise<SpanishTaxReportResponse> {
+    await this.freshnessService.ensureFresh();
+
     const year = request.year;
     const method = request.method || 'FIFO';
     const accountId = request.accountId;

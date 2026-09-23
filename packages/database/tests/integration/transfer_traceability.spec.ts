@@ -81,6 +81,7 @@ describe('FIFO custody traceability', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
   });
 
   afterEach(() => {
@@ -378,6 +379,7 @@ describe('FIFO view hygiene', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
   });
 
   afterEach(() => {
@@ -487,6 +489,7 @@ describe('FIFO price resolution and provenance', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
   });
 
   afterEach(() => {
@@ -502,6 +505,10 @@ describe('FIFO price resolution and provenance', () => {
     );
 
   const stakingLot = async () => {
+    // Every caller seeds a price or override immediately before this, and the six relations
+    // are now materialized tables — the chain must be rebuilt to reflect that mutation before
+    // querying it, exactly as a real read request would trigger via ensureFresh() (section 8).
+    await duckDb.rebuildDerivedChain();
     const rows = (await duckDb.queryMany(
       `SELECT * FROM v_calculated_tax_lots WHERE spot_transaction_id = '${TX.stakingUnpriced}'`
     )) as LotRow[];
@@ -596,6 +603,7 @@ describe('FIFO negative cost basis guard', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
   });
 
   afterEach(() => {

@@ -138,7 +138,7 @@ const mockMetrics = {
   pricesIncomplete: false,
 };
 
-import { I18N_PORT_KEY, CRYPTO_METRICS_PORT_KEY } from "@/core/injectionKeys";
+import { I18N_PORT_KEY, CRYPTO_METRICS_PORT_KEY, SETTINGS_PORT_KEY } from "@/core/injectionKeys";
 
 function mountView(
   dataOverrides: Partial<
@@ -204,6 +204,9 @@ function mountView(
               roiPercent: -5,
             },
           }),
+        },
+        [SETTINGS_PORT_KEY as symbol]: {
+          getBaseCurrency: vi.fn().mockResolvedValue("USD"),
         },
       },
     },

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Duckdb Connection Pool Specification
+
+## Purpose
+
+A fixed-size, FIFO-queuing connection pool over one shared DuckDB instance, with no per-connection session state leaking between requests.
+
+## Requirements
 
 ### Requirement: Pooled Connections Over a Single DuckDB Instance
 
@@ -57,3 +63,4 @@ No connection-scoped session state SHALL be relied upon across requests. Extensi
 - **WHEN** the analytical adapters' emitted SQL is inspected across a full dashboard fan-out
 - **THEN** no `CREATE ... TEMP TABLE` statement MUST be emitted
 - **AND** the result of any query MUST NOT depend on which pooled connection served it
+

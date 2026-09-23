@@ -86,6 +86,7 @@ describe('micro-priced assets keep their significant digits', () => {
     process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
     analytics = new DuckDbPortfolioAnalyticsAdapter(duckDb);
   });
 
@@ -178,6 +179,7 @@ describe('both ends of the range survive together', () => {
     process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
   });
 
   afterEach(() => {
@@ -222,7 +224,10 @@ describe('both ends of the range survive together', () => {
       .run();
 
     await expect(
-      new DuckDbPortfolioAnalyticsAdapter(duckDb).getHoldingsSnapshot('acc-1', 'EUR'),
+      (async () => {
+        await duckDb.rebuildDerivedChain();
+        return new DuckDbPortfolioAnalyticsAdapter(duckDb).getHoldingsSnapshot('acc-1', 'EUR');
+      })(),
     ).rejects.toThrow(/out of range/);
   });
 });

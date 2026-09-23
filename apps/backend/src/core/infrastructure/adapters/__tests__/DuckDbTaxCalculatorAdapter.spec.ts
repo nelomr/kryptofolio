@@ -27,6 +27,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     adapter = new DuckDbTaxCalculatorAdapter(duckDb);
   });
@@ -117,12 +118,14 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('excludes non-taxable flagged events from spotCapitalGains', async () => {
     seedTaxableAndFlaggedEvents();
+    await duckDb.rebuildDerivedChain();
     const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(Number(report.spotCapitalGains)).toBe(100);
   });
 
   it('reports how many events were excluded alongside the total', async () => {
     seedTaxableAndFlaggedEvents();
+    await duckDb.rebuildDerivedChain();
     const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedFlaggedEvents).toBe(1);
   });
@@ -158,12 +161,14 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('excludes an unresolved staking reward from savingsBaseYields', async () => {
     seedUnresolvedStaking();
+    await duckDb.rebuildDerivedChain();
     const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(Number(report.savingsBaseYields)).toBe(500);
   });
 
   it('counts the unresolved reward instead of letting it disappear from the total', async () => {
     seedUnresolvedStaking();
+    await duckDb.rebuildDerivedChain();
     const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedUnresolvedIncomeCount).toBe(1);
   });
@@ -174,6 +179,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
       UPDATE spot_transactions SET total_fiat = '600.00', price_fiat = '30000.00'
       WHERE id = 'tx-staking-unpriced';
     `);
+    await duckDb.rebuildDerivedChain();
     const report = await adapter.getSpanishTaxReport(2023, undefined, 'EUR');
     expect(report.excludedUnresolvedIncomeCount).toBe(0);
   });
@@ -205,6 +211,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('returns balanced custody entries for a movement', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.calculateCustodyEntries();
 
     expect(rows.length).toBe(2);
@@ -224,6 +231,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
   // The lot's custody *timeline*: where it has been, as against where it is now.
   it('returns one relocation per allocated movement leg, with both ends named', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.getLotCustodyTimeline();
 
     expect(rows).toHaveLength(1);
@@ -250,12 +258,14 @@ describe('DuckDbTaxCalculatorAdapter', () => {
         ('tx-buy', 'h-buy', 'acc-1', 'BUY', 'BTC', '10', '10000', '1000', 'EUR',
          '2024-01-01T10:00:00.000Z', 'COMPLETED');
     `);
+    await duckDb.rebuildDerivedChain();
 
     expect(await adapter.getLotCustodyTimeline()).toEqual([]);
   });
 
   it('scopes the timeline to an account on either end of the movement', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
 
     expect(await adapter.getLotCustodyTimeline('acc-1')).toHaveLength(1);
     expect(await adapter.getLotCustodyTimeline('ownwallet-BTC')).toHaveLength(1);
@@ -264,11 +274,13 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('[SQL Injection] getLotCustodyTimeline with a malicious accountId returns safely', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     expect(await adapter.getLotCustodyTimeline("'; DROP TABLE tax_lots; --")).toEqual([]);
   });
 
   it('scopes custody entries to the requested account', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.calculateCustodyEntries('acc-1');
     expect(rows.length).toBe(1);
     expect(rows[0].account_id).toBe('acc-1');
@@ -276,6 +288,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('[SQL Injection] calculateCustodyEntries with a malicious accountId returns no rows safely', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.calculateCustodyEntries(
       "'; DROP TABLE lot_custody_entries; --",
     );
@@ -288,6 +301,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('reports where each portion of a lot currently sits', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.getLotCustodyLocations();
 
     const held = rows.filter((row) => Number(row.qty) !== 0);
@@ -309,6 +323,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('scopes custody locations to the requested account', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.getLotCustodyLocations('acc-1');
 
     expect(rows.every((row) => row.account_id === 'acc-1')).toBe(true);
@@ -317,6 +332,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
 
   it('[SQL Injection] getLotCustodyLocations with a malicious accountId returns no rows safely', async () => {
     seedCustodyMovement();
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.getLotCustodyLocations("'; DROP TABLE tax_lots; --");
 
     expect(rows).toEqual([]);
@@ -337,6 +353,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
         ('tx-staking', 'h-staking', 'acc-1', 'STAKING', 'BTC', '1', NULL, NULL, 'EUR',
          '2024-01-01T10:00:00.000Z', 'COMPLETED');
     `);
+    await duckDb.rebuildDerivedChain();
 
     const rows = await adapter.getDataQuality();
     const missing = rows.filter((row) => row.quality_flag === 'MISSING_PRICE');
@@ -363,6 +380,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
         ('tx-free', 'h-free', 'acc-1', 'STAKING', 'BTC', '1', '0', '0', 'EUR',
          '2024-01-01T10:00:00.000Z', 'COMPLETED');
     `);
+    await duckDb.rebuildDerivedChain();
 
     const rows = await adapter.getDataQuality();
     const missing = rows.filter((row) => row.tx_id === 'tx-free' && row.quality_flag === 'MISSING_PRICE');
@@ -379,6 +397,7 @@ describe('DuckDbTaxCalculatorAdapter', () => {
         ('tx-in', 'h-in', 'acc-2', 'TRANSFER_IN', 'BTC', '4', '0', '0', 'EUR',
          '2024-02-01T10:00:00.000Z', 'COMPLETED');
     `);
+    await duckDb.rebuildDerivedChain();
     const rows = await adapter.getDataQuality();
     expect(rows).toEqual([]);
   });

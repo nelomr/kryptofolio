@@ -45,24 +45,26 @@ The backend employs a sophisticated dual-database architecture, heavily optimize
 | Component | Engine | Purpose | Architecture |
 |---|---|---|---|
 | **OLTP Ledger & Vault** | SQLite (`node:sqlite`) | Fast, ACID-compliant persistence for transactions, settings, and encrypted API credentials. | File-based (`kryptofolio_ledger.db`). Strict schema enforcing `TEXT` columns for financial amounts to guarantee `decimal.js` precision without float loss. Single-user (no `user_id` multi-tenancy). |
-| **OLAP Analytics** | DuckDB | Tax calculations, FIFO matching, complex SWAPs, and portfolio PnL. | Ephemeral in-memory instance. Attaches directly to the SQLite ledger using `ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE)`. Uses Window Functions for high-performance vectorized operations. |
+| **OLAP Analytics** | DuckDB | Tax calculations, FIFO matching, complex SWAPs, and portfolio PnL. | File-backed instance (`fiscal.duckdb`; `:memory:` only under `MOCK_MODE`), accessed through a fixed-size connection pool (`DUCKDB_POOL_SIZE`, default 4) over one `DuckDBInstance`. Attaches directly to the SQLite ledger using `ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE)`. Uses Window Functions for high-performance vectorized operations. |
 | **Historical Data** | Apache Parquet | Local, columnar storage of historical cryptocurrency and fiat exchange rates. | Hive-partitioned directories (`year=2026/month=01`). Federated dynamically into DuckDB via `LEFT JOIN` during analytics queries. |
 
 Migration files, schema definitions, and analytical adapters live in `packages/database/`:
 - **SQLite Migrations**: Manage table definitions for Vault, Assets, Accounts, and Transactions.
-- **DuckDB Views & Adapters**: Define the analytical queries (e.g., `v_flattened_fifo_events`, `v_portfolio_daily_valuation`, `v_portfolio_returns_volatility`, `v_portfolio_ath_drawdown`, `v_portfolio_alpha_beta`) executed on the fly against the attached SQLite and Parquet files.
+- **DuckDB Views & Adapters**: Define the analytical queries (e.g., `v_flattened_fifo_events`, `v_portfolio_daily_valuation`, `v_portfolio_returns_volatility`, `v_portfolio_ath_drawdown`, `v_portfolio_alpha_beta`) against the attached SQLite and Parquet files. Six of these — the derived FIFO chain — are backed by physical `m_<name>` tables rebuilt on demand rather than recomputed on every query; see the *DuckDB read-side views* section of [FIFO Tax Engine](fifo-tax-engine.md#duckdb-read-side-views) for the full materialized-chain diagram.
   - `DuckDbTaxCalculatorAdapter`: Consumes the vectorized DuckDB views to generate accurate capital gains and tax base categorization (IRPF).
   - `DuckDbPortfolioAnalyticsAdapter`: Responsible for ASOF joins and real-time market data projection.
   - `DuckDbMetricsAdapter`: Generates institutional risk metrics (Sharpe Ratio, Volatility, Max Drawdown, Alpha, Beta, Win Rate) via DuckDB OLAP queries. *See full [DuckDB Metrics & Time-Series Architecture](architecture/duckdb-metrics-time-series.md).*
-  - `FifoMaterializerService`: Orchestrates the complex lifecycle of extracting flattened events, calculating gains using FIFO matching, and persisting consumed lots back to the ledger via set reconciliation (insert new / update changed / soft-delete absent) rather than an UPSERT-only write, so rows recomputed away from the ledger actually retire.
+  - `FifoMaterializerService`: Reconciles the SQLite-side derived tables (tax lots, lot history events, custody entries) against the freshly rebuilt DuckDB chain via set reconciliation (insert new / update changed / soft-delete absent) rather than an UPSERT-only write, so rows recomputed away from the ledger actually retire. It no longer decides *when* to run — see below.
 
 > [!NOTE]
 > Tax-lot calculation, the custody double-entry ledger, and the per-source fee/format model are
 > documented in full in [FIFO Tax Engine, Custody Ledger & Source Format Profiles](fifo-tax-engine.md).
-> `IngestAndMaterializeUseCase` (`apps/backend/src/core/application/use-cases/`) is the orchestrator
-> that runs `FifoMaterializerService.recalculate()` once per ingestion batch — never per row, since
-> `CsvIngestionUseCase` already performs a network price lookup per transaction — and after every
-> manual price/transfer-destination override edit.
+> `FifoChainFreshnessService` (`apps/backend/src/core/application/services/`) is the single owner of
+> the derived-state pipeline: rebuild the DuckDB chain, reconcile the SQLite tables via
+> `FifoMaterializerService`, then clear `needs_recalculation` — as one sequence, coalesced so
+> concurrent readers share a single in-flight run. `IngestAndMaterializeUseCase` and every override
+> mutation call it once per ingestion batch or edit (never per row), and every read use case that
+> depends on the derived chain awaits it before its first query, rebuilding synchronously when stale.
 
 ## Domain Layer Isolation (`PreciseAmount`)
 

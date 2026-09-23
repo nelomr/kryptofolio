@@ -5,7 +5,16 @@ import type {
   ITaxCalculatorPort,
 } from '../../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
 import type { TaxLotEventType } from '@kryptofolio/shared-types';
+
+const fakeFreshnessService = {
+  ensureFresh: vi.fn().mockResolvedValue({
+    kind: 'fresh',
+    buildId: 'test-build',
+    builtAt: '2026-01-01T00:00:00Z',
+  }),
+} as unknown as FifoChainFreshnessService;
 
 const BASE_EVENT: TaxLotEventType = {
   id: 'evt-2024-1',
@@ -33,7 +42,7 @@ const settingsPort: IUserSettingsPort = {
 };
 
 const makeUseCase = (port: ITaxCalculatorPort): GetSpanishTaxReportUseCase =>
-  new GetSpanishTaxReportUseCase(port, settingsPort);
+  new GetSpanishTaxReportUseCase(port, settingsPort, fakeFreshnessService);
 
 /**
  * The converted read, derived from the same native events each case declares.

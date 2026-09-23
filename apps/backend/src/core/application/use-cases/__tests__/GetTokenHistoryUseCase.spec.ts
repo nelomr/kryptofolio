@@ -8,6 +8,15 @@ import type {
   LotCustodyRelocationRow,
 } from '../../../domain/ports/ITaxCalculatorPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
+
+const fakeFreshnessService = {
+  ensureFresh: vi.fn().mockResolvedValue({
+    kind: 'fresh',
+    buildId: 'test-build',
+    builtAt: '2026-01-01T00:00:00Z',
+  }),
+} as unknown as FifoChainFreshnessService;
 
 /**
  * The converted read, derived from the same native events each case declares.
@@ -50,7 +59,7 @@ const settingsPort: IUserSettingsPort = {
 };
 
 const makeUseCase = (port: ITaxCalculatorPort): GetTokenHistoryUseCase =>
-  new GetTokenHistoryUseCase(port, settingsPort);
+  new GetTokenHistoryUseCase(port, settingsPort, fakeFreshnessService);
 
 function makePort(data: {
   lots?: TaxLotType[];

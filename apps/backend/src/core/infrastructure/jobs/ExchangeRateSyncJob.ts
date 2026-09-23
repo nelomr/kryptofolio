@@ -59,7 +59,7 @@ export async function startExchangeRateBootSync() {
         'FX coverage repaired on boot',
       );
       if (repair.rowsWritten > 0) {
-        await container.fifoMaterializerService.recalculate(true);
+        await container.fifoChainFreshnessService.refresh();
       }
     } catch (err) {
       bffLogger.error({ err }, 'Boot FX coverage repair failed; the daily sync continues');

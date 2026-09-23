@@ -35,6 +35,23 @@ import { DownloadTaxReportUseCase } from '@/core/application/use-cases/DownloadT
 import { ImportTransactionsUseCase } from '@/core/application/use-cases/ImportTransactionsUseCase'
 import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
 
+/**
+ * Every derived-chain read the dashboard fans out (design D10). A ledger-dirtying mutation
+ * rebuilds all of these server-side, and with an explicit 60s `staleTime` on each query
+ * (rather than Pinia Colada's 5s default) an omission here would leave the dashboard showing
+ * stale figures for up to a minute after an import or an override — invalidation is what
+ * makes "freshness by explicit invalidation, not a timer" actually true.
+ */
+function invalidatePortfolioAndMetrics(queryCache: ReturnType<typeof useQueryCache>) {
+  queryCache.invalidateQueries({ key: ['portfolio-summary'] })
+  queryCache.invalidateQueries({ key: ['crypto-metrics-kpis'] })
+  queryCache.invalidateQueries({ key: ['crypto-performance-history'] })
+  queryCache.invalidateQueries({ key: ['crypto-asset-allocation'] })
+  queryCache.invalidateQueries({ key: ['crypto-volatility-heatmap'] })
+  queryCache.invalidateQueries({ key: ['crypto-risk-metrics'] })
+  queryCache.invalidateQueries({ key: ['crypto-drawdown-curve'] })
+}
+
 // ---------------------------------------------------------------------------
 // useUploadTaxFileMutation
 // Uploads a CSV/XLSX file via the port and invalidates the transactions cache.
@@ -50,6 +67,7 @@ export function useUploadTaxFileMutation() {
     mutation: (args: { file: File, market: 'spot' | 'futures' }) => useCase.execute(args.file, args.market),
     onSuccess: (_, args) => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(args.market) })
+      invalidatePortfolioAndMetrics(queryCache)
     },
   })
 }
@@ -70,6 +88,7 @@ export function useSubmitIngestionMutation() {
       useCase.execute(args.rows, args.market, args.timezone, args.sourceProfileId),
     onSuccess: (_, args) => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY(args.market) })
+      invalidatePortfolioAndMetrics(queryCache)
     },
   })
 }
@@ -89,6 +108,7 @@ export function useImportWalletMutation() {
       useCase.execute(chain, address),
     onSuccess: () => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
+      invalidatePortfolioAndMetrics(queryCache)
     },
   })
 }
@@ -107,6 +127,7 @@ export function useSyncWeb3Mutation() {
     mutation: () => useCase.execute(),
     onSuccess: () => {
       queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY() })
+      invalidatePortfolioAndMetrics(queryCache)
     },
   })
 }
@@ -130,6 +151,7 @@ export function useDeleteTransactionsMutation() {
         queryCache.invalidateQueries({ key: ['tax-transactions', 'futures-derivatives'] })
       }
       queryCache.invalidateQueries({ key: ['tax-report'] })
+      invalidatePortfolioAndMetrics(queryCache)
     },
   })
 }
@@ -145,7 +167,7 @@ function invalidateDerivedFiscalData(queryCache: ReturnType<typeof useQueryCache
   queryCache.invalidateQueries({ key: FISCAL_INTEGRITY_KEY })
   queryCache.invalidateQueries({ key: ['tax-report'] })
   queryCache.invalidateQueries({ key: ['token-history'] })
-  queryCache.invalidateQueries({ key: ['portfolio-summary'] })
+  invalidatePortfolioAndMetrics(queryCache)
 }
 
 export function useSetManualPriceOverrideMutation() {

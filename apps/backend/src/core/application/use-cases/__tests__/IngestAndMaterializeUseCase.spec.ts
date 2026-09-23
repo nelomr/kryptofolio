@@ -3,18 +3,18 @@
  *
  * The two steps are doubled rather than run for real: what is under test is how many times each is
  * invoked and in which order, which a real DuckDB engine would make slower to observe and no more
- * convincing.
+ * convincing. Materialisation itself is owned by `FifoChainFreshnessService.refresh()` (design
+ * D4a), so the double here is the freshness service, not the materialiser directly.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IngestAndMaterializeUseCase } from '../IngestAndMaterializeUseCase.js';
 import type { CsvIngestionUseCase, IngestibleTransaction, IngestionResult } from '../CsvIngestionUseCase.js';
-import type {
-  FifoMaterializerService,
-  MaterializationSummary,
-} from '../../services/FifoMaterializerService.js';
+import type { MaterializationSummary } from '../../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
+import type { FifoBuildId } from '../../../domain/models/FifoChainState.js';
 
 const RECALC_KEY = 'needs_recalculation';
 
@@ -65,12 +65,23 @@ function ingestionDouble(result: IngestionResult) {
   return { double: { execute } as unknown as CsvIngestionUseCase, execute };
 }
 
-function materializerDouble(outcome: MaterializationSummary | Error) {
-  const recalculate = vi.fn(async () => {
+/**
+ * `refresh()` is the only entry point `IngestAndMaterializeUseCase` calls (design D4a: an explicit
+ * trigger must observe its own batch, so it never joins an in-flight `ensureFresh()`).
+ */
+function freshnessDouble(outcome: MaterializationSummary | Error) {
+  const refresh = vi.fn(async () => {
     if (outcome instanceof Error) throw outcome;
-    return outcome;
+    return {
+      chain: {
+        kind: 'fresh' as const,
+        buildId: 'test-build' as FifoBuildId,
+        builtAt: new Date().toISOString(),
+      },
+      materialization: outcome,
+    };
   });
-  return { double: { recalculate } as unknown as FifoMaterializerService, recalculate };
+  return { double: { refresh } as unknown as FifoChainFreshnessService, refresh };
 }
 
 describe('IngestAndMaterializeUseCase', () => {
@@ -83,16 +94,16 @@ describe('IngestAndMaterializeUseCase', () => {
   it('materialises exactly once for a 97-row batch', async () => {
     const rows = Array.from({ length: 97 }, (_, i) => row(`hash-${i}`, 'kraken_spot.csv'));
     const ingestion = ingestionDouble({ persisted: 97, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(ingestion.execute).toHaveBeenCalledOnce();
-    expect(materializer.recalculate).toHaveBeenCalledOnce();
+    expect(freshness.refresh).toHaveBeenCalledOnce();
     expect(result.materialized).toBe(true);
     expect(result.materialization).toEqual(SUMMARY);
     expect(result.ingestion.persisted).toBe(97);
@@ -105,43 +116,43 @@ describe('IngestAndMaterializeUseCase', () => {
       row('hash-c', 'bitunix_spot.csv'),
     ];
     const ingestion = ingestionDouble({ persisted: 3, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(ingestion.execute).toHaveBeenCalledOnce();
-    expect(materializer.recalculate).toHaveBeenCalledOnce();
+    expect(freshness.refresh).toHaveBeenCalledOnce();
   });
 
   it('never recomputes per row', async () => {
     const rows = Array.from({ length: 12 }, (_, i) => row(`hash-${i}`, 'kraken_spot.csv'));
     const ingestion = ingestionDouble({ persisted: 12, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows, market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
-    expect(materializer.recalculate).toHaveBeenCalledTimes(1);
+    expect(freshness.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('does not materialise an empty batch, and sets no pending flag', async () => {
     const ingestion = ingestionDouble({ persisted: 0, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows: [], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
-    expect(materializer.recalculate).not.toHaveBeenCalled();
+    expect(freshness.refresh).not.toHaveBeenCalled();
     expect(result.materialized).toBe(false);
     expect(result.materialization).toBeNull();
     expect(settings.writes).toEqual([]);
@@ -164,27 +175,27 @@ describe('IngestAndMaterializeUseCase', () => {
       pendingFeeReview: [],
       invariant: { kind: 'NOT_DECLARED' },
     });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
-    expect(materializer.recalculate).not.toHaveBeenCalled();
+    expect(freshness.refresh).not.toHaveBeenCalled();
     expect(result.ingestion.rejected).toHaveLength(1);
   });
 
   it('reports a failed rebuild without discarding the persisted rows', async () => {
     const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 1, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(new Error('Catalog Error: v_custody_entries'));
+    const freshness = freshnessDouble(new Error('Catalog Error: v_custody_entries'));
     await settings.setSetting(RECALC_KEY, 'true');
 
     const result = await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(result.materialized).toBe(false);
@@ -195,12 +206,12 @@ describe('IngestAndMaterializeUseCase', () => {
 
   it('leaves the pending flag set when the rebuild throws before the materialiser could clear it', async () => {
     const ingestion = ingestionDouble({ persisted: 5, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(new Error('disk I/O error'));
+    const freshness = freshnessDouble(new Error('disk I/O error'));
 
     await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(await settings.getSetting(RECALC_KEY)).toBe('true');
@@ -208,12 +219,12 @@ describe('IngestAndMaterializeUseCase', () => {
 
   it('carries the pending-review count through to its own result', async () => {
     const ingestion = ingestionDouble({ persisted: 30, rejected: [], unresolvedFiat: 30, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } });
-    const materializer = materializerDouble(SUMMARY);
+    const freshness = freshnessDouble(SUMMARY);
 
     const result = await new IngestAndMaterializeUseCase(
       ingestion.double,
-      materializer.double,
       settings,
+      freshness.double,
     ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(result.materialization?.pendingReview).toBe(30);
@@ -226,15 +237,18 @@ describe('IngestAndMaterializeUseCase', () => {
       order.push('ingest');
       return { persisted: 1, rejected: [], unresolvedFiat: 0, pendingFeeReview: [], invariant: { kind: 'NOT_DECLARED' } };
     });
-    const recalculate = vi.fn(async () => {
+    const refresh = vi.fn(async () => {
       order.push('materialise');
-      return SUMMARY;
+      return {
+        chain: { kind: 'fresh' as const, buildId: 'test-build' as FifoBuildId, builtAt: new Date().toISOString() },
+        materialization: SUMMARY,
+      };
     });
 
     await new IngestAndMaterializeUseCase(
       { execute: ingestionExecute } as unknown as CsvIngestionUseCase,
-      { recalculate } as unknown as FifoMaterializerService,
       settings,
+      { refresh } as unknown as FifoChainFreshnessService,
     ).execute({ rows: [row('hash-a', 'kraken_spot.csv')], market: 'spot', sourceProfileId: 'kraken-spot', timezone: 'UTC' });
 
     expect(order).toEqual(['ingest', 'materialise']);

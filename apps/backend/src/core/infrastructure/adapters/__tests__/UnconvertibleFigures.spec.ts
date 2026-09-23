@@ -198,6 +198,7 @@ async function createFixture(seed: (s: Seeder) => void): Promise<Fixture> {
   process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
   const duckDb = new DuckDbAdapter();
   await duckDb.initialize(sqlitePath);
+  await duckDb.rebuildDerivedChain();
 
   for (const p of prices) {
     await duckDb.execute(
@@ -205,6 +206,7 @@ async function createFixture(seed: (s: Seeder) => void): Promise<Fixture> {
        VALUES ('${p.symbol}', ${p.close}, DATE '${p.date}', '${p.currency}')`,
     );
   }
+  await duckDb.rebuildDerivedChain();
 
   cleanups.push(() => {
     if (fs.existsSync(sqlitePath)) fs.unlinkSync(sqlitePath);

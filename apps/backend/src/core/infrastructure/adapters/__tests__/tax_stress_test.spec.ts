@@ -27,6 +27,7 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     adapter = new DuckDbTaxCalculatorAdapter(duckDb);
   });
@@ -67,6 +68,7 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
       insertStmt.run(id, hash, timestamp);
     }
 
+    await duckDb.rebuildDerivedChain();
     const { lots, events } = await adapter.calculateLotsAndEvents();
 
     expect(lots).toHaveLength(1);
@@ -110,6 +112,7 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     // Seed BNB price at transfer time in DuckDB's _price_seed table
     await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('BNB', 300.0, '2023-01-02', 'USD')");
 
+    await duckDb.rebuildDerivedChain();
     const { lots, events } = await adapter.calculateLotsAndEvents();
 
     expect(events).toHaveLength(1);
@@ -313,6 +316,7 @@ describe('Tax Engine — Stress & Edge Case Tests', () => {
     await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.33, '2023-01-15', 'USD')");
     await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('HBAR', 0.34, '2023-01-16', 'USD')");
 
+    await duckDb.rebuildDerivedChain();
     // Calculate lots and events
     const { lots, events } = await adapter.calculateLotsAndEvents();
 

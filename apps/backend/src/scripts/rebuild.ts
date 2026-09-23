@@ -10,7 +10,7 @@ async function run() {
   container.setDuckDbAdapter(duckDb);
 
   console.log('Starting full FIFO rebuild...');
-  const result = await container.fifoMaterializerService.recalculate();
+  const result = await container.fifoChainFreshnessService.refresh();
   console.log('Rebuild complete. Result:', JSON.stringify(result, null, 2));
   
   process.exit(0);

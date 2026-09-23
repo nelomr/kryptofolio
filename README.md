@@ -16,7 +16,7 @@
 
 - **📊 Institutional Analytics & Time Series Engine:** DuckDB-powered OLAP queries for daily valuation, 30d annualized volatility, ATH drawdowns, and risk metrics (Sharpe Ratio, Alpha, Beta, Win Rate, Best/Worst performing asset).
 - **🏛️ Strict Domain Isolation & Precise Financial Precision:** Pure domain architecture using `PreciseAmount` branded string value objects (`string & { __brand: 'PreciseAmount' }`), isolating domain logic from external math libraries and guaranteeing zero decimal truncation.
-- **🔄 Synchronized Portfolio Materializer & Dynamic Base Currency:** Real-time FIFO recalculation and materialization across SQLite transaction ledgers and DuckDB analytical views, with dynamic base currency configuration from user settings.
+- **🔄 Synchronized Portfolio Materializer & Dynamic Base Currency:** On-demand FIFO recalculation coalesced by `FifoChainFreshnessService`, which rebuilds six materialized DuckDB relations and reconciles the SQLite transaction ledger from them as one pipeline, with dynamic base currency configuration from user settings.
 - **⚖️ Global FIFO Tax Engine with Custody Traceability:** Global per-asset FIFO for taxation (legally required for Spanish IRPF) is computed entirely separately from a double-entry custody ledger that tracks which account physically holds each lot. Wallet-to-wallet transfers never generate a taxable event and never reorder the FIFO queue. See [FIFO Tax Engine & Custody Ledger](docs/fifo-tax-engine.md).
 - **🧹 Data Ingestion Wizard with Source Format Profiles:** A multi-step interface to upload CSV/XLSX files, detect the source's own fee/format conventions (Kraken, Bitvavo, Bit2Me, Bitunix, Tangem, or a generic fallback) from its header row, perform manual adjustments with alphabetically sorted options, validate Spot vs. Futures constraints, and push valid data to the backend through the same pure ingestion pipeline used for re-ingestion.
 - **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to inspect transaction logs, identify gaps (missing cost bases or negative balances), and present clean data for AEAT-compliant reporting.
@@ -41,7 +41,7 @@ The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decoup
 - `apps/backend/`: The Hono backend service — handles API routes, encrypted secrets vault, and the dual-database analytical engine. Cleanly separated into `app.ts` (routing) and `index.ts` (orchestration). Exposes an `AppType` for end-to-end Hono RPC type safety.
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
-- `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL schema files. It encapsulates the core architecture: a local-first **SQLite Ledger** (`kryptofolio_ledger.db`) for OLTP persistence, and an ephemeral **DuckDB Engine** for high-performance OLAP federated queries.
+- `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL schema files. It encapsulates the core architecture: a local-first **SQLite Ledger** (`kryptofolio_ledger.db`) for OLTP persistence, and a **DuckDB Engine** (file-backed, pooled connections) for high-performance OLAP federated queries.
 - `docs/`: Technical documentation covering:
   - [System Architecture](docs/architecture.md)
   - [Backend — Hono API Server](docs/backend.md)

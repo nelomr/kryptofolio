@@ -139,7 +139,7 @@ flowchart TD
 Kryptofolio operates as a **local-first, single-user** application. To balance the need for reliable data entry (OLTP) and heavy mathematical calculations for taxes (OLAP), the system implements a Dual-Database strategy:
 
 1. **Transactional Ledger (SQLite):** Acts as the single source of truth for the user's data (Transactions, Accounts, Vault). To avoid IEEE-754 floating-point errors, all financial values are stored as `TEXT` and handled in TypeScript via `decimal.js`.
-2. **Analytical Engine (DuckDB):** Operates entirely in-memory as a high-performance query engine. It establishes a zero-copy connection to the SQLite database (`ATTACH ... TYPE SQLITE`) and executes complex vectorized calculations (e.g., FIFO queues via Window Functions) on the fly, casting TEXT to `DECIMAL(38,18)`.
+2. **Analytical Engine (DuckDB):** A file-backed instance (`fiscal.duckdb`) accessed through a fixed-size connection pool (`DUCKDB_POOL_SIZE`, default 4). A single zero-copy `ATTACH ... TYPE SQLITE` to the ledger is shared by every pooled connection, and complex vectorized calculations (e.g., FIFO queues via Window Functions) cast TEXT to `DECIMAL(38,18)`. The six derived FIFO relations are materialized into physical tables and rebuilt on demand — see [FIFO Tax Engine](fifo-tax-engine.md#duckdb-read-side-views) — rather than recomputed on every query.
 3. **Federated Historical Storage (Parquet):** Time-series data like daily price ticks are stored in Hive-partitioned Parquet files on disk. DuckDB seamlessly federates this data (`LEFT JOIN`) with the SQLite ledger to compute dynamic metrics like TTWROR and unrealized PnL.
 
 ```mermaid

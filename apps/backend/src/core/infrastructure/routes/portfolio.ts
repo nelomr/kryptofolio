@@ -55,8 +55,9 @@ export function createPortfolioApi(container: DIContainer) {
       zValidator('json', z.object({}).optional()),
       async (c) => {
         try {
-          // Forced: this endpoint is the retry, so it must not consult the pending marker it clears.
-          const materialization = await container.fifoMaterializerService.recalculate(true);
+          // Always the full pipeline — rebuild, then reconcile — so the retry can never reconcile
+          // against a chain that does not reflect the ledger (design D4a).
+          const { materialization } = await container.fifoChainFreshnessService.refresh();
 
           const body = rebuildOutcomeSchema.parse({
             materialized: true,

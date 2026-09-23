@@ -8,8 +8,8 @@ export class GetPortfolioSummaryUseCase {
     this.portfolioPort = portfolioPort
   }
 
-  async execute(): Promise<PortfolioSummaryEntity> {
-    return await this.portfolioPort.getSummary()
+  async execute(currency?: string): Promise<PortfolioSummaryEntity> {
+    return await this.portfolioPort.getSummary(currency)
   }
 }
 

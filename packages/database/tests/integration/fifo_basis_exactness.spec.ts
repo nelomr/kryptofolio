@@ -63,6 +63,7 @@ beforeAll(async () => {
   process.env.DUCKDB_PATH = ':memory:';
   duckDb = new DuckDbAdapter();
   await duckDb.initialize(sqlitePath);
+  await duckDb.rebuildDerivedChain();
 });
 
 afterAll(() => {

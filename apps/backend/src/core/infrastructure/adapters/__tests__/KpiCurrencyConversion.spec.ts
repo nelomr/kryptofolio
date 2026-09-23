@@ -125,12 +125,14 @@ describe('KPI display-currency conversion', () => {
     process.env.PARQUET_DATA_PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'prices-'));
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     await duckDb.execute(`
       INSERT INTO _price_seed (date, asset_id, symbol, open, high, low, close, volume, currency, year)
       VALUES (DATE '${LATEST_ON}', 'HELD', 'HELD', ${HELD_PRICE_EUR}, ${HELD_PRICE_EUR},
               ${HELD_PRICE_EUR}, ${HELD_PRICE_EUR}, 0, 'EUR', 2025);
     `);
+    await duckDb.rebuildDerivedChain();
 
     metrics = new DuckDbMetricsAdapter(duckDb);
   });
@@ -205,5 +207,52 @@ describe('KPI display-currency conversion', () => {
       );
     expect(usd.totalRoiFiat, 'no totalRoiFiat returned').toBeDefined();
     expectMoney(usd.totalRoiFiat!, expectedUsdRoi, 'USD totalRoiFiat');
+  });
+
+  /**
+   * Design section 9: `getKpis` used to pin its shared sources into session-scoped TEMP
+   * TABLEs, which made two concurrent calls over the same connection a currency-mixing race
+   * — one call's `CREATE OR REPLACE TEMP TABLE kpi_valuation` for USD could be read by the
+   * other's EUR query mid-flight. With no shared session state left, firing both currencies
+   * concurrently must be indistinguishable from firing them sequentially.
+   */
+  it('answers concurrent EUR and USD reads each in exactly its own currency, with no cross-contamination', async () => {
+    const [sequentialEur, sequentialUsd] = [await metrics.getKpis('EUR'), await metrics.getKpis('USD')];
+    const [concurrentEur, concurrentUsd] = await Promise.all([
+      metrics.getKpis('EUR'),
+      metrics.getKpis('USD'),
+    ]);
+
+    expectMoney(
+      concurrentEur.totalCostBasis,
+      new Decimal(sequentialEur.totalCostBasis),
+      'concurrent EUR totalCostBasis matches sequential EUR',
+    );
+    expectMoney(
+      concurrentEur.totalEquity,
+      new Decimal(sequentialEur.totalEquity),
+      'concurrent EUR totalEquity matches sequential EUR',
+    );
+    expectMoney(
+      concurrentUsd.totalCostBasis,
+      new Decimal(sequentialUsd.totalCostBasis),
+      'concurrent USD totalCostBasis matches sequential USD',
+    );
+    expectMoney(
+      concurrentUsd.totalEquity,
+      new Decimal(sequentialUsd.totalEquity),
+      'concurrent USD totalEquity matches sequential USD',
+    );
+
+    // Neither figure leaked into the other's currency: a EUR figure wearing a USD label (or
+    // vice versa) would show up as the concurrent USD read equaling the sequential EUR one.
+    expect(
+      new Decimal(concurrentUsd.totalCostBasis).equals(sequentialEur.totalCostBasis),
+      'concurrent USD totalCostBasis must not equal the EUR figure',
+    ).toBe(false);
+    expect(
+      new Decimal(concurrentEur.totalCostBasis).equals(sequentialUsd.totalCostBasis),
+      'concurrent EUR totalCostBasis must not equal the USD figure',
+    ).toBe(false);
   });
 });

@@ -111,6 +111,7 @@ async function buildFixture(): Promise<Fixture> {
        VALUES ('${symbol}', ${close}, DATE '${date}', '${currency}')`,
     );
   }
+  await duckDb.rebuildDerivedChain();
 
   return {
     duckDb,

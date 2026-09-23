@@ -53,8 +53,8 @@ function parseOrFail<T>(
 }
 
 export class RestCryptoAdapter implements ICryptoPortfolioPort {
-  async getSummary(): Promise<PortfolioSummaryEntity> {
-    const res = await bffClient.api.portfolio.summary.$get()
+  async getSummary(currency?: string): Promise<PortfolioSummaryEntity> {
+    const res = await bffClient.api.portfolio.summary.$get({ query: currency ? { currency } : {} })
     const rawData = await res.json()
     const dto = parseOrFail(ExternalPortfolioSummarySchema, rawData, 'getSummary')
 

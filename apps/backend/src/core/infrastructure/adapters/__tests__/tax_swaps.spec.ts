@@ -27,6 +27,7 @@ describe('Vectorized Spot FIFO Engine', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     adapter = new DuckDbTaxCalculatorAdapter(duckDb);
   });
@@ -70,6 +71,7 @@ describe('Vectorized Spot FIFO Engine', () => {
     // Seed BNB price at swap time in DuckDB's _price_seed table
     await duckDb.execute("INSERT INTO _price_seed (symbol, close, date, currency) VALUES ('BNB', 300.0, '2023-01-03', 'USD')");
 
+    await duckDb.rebuildDerivedChain();
     // Calculate lots and events
     const { lots, events } = await adapter.calculateLotsAndEvents();
 

@@ -1,12 +1,65 @@
-# Specifications: Pinia Colada Migration
+# Portfolio Colada Specification
+
+## Purpose
+
+Fetching and mutating portfolio and metrics server data exclusively through Pinia Colada, with currency-aware query keys and explicit staleness so navigation never re-fires the dashboard's request fan-out.
 
 ## Requirements
-1. **Data Fetching via Colada**: `useQuery` must be used to fetch the Portfolio Summary. The query must automatically handle `isLoading`, `error`, and caching.
-2. **Mutations via Colada**: Rebuilding the index (`triggerRebuild`) must be handled by `useMutation`.
-3. **Cache Invalidation**: Upon a successful rebuild mutation, the portfolio summary cache must be automatically invalidated so the `useQuery` refetches the fresh data without manual reloading.
-4. **Hexagonal Architecture Compliance**: Data fetching logic still relies on the injected `ICryptoPortfolioPort` adapter. `useQuery` simply wraps the repository methods.
-5. **No Regression**: The UI must behave identically. The loading states, rebuild spin animations, and data displays must map directly to Colada's `isLoading`/`isPending` states.
 
-## Scenarios
-- **Initial Load**: User opens the dashboard. `useQuery` detects empty cache, sets `isLoading = true`, calls the repository, populates cache, and sets `isLoading = false`.
-- **Rebuild Index**: User clicks "Sincronizar Portfolio". `useMutation` executes. While executing, the UI shows the spinner (derived from `isPending`). When done, Colada invalidates the `['portfolio-summary']` query key, triggering a background refetch. UI updates reactively.
+### Requirement: Server Data Is Fetched Through Pinia Colada
+
+All server data SHALL be fetched with Pinia Colada `useQuery` and mutated with `useMutation`, wrapping the injected port adapters. No global Pinia store SHALL hold server data, and the data-fetching composables SHALL call port methods rather than an HTTP client directly.
+
+#### Scenario: Portfolio summary is fetched by a query
+
+- **WHEN** the dashboard mounts with an empty cache
+- **THEN** `useQuery` MUST set `isLoading` to `true`, call the injected `ICryptoPortfolioPort`, populate the cache, and set `isLoading` to `false`
+- **AND** the composable MUST NOT import an HTTP client or a store holding the same server data
+
+#### Scenario: Rebuild is a mutation that invalidates its queries
+
+- **WHEN** the user triggers the portfolio rebuild
+- **THEN** it MUST run through `useMutation`, with the spinner derived from `isPending`
+- **AND** on success the affected query keys MUST be invalidated so their queries refetch without a manual reload
+
+### Requirement: The Display Currency Is Part of Every Currency-Dependent Query Key
+
+Any query whose response depends on the display currency SHALL include that currency as its own segment of the query key — at minimum `crypto-metrics-kpis`, `portfolio-summary`, `crypto-asset-allocation` and `crypto-risk-metrics`. A key that omits it is a cache bug: switching currency serves the previous currency's cached payload.
+
+#### Scenario: Switching currency refetches instead of serving the previous payload
+
+- **WHEN** the display currency changes from EUR to USD
+- **THEN** each currency-dependent query MUST resolve to a different key and issue a request for the new currency
+- **AND** the rendered figures MUST NOT be the EUR payload
+
+#### Scenario: Both currencies stay cached independently
+
+- **WHEN** the user switches to USD and back to EUR
+- **THEN** the EUR entry MUST still be addressable under its own key
+- **AND** neither entry MUST have overwritten the other
+
+#### Scenario: Every currency-dependent key is audited
+
+- **WHEN** the query keys declared in `useCryptoMetricsQueries.ts` and `usePortfolioQueries.ts` are enumerated
+- **THEN** every query whose request carries a currency parameter MUST include that currency in its key
+
+### Requirement: Every Server-Data Query Declares an Explicit `staleTime`
+
+Every `useQuery` in `useCryptoMetricsQueries.ts` and `usePortfolioQueries.ts` SHALL declare an explicit `staleTime` (60 s) rather than inheriting Pinia Colada's 5 s default. Freshness SHALL come from explicit invalidation by the mutations that dirty the ledger — ingestion and override edits — not from a short default silently re-firing the dashboard's request fan-out.
+
+#### Scenario: Navigation does not re-fire the fan-out
+
+- **WHEN** the user navigates away from the dashboard and back within the declared `staleTime`
+- **THEN** the cached data MUST be served
+- **AND** no new request MUST be issued for those queries
+
+#### Scenario: A ledger-dirtying mutation invalidates the affected queries
+
+- **WHEN** an ingestion or an override edit completes successfully
+- **THEN** the portfolio and metrics query keys MUST be invalidated
+- **AND** the next render MUST reflect the rebuilt figures
+
+#### Scenario: No query relies on the default
+
+- **WHEN** the `useQuery` calls in the two composable files are enumerated
+- **THEN** each MUST pass an explicit `staleTime`

@@ -6,6 +6,7 @@ import type {
 } from '../../domain/ports/IPortfolioAnalyticsPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import type { IMetricsPort } from '../../domain/ports/IMetricsPort.js';
+import type { FifoChainFreshnessService } from '../services/FifoChainFreshnessService.js';
 
 export interface GetPortfolioSummaryRequest {
   accountId?: string;
@@ -88,13 +89,16 @@ export class GetPortfolioSummaryUseCase {
   private readonly portfolioAnalyticsPort: IPortfolioAnalyticsPort;
   private readonly userSettingsPort?: IUserSettingsPort;
   private readonly metricsPort?: IMetricsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
   constructor(
     portfolioAnalyticsPort: IPortfolioAnalyticsPort,
+    freshnessService: FifoChainFreshnessService,
     userSettingsPort?: IUserSettingsPort,
     metricsPort?: IMetricsPort,
   ) {
     this.portfolioAnalyticsPort = portfolioAnalyticsPort;
+    this.freshnessService = freshnessService;
     this.userSettingsPort = userSettingsPort;
     this.metricsPort = metricsPort;
   }
@@ -102,6 +106,8 @@ export class GetPortfolioSummaryUseCase {
   public async execute(
     req: GetPortfolioSummaryRequest = {},
   ): Promise<PortfolioSummaryResponse> {
+    await this.freshnessService.ensureFresh();
+
     // 1. Impure Effect: Resolve target currency
     let currency = req.targetCurrency;
     if (!currency && this.userSettingsPort) {

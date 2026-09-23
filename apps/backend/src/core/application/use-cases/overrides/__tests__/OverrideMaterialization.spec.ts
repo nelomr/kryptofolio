@@ -15,6 +15,8 @@ import { createAccountId, createTransactionIdHash } from '@kryptofolio/shared-ty
 import { SQLiteLedgerAdapter } from '../../../../infrastructure/adapters/SQLiteLedgerAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../../infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 import { FifoMaterializerService } from '../../../services/FifoMaterializerService.js';
+import { FifoChainFreshnessService } from '../../../services/FifoChainFreshnessService.js';
+import { DuckDbDerivedChainAdapter } from '../../../../infrastructure/adapters/DuckDbDerivedChainAdapter.js';
 import { SetManualPriceOverrideUseCase } from '../SetManualPriceOverrideUseCase.js';
 import { RemoveManualPriceOverrideUseCase } from '../RemoveManualPriceOverrideUseCase.js';
 import { SetTransferDestinationUseCase } from '../SetTransferDestinationUseCase.js';
@@ -90,6 +92,7 @@ describe('manual overrides against the real FIFO engine', () => {
   let duckDb: DuckDbAdapter;
   let materializer: FifoMaterializerService;
   let settings: IUserSettingsPort;
+  let freshnessService: FifoChainFreshnessService;
 
   const stakingLot = () =>
     sqliteDb
@@ -127,6 +130,7 @@ describe('manual overrides against the real FIFO engine', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     let needsRecalculation = 'true';
     settings = {
@@ -140,7 +144,12 @@ describe('manual overrides against the real FIFO engine', () => {
     materializer = new FifoMaterializerService(
       ledger,
       new DuckDbTaxCalculatorAdapter(duckDb),
+    );
+
+    freshnessService = new FifoChainFreshnessService(
       settings,
+      new DuckDbDerivedChainAdapter(duckDb),
+      materializer,
     );
   });
 
@@ -151,16 +160,16 @@ describe('manual overrides against the real FIFO engine', () => {
 
   it('flags the unpriced receipt before any value is declared', async () => {
     // Without this the next test could pass against a lot that was never flagged.
-    await materializer.recalculate(true);
+    await freshnessService.refresh();
 
     expect(stakingLot()?.quality_flag).toBe('MISSING_PRICE');
     expect(stakingLot()?.unit_cost_fiat).toBe('0');
   });
 
   it('takes the declared price into the cost basis and clears the flag', async () => {
-    const before = await materializer.recalculate(true);
+    const { materialization: before } = await freshnessService.refresh();
 
-    const result = await new SetManualPriceOverrideUseCase(ledger, materializer, settings).execute([
+    const result = await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
       {
         idHash: createTransactionIdHash(STAKING_HASH),
         priceFiat: toPreciseAmount('0.42'),
@@ -180,7 +189,7 @@ describe('manual overrides against the real FIFO engine', () => {
   });
 
   it('reverts to the flag when the declaration is removed', async () => {
-    const set = new SetManualPriceOverrideUseCase(ledger, materializer, settings);
+    const set = new SetManualPriceOverrideUseCase(ledger, settings, freshnessService);
     await set.execute([
       {
         idHash: createTransactionIdHash(STAKING_HASH),
@@ -190,7 +199,7 @@ describe('manual overrides against the real FIFO engine', () => {
     ]);
     expect(stakingLot()?.quality_flag).toBeNull();
 
-    await new RemoveManualPriceOverrideUseCase(ledger, materializer, settings).execute([
+    await new RemoveManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
       createTransactionIdHash(STAKING_HASH),
     ]);
 
@@ -201,7 +210,7 @@ describe('manual overrides against the real FIFO engine', () => {
   });
 
   it('leaves the override table untouched across a rebuild', async () => {
-    await new SetManualPriceOverrideUseCase(ledger, materializer, settings).execute([
+    await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
       {
         idHash: createTransactionIdHash(STAKING_HASH),
         priceFiat: toPreciseAmount('0.42'),
@@ -210,7 +219,7 @@ describe('manual overrides against the real FIFO engine', () => {
     ]);
     const before = overrideRows();
 
-    await materializer.recalculate(true);
+    await freshnessService.refresh();
 
     expect(overrideRows()).toEqual(before);
     expect(before).toHaveLength(1);
@@ -219,7 +228,7 @@ describe('manual overrides against the real FIFO engine', () => {
   it('keeps applying after the same source row is written again', async () => {
     // Re-ingestion replaces the transaction row but not its identity, which is what the override
     // keys on. A surrogate-id key would have been orphaned here.
-    await new SetManualPriceOverrideUseCase(ledger, materializer, settings).execute([
+    await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
       {
         idHash: createTransactionIdHash(STAKING_HASH),
         priceFiat: toPreciseAmount('0.42'),
@@ -243,7 +252,7 @@ describe('manual overrides against the real FIFO engine', () => {
       status: 'COMPLETED',
     });
 
-    await materializer.recalculate(true);
+    await freshnessService.refresh();
 
     expect(overrideRows()).toHaveLength(1);
     const lot = sqliteDb
@@ -257,7 +266,7 @@ describe('manual overrides against the real FIFO engine', () => {
   });
 
   it('moves the custody credit onto the declared destination account', async () => {
-    await materializer.recalculate(true);
+    await freshnessService.refresh();
 
     const syntheticBefore = sqliteDb
       .prepare(
@@ -267,7 +276,7 @@ describe('manual overrides against the real FIFO engine', () => {
       .get() as { total: number | null };
     expect(syntheticBefore.total).toBeGreaterThan(0);
 
-    await new SetTransferDestinationUseCase(ledger, materializer, settings).execute([
+    await new SetTransferDestinationUseCase(ledger, settings, freshnessService).execute([
       {
         idHash: createTransactionIdHash(WITHDRAWAL_HASH),
         counterpartyAccountId: createAccountId(LEDGER_WALLET),
@@ -293,7 +302,7 @@ describe('manual overrides against the real FIFO engine', () => {
 
   it('refuses a destination the ledger has never heard of, leaving the table empty', async () => {
     await expect(
-      new SetTransferDestinationUseCase(ledger, materializer, settings).execute([
+      new SetTransferDestinationUseCase(ledger, settings, freshnessService).execute([
         {
           idHash: createTransactionIdHash(WITHDRAWAL_HASH),
           counterpartyAccountId: createAccountId('acc-does-not-exist'),

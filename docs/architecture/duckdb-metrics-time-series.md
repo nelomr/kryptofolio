@@ -8,7 +8,7 @@ This document details the architecture, SQL view definitions, domain isolation p
 
 Kryptofolio uses a **Dual-Database OLTP/OLAP Pattern**:
 - **SQLite Ledger (`kryptofolio_ledger.db`)**: Transactional truth (OLTP). Holds raw spot/futures transactions, accounts, assets, and persisted tax lots.
-- **DuckDB Engine**: Ephemeral analytical engine (OLAP). Attaches to SQLite in zero-copy mode (`ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE);`) to calculate time-series metrics, portfolio valuation, drawdowns, and institutional risk metrics dynamically using SQL Window Functions.
+- **DuckDB Engine**: File-backed analytical engine (OLAP), accessed through a fixed-size connection pool. Attaches to SQLite in zero-copy mode (`ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE);`) to calculate time-series metrics, portfolio valuation, drawdowns, and institutional risk metrics dynamically using SQL Window Functions.
 
 ```mermaid
 flowchart TD
@@ -58,7 +58,16 @@ flowchart TD
 
 ## 2. Core SQL Analytical Views
 
-The analytical engine creates 4 foundational vectorized views inside DuckDB:
+The analytical engine creates 4 foundational vectorized views inside DuckDB. Of these,
+`v_portfolio_daily_valuation` and its own dependency `v_daily_running_balances` (not diagrammed
+above) are **materialized**, not recomputed on every read: each is declared as `v_<name>__def`,
+populated into a `m_<name>` table by `DuckDbAdapter.rebuildDerivedChain()`, and the public
+`v_<name>` name is a thin view over that table. The rebuild runs only when the FIFO chain is stale,
+coalesced by `FifoChainFreshnessService` — see
+[`docs/fifo-tax-engine.md`](../fifo-tax-engine.md#duckdb-read-side-views) for the full six-relation
+materialized chain. `v_portfolio_returns_volatility`, `v_portfolio_ath_drawdown`, and
+`v_portfolio_alpha_beta` below stay plain views, recomputed on every read from the materialized
+valuation table.
 
 ### 2.1. Daily Portfolio Valuation (`v_portfolio_daily_valuation`)
 Computes running balances per asset and evaluates daily portfolio value using ASOF join logic with historical prices.

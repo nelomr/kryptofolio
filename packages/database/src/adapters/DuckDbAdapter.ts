@@ -26,9 +26,24 @@ import path from 'node:path';
  */
 export class DuckDbAdapter implements IAnalyticalDatabasePort {
   private instance: DuckDBInstance | null = null;
+  /**
+   * The bootstrap connection used by `initialize()` to run its one-time DDL/schema/view
+   * setup. Set only for the duration of `initialize()` — folded into the pool (as its
+   * first connection) before `initialize()` returns, so no method reaches for it directly
+   * afterward. `debugHasLongLivedConnection()` is the litmus test for that invariant.
+   */
   private connection: DuckDBConnection | null = null;
   private dbPath: string;
   private custodyRelations: Promise<void> | null = null;
+
+  // -----------------------------------------------------------------------
+  //  Fixed-size connection pool over the single DuckDBInstance (design D7)
+  // -----------------------------------------------------------------------
+  private readonly maxPoolSize: number;
+  private readonly idleConnections: DuckDBConnection[] = [];
+  private readonly waiters: Array<(connection: DuckDBConnection) => void> = [];
+  private openConnectionCount = 0;
+  private peakPoolSize = 0;
 
   private static readonly CUSTODY_RELATION_MENTION =
     /\b(v_custody_movements|v_lot_custody_timeline|v_lot_custody_allocation|v_custody_entries|v_lot_current_location|v_custody_balances|v_fifo_data_quality|duckdb_views)\b/i;
@@ -36,6 +51,113 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
   constructor() {
     const isMockMode = process.env.MOCK_MODE === 'true';
     this.dbPath = isMockMode ? ':memory:' : resolveAnalyticalDbPath();
+
+    const configuredPoolSize = Number.parseInt(process.env.DUCKDB_POOL_SIZE ?? '', 10);
+    this.maxPoolSize =
+      Number.isInteger(configuredPoolSize) && configuredPoolSize > 0 ? configuredPoolSize : 4;
+  }
+
+  /**
+   * Reserved home for future per-connection session setup. Empty today: `INSTALL/LOAD
+   * sqlite` and `ATTACH ledger` are instance/catalogue level and are visible to every
+   * connection opened on the same `DuckDBInstance` after the bootstrap connection ran
+   * them once (design D7, measurement 1.5) — there is no per-connection session state left
+   * to replay. Called once per newly created pooled connection, never on idle-connection
+   * reuse.
+   */
+  private prepareConnection(_connection: DuckDBConnection): void {
+    // Intentionally empty — see doc comment above.
+  }
+
+  /**
+   * Acquires a connection from the pool: an idle one if available, a freshly created one
+   * if the pool has not yet reached `maxPoolSize`, or a queued FIFO slot otherwise. Every
+   * caller MUST release the connection in a `finally` via `releaseConnection`.
+   */
+  private async acquireConnection(): Promise<DuckDBConnection> {
+    const idle = this.idleConnections.pop();
+    if (idle) return idle;
+
+    if (this.openConnectionCount < this.maxPoolSize) {
+      if (!this.instance) {
+        throw new Error('[DuckDbAdapter] Not initialized — call initialize() first.');
+      }
+      // Reserve the slot synchronously, BEFORE awaiting `connect()` — otherwise concurrent
+      // acquirers all pass this check before any of them increments the counter, and the
+      // pool opens more than `maxPoolSize` connections.
+      this.openConnectionCount += 1;
+      this.peakPoolSize = Math.max(this.peakPoolSize, this.openConnectionCount);
+      try {
+        const connection = await this.instance.connect();
+        this.prepareConnection(connection);
+        return connection;
+      } catch (err) {
+        this.openConnectionCount -= 1;
+        throw err;
+      }
+    }
+
+    return new Promise<DuckDBConnection>((resolve) => {
+      this.waiters.push(resolve);
+    });
+  }
+
+  /** Hands a connection to the longest-waiting queued acquirer, or returns it to the idle pool. */
+  private releaseConnection(connection: DuckDBConnection): void {
+    const nextWaiter = this.waiters.shift();
+    if (nextWaiter) {
+      nextWaiter(connection);
+      return;
+    }
+    this.idleConnections.push(connection);
+  }
+
+  /** Test-only: the highest number of connections the pool has ever had open simultaneously. */
+  public debugPeakPoolSize(): number {
+    return this.peakPoolSize;
+  }
+
+  /**
+   * Test-only: acquires a pooled connection, runs `fn` with it, and releases it in a
+   * `finally` — a thin public wrapper around `acquireConnection`/`releaseConnection` so
+   * tests can drive the pool's FIFO ordering directly.
+   */
+  public async withPooledConnectionForTest<T>(
+    fn: (connection: DuckDBConnection) => Promise<T>,
+  ): Promise<T> {
+    const connection = await this.acquireConnection();
+    try {
+      return await fn(connection);
+    } finally {
+      this.releaseConnection(connection);
+    }
+  }
+
+  /**
+   * Test-only litmus check for the whole refactor: after `initialize()` completes, nothing
+   * should be holding a single connection that later serves arbitrary queries.
+   */
+  public debugHasLongLivedConnection(): boolean {
+    return this.connection !== null;
+  }
+
+  /**
+   * Publishes the three-object shape (design D1) for one derived relation: `m_<name>` is
+   * (re)created as an empty placeholder — dropped first so a schema from a previous
+   * `__def` version can never linger — then `v_<name>` is published over it. DuckDB
+   * refuses `CREATE VIEW ... AS SELECT * FROM m_x` while `m_x` does not exist, which is
+   * why the placeholder must exist, even empty, before the public view can be declared.
+   * Called once per relation, immediately after its `__def`, in dependency order — a
+   * downstream `__def` reads its upstream's *public* name, so that name must already
+   * resolve by the time the downstream `__def` is created.
+   */
+  private async publishDerivedRelation(name: string): Promise<void> {
+    if (!this.connection) return;
+    await this.connection.run(`DROP TABLE IF EXISTS m_${name};`);
+    await this.connection.run(
+      `CREATE TABLE m_${name} AS SELECT * FROM v_${name}__def WHERE FALSE;`,
+    );
+    await this.connection.run(`CREATE OR REPLACE VIEW v_${name} AS SELECT * FROM m_${name};`);
   }
 
   public async initialize(ledgerDbPath?: string): Promise<void> {
@@ -43,6 +165,12 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       this.custodyRelations = null;
       this.instance = await DuckDBInstance.create(this.dbPath);
       this.connection = await this.instance.connect();
+
+      // The analytical file outlives the process, and every `m_<name>` below is reset to an
+      // empty placeholder. A stamp left by the previous process would vouch for rows that are
+      // gone, so the chain would report fresh while serving nothing; dropping it makes the
+      // first read after boot rebuild instead.
+      await this.connection.run('DROP TABLE IF EXISTS m_fifo_build;');
 
       // Load the sqlite scanner extension
       await this.connection.run('INSTALL sqlite;');
@@ -142,7 +270,11 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       }
 
       await this.connection.run(`
-        CREATE TEMP TABLE IF NOT EXISTS _price_seed (
+        -- Not TEMP: a TEMP table is connection-scoped in DuckDB, and historical_prices
+        -- must resolve identically from any pooled connection (design D7) -- a caller
+        -- seeding a price on one connection and reading historical_prices from another
+        -- must see it, not a missing-catalogue-object error.
+        CREATE TABLE IF NOT EXISTS _price_seed (
           date DATE,
           asset_id VARCHAR,
           symbol VARCHAR,
@@ -354,7 +486,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       // A single override row is keyed by transaction identity alone, so it is applied to whichever
       // asset the branch is valuing — the acquired asset, the disposed asset, or the fee asset.
       await this.connection.run(`
-        CREATE OR REPLACE VIEW v_flattened_fifo_events AS
+        CREATE OR REPLACE VIEW v_flattened_fifo_events__def AS
         -- MATERIALIZED is not decoration. Every branch below reads this CTE, and each read that is
         -- inlined instead re-scans the attached SQLite ledger through the sqlite extension. Measured
         -- on an empty ledger, inlining cost roughly 2.3x the previous engine's query time; pinning
@@ -722,6 +854,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             FROM fee_priced f
         );
       `);
+      await this.publishDerivedRelation('flattened_fifo_events');
 
       // Create v_acquisitions, v_disposals, and v_fifo_matches views
       await this.connection.run(`
@@ -778,7 +911,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       // failure this prevents was measured: a −1,6724 €/XRP basis against a zero-priced transfer
       // disposal reported +299,46 € of profit.
       await this.connection.run(`
-        CREATE OR REPLACE VIEW v_fifo_matches AS
+        CREATE OR REPLACE VIEW v_fifo_matches__def AS
         WITH matched_raw AS (
             SELECT
                 md5(a.tx_id || '_' || d.tx_id || '_' || a.asset_id) AS id,
@@ -861,9 +994,10 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             acquisition_date
         FROM matched_raw;
       `);
+      await this.publishDerivedRelation('fifo_matches');
 
       await this.connection.run(`
-        CREATE OR REPLACE VIEW v_calculated_tax_lots AS
+        CREATE OR REPLACE VIEW v_calculated_tax_lots__def AS
         WITH lot_base AS (
             SELECT
                 md5(a.id_hash || '_' || a.asset_id) AS id,
@@ -894,48 +1028,95 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 GROUP BY 1, 2
             ) m ON a.tx_id = m.acquisition_tx_id AND a.asset_id = m.asset_id
             LEFT JOIN ledger.accounts acc ON a.account_id = acc.id
+        ),
+        fifo_lots AS (
+            SELECT
+                id,
+                spot_transaction_id,
+                asset_id,
+                symbol,
+                account_id,
+                CAST(original_qty_num AS VARCHAR) AS original_qty,
+                CAST(original_qty_num - matched_qty AS VARCHAR) AS remaining_qty,
+                CASE
+                    WHEN raw_unit_cost_fiat < CAST(0 AS DECIMAL(38,18)) THEN 'NEGATIVE_COST_BASIS'
+                    WHEN currency_mismatch THEN 'CURRENCY_MISMATCH'
+                    WHEN missing_fx_rate THEN 'MISSING_FX_RATE'
+                    WHEN rounds_to_zero THEN 'MISSING_PRICE'
+                    WHEN raw_unit_cost_fiat IS NULL THEN 'MISSING_PRICE'
+                END AS quality_flag,
+                -- tax_lots.unit_cost_fiat is NOT NULL with a non-negative GLOB CHECK, so an unresolved
+                -- or defective basis cannot be carried in the number itself. quality_flag is what
+                -- distinguishes "genuinely free" from "we do not know" — reading the figure without it
+                -- is the mistake this column exists to prevent.
+                CASE WHEN quality_flag IS NULL THEN CAST(raw_unit_cost_fiat AS VARCHAR) ELSE '0' END AS unit_cost_fiat,
+                CASE WHEN quality_flag IS NULL THEN CAST(raw_total_cost_fiat AS VARCHAR) ELSE '0' END AS total_cost_fiat,
+                fiat_currency,
+                acquisition_timestamp,
+                exchange_location,
+                source_tx_id,
+                value_provenance,
+                -- NULL, not 0, when no conversion took place: null >= 0 is true in JavaScript, so a
+                -- zero here would read to a consumer as a rate that was actually applied.
+                CAST(fx_rate AS VARCHAR) AS fx_rate,
+                fx_rate_date,
+                CASE
+                    WHEN original_qty_num - matched_qty <= CAST(0.0000000000000001 AS DECIMAL(38,18)) THEN 'CLOSED'
+                    WHEN matched_qty > CAST(0 AS DECIMAL(38,18)) THEN 'PARTIAL'
+                    ELSE 'OPEN'
+                END AS status
+            FROM lot_base
+        ),
+        -- v_external_tax_lots (design D5): a ledger.tax_lots row whose originating transaction
+        -- never produced a v_flattened_fifo_events row (a custody movement — DEPOSIT, WITHDRAWAL,
+        -- TRANSFER_IN/OUT, MIGRATION_SWAP — none of which open an acquisition) is still a real open
+        -- position. Declared here, unioned into the definition, so it is computed once per rebuild
+        -- rather than once per query (it used to be duplicated inline in DuckDbMetricsAdapter).
+        -- spot_transaction_id IS NULL never holds today (the column is NOT NULL in every SQLite
+        -- migration to date) -- kept for schema forward-compatibility; the NOT IN arm is the one
+        -- that matters in practice.
+        external_lots AS (
+            SELECT
+                tl.id,
+                tl.spot_transaction_id,
+                tl.asset_id,
+                COALESCE(ast.symbol, tl.asset_id) AS symbol,
+                tl.account_id,
+                tl.original_qty,
+                tl.remaining_qty,
+                tl.quality_flag,
+                tl.unit_cost_fiat,
+                tl.total_cost_fiat,
+                tl.fiat_currency,
+                tl.acquisition_timestamp,
+                tl.exchange_location,
+                tl.source_tx_id,
+                'MANUAL' AS value_provenance,
+                CAST(NULL AS VARCHAR) AS fx_rate,
+                CAST(NULL AS VARCHAR) AS fx_rate_date,
+                tl.status
+            FROM ledger.tax_lots tl
+            LEFT JOIN ledger.assets ast ON tl.asset_id = ast.id OR tl.asset_id = ast.symbol
+            LEFT JOIN ledger.spot_transactions st ON tl.spot_transaction_id = st.id
+            WHERE tl.deleted_at IS NULL
+              -- A soft-deleted source transaction must retire its lot, not resurrect it here: its
+              -- tx_id also fails to appear in v_flattened_fifo_events (which filters deleted_at IS
+              -- NULL), which would otherwise satisfy the NOT IN below for the wrong reason.
+              AND (st.id IS NULL OR st.deleted_at IS NULL)
+              AND (
+                tl.spot_transaction_id IS NULL
+                OR tl.spot_transaction_id NOT IN (SELECT tx_id FROM v_flattened_fifo_events)
+              )
         )
-        SELECT
-            id,
-            spot_transaction_id,
-            asset_id,
-            symbol,
-            account_id,
-            CAST(original_qty_num AS VARCHAR) AS original_qty,
-            CAST(original_qty_num - matched_qty AS VARCHAR) AS remaining_qty,
-            CASE
-                WHEN raw_unit_cost_fiat < CAST(0 AS DECIMAL(38,18)) THEN 'NEGATIVE_COST_BASIS'
-                WHEN currency_mismatch THEN 'CURRENCY_MISMATCH'
-                WHEN missing_fx_rate THEN 'MISSING_FX_RATE'
-                WHEN rounds_to_zero THEN 'MISSING_PRICE'
-                WHEN raw_unit_cost_fiat IS NULL THEN 'MISSING_PRICE'
-            END AS quality_flag,
-            -- tax_lots.unit_cost_fiat is NOT NULL with a non-negative GLOB CHECK, so an unresolved
-            -- or defective basis cannot be carried in the number itself. quality_flag is what
-            -- distinguishes "genuinely free" from "we do not know" — reading the figure without it
-            -- is the mistake this column exists to prevent.
-            CASE WHEN quality_flag IS NULL THEN CAST(raw_unit_cost_fiat AS VARCHAR) ELSE '0' END AS unit_cost_fiat,
-            CASE WHEN quality_flag IS NULL THEN CAST(raw_total_cost_fiat AS VARCHAR) ELSE '0' END AS total_cost_fiat,
-            fiat_currency,
-            acquisition_timestamp,
-            exchange_location,
-            source_tx_id,
-            value_provenance,
-            -- NULL, not 0, when no conversion took place: null >= 0 is true in JavaScript, so a
-            -- zero here would read to a consumer as a rate that was actually applied.
-            CAST(fx_rate AS VARCHAR) AS fx_rate,
-            fx_rate_date,
-            CASE
-                WHEN original_qty_num - matched_qty <= CAST(0.0000000000000001 AS DECIMAL(38,18)) THEN 'CLOSED'
-                WHEN matched_qty > CAST(0 AS DECIMAL(38,18)) THEN 'PARTIAL'
-                ELSE 'OPEN'
-            END AS status
-        FROM lot_base
+        SELECT * FROM fifo_lots
+        UNION ALL
+        SELECT * FROM external_lots
         ORDER BY acquisition_timestamp, source_tx_id;
       `);
+      await this.publishDerivedRelation('calculated_tax_lots');
 
       await this.connection.run(`
-        CREATE OR REPLACE VIEW v_calculated_lot_history_events AS
+        CREATE OR REPLACE VIEW v_calculated_lot_history_events__def AS
         SELECT
             m.id,
             md5(a.id_hash || '_' || a.asset_id) AS tax_lot_id,
@@ -966,6 +1147,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         LEFT JOIN ledger.accounts acc ON m.account_id = acc.id
         ORDER BY m.disposal_date, m.id;
       `);
+      await this.publishDerivedRelation('calculated_lot_history_events');
 
       // -----------------------------------------------------------------------
       //  Time-Series & Risk Metric Views
@@ -974,7 +1156,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       // Gap-less daily running balances per asset using GENERATE_SERIES & Window SUM
       await this.connection.run(`
 
-        CREATE OR REPLACE VIEW v_daily_running_balances AS
+        CREATE OR REPLACE VIEW v_daily_running_balances__def AS
         WITH daily_deltas AS (
             SELECT
                 asset_id,
@@ -1033,6 +1215,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         FROM asset_grid g
         LEFT JOIN daily_net n ON g.asset_id = n.asset_id AND g.date = n.date;
       `);
+      await this.publishDerivedRelation('daily_running_balances');
 
       // Daily portfolio valuation via ASOF JOIN against historical_prices & exchange_rates
       await this.connection.run(`
@@ -1060,7 +1243,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         -- by seeding the FX ledger. One column carrying both sent a reader with full rate
         -- coverage and one unpriced asset to the rate ledger. This is the same ordering the
         -- FIFO path already keeps between MISSING_PRICE and MISSING_FX_RATE.
-        CREATE OR REPLACE VIEW v_portfolio_daily_valuation AS
+        CREATE OR REPLACE VIEW v_portfolio_daily_valuation__def AS
         SELECT
             b.date,
             b.asset_id,
@@ -1091,6 +1274,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
          AND hp.currency <> 'EUR'
          AND fx.rate_date <= b.date;
       `);
+      await this.publishDerivedRelation('portfolio_daily_valuation');
 
       // Rolling ATH & Drawdown % view
       await this.connection.run(`
@@ -1215,11 +1399,161 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             AS DECIMAL(38,18)) AS alpha
         FROM stats;
       `);
+
+      // Bootstrap is done. Fold this connection into the pool as its first entry instead of
+      // wasting it — but from here on it is indistinguishable from any other pooled
+      // connection, and nothing keeps a direct reference to it (design D7).
+      const bootstrapConnection = this.connection;
+      this.connection = null;
+      if (bootstrapConnection) {
+        this.openConnectionCount += 1;
+        this.peakPoolSize = Math.max(this.peakPoolSize, this.openConnectionCount);
+        this.idleConnections.push(bootstrapConnection);
+      }
     } catch (err) {
       throw new Error(
         `[Database] Critical failure initializing DuckDB: ${err}`,
       );
     }
+  }
+
+  private static readonly DERIVED_RELATIONS = [
+    'flattened_fifo_events',
+    'fifo_matches',
+    'calculated_tax_lots',
+    'calculated_lot_history_events',
+    'daily_running_balances',
+    'portfolio_daily_valuation',
+  ] as const;
+
+  /**
+   * Exposes the single `DuckDBInstance` so a caller can open an additional connection —
+   * needed to observe rebuild isolation from outside the adapter's own connection, and the
+   * foundation the pool (design D7) is built over.
+   */
+  public getInstance(): DuckDBInstance {
+    if (!this.instance) {
+      throw new Error('[DuckDbAdapter] Not initialized — call initialize() first.');
+    }
+    return this.instance;
+  }
+
+  /**
+   * Throws if `m_<name>`'s column shape (name, order, or type) has drifted from
+   * `v_<name>__def`'s (catches a hypothetical CTAS type-inference divergence), and,
+   * independently, if any column at all materialized as `DOUBLE`/`FLOAT`/`REAL` (design
+   * D3). The second check cannot be reduced to the first: CTAS always adopts its SELECT's
+   * own types, so a `__def` that itself declares a monetary column `DOUBLE` would describe
+   * identically on both sides of a same-vs-definition comparison. Money is never a float
+   * anywhere in this chain (rule 4), so a bare float surviving into any materialized
+   * relation is the anomaly, whichever side introduced it — the rebuild rolls back rather
+   * than let it commit.
+   */
+  private async assertSchemaMatchesDefinition(
+    connection: DuckDBConnection,
+    name: string,
+  ): Promise<void> {
+    // Queried on the SAME connection `rebuildDerivedChain` holds its transaction on — a
+    // second, pool-acquired connection would not see the uncommitted `m_<name>` this
+    // transaction just (re)created, and with a pool of size 1 acquiring a second one here
+    // would deadlock.
+    const [actual, expected] = await Promise.all([
+      this.queryManyOnConnection<{ column_name: string; column_type: string }>(
+        connection,
+        `DESCRIBE m_${name};`,
+      ),
+      this.queryManyOnConnection<{ column_name: string; column_type: string }>(
+        connection,
+        `DESCRIBE v_${name}__def;`,
+      ),
+    ]);
+    const shape = (rows: { column_name: string; column_type: string }[]) =>
+      rows.map((r) => `${r.column_name}:${r.column_type}`).join(',');
+    if (shape(actual) !== shape(expected)) {
+      throw new Error(
+        `[DuckDbAdapter] Rebuild aborted: m_${name}'s schema (${shape(actual)}) no longer ` +
+          `matches v_${name}__def's (${shape(expected)}) — a DECIMAL column may have been ` +
+          'widened to DOUBLE/FLOAT/REAL, or the definition changed shape.',
+      );
+    }
+
+    const floatColumns = actual.filter((r) => /^(DOUBLE|FLOAT|REAL)\b/i.test(r.column_type));
+    if (floatColumns.length > 0) {
+      throw new Error(
+        `[DuckDbAdapter] Rebuild aborted: m_${name} has ${floatColumns
+          .map((r) => `${r.column_name} (${r.column_type})`)
+          .join(', ')} typed as a float — money is never a float (rule 4); the definition ` +
+          'must CAST it to DECIMAL.',
+      );
+    }
+  }
+
+  /**
+   * Rebuilds all six derived FIFO relations as one explicit transaction (design D2): each
+   * `m_<name>` is replaced from its `__def` in dependency order, its schema is asserted
+   * against that `__def` before anything commits (D3), and the whole chain either commits
+   * together or leaves the previous, already-committed chain completely untouched — a
+   * reader on another connection never observes a half-built chain.
+   *
+   * `beforeCommit` is a testing seam only: it runs after every `m_<name>` has been
+   * replaced and schema-asserted, but before `COMMIT`, so a test can deterministically
+   * observe the still-uncommitted state from a second connection. Production callers never
+   * pass it.
+   */
+  public async rebuildDerivedChain(options?: {
+    readonly beforeCommit?: () => Promise<void>;
+  }): Promise<{ readonly buildId: string; readonly builtAt: string }> {
+    // One connection held for the whole BEGIN...COMMIT/ROLLBACK transaction, never
+    // re-acquired per statement — a transaction is connection-scoped in DuckDB.
+    const connection = await this.acquireConnection();
+    try {
+      await connection.run('BEGIN TRANSACTION;');
+      try {
+        for (const name of DuckDbAdapter.DERIVED_RELATIONS) {
+          await connection.run(
+            `CREATE OR REPLACE TABLE m_${name} AS SELECT * FROM v_${name}__def;`,
+          );
+          await this.assertSchemaMatchesDefinition(connection, name);
+        }
+
+        if (options?.beforeCommit) {
+          await options.beforeCommit();
+        }
+
+        const buildId = crypto.randomUUID();
+        const builtAt = new Date().toISOString();
+        await connection.run(`
+        CREATE OR REPLACE TABLE m_fifo_build AS
+        SELECT '${buildId}' AS build_id, CAST('${builtAt}' AS TIMESTAMP) AS built_at;
+      `);
+
+        await connection.run('COMMIT;');
+        return { buildId, builtAt };
+      } catch (err) {
+        await connection.run('ROLLBACK;');
+        throw err;
+      }
+    } finally {
+      this.releaseConnection(connection);
+    }
+  }
+
+  /** The most recent rebuild's stamp, or `null` if `rebuildDerivedChain` has never run. */
+  public async describeDerivedChain(): Promise<{
+    readonly buildId: string;
+    readonly builtAt: string;
+  } | null> {
+    this.ensureInstance();
+    const tables = await this.queryMany<{ table_name: string }>(
+      "SELECT table_name FROM duckdb_tables() WHERE schema_name = 'main' AND table_name = 'm_fifo_build';",
+    );
+    if (tables.length === 0) return null;
+
+    const rows = await this.queryMany<{ build_id: string; built_at: string }>(
+      'SELECT build_id, CAST(built_at AS VARCHAR) AS built_at FROM m_fifo_build;',
+    );
+    if (rows.length === 0) return null;
+    return { buildId: rows[0]!.build_id, builtAt: rows[0]!.built_at };
   }
 
   /**
@@ -1345,8 +1679,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
    * paid by every caller, including the majority that never read a custody relation and whose test
    * budget it was consuming. Binding on demand moves that cost to the callers that ask for it.
    */
-  private async createCustodyRelations(): Promise<void> {
-    this.ensureConnection();
+  private async createCustodyRelations(connection: DuckDBConnection): Promise<void> {
     // -----------------------------------------------------------------------
     //  Double-entry custody
     // -----------------------------------------------------------------------
@@ -1359,7 +1692,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // The counterparty resolves in one order: a user-declared destination, then a counterparty
     // the ledger itself records through `transfer_group_id`, then the synthetic per-asset
     // account. Nothing is inferred from how close two rows are in time or in amount.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_custody_movements AS
     WITH fiat_assets AS MATERIALIZED (
         SELECT id FROM ledger.assets WHERE is_fiat = 1
@@ -1452,7 +1785,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // each has to see what the previous one left behind. Originations and consumptions are pure
     // additions to and subtractions from inventory, so they are folded into the step of the
     // movement they precede.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_lot_custody_timeline AS
     -- Every upstream relation is read exactly once. Without the MATERIALIZED pins each of the
     -- four branches below re-derives v_flattened_fifo_events through the attached SQLite ledger,
@@ -1565,7 +1898,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // This ordering is per (account, asset) and has no fiscal effect whatsoever: it decides which
     // lot's quantity moved, never which lot a sale consumes. Nothing here emits an event, changes
     // a remaining quantity or a status, or reorders the global per-asset taxation queue.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_lot_custody_allocation AS
     WITH RECURSIVE
     timeline AS MATERIALIZED (
@@ -1737,7 +2070,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     //
     // Emitted at 12 decimal places because `lot_custody_entries.qty_delta` is TEXT behind a GLOB
     // that admits no exponent form.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_custody_entries AS
     WITH allocated AS MATERIALIZED (
         SELECT * FROM v_lot_custody_allocation
@@ -1769,7 +2102,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // where it was disposed of, and shifted by every allocated movement. The lot row itself is
     // untouched — `tax_lots.exchange_location` keeps reporting the acquiring venue no matter how
     // many times the quantity has moved.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_lot_current_location AS
     WITH allocated AS MATERIALIZED (
         SELECT tax_lot_id, asset_id, from_account_id, to_account_id, qty
@@ -1814,7 +2147,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // holds, and what custody can attribute to actual lots. They diverge exactly when a movement
     // could not be backed by any lot held there, or when a disposal exceeded everything ever
     // acquired — which is what makes the difference worth reporting rather than absorbing.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_custody_balances AS
     WITH movements AS MATERIALIZED (
         SELECT asset_id, from_account_id, to_account_id, qty FROM v_custody_movements
@@ -1880,7 +2213,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     // more was moved or disposed of than ever arrived, so a holding exists whose cost basis was
     // never established — the fiscally dangerous direction, and the reason this is high severity
     // wherever it occurs rather than only on the synthetic account.
-    await this.connection!.run(`
+    await connection.run(`
     CREATE OR REPLACE VIEW v_fifo_data_quality AS
     WITH fee_scale AS (
         SELECT
@@ -1977,22 +2310,54 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
    * whole of it, and a hygiene assertion that silently stopped covering these definitions would be
    * worse than the bootstrap cost it saves.
    */
-  private async ensureCustodyRelations(sql: string): Promise<void> {
+  private async ensureCustodyRelations(connection: DuckDBConnection, sql: string): Promise<void> {
     if (!DuckDbAdapter.CUSTODY_RELATION_MENTION.test(sql)) return;
     if (!this.custodyRelations) {
-      this.custodyRelations = this.createCustodyRelations();
+      // Memoized regardless of which caller's connection triggers it: the custody chain is
+      // views (catalogue objects shared by every connection on this instance), so this is one
+      // lazy bootstrap for the whole pool, not one per connection.
+      this.custodyRelations = this.createCustodyRelations(connection);
     }
     await this.custodyRelations;
   }
 
-  public async execute(sql: string, params: unknown[] = []): Promise<void> {
-    this.ensureConnection();
-    await this.ensureCustodyRelations(sql);
-    const stmt = await this.connection!.prepare(sql);
+  /** Runs `sql` on an already-acquired `connection` — the shared core `execute` delegates to. */
+  private async runOnConnection(
+    connection: DuckDBConnection,
+    sql: string,
+    params: unknown[],
+    callerLabel: string,
+  ): Promise<void> {
+    const stmt = await connection.prepare(sql);
     if (params.length > 0) {
-      stmt.bind(toDuckDbParams(params, 'DuckDbAdapter.execute'));
+      stmt.bind(toDuckDbParams(params, callerLabel));
     }
     await stmt.run();
+  }
+
+  /** Runs `sql` on an already-acquired `connection` and reads all rows back — the shared core `queryMany` delegates to. */
+  private async queryManyOnConnection<T = Record<string, unknown>>(
+    connection: DuckDBConnection,
+    sql: string,
+    params: unknown[] = [],
+  ): Promise<T[]> {
+    const stmt = await connection.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(toDuckDbParams(params, 'DuckDbAdapter.queryMany'));
+    }
+    const reader = await stmt.runAndReadAll();
+    return reader.getRowObjects() as unknown as T[];
+  }
+
+  public async execute(sql: string, params: unknown[] = []): Promise<void> {
+    this.ensureInstance();
+    const connection = await this.acquireConnection();
+    try {
+      await this.ensureCustodyRelations(connection, sql);
+      await this.runOnConnection(connection, sql, params, 'DuckDbAdapter.execute');
+    } finally {
+      this.releaseConnection(connection);
+    }
   }
 
   public async queryOne<T = Record<string, unknown>>(
@@ -2007,60 +2372,69 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
     sql: string,
     params: unknown[] = [],
   ): Promise<T[]> {
-    this.ensureConnection();
-    await this.ensureCustodyRelations(sql);
-    const stmt = await this.connection!.prepare(sql);
-    if (params.length > 0) {
-      stmt.bind(toDuckDbParams(params, 'DuckDbAdapter.queryMany'));
+    this.ensureInstance();
+    const connection = await this.acquireConnection();
+    try {
+      await this.ensureCustodyRelations(connection, sql);
+      return await this.queryManyOnConnection<T>(connection, sql, params);
+    } finally {
+      this.releaseConnection(connection);
     }
-    const reader = await stmt.runAndReadAll();
-    return reader.getRowObjects() as unknown as T[];
   }
 
   public async bulkInsert<T extends Record<string, unknown>>(
     table: string,
     data: T[],
   ): Promise<void> {
-    this.ensureConnection();
+    this.ensureInstance();
     if (data.length === 0) return;
 
-    // Fetch the table columns in their schema-defined order to ensure correct appending sequence
-    const columnsInfo = await this.queryMany<{ column_name: string }>(
-      'SELECT column_name FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position',
-      [table],
-    );
-
-    if (columnsInfo.length === 0) {
-      throw new Error(
-        `[DuckDbAdapter] bulkInsert failed: Table '${table}' does not exist or has no columns.`,
-      );
-    }
-
-    const columnNames = columnsInfo.map((c) => c.column_name);
-    const appender = await this.connection!.createAppender(table);
-
+    // One connection held for the whole Appender lifecycle, released even if the insert
+    // throws — including the column lookup below, which shares the same connection rather
+    // than acquiring a second one (a pool of size 1 would otherwise deadlock).
+    const connection = await this.acquireConnection();
     try {
-      for (const row of data) {
-        for (const colName of columnNames) {
-          const val = row[colName];
-          if (val === undefined || val === null) {
-            appender.appendNull();
-          } else {
-            appender.appendValue(
-              toDuckDbValue(val, 'DuckDbAdapter.bulkInsert', colName),
-            );
-          }
-        }
-        appender.endRow();
+      // Fetch the table columns in their schema-defined order to ensure correct appending sequence
+      const columnsInfo = await this.queryManyOnConnection<{ column_name: string }>(
+        connection,
+        'SELECT column_name FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position',
+        [table],
+      );
+
+      if (columnsInfo.length === 0) {
+        throw new Error(
+          `[DuckDbAdapter] bulkInsert failed: Table '${table}' does not exist or has no columns.`,
+        );
       }
-      appender.flushSync();
+
+      const columnNames = columnsInfo.map((c) => c.column_name);
+      const appender = await connection.createAppender(table);
+
+      try {
+        for (const row of data) {
+          for (const colName of columnNames) {
+            const val = row[colName];
+            if (val === undefined || val === null) {
+              appender.appendNull();
+            } else {
+              appender.appendValue(
+                toDuckDbValue(val, 'DuckDbAdapter.bulkInsert', colName),
+              );
+            }
+          }
+          appender.endRow();
+        }
+        appender.flushSync();
+      } finally {
+        appender.closeSync();
+      }
     } finally {
-      appender.closeSync();
+      this.releaseConnection(connection);
     }
   }
 
-  private ensureConnection(): void {
-    if (!this.connection) {
+  private ensureInstance(): void {
+    if (!this.instance) {
       throw new Error(
         '[DuckDbAdapter] Connection not initialized. Did you call initialize()?',
       );

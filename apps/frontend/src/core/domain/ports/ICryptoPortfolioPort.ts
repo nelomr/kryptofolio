@@ -22,7 +22,7 @@ export interface ICryptoPortfolioPort {
   /**
    * Fetch the full portfolio summary including metrics and all holdings.
    */
-  getSummary(): Promise<PortfolioSummaryEntity>
+  getSummary(currency?: string): Promise<PortfolioSummaryEntity>
 
   /**
    * Fetch detailed FIFO lot information for a specific asset.

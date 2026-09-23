@@ -180,7 +180,7 @@ export class DuckDbPortfolioAnalyticsAdapter implements IPortfolioAnalyticsPort 
               -- figure that some of its parts are not.
               MIN(l.fiat_currency) AS fiat_currency,
               MIN(CAST(l.display_rate AS VARCHAR)) AS basis_rate,
-              TO_JSON(ARRAY_AGG(DISTINCT COALESCE(acc.name, l.exchange_location, 'Unknown'))) AS portfolio_locations
+              TO_JSON(ARRAY_AGG(DISTINCT COALESCE(acc.name, l.exchange_location, 'Unknown') ORDER BY COALESCE(acc.name, l.exchange_location, 'Unknown'))) AS portfolio_locations
           FROM ledger.assets a
           JOIN lots_valued l ON (a.id = l.asset_id OR a.symbol = l.asset_id)
           LEFT JOIN ledger.accounts acc ON l.account_id = acc.id
@@ -234,6 +234,7 @@ export class DuckDbPortfolioAnalyticsAdapter implements IPortfolioAnalyticsPort 
       LEFT JOIN latest_fx pfx
         ON pfx.pair = lp.currency || '/' || $1
        AND lp.currency <> $1
+      ORDER BY h.asset_id
     `;
 
     const results = await this.db.queryMany<RawHoldingsRow>(sql, params);

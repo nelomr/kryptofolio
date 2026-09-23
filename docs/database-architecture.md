@@ -150,7 +150,16 @@ END;
 
 ## 5. Exposing Data: Analytical Views
 
-Since the application uses **DuckDB** for heavy OLAP analytics, we expose the SQLite data securely using Views. 
+Since the application uses **DuckDB** for heavy OLAP analytics, we expose the SQLite data securely using Views.
+
+DuckDB access itself goes through a fixed-size connection pool over one `DuckDBInstance`
+(`DUCKDB_POOL_SIZE`, default 4, in `packages/database/src/adapters/DuckDbAdapter.ts`) rather than a
+single shared connection — concurrent reads (e.g. several dashboard metrics fetched at once) borrow
+a pooled connection each and release it when done, instead of serializing behind one connection.
+
+DuckDB holds nothing SQLite doesn't already have: every view and every materialized `m_*` table
+below is re-derivable from `ledger.*` from scratch. Deleting the analytical `.duckdb` file is a valid
+recovery step — the next rebuild reconstructs the full chain, materialized tables included.
 
 These `v_active_*` views automatically filter out soft-deleted records and alias columns for ergonomic querying, acting as the boundary layer between the OLTP and OLAP systems.
 
@@ -172,7 +181,7 @@ These raw views are the foundation for the advanced analytical pipeline executed
 
 ### 5.1. Vectorized Spot FIFO Engine
 DuckDB takes the raw transactions and passes them through a sophisticated flattening process:
-- **`v_flattened_fifo_events`**: Splits single Swap transactions into completely independent Acquisition and Disposal legs, converting fees into independent crypto disposals. It strictly ignores transfers between own wallets (`TRANSFER_IN`, `TRANSFER_OUT`) as taxable events, except for their gas fees.
+- **`v_flattened_fifo_events`** (materialized): Splits single Swap transactions into completely independent Acquisition and Disposal legs, converting fees into independent crypto disposals. It strictly ignores transfers between own wallets (`TRANSFER_IN`, `TRANSFER_OUT`) as taxable events, except for their gas fees. Its logic lives in `v_flattened_fifo_events__def`; the public `v_flattened_fifo_events` name reads from a `m_flattened_fifo_events` table, rebuilt on demand (not on every read) whenever `FifoChainFreshnessService` finds the chain stale. See [`docs/fifo-tax-engine.md`](fifo-tax-engine.md#duckdb-read-side-views) for the full materialized-chain diagram.
 - **Window Functions**: We rely on DuckDB's native window functions (`SUM() OVER (PARTITION BY asset_id ORDER BY timestamp)`) to align and consume lots chronologically without explicit `while` loops, boosting throughput immensely compared to Node.js loops.
 
 ### 5.2. Real-Time PnL & ASOF Joins

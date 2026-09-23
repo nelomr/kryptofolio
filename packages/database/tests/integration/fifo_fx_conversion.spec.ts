@@ -177,6 +177,8 @@ async function harness(spec: HarnessSpec): Promise<Harness> {
     );
   }
 
+  await duckDb.rebuildDerivedChain();
+
   const h: Harness = {
     duckDb,
     lots: () =>

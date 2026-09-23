@@ -75,11 +75,13 @@ describe('DuckDbMetricsAdapter', () => {
 
   /**
    * Three open lots: one trustworthy, two carrying a valuation defect. The lots hang off crypto
-   * DEPOSIT transactions on purpose — those generate no FIFO event, so the adapter's dual-source
-   * `UNION` falls through to the materialised `ledger.tax_lots` rows, which is the branch whose
-   * aggregation ignored `quality_flag` entirely.
+   * DEPOSIT transactions on purpose — those generate no FIFO event, so they only reach
+   * `v_calculated_tax_lots` through `v_external_tax_lots` (design D5/section 6), which is the
+   * branch whose aggregation used to ignore `quality_flag` entirely before this fixture existed.
+   * `v_external_tax_lots` is unioned into `v_calculated_tax_lots__def`, so a rebuild is required
+   * after seeding for it to be reflected — there is no more per-query live union to fall back on.
    */
-  const seedCleanAndFlaggedLots = (): void => {
+  const seedCleanAndFlaggedLots = async (): Promise<void> => {
     sqliteDb.exec(`
       INSERT INTO assets (id, symbol) VALUES ('BNB', 'BNB');
       INSERT INTO accounts (id, name, type) VALUES ('acc-1', 'Binance', 'exchange');
@@ -106,13 +108,15 @@ describe('DuckDbMetricsAdapter', () => {
   };
 
   it('keeps a flagged cost basis out of totalCostBasis', async () => {
-    seedCleanAndFlaggedLots();
+    await seedCleanAndFlaggedLots();
+    await duckDb.rebuildDerivedChain();
     const kpis = await adapter.getKpis('EUR');
     expect(Number(kpis.totalCostBasis)).toBe(100);
   });
 
   it('reports the flagged lots separately rather than dropping them silently', async () => {
-    seedCleanAndFlaggedLots();
+    await seedCleanAndFlaggedLots();
+    await duckDb.rebuildDerivedChain();
     const kpis = await adapter.getKpis('EUR');
     expect(kpis.excludedFlaggedLots).toBe(2);
   });
@@ -122,11 +126,12 @@ describe('DuckDbMetricsAdapter', () => {
     expect(kpis.excludedFlaggedLots).toBe(0);
   });
 
-  it('reads the ledger again on a second call rather than a cached snapshot', async () => {
+  it('reflects newly-seeded lots after an explicit rebuild, not a stale snapshot', async () => {
     const before = await adapter.getKpis('EUR');
     expect(before.excludedFlaggedLots).toBe(0);
 
-    seedCleanAndFlaggedLots();
+    await seedCleanAndFlaggedLots();
+    await duckDb.rebuildDerivedChain();
     const after = await adapter.getKpis('EUR');
 
     expect(after.excludedFlaggedLots).toBe(2);

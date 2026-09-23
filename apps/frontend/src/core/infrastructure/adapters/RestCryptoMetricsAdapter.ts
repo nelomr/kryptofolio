@@ -41,27 +41,29 @@ const RANGE_DAYS_MAP: Record<TimeRange, string> = {
 }
 
 export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
-  async getKpis(): Promise<CryptoKpis> {
-    const res = await bffClient.api.metrics.kpis.$get()
+  async getKpis(currency?: string): Promise<CryptoKpis> {
+    const res = await bffClient.api.metrics.kpis.$get({ query: currency ? { currency } : {} })
     const rawData = await res.json()
     return parseOrFail(CryptoKpisSchema, rawData, 'getKpis')
   }
 
-  async getPerformanceHistory(range: TimeRange): Promise<{ history: PerformancePoint[]; metrics: PerformanceMetrics }> {
+  async getPerformanceHistory(range: TimeRange, currency?: string): Promise<{ history: PerformancePoint[]; metrics: PerformanceMetrics }> {
     const days = RANGE_DAYS_MAP[range] || '30'
-    const res = await bffClient.api.metrics.performance.$get({ query: { days } })
+    const res = await bffClient.api.metrics.performance.$get({ query: currency ? { days, currency } : { days } })
     const rawData = await res.json()
     return parseOrFail(PerformanceHistoryResponseSchema, rawData, 'getPerformanceHistory')
   }
 
-  async getAssetAllocation(): Promise<{ items: AssetAllocationItem[]; totalAssets: number; hhiScore: number }> {
-    const res = await bffClient.api.metrics.allocation.$get()
+  async getAssetAllocation(currency?: string): Promise<{ items: AssetAllocationItem[]; totalAssets: number; hhiScore: number }> {
+    const res = await bffClient.api.metrics.allocation.$get({ query: currency ? { currency } : {} })
     const rawData = await res.json()
     return parseOrFail(AssetAllocationResponseSchema, rawData, 'getAssetAllocation')
   }
 
-  async getVolatilityHeatmap(year: number): Promise<VolatilityHeatmapEntity> {
-    const res = await bffClient.api.metrics.heatmap.$get({ query: { year: year.toString() } })
+  async getVolatilityHeatmap(year: number, currency?: string): Promise<VolatilityHeatmapEntity> {
+    const res = await bffClient.api.metrics.heatmap.$get({
+      query: currency ? { year: year.toString(), currency } : { year: year.toString() },
+    })
     const rawData = await res.json()
     const days = parseOrFail(VolatilityHeatmapResponseSchema, rawData, 'getVolatilityHeatmap')
     
@@ -138,15 +140,15 @@ export class RestCryptoMetricsAdapter implements ICryptoMetricsPort {
     };
   }
 
-  async getRiskMetrics(): Promise<RiskMetrics> {
-    const res = await bffClient.api.metrics.risk.$get()
+  async getRiskMetrics(currency?: string): Promise<RiskMetrics> {
+    const res = await bffClient.api.metrics.risk.$get({ query: currency ? { currency } : {} })
     const rawData = await res.json()
     return parseOrFail(RiskMetricsSchema, rawData, 'getRiskMetrics')
   }
 
-  async getDrawdownCurve(range: TimeRange): Promise<DrawdownPoint[]> {
+  async getDrawdownCurve(range: TimeRange, currency?: string): Promise<DrawdownPoint[]> {
     const days = RANGE_DAYS_MAP[range] || '30'
-    const res = await bffClient.api.metrics.drawdown.$get({ query: { days } })
+    const res = await bffClient.api.metrics.drawdown.$get({ query: currency ? { days, currency } : { days } })
     const rawData = await res.json()
     return parseOrFail(DrawdownCurveResponseSchema, rawData, 'getDrawdownCurve')
   }

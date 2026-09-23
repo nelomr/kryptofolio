@@ -108,12 +108,23 @@ Retrieves tax lots (FIFO purchases) and historical balance updates for a specifi
 #### `POST /api/portfolio/rebuild`
 Triggers the backend to re-process the FIFO allocation queues and synchronize the analytical engine.
 
-Internally, this endpoint fetches the `FifoMaterializerService` from the Dependency Injection container and calls `rebuildAll()`. This executes a full materialisation cycle: reading all immutable raw transactions from the SQLite ledger (`spot_transactions`), executing the FIFO accounting models, rebuilding the double-entry custody ledger (`lot_custody_entries`) inside DuckDB, and safely resetting the `needs_recalculation` flag in `user_settings` back to `false`.
+Internally, this endpoint fetches `FifoChainFreshnessService` from the Dependency Injection container and calls `refresh()`, which always runs the full derived-state pipeline regardless of the pending-recalculation flag: rebuild the DuckDB FIFO chain, reconcile the SQLite derived tables (tax lots, lot history events, and the double-entry custody ledger `lot_custody_entries`) against it via `FifoMaterializerService`, then clear `needs_recalculation` in `user_settings` — in that order, so the reconciliation never runs against a stale or just-reset chain.
 
 - **Request Body:** `{}`
 - **Response Format:** `200 OK`
   ```json
-  { "success": true }
+  {
+    "materialized": true,
+    "materialization": {
+      "taxLots": { "inserted": 0, "updated": 3, "retired": 0, "reactivated": 0 },
+      "lotHistoryEvents": { "inserted": 0, "updated": 1, "retired": 0, "reactivated": 0 },
+      "custodyEntries": { "inserted": 0, "updated": 0, "retired": 0, "reactivated": 0 },
+      "flagged": 2,
+      "pendingReview": 1
+    },
+    "materializationError": null,
+    "pendingReview": 1
+  }
   ```
 
 ---

@@ -9,7 +9,7 @@ function makeAdapter(result: BackfillExchangeRateGapsResult | Error) {
   const rematerialize = vi.fn(async () => undefined);
   const adapter = new DeferredBackfillSchedulerAdapter(
     { execute: backfill },
-    { recalculate: rematerialize },
+    { refresh: rematerialize },
   );
   return { adapter, backfill, rematerialize };
 }

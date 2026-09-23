@@ -87,6 +87,7 @@ beforeAll(async () => {
   process.env.DUCKDB_PATH = ':memory:';
   duckDb = new DuckDbAdapter();
   await duckDb.initialize(sqlitePath);
+  await duckDb.rebuildDerivedChain();
 });
 
 afterAll(() => {
@@ -168,6 +169,7 @@ describe('v_calculated_tax_lots row order — through SELECT * ... WHERE account
     process.env.DUCKDB_PATH = ':memory:';
     scaleDuckDb = new DuckDbAdapter();
     await scaleDuckDb.initialize(scaleSqlitePath);
+    await scaleDuckDb.rebuildDerivedChain();
   });
 
   afterAll(() => {

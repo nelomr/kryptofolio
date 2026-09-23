@@ -7,7 +7,6 @@ import type {
   ReconciliationSummary,
 } from '../../domain/ports/ILedgerPort.js';
 import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.js';
-import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
 import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 /**
@@ -26,16 +25,14 @@ export interface MaterializationSummary {
   pendingReview: number;
 }
 
-const NOTHING_RECONCILED: ReconciliationSummary = {
-  inserted: 0,
-  updated: 0,
-  retired: 0,
-  reactivated: 0,
-};
-
 /**
- * FifoMaterializerService — recomputes the Spot FIFO projection in DuckDB and reconciles the three
- * derived SQLite tables against it.
+ * FifoMaterializerService — reconciles the three derived SQLite tables against the derived
+ * FIFO chain as DuckDB currently holds it.
+ *
+ * Reconciliation is a full set difference: whatever the chain does not contain is retired. So
+ * this service must only ever read a chain rebuilt in the same run, which is why its only
+ * caller is `FifoChainFreshnessService`'s pipeline and why it holds no opinion on whether work
+ * is pending — that flag belongs to the pipeline (design D4a).
  *
  * Structured as a Functional Sandwich: every read from the analytical engine happens before the
  * write transaction opens, so no SQLite write lock is held across a DuckDB query — and the writes
@@ -44,33 +41,13 @@ const NOTHING_RECONCILED: ReconciliationSummary = {
 export class FifoMaterializerService {
   private readonly ledgerPort: ILedgerPort;
   private readonly taxCalculatorPort: ITaxCalculatorPort;
-  private readonly userSettingsPort: IUserSettingsPort;
 
-  constructor(
-    ledgerPort: ILedgerPort,
-    taxCalculatorPort: ITaxCalculatorPort,
-    userSettingsPort: IUserSettingsPort
-  ) {
+  constructor(ledgerPort: ILedgerPort, taxCalculatorPort: ITaxCalculatorPort) {
     this.ledgerPort = ledgerPort;
     this.taxCalculatorPort = taxCalculatorPort;
-    this.userSettingsPort = userSettingsPort;
   }
 
-  /**
-   * @param force - Recalculate even when nothing has flagged the ledger as pending.
-   */
-  public async recalculate(force = false): Promise<MaterializationSummary> {
-    const needsRecalculation = await this.userSettingsPort.getSetting('needs_recalculation');
-    if (!force && needsRecalculation !== 'true') {
-      return {
-        taxLots: { ...NOTHING_RECONCILED },
-        lotHistoryEvents: { ...NOTHING_RECONCILED },
-        custodyEntries: { ...NOTHING_RECONCILED },
-        flagged: 0,
-        pendingReview: 0,
-      };
-    }
-
+  public async recalculate(): Promise<MaterializationSummary> {
     const { lots, events } = await this.taxCalculatorPort.calculateLotsAndEvents();
     const custodyEntries = await this.taxCalculatorPort.calculateCustodyEntries();
     const dataQuality = await this.taxCalculatorPort.getDataQuality();
@@ -152,8 +129,6 @@ export class FifoMaterializerService {
       const taxLots = await this.ledgerPort.reconcileTaxLots(domainLots);
       const lotHistoryEvents = await this.ledgerPort.reconcileLotHistoryEvents(domainEvents);
       const custody = await this.ledgerPort.reconcileCustodyEntries(domainCustodyEntries);
-
-      await this.userSettingsPort.setSetting('needs_recalculation', 'false');
 
       return {
         taxLots,

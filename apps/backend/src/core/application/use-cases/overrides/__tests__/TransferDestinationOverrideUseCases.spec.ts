@@ -17,10 +17,11 @@ import type {
   LedgerTransferDestinationOverride,
 } from '../../../../domain/ports/ILedgerPort.js';
 import type {
-  FifoMaterializerService,
   MaterializationSummary,
 } from '../../../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../../services/FifoChainFreshnessService.js';
+import type { FifoBuildId } from '../../../../domain/models/FifoChainState.js';
 import { toPreciseAmount } from '../../../../domain/value-objects/PreciseAmount.js';
 
 const EMPTY_RECONCILIATION = { inserted: 0, updated: 0, retired: 0, reactivated: 0 } as const;
@@ -65,7 +66,7 @@ function spotTransaction(idHash: string, accountId: string): LedgerSpotTransacti
 
 interface Harness {
   ledger: ILedgerPort;
-  materializer: FifoMaterializerService;
+  freshnessService: FifoChainFreshnessService;
   settings: SettingsStub;
   calls: string[];
   written: LedgerTransferDestinationOverride[];
@@ -111,9 +112,26 @@ function harness(): Harness {
     },
   } as unknown as ILedgerPort;
 
+  // `refresh()` is the only entry point the override use cases call (design D4a); it owns the
+  // rebuild-then-reconcile pipeline, so the double models that shape rather than the materialiser
+  // directly.
+  const freshnessService = {
+    refresh: async () => {
+      const materialization = await recalculate();
+      return {
+        chain: {
+          kind: 'fresh' as const,
+          buildId: 'test-build' as FifoBuildId,
+          builtAt: new Date().toISOString(),
+        },
+        materialization,
+      };
+    },
+  } as unknown as FifoChainFreshnessService;
+
   return {
     ledger,
-    materializer: { recalculate } as unknown as FifoMaterializerService,
+    freshnessService,
     settings: new SettingsStub(),
     calls,
     written,
@@ -129,7 +147,8 @@ describe('SetTransferDestinationUseCase', () => {
     h = harness();
   });
 
-  const useCase = () => new SetTransferDestinationUseCase(h.ledger, h.materializer, h.settings);
+  const useCase = () =>
+    new SetTransferDestinationUseCase(h.ledger, h.settings, h.freshnessService);
 
   const destination = (idHash: string, accountId: string) => ({
     idHash: createTransactionIdHash(idHash),
@@ -213,8 +232,8 @@ describe('RemoveTransferDestinationUseCase', () => {
   it('removes the override and rebuilds so the synthetic counterparty returns', async () => {
     const result = await new RemoveTransferDestinationUseCase(
       h.ledger,
-      h.materializer,
       h.settings,
+      h.freshnessService,
     ).execute([createTransactionIdHash(WITHDRAWAL_HASH)]);
 
     expect(h.removed).toEqual([WITHDRAWAL_HASH]);
@@ -223,7 +242,11 @@ describe('RemoveTransferDestinationUseCase', () => {
   });
 
   it('does not rebuild when asked to remove nothing', async () => {
-    await new RemoveTransferDestinationUseCase(h.ledger, h.materializer, h.settings).execute([]);
+    await new RemoveTransferDestinationUseCase(
+      h.ledger,
+      h.settings,
+      h.freshnessService,
+    ).execute([]);
 
     expect(h.recalculate).not.toHaveBeenCalled();
   });

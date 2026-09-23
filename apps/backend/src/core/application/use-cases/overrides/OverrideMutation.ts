@@ -1,9 +1,7 @@
 import type { ILedgerPort } from '../../../domain/ports/ILedgerPort.js';
-import type {
-  FifoMaterializerService,
-  MaterializationSummary,
-} from '../../services/FifoMaterializerService.js';
+import type { MaterializationSummary } from '../../services/FifoMaterializerService.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
 
 /**
  * A rejected override, raised before any write.
@@ -35,17 +33,17 @@ export interface OverrideMutationResult {
  */
 export abstract class OverrideMutationUseCase {
   protected readonly ledgerPort: ILedgerPort;
-  protected readonly materializer: FifoMaterializerService;
   protected readonly userSettingsPort: IUserSettingsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
   constructor(
     ledgerPort: ILedgerPort,
-    materializer: FifoMaterializerService,
     userSettingsPort: IUserSettingsPort,
+    freshnessService: FifoChainFreshnessService,
   ) {
     this.ledgerPort = ledgerPort;
-    this.materializer = materializer;
     this.userSettingsPort = userSettingsPort;
+    this.freshnessService = freshnessService;
   }
 
   protected async applyThenRebuild(
@@ -63,9 +61,9 @@ export abstract class OverrideMutationUseCase {
     // the rollback.
     await this.userSettingsPort.setSetting('needs_recalculation', 'true');
 
-    // Forced: the user is waiting to see the effect of a value they just declared, so whether a
-    // rebuild is owed was decided by the act of declaring it.
-    const materialization = await this.materializer.recalculate(true);
+    // `refresh()` always runs the full pipeline and never joins one that started before this
+    // override was written: the user is waiting to see the effect of the value they just declared.
+    const { materialization } = await this.freshnessService.refresh();
 
     return { applied: count, materialization };
   }

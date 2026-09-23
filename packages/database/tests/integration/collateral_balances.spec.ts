@@ -100,6 +100,7 @@ async function harness(label: string, specs: readonly MovementSpec[]): Promise<H
   process.env.DUCKDB_PATH = ':memory:';
   const duckDb = new DuckDbAdapter();
   await duckDb.initialize(sqlitePath);
+  await duckDb.rebuildDerivedChain();
 
   return {
     sqliteDb,
@@ -170,6 +171,7 @@ describe('v_collateral_balances', () => {
       { id: 'usd-leg', movementType: 'CONVERSION', currency: 'USD', amount: '1.0', pairId: 'p1', occurredAt: '2026-02-08T16:42:52.000Z' },
     ]);
     seedPositionEvents(h.sqliteDb);
+    await h.duckDb.rebuildDerivedChain();
     try {
       const fifoEvents = (await h.duckDb.queryMany(
         'SELECT tx_id, event_type FROM v_flattened_fifo_events ORDER BY event_type'

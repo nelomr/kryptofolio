@@ -73,6 +73,7 @@ describe('switching the display currency re-reads through Pinia Colada (task 9.3
 
     const portfolioPort = { getSummary } as unknown as ICryptoPortfolioPort
     const settingsPort = {
+      getBaseCurrency: vi.fn(async () => served),
       setBaseCurrency: vi.fn(async () => {
         served = 'EUR'
       }),

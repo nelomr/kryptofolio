@@ -8,7 +8,6 @@ import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedg
 import { DuckDbAdapter } from '@kryptofolio/database';
 import { DuckDbTaxCalculatorAdapter } from '../../../infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 import { FifoMaterializerService } from '../FifoMaterializerService';
-import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 import type { TaxLotType, TaxLotEventType } from '@kryptofolio/shared-types';
 
 
@@ -17,7 +16,6 @@ describe('FifoMaterializerService — Integration Tests', () => {
   let ledgerAdapter: SQLiteLedgerAdapter;
   let duckDbAdapter: DuckDbAdapter;
   let taxCalculator: DuckDbTaxCalculatorAdapter;
-  let userSettings: IUserSettingsPort;
   let service: FifoMaterializerService;
   let sqliteDbPath: string;
 
@@ -41,21 +39,7 @@ describe('FifoMaterializerService — Integration Tests', () => {
 
     taxCalculator = new DuckDbTaxCalculatorAdapter(duckDbAdapter);
 
-    // 3. Mock User Settings
-    let needsRecalc = 'false';
-    userSettings = {
-      getSetting: async (key: string) =>
-        key === 'needs_recalculation' ? needsRecalc : null,
-      setSetting: async (key: string, value: string) => {
-        if (key === 'needs_recalculation') needsRecalc = value;
-      },
-    };
-
-    service = new FifoMaterializerService(
-      ledgerAdapter,
-      taxCalculator,
-      userSettings,
-    );
+    service = new FifoMaterializerService(ledgerAdapter, taxCalculator);
   });
 
   afterEach(() => {
@@ -115,9 +99,6 @@ describe('FifoMaterializerService — Integration Tests', () => {
       events: [],
     });
 
-    // Mark as needing recalculation
-    await userSettings.setSetting('needs_recalculation', 'true');
-
     // Run first recalculation (inserts the lot)
     await service.recalculate();
 
@@ -133,7 +114,6 @@ describe('FifoMaterializerService — Integration Tests', () => {
       .get() as { count: number };
 
     // Run second recalculation with the same identical lot
-    await userSettings.setSetting('needs_recalculation', 'true');
     await service.recalculate();
 
     const postRecalcAuditCount = sqliteDb

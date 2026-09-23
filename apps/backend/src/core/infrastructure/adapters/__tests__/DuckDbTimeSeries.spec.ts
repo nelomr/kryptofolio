@@ -118,6 +118,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
     process.env.DUCKDB_PATH = ':memory:';
     duckDb = new DuckDbAdapter();
     await duckDb.initialize(sqlitePath);
+    await duckDb.rebuildDerivedChain();
 
     await duckDb.execute(
       `CREATE TEMP TABLE IF NOT EXISTS _price_seed (date DATE, symbol VARCHAR, close DECIMAL(38,18), currency VARCHAR);`,
@@ -150,6 +151,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '30000',
         acquisitionTimestamp: dateStr + 'T00:00:00.000Z',
       });
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{
         date: string;
@@ -176,6 +178,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         unitCostFiat: '2000',
         acquisitionTimestamp: ds + 'T00:00:00.000Z',
       });
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ running_balance: string }>(
         `SELECT running_balance FROM v_daily_running_balances WHERE asset_id = 'asset-eth' ORDER BY date`,
@@ -203,6 +206,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
       });
       await seedHistoricalPrice(duckDb, 'BTC', ds, '50000');
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ daily_value: string }>(
         `SELECT daily_value FROM v_portfolio_daily_valuation WHERE asset_id = 'asset-btc' AND CAST(date AS VARCHAR) = '${ds}'`,
@@ -233,6 +237,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
       });
       await seedHistoricalPrice(duckDb, 'BTC', fridayStr, '42000');
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ daily_value: string }>(
         `SELECT daily_value FROM v_portfolio_daily_valuation WHERE asset_id = 'asset-btc' AND CAST(date AS VARCHAR) = '${satStr}'`,
@@ -263,6 +268,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
       await seedHistoricalPrice(duckDb, 'BTC', d5s, '100000');
       await seedHistoricalPrice(duckDb, 'BTC', todayStr, '50000');
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ drawdown_pct: string }>(
         `SELECT drawdown_pct FROM v_portfolio_ath_drawdown ORDER BY date DESC LIMIT 1`,
@@ -290,6 +296,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
       await seedHistoricalPrice(duckDb, 'BTC', d2s, '90000');
       await seedHistoricalPrice(duckDb, 'BTC', todayStr, '100000');
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ drawdown_pct: string }>(
         `SELECT drawdown_pct FROM v_portfolio_ath_drawdown ORDER BY date DESC LIMIT 1`,
@@ -321,6 +328,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
       await seedHistoricalPrice(duckDb, 'BTC', d2s, '80000');
       await seedHistoricalPrice(duckDb, 'BTC', d1s, '100000');
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ daily_return: string }>(
         `SELECT daily_return FROM v_portfolio_returns_volatility WHERE CAST(date AS VARCHAR) = '${d1s}'`,
@@ -354,6 +362,7 @@ describe('[Strict TDD] DuckDB Time-Series Views (Block 3)', () => {
         }
       }
       await refreshHistoricalPricesView(duckDb);
+      await duckDb.rebuildDerivedChain();
 
       const rows = await duckDb.queryMany<{ beta: string }>(
         `SELECT beta FROM v_portfolio_alpha_beta`,

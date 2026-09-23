@@ -10,6 +10,8 @@ import { FifoMaterializerService } from '../../services/FifoMaterializerService'
 import { DuckDbTaxCalculatorAdapter } from '../../../infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
 import { CsvIngestionUseCase } from '../CsvIngestionUseCase.js';
 import { IngestAndMaterializeUseCase } from '../IngestAndMaterializeUseCase';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
+import type { FifoBuildId } from '../../../domain/models/FifoChainState.js';
 import {
   guessColumnMapping,
   mapToEntity,
@@ -60,11 +62,33 @@ describe('End-to-End Ingestion: Kraken CSV Fixture', () => {
     materializerService = new FifoMaterializerService(
       sqliteAdapter,
       taxCalculatorAdapter,
-      mockUserSettings
     );
 
     ingestionUseCase = new CsvIngestionUseCase(sqliteAdapter, mockPriceProvider, mockUserSettings, NO_BACKFILL_SCHEDULER);
-    e2eUseCase = new IngestAndMaterializeUseCase(ingestionUseCase, materializerService, mockUserSettings);
+
+    // `refresh()` now owns the whole pipeline (design D4a): rebuild the real DuckDB chain, then
+    // reconcile through the real materialiser under test, so the fixture's assertions still
+    // exercise a chain that was actually rebuilt before reconciliation reads it.
+    const fakeFreshnessService = {
+      refresh: async () => {
+        await duckDbAdapter.rebuildDerivedChain();
+        const materialization = await materializerService.recalculate();
+        return {
+          chain: {
+            kind: 'fresh' as const,
+            buildId: 'test-build' as FifoBuildId,
+            builtAt: new Date().toISOString(),
+          },
+          materialization,
+        };
+      },
+    } as unknown as FifoChainFreshnessService;
+
+    e2eUseCase = new IngestAndMaterializeUseCase(
+      ingestionUseCase,
+      mockUserSettings,
+      fakeFreshnessService,
+    );
     
     // Spy on materialization
     vi.spyOn(materializerService, 'recalculate');

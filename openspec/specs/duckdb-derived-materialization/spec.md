@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Duckdb Derived Materialization Specification
+
+## Purpose
+
+Materialising the six derived FIFO relations as physical DuckDB tables rebuilt in one transaction, gated by a freshness state machine that never serves a stale or empty chain as fresh, and fully re-derivable from SQLite on demand.
+
+## Requirements
 
 ### Requirement: The Six Derived FIFO Relations Are Physical Tables
 
@@ -80,7 +86,7 @@ The derived chain's freshness SHALL be modelled in `core/domain/models/` as a di
 
 ### Requirement: Synchronous Rebuild Before Any Read of the Derived Chain, Coalesced Single-Flight
 
-A read use case consuming the derived chain SHALL await `FifoChainFreshnessService.ensureFresh()` before its first analytical port read. When `needs_recalculation` is `'true'`, `ensureFresh()` SHALL rebuild the chain synchronously and resolve only after the rebuild commits; stale data SHALL NEVER be served. `ensureFresh()` SHALL return only the `fresh` variant. The service SHALL coalesce concurrent callers onto one in-flight rebuild, SHALL be a singleton in the composition root, and SHALL clear its in-flight memo in a `finally` so a rejected rebuild rejects all waiters and leaves no poisoned promise.
+A read use case consuming the derived chain SHALL await `FifoChainFreshnessService.ensureFresh()` before its first analytical port read. When `needs_recalculation` is `'true'` or the chain is not `fresh`, `ensureFresh()` SHALL run the derived-state pipeline synchronously — rebuild the DuckDB chain, then reconcile the SQLite derived tables from the rebuilt chain, then clear `needs_recalculation` — and resolve only after all three steps complete; stale data SHALL NEVER be served. `ensureFresh()` SHALL return only the `fresh` variant. The service SHALL additionally expose `refresh()`, which always runs the pipeline and returns the committed chain together with the reconciliation summary; it SHALL be the only entry point for explicit triggers (ingestion, overrides, the manual rebuild endpoint, scheduled jobs). The service SHALL be the only writer that clears `needs_recalculation`, SHALL coalesce concurrent `ensureFresh()` callers onto one in-flight pipeline, SHALL run a `refresh()` after (never joined to) any pipeline already in flight when it was called, SHALL be a singleton in the composition root, and SHALL clear its in-flight memo in a `finally` so a rejected pipeline rejects all waiters and leaves no poisoned promise.
 
 #### Scenario: Nine concurrent readers trigger exactly one rebuild
 
@@ -118,6 +124,30 @@ A read use case consuming the derived chain SHALL await `FifoChainFreshnessServi
 - **THEN** both MUST resolve through the same singleton service instance
 - **AND** exactly one DuckDB rebuild transaction MUST be open at a time
 
+#### Scenario: SQLite is reconciled after the chain rebuild, before the flag clears
+
+- **WHEN** the pipeline runs
+- **THEN** the SQLite reconciliation MUST start only after the DuckDB rebuild has committed
+- **AND** `needs_recalculation` MUST be cleared only after the reconciliation has committed
+- **AND** a failure in either step MUST leave `needs_recalculation` `'true'`
+
+#### Scenario: An explicit trigger never reconciles against a stale or empty chain
+
+- **WHEN** the manual rebuild endpoint, a scheduled job, an ingestion or an override requests materialisation
+- **THEN** it MUST go through `refresh()`, which rebuilds the DuckDB chain before reconciling
+- **AND** no code path MUST invoke the SQLite reconciliation without a rebuild committed in the same pipeline run
+
+#### Scenario: Ingestion's reconciliation is not skipped by an earlier freshness check
+
+- **WHEN** an ingestion batch commits new transactions and triggers materialisation
+- **THEN** the SQLite derived tables MUST reflect the new transactions once the ingestion response returns
+- **AND** the reconciliation MUST NOT be gated on a flag value some earlier step of the same request already cleared
+
+#### Scenario: An explicit trigger observes its own mutation
+
+- **WHEN** `refresh()` is called while a pipeline started before the caller's ledger mutation is still in flight
+- **THEN** `refresh()` MUST run a new pipeline after the in-flight one settles rather than resolving with its result
+
 ### Requirement: Layering of the Derived-Chain Port
 
 The freshness policy SHALL live in the application layer and the DuckDB SQL in an adapter. `IDerivedChainPort` SHALL be declared in `core/domain/ports/` exposing `rebuild()` and `describe()`, and SHALL be implemented by a `DuckDbDerivedChainAdapter` under `core/infrastructure/adapters/`. The `packages/database` layer SHALL gain no knowledge of what the pending-work flag means.
@@ -144,6 +174,12 @@ The `m_*` tables SHALL hold nothing SQLite does not already hold. No business lo
 - **THEN** initialisation MUST succeed
 - **AND** the first read MUST rebuild the chain and return the same values as before the deletion
 
+#### Scenario: A restart is never served as a fresh empty chain
+
+- **WHEN** the backend restarts over an analytical file that holds a build stamp from a previous process
+- **THEN** initialisation MUST leave the chain in `{ kind: 'stale', reason: 'never-built' }`, dropping the stale stamp together with the materialised rows it described
+- **AND** the first read MUST run the pipeline even when `needs_recalculation` is `'false'`
+
 #### Scenario: A rebuild from empty equals an incremental rebuild
 
 - **WHEN** all `m_*` tables are dropped and the chain is rebuilt over an unchanged ledger
@@ -158,3 +194,4 @@ A materialised relation SHALL be treated as an unordered heap. Any consumer whos
 - **WHEN** consumers of the six derived relations are audited
 - **THEN** every consumer whose response order is observable MUST carry an explicit `ORDER BY`
 - **AND** the order-sensitive equivalence comparison MUST pass for all six relations
+

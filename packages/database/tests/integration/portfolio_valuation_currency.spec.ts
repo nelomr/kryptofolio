@@ -159,6 +159,7 @@ async function setup(
        })`,
     );
   }
+  await duckDb.rebuildDerivedChain();
 
   created.push({ duckDb, sqlitePath });
   return duckDb;

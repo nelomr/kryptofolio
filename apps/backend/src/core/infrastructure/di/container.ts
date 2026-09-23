@@ -45,7 +45,15 @@ import { GetPortfolioSummaryUseCase } from '../../application/use-cases/GetPortf
 import { GetSpanishTaxReportUseCase } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
 import { GetTokenHistoryUseCase } from '../../application/use-cases/GetTokenHistoryUseCase.js';
 import { GetFiscalIntegrityUseCase } from '../../application/use-cases/GetFiscalIntegrityUseCase.js';
+import { GetKpisUseCase } from '../../application/use-cases/GetKpisUseCase.js';
+import { GetAssetAllocationUseCase } from '../../application/use-cases/GetAssetAllocationUseCase.js';
+import { GetPerformanceHistoryUseCase } from '../../application/use-cases/GetPerformanceHistoryUseCase.js';
+import { GetVolatilityHeatmapUseCase } from '../../application/use-cases/GetVolatilityHeatmapUseCase.js';
+import { GetDrawdownCurveUseCase } from '../../application/use-cases/GetDrawdownCurveUseCase.js';
+import { GetRiskMetricsUseCase } from '../../application/use-cases/GetRiskMetricsUseCase.js';
 import { FifoMaterializerService } from '../../application/services/FifoMaterializerService.js';
+import { FifoChainFreshnessService } from '../../application/services/FifoChainFreshnessService.js';
+import { DuckDbDerivedChainAdapter } from '../adapters/DuckDbDerivedChainAdapter.js';
 import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
 import { SetManualPriceOverrideUseCase } from '../../application/use-cases/overrides/SetManualPriceOverrideUseCase.js';
 import { RemoveManualPriceOverrideUseCase } from '../../application/use-cases/overrides/RemoveManualPriceOverrideUseCase.js';
@@ -65,6 +73,12 @@ class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort 
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
   async bulkInsert(): Promise<void> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async rebuildDerivedChain(): Promise<{ buildId: string; builtAt: string }> {
+    throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
+  }
+  async describeDerivedChain(): Promise<{ buildId: string; builtAt: string } | null> {
     throw new Error('[DuckDB] Analytical database is not initialized. Call container.setDuckDbAdapter(duckDb) at startup.');
   }
 }
@@ -124,7 +138,21 @@ export class DIContainer {
   public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
   public getTokenHistoryUseCase: GetTokenHistoryUseCase;
   public getFiscalIntegrityUseCase: GetFiscalIntegrityUseCase;
+  public getKpisUseCase: GetKpisUseCase;
+  public getAssetAllocationUseCase: GetAssetAllocationUseCase;
+  public getPerformanceHistoryUseCase: GetPerformanceHistoryUseCase;
+  public getVolatilityHeatmapUseCase: GetVolatilityHeatmapUseCase;
+  public getDrawdownCurveUseCase: GetDrawdownCurveUseCase;
+  public getRiskMetricsUseCase: GetRiskMetricsUseCase;
   public fifoMaterializerService: FifoMaterializerService;
+  /**
+   * Singleton over the container's lifetime (design D4/D4a): every caller — reads, ingestion,
+   * override mutations, the manual rebuild and the scheduled jobs — goes through this exact
+   * instance, so "one derived-state pipeline in flight per process" holds. Reconstructed once in
+   * `setDuckDbAdapter()` when the real DuckDB connection replaces the startup stub; nothing
+   * else ever creates a second instance.
+   */
+  public fifoChainFreshnessService: FifoChainFreshnessService;
   public ingestAndMaterializeUseCase: IngestAndMaterializeUseCase;
   public setManualPriceOverrideUseCase: SetManualPriceOverrideUseCase;
   public removeManualPriceOverrideUseCase: RemoveManualPriceOverrideUseCase;
@@ -187,12 +215,12 @@ export class DIContainer {
       this.exchangeRatePort,
       this.fxRateLedgerPort,
     );
-    // The materializer is rebound when the analytical database initialises, so it is reached
-    // through the container rather than captured: a captured reference would rebuild the
+    // The freshness service is rebound when the analytical database initialises, so it is
+    // reached through the container rather than captured: a captured reference would rebuild the
     // uninitialised guard forever.
     this.backfillSchedulerPort = new DeferredBackfillSchedulerAdapter(
       this.backfillExchangeRateGapsUC,
-      { recalculate: (force?: boolean) => this.fifoMaterializerService.recalculate(force) },
+      { refresh: () => this.fifoChainFreshnessService.refresh() },
     );
     this.csvIngestionUseCase = new CsvIngestionUseCase(
       this.ledgerPort,
@@ -208,6 +236,12 @@ export class DIContainer {
     this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(uninitializedDb);
     this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(uninitializedDb);
     this.metricsPort = new DuckDbMetricsAdapter(uninitializedDb);
+    this.fifoMaterializerService = new FifoMaterializerService(this.ledgerPort, this.taxCalculatorPort);
+    this.fifoChainFreshnessService = new FifoChainFreshnessService(
+      this.userSettingsPort,
+      new DuckDbDerivedChainAdapter(uninitializedDb),
+      this.fifoMaterializerService,
+    );
 
     this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
       this.ledgerPort,
@@ -217,6 +251,7 @@ export class DIContainer {
 
     this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
       this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
       this.userSettingsPort,
       this.metricsPort,
     );
@@ -224,49 +259,68 @@ export class DIContainer {
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
-    this.fifoMaterializerService = new FifoMaterializerService(
-      this.ledgerPort,
-      this.taxCalculatorPort,
-      this.userSettingsPort,
+    this.getKpisUseCase = new GetKpisUseCase(this.metricsPort, this.fifoChainFreshnessService);
+    this.getAssetAllocationUseCase = new GetAssetAllocationUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getPerformanceHistoryUseCase = new GetPerformanceHistoryUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getVolatilityHeatmapUseCase = new GetVolatilityHeatmapUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getDrawdownCurveUseCase = new GetDrawdownCurveUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getRiskMetricsUseCase = new GetRiskMetricsUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
       this.csvIngestionUseCase,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
   }
 
@@ -279,6 +333,12 @@ export class DIContainer {
     this.portfolioAnalyticsPort = new DuckDbPortfolioAnalyticsAdapter(duckDb);
     this.taxCalculatorPort = new DuckDbTaxCalculatorAdapter(duckDb);
     this.metricsPort = new DuckDbMetricsAdapter(duckDb);
+    this.fifoMaterializerService = new FifoMaterializerService(this.ledgerPort, this.taxCalculatorPort);
+    this.fifoChainFreshnessService = new FifoChainFreshnessService(
+      this.userSettingsPort,
+      new DuckDbDerivedChainAdapter(duckDb),
+      this.fifoMaterializerService,
+    );
 
     this.ingestDailyPricesUseCase = new IngestDailyPricesUseCase(
       this.ledgerPort,
@@ -288,6 +348,7 @@ export class DIContainer {
 
     this.getPortfolioSummaryUseCase = new GetPortfolioSummaryUseCase(
       this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
       this.userSettingsPort,
       this.metricsPort,
     );
@@ -295,49 +356,68 @@ export class DIContainer {
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.getTokenHistoryUseCase = new GetTokenHistoryUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.getFiscalIntegrityUseCase = new GetFiscalIntegrityUseCase(
       this.taxCalculatorPort,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
-    this.fifoMaterializerService = new FifoMaterializerService(
-      this.ledgerPort,
-      this.taxCalculatorPort,
-      this.userSettingsPort,
+    this.getKpisUseCase = new GetKpisUseCase(this.metricsPort, this.fifoChainFreshnessService);
+    this.getAssetAllocationUseCase = new GetAssetAllocationUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getPerformanceHistoryUseCase = new GetPerformanceHistoryUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getVolatilityHeatmapUseCase = new GetVolatilityHeatmapUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getDrawdownCurveUseCase = new GetDrawdownCurveUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
+    );
+    this.getRiskMetricsUseCase = new GetRiskMetricsUseCase(
+      this.metricsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.ingestAndMaterializeUseCase = new IngestAndMaterializeUseCase(
       this.csvIngestionUseCase,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
 
     this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
     this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
       this.ledgerPort,
-      this.fifoMaterializerService,
       this.userSettingsPort,
+      this.fifoChainFreshnessService,
     );
   }
 }

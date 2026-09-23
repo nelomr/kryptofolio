@@ -3,8 +3,9 @@ import { setActivePinia, createPinia } from "pinia";
 import { createApp, ref } from "vue";
 import { PiniaColada } from "@pinia/colada";
 import { useDrawdownCurveQuery } from "@/composables/queries/useCryptoMetricsQueries";
-import { CRYPTO_METRICS_PORT_KEY } from "@/core/injectionKeys";
+import { CRYPTO_METRICS_PORT_KEY, SETTINGS_PORT_KEY } from "@/core/injectionKeys";
 import type { ICryptoMetricsPort, TimeRange } from "@/core/domain/ports/ICryptoMetricsPort";
+import type { ISettingsPort } from "@/core/domain/ports/ISettingsPort";
 
 const mockDrawdown = [
   { timestamp: 1672531200, drawdownPercent: -1.23 }
@@ -13,6 +14,12 @@ const mockDrawdown = [
 function createMockPort(): Partial<ICryptoMetricsPort> {
   return {
     getDrawdownCurve: vi.fn().mockResolvedValue(mockDrawdown)
+  };
+}
+
+function createMockSettingsPort(): Partial<ISettingsPort> {
+  return {
+    getBaseCurrency: vi.fn().mockResolvedValue("USD"),
   };
 }
 
@@ -27,6 +34,7 @@ describe("useDrawdownCurveQuery Composable", () => {
     app.use(PiniaColada);
     const port = createMockPort() as ICryptoMetricsPort;
     app.provide(CRYPTO_METRICS_PORT_KEY, port);
+    app.provide(SETTINGS_PORT_KEY, createMockSettingsPort() as ISettingsPort);
     return { app, port };
   }
 
@@ -44,7 +52,7 @@ describe("useDrawdownCurveQuery Composable", () => {
     // wait for query resolution
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(port.getDrawdownCurve).toHaveBeenCalledWith("1M");
+    expect(port.getDrawdownCurve).toHaveBeenCalledWith("1M", "USD");
     expect(composable!.isLoading.value).toBe(false);
     expect(composable!.data.value).toEqual(mockDrawdown);
   });

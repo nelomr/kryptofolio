@@ -5,6 +5,15 @@ import type {
   ITaxCalculatorPort,
 } from '../../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../../services/FifoChainFreshnessService.js';
+
+const fakeFreshnessService = {
+  ensureFresh: vi.fn().mockResolvedValue({
+    kind: 'fresh',
+    buildId: 'test-build',
+    builtAt: '2026-01-01T00:00:00Z',
+  }),
+} as unknown as FifoChainFreshnessService;
 
 function row(overrides: Partial<FifoDataQualityRow>): FifoDataQualityRow {
   return {
@@ -35,7 +44,7 @@ function makeUseCase(rows: FifoDataQualityRow[], needsRecalculation: string | nu
     setSetting: vi.fn(),
   };
   return {
-    useCase: new GetFiscalIntegrityUseCase(taxCalculatorPort, userSettingsPort),
+    useCase: new GetFiscalIntegrityUseCase(taxCalculatorPort, userSettingsPort, fakeFreshnessService),
     taxCalculatorPort,
     userSettingsPort,
   };

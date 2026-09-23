@@ -11,7 +11,7 @@ interface BackfillRunner {
 }
 
 interface Rematerializer {
-  recalculate(force?: boolean): Promise<unknown>;
+  refresh(): Promise<unknown>;
 }
 
 /**
@@ -57,7 +57,7 @@ export class DeferredBackfillSchedulerAdapter implements IBackfillSchedulerPort 
 
       if (result.rowsWritten === 0) return;
 
-      await this.rematerializer.recalculate(true);
+      await this.rematerializer.refresh();
     } catch (err) {
       bffLogger.error({ err, request }, 'FX backfill failed; ingested rows are unaffected');
     }

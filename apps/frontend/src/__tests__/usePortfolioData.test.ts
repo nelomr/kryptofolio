@@ -10,8 +10,9 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createApp, nextTick } from 'vue'
 import { PiniaColada } from '@pinia/colada'
 import { usePortfolioData } from '@/views/Portfolio/composables/usePortfolioData'
-import { PORTFOLIO_PORT_KEY } from '@/core/injectionKeys'
+import { PORTFOLIO_PORT_KEY, SETTINGS_PORT_KEY } from '@/core/injectionKeys'
 import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
+import type { ISettingsPort } from '@/core/domain/ports/ISettingsPort'
 import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
 import { AssetIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
 
@@ -68,6 +69,9 @@ describe('Portfolio Data Composable (portfolio-data-composable)', () => {
     app.use(PiniaColada)
     const port = createMockPort(portOverrides)
     app.provide(PORTFOLIO_PORT_KEY, port)
+    app.provide(SETTINGS_PORT_KEY, {
+      getBaseCurrency: vi.fn().mockResolvedValue('USD'),
+    } as unknown as ISettingsPort)
     return { app, port }
   }
 

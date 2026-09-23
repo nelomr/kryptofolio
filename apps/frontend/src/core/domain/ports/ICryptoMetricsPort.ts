@@ -96,17 +96,17 @@ export interface DrawdownPoint {
 }
 
 export interface ICryptoMetricsPort {
-  getKpis(): Promise<CryptoKpis>;
-  getPerformanceHistory(range: TimeRange): Promise<{
+  getKpis(currency?: string): Promise<CryptoKpis>;
+  getPerformanceHistory(range: TimeRange, currency?: string): Promise<{
     history: PerformancePoint[];
     metrics: PerformanceMetrics;
   }>;
-  getAssetAllocation(): Promise<{
+  getAssetAllocation(currency?: string): Promise<{
     items: AssetAllocationItem[];
     totalAssets: number;
     hhiScore: number;
   }>;
-  getVolatilityHeatmap(year: number): Promise<VolatilityHeatmapEntity>;
-  getRiskMetrics(): Promise<RiskMetrics>;
-  getDrawdownCurve(range: TimeRange): Promise<DrawdownPoint[]>;
+  getVolatilityHeatmap(year: number, currency?: string): Promise<VolatilityHeatmapEntity>;
+  getRiskMetrics(currency?: string): Promise<RiskMetrics>;
+  getDrawdownCurve(range: TimeRange, currency?: string): Promise<DrawdownPoint[]>;
 }

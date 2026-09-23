@@ -10,6 +10,7 @@ import type {
   ITaxCalculatorPort,
 } from '../../domain/ports/ITaxCalculatorPort.js';
 import type { IUserSettingsPort } from '../../domain/ports/IUserSettingsPort.js';
+import type { FifoChainFreshnessService } from '../services/FifoChainFreshnessService.js';
 
 export interface GetFiscalIntegrityRequest {
   accountId?: string;
@@ -51,13 +52,21 @@ function severityRank(severity: FlagSeverity): number {
 export class GetFiscalIntegrityUseCase {
   private readonly taxCalculatorPort: ITaxCalculatorPort;
   private readonly userSettingsPort: IUserSettingsPort;
+  private readonly freshnessService: FifoChainFreshnessService;
 
-  constructor(taxCalculatorPort: ITaxCalculatorPort, userSettingsPort: IUserSettingsPort) {
+  constructor(
+    taxCalculatorPort: ITaxCalculatorPort,
+    userSettingsPort: IUserSettingsPort,
+    freshnessService: FifoChainFreshnessService,
+  ) {
     this.taxCalculatorPort = taxCalculatorPort;
     this.userSettingsPort = userSettingsPort;
+    this.freshnessService = freshnessService;
   }
 
   public async execute(request: GetFiscalIntegrityRequest): Promise<FiscalIntegrityReport> {
+    await this.freshnessService.ensureFresh();
+
     const [rows, pendingFlag] = await Promise.all([
       this.taxCalculatorPort.getDataQuality(request.accountId),
       this.userSettingsPort.getSetting(NEEDS_RECALCULATION),
