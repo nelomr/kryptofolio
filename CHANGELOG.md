@@ -3,6 +3,15 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.14](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.14) (2026-09-28)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.14)
+
+**Patch Changes**
+
+- [`dac931f`](https://github.com/nelomr/kryptofolio/commit/dac931f656ea013a07d69c2cc226edf1e5799d62) Thanks [@nelomr](https://github.com/nelomr)! - Add spot transaction editing from the Ledgers table: a modal lets you correct quantities, price, fee, date, and type for any past acquisition or disposal, saved as an auditable override that survives re-imports and can be restored. Also fixes the price-declaration form in the fiscal integrity panel to use the same editor, a bug where editing one field could silently wipe another, a missing dialog accessibility warning, and adds a connectivity notice when the live price stream drops.
+
+
 ## [1.16.13](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.13) (2026-09-23)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.13)
