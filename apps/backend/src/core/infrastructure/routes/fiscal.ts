@@ -2,16 +2,24 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { createAccountId, createTransactionIdHash } from '@kryptofolio/shared-types';
 import type { DIContainer } from '../di/container.js';
-import { OverrideValidationError } from '../../application/use-cases/overrides/OverrideMutation.js';
+import {
+  OverrideValidationError,
+  OverrideNotFoundError,
+} from '../../application/use-cases/overrides/OverrideMutation.js';
 import type { OverrideMutationResult } from '../../application/use-cases/overrides/OverrideMutation.js';
+import type {
+  SpotOverrideMutationResult,
+  SpotTransactionOverrideEditInput,
+} from '../../application/use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
 import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 import {
-  manualPriceOverrideBatchSchema,
   overrideRemovalSchema,
   transferDestinationBatchSchema,
+  spotTransactionEditSchema,
 } from '../dtos/overrides.js';
-import { overrideOutcomeSchema } from '../dtos/materialization.js';
+import { overrideOutcomeSchema, spotOverrideOutcomeSchema } from '../dtos/materialization.js';
 import { fiscalIntegrityReportSchema } from '../dtos/fiscal-integrity.js';
+import type { SpotTransactionEditInput } from '@kryptofolio/shared-types';
 
 /**
  * Fiscal API — the user's calculation inputs.
@@ -30,11 +38,23 @@ function outcomeBody(result: OverrideMutationResult) {
   });
 }
 
+function spotOutcomeBody(result: SpotOverrideMutationResult) {
+  return spotOverrideOutcomeSchema.parse({
+    applied: result.applied,
+    materialization: result.materialization,
+    pendingReview: result.materialization?.pendingReview ?? 0,
+    balanceCheck: result.balanceCheck,
+  });
+}
+
 /** A rejected declaration is the user's to correct, so it is not reported as a server failure. */
 function errorBody(error: unknown): {
   body: { status: 'error'; message: string };
-  status: 422 | 500;
+  status: 404 | 422 | 500;
 } {
+  if (error instanceof OverrideNotFoundError) {
+    return { body: { status: 'error', message: error.message }, status: 404 };
+  }
   if (error instanceof OverrideValidationError) {
     return { body: { status: 'error', message: error.message }, status: 422 };
   }
@@ -47,6 +67,54 @@ function errorBody(error: unknown): {
   };
 }
 
+/**
+ * Maps the shared `spotTransactionEditSchema` shape (snake_case, plain decimal strings) to the
+ * use case's `SpotTransactionOverrideEditInput` (camelCase, branded `PreciseAmount`) — the same
+ * anti-corruption role every other route in this file already plays.
+ */
+function toEditInput(
+  idHash: string,
+  body: SpotTransactionEditInput,
+): SpotTransactionOverrideEditInput {
+  return {
+    idHash: createTransactionIdHash(idHash),
+    amountIn:
+      body.amount_in.kind === 'SET'
+        ? { kind: 'SET', value: toPreciseAmount(body.amount_in.value) }
+        : { kind: 'UNCHANGED' },
+    amountOut:
+      body.amount_out.kind === 'SET'
+        ? { kind: 'SET', value: toPreciseAmount(body.amount_out.value) }
+        : { kind: 'UNCHANGED' },
+    priceFiat:
+      body.price_fiat.kind === 'SET'
+        ? {
+            kind: 'SET',
+            value: toPreciseAmount(body.price_fiat.value),
+            fiatCurrency: body.price_fiat.fiatCurrency,
+          }
+        : { kind: 'UNCHANGED' },
+    totalFiat:
+      body.total_fiat.kind === 'SET'
+        ? { kind: 'SET', value: body.total_fiat.value === null ? null : toPreciseAmount(body.total_fiat.value) }
+        : { kind: 'UNCHANGED' },
+    fee:
+      body.fee.kind === 'CHARGED'
+        ? { kind: 'CHARGED', amount: toPreciseAmount(body.fee.amount), assetId: body.fee.assetId }
+        : body.fee.kind === 'NONE'
+          ? { kind: 'NONE' }
+          : { kind: 'UNCHANGED' },
+    timestamp:
+      body.timestamp.kind === 'SET'
+        ? { kind: 'SET', value: body.timestamp.value }
+        : { kind: 'UNCHANGED' },
+    txType:
+      body.tx_type.kind === 'SET'
+        ? { kind: 'SET', value: body.tx_type.value }
+        : { kind: 'UNCHANGED' },
+  };
+}
+
 export function createFiscalApi(container: DIContainer) {
   return new Hono()
     .get('/integrity', async (c) => {
@@ -54,33 +122,36 @@ export function createFiscalApi(container: DIContainer) {
       const report = await container.getFiscalIntegrityUseCase.execute({ accountId });
       return c.json(fiscalIntegrityReportSchema.parse(report), 200);
     })
-    .put('/overrides/prices', zValidator('json', manualPriceOverrideBatchSchema), async (c) => {
-      const { overrides } = c.req.valid('json');
+    // PUT/DELETE /overrides/prices were removed here (design.md D3): manual_price_overrides was
+    // unified into spot_transaction_overrides and dropped (migration 008). The replacement is
+    // PUT/DELETE /overrides/transactions/:idHash, below — a single hash, not a batch (bulk edit
+    // is out of scope per design.md D8).
+    .put('/overrides/transactions/:idHash', zValidator('json', spotTransactionEditSchema), async (c) => {
+      const idHash = c.req.param('idHash');
+      const body = c.req.valid('json');
       try {
-        const result = await container.setManualPriceOverrideUseCase.execute(
-          overrides.map((override) => ({
-            idHash: createTransactionIdHash(override.id_hash),
-            priceFiat: toPreciseAmount(override.price_fiat),
-            fiatCurrency: override.fiat_currency,
-            note: override.note,
-          })),
+        const result = await container.setSpotTransactionOverrideUseCase.execute(
+          toEditInput(idHash, body),
         );
-        return c.json(outcomeBody(result), 200);
+        return c.json(spotOutcomeBody(result), 200);
       } catch (error) {
-        const { body, status } = errorBody(error);
-        return c.json(body, status);
+        const { body: errBody, status } = errorBody(error);
+        return c.json(errBody, status);
       }
     })
-    .delete('/overrides/prices', zValidator('json', overrideRemovalSchema), async (c) => {
-      const { idHashes } = c.req.valid('json');
+    .delete('/overrides/transactions/:idHash', async (c) => {
+      const idHash = c.req.param('idHash');
       try {
-        const result = await container.removeManualPriceOverrideUseCase.execute(
-          idHashes.map(createTransactionIdHash),
+        const result = await container.removeSpotTransactionOverrideUseCase.execute(
+          createTransactionIdHash(idHash),
         );
-        return c.json(outcomeBody(result), 200);
+        return c.json(
+          spotOutcomeBody({ ...result, balanceCheck: { kind: 'CLEAN' } }),
+          200,
+        );
       } catch (error) {
-        const { body, status } = errorBody(error);
-        return c.json(body, status);
+        const { body: errBody, status } = errorBody(error);
+        return c.json(errBody, status);
       }
     })
     .put(

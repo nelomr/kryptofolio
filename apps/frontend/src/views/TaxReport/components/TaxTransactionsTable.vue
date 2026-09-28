@@ -253,6 +253,13 @@ function getAssetTypeLabel(symbol: string | undefined): string {
                 >
                   {{ tx.type.replace(/_/g, " ") }}
                 </Badge>
+                <Badge
+                  v-if="tx.override?.kind === 'ACTIVE'"
+                  variant="outline"
+                  class="ml-1 text-[8px] font-black uppercase tracking-widest border-info text-info bg-info-soft pointer-events-none"
+                >
+                  {{ t("tax.badge.edited") }}
+                </Badge>
               </TableCell>
 
               <!-- Asset (using CryptoIcon) -->

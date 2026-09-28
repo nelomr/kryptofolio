@@ -17,6 +17,19 @@ export class OverrideValidationError extends Error {
   }
 }
 
+/**
+ * The `id_hash` in the request does not match any imported `spot_transactions` row.
+ *
+ * Distinct from `OverrideValidationError` (422): this is a 404 — there is nothing wrong with the
+ * shape of the request, the row it refers to simply doesn't exist (design.md D8).
+ */
+export class OverrideNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OverrideNotFoundError';
+  }
+}
+
 export interface OverrideMutationResult {
   /** Overrides written or removed. */
   applied: number;

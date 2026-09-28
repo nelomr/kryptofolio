@@ -39,7 +39,7 @@ Reconciliation SHALL operate only on `tax_lots`, `lot_history_events`, and `lot_
 #### Scenario: Override tables are untouched by a rebuild
 
 - **WHEN** materialisation reconciliation completes
-- **THEN** `manual_price_overrides` and `transfer_destination_overrides` MUST be byte-identical to their pre-run contents
+- **THEN** `spot_transaction_overrides` and `transfer_destination_overrides` MUST be byte-identical to their pre-run contents
 - **AND** an automated test MUST assert this
 
 #### Scenario: Derived tables are a pure function of their inputs
@@ -165,7 +165,7 @@ Because reconciliation is a full set difference, reconciling against a derived c
 
 #### Scenario: An empty chain after a restart does not retire the ledger's derived rows
 
-- **WHEN** the backend restarts, every `m_*` table is an empty placeholder, and an explicit trigger (the manual rebuild endpoint, a scheduled job, an ingestion) requests materialisation before any read
+- **WHEN** the backend restarts, every `m_*` table is an empty placeholder, and an explicit trigger (the manual rebuild endpoint, a scheduled job, an ingestion, or a spot-transaction override mutation) requests materialisation before any read
 - **THEN** the chain MUST be rebuilt from the ledger before the reconciliation reads it
 - **AND** no tax lot, lot-history event or custody entry derived from a live transaction MUST be soft-deleted
 
@@ -174,4 +174,10 @@ Because reconciliation is a full set difference, reconciling against a derived c
 - **WHEN** derived rows were soft-deleted by an earlier reconciliation that read a chain not reflecting the ledger, and the pipeline then runs over an unchanged ledger
 - **THEN** every such row whose source transaction is live MUST be reactivated with `deleted_at = NULL`
 - **AND** no duplicate row MUST be inserted
+
+#### Scenario: A spot-transaction override mutation triggers the same pipeline as any other explicit trigger
+
+- **WHEN** `SetSpotTransactionOverrideUseCase` or `RemoveSpotTransactionOverrideUseCase` calls `OverrideMutationUseCase.applyThenRebuild`
+- **THEN** it MUST go through `FifoChainFreshnessService.refresh()`, rebuilding the DuckDB chain before reconciliation reads it
+- **AND** the reconciled `tax_lots`, `lot_history_events` and `lot_custody_entries` rows MUST reflect the override's edited values once the pipeline commits
 

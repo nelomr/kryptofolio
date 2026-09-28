@@ -351,6 +351,74 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         WHERE preference = 1;
       `);
 
+      // -----------------------------------------------------------------------
+      //  Effective spot transactions (design.md D5, add-spot-transaction-edit-overrides)
+      // -----------------------------------------------------------------------
+      // The imported row plus its edit-override, folded into one effective row. `id`, `id_hash`,
+      // `account_id`, `transfer_group_id` and `status` always come from the imported row: none of
+      // those are editable fields, and the override table carries no columns for them at all.
+      //
+      // NOT YET the read every consumer uses (group 6.5+ of that change re-points `tx_context`,
+      // custody, data-quality and the display joins onto this view, replacing 8 direct
+      // `ledger.spot_transactions` reads one at a time). Until then this view exists standalone,
+      // and `tx_context` below still carries its own TEMPORARY `spot_transaction_overrides` join
+      // for the price-only case (see that join's own comment).
+      await this.connection.run(`
+        CREATE OR REPLACE VIEW v_effective_spot_transactions AS
+        SELECT
+            t.id,
+            t.id_hash,
+            t.account_id,
+            t.tx_type_effective AS tx_type,
+            t.asset_in_id,
+            t.amount_in_effective AS amount_in,
+            t.asset_out_id,
+            t.amount_out_effective AS amount_out,
+            t.fee_asset_id_effective AS fee_asset_id,
+            t.fee_amount_effective AS fee_amount,
+            t.total_fiat_effective AS total_fiat,
+            t.price_fiat_effective AS price_fiat,
+            t.fiat_currency,
+            t.transfer_group_id,
+            t.flag,
+            t.timestamp_effective AS timestamp,
+            t.timestamp AS original_timestamp,
+            t.status,
+            (o.id_hash IS NOT NULL) AS has_override,
+            o.fiat_currency AS override_fiat_currency,
+            COALESCE(o.price_edited, 0) = 1 AS price_overridden,
+            COALESCE(o.total_fiat_edited, 0) = 1 AS total_fiat_overridden
+        FROM (
+            SELECT
+                st.*,
+                CASE WHEN o.amount_in_edited = 1 THEN o.amount_in ELSE st.amount_in END AS amount_in_effective,
+                CASE WHEN o.amount_out_edited = 1 THEN o.amount_out ELSE st.amount_out END AS amount_out_effective,
+                CASE WHEN o.price_edited = 1 THEN o.price_fiat ELSE st.price_fiat END AS price_fiat_effective,
+                CASE WHEN o.total_fiat_edited = 1 THEN o.total_fiat ELSE st.total_fiat END AS total_fiat_effective,
+                CASE WHEN o.timestamp_edited = 1 THEN o.timestamp ELSE st.timestamp END AS timestamp_effective,
+                CASE WHEN o.tx_type_edited = 1 THEN o.tx_type ELSE st.tx_type END AS tx_type_effective,
+                -- fee_kind resolution: UNCHANGED keeps the imported pair; NONE clears it entirely
+                -- (an explicit edit that removes a fee, distinct from never having had one); CHARGED
+                -- (including a stated zero) replaces it with the override's own amount/asset.
+                CASE
+                    WHEN o.fee_kind = 'NONE' THEN NULL
+                    WHEN o.fee_kind = 'CHARGED' THEN o.fee_amount
+                    ELSE st.fee_amount
+                END AS fee_amount_effective,
+                CASE
+                    WHEN o.fee_kind = 'NONE' THEN NULL
+                    WHEN o.fee_kind = 'CHARGED' THEN o.fee_asset_id
+                    ELSE st.fee_asset_id
+                END AS fee_asset_id_effective
+            FROM ledger.spot_transactions st
+            LEFT JOIN ledger.spot_transaction_overrides o
+                   ON o.id_hash = st.id_hash AND o.deleted_at IS NULL
+            -- Every existing consumer of ledger.spot_transactions filters this; baked in here once
+            -- so none of the 8 consumers re-pointed onto this view (group 6) has to repeat it.
+            WHERE st.deleted_at IS NULL
+        ) t
+        LEFT JOIN ledger.spot_transaction_overrides o ON o.id_hash = t.id_hash AND o.deleted_at IS NULL;
+      `);
       // Tax Base routing views
       //
       // `fiat_currency` is projected because `total_fiat` is denominated in it. A reader that has
@@ -368,10 +436,9 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             fiat_currency,
             timestamp,
             SUBSTR(CAST(timestamp AS VARCHAR), 1, 4) AS year
-        FROM ledger.spot_transactions
+        FROM v_effective_spot_transactions
         WHERE tx_type IN ('STAKING', 'EARN', 'DIVIDENDS', 'REWARD')
-          AND status = 'COMPLETED'
-          AND deleted_at IS NULL;
+          AND status = 'COMPLETED';
       `);
 
       await this.connection.run(`
@@ -386,12 +453,11 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             fiat_currency,
             timestamp,
             SUBSTR(CAST(timestamp AS VARCHAR), 1, 4) AS year
-        FROM ledger.spot_transactions
+        FROM v_effective_spot_transactions
         -- A promotional credit is income in the general base like an airdrop, and unlike a deposit
         -- of the user's own money. Its own type is what keeps the two distinguishable.
         WHERE tx_type IN ('AIRDROP', 'MINING', 'PROMOTION')
-          AND status = 'COMPLETED'
-          AND deleted_at IS NULL;
+          AND status = 'COMPLETED';
       `);
 
       // - Replaced `settlement_asset_id = 'EUR'` and `fee_asset_id = 'EUR'` with
@@ -470,6 +536,7 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
       await this.seedFifoFlagSeverity();
       await this.createAccountNamingMacros();
 
+
       // -----------------------------------------------------------------------
       //  FIFO event flattening
       // -----------------------------------------------------------------------
@@ -532,28 +599,34 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 -- total_fiat could be NULL, every unresolved magnitude was also stored as 0, so this
                 -- used to read <> 0 to tell the two apart; that read a real free acquisition as
                 -- unresolved too, which is the defect the nullable column exists to remove.
-                recorded_fiat IS NOT NULL AS has_recorded_fiat,
+                -- D3 (design.md, add-spot-transaction-edit-overrides): an edited price is
+                -- authoritative on every leg, even when a total was already recorded (or carried
+                -- over unedited) — the LEGACY DEFECT was treating override_unit_price as inert
+                -- whenever has_recorded_fiat was true. Forcing has_recorded_fiat to false exactly
+                -- when the price was overridden and the total was NOT independently edited routes
+                -- basis_fiat below to the qty × derived_unit_price branch, which already prefers
+                -- override_unit_price. An independently edited total_fiat still wins outright: the
+                -- user gave both figures explicitly, so no recompute is owed.
+                recorded_fiat IS NOT NULL
+                    AND NOT (t.price_overridden AND NOT t.total_fiat_overridden) AS has_recorded_fiat,
                 p.generates_acquisition,
                 p.generates_disposal,
                 p.generates_fee_disposal,
                 p.taxable_disposal,
                 p.principal_disposal_type,
-                TRY_CAST(ovr.price_fiat AS DECIMAL(38,18)) AS override_unit_price,
-                CASE WHEN ovr.price_fiat IS NOT NULL
-                     THEN ovr.fiat_currency <> t.fiat_currency
+                TRY_CAST(CASE WHEN t.price_overridden THEN t.price_fiat END AS DECIMAL(38,18)) AS override_unit_price,
+                CASE WHEN t.price_overridden
+                     THEN t.override_fiat_currency <> t.fiat_currency
                 END AS override_currency_differs,
                 fa_in.id  IS NOT NULL AS asset_in_is_fiat,
                 fa_out.id IS NOT NULL AS asset_out_is_fiat,
                 fa_fee.id IS NOT NULL AS fee_asset_is_fiat
-            FROM ledger.spot_transactions t
+            FROM v_effective_spot_transactions t
             JOIN fifo_event_policy p ON p.tx_type = t.tx_type
-            LEFT JOIN ledger.manual_price_overrides ovr
-                   ON ovr.id_hash = t.id_hash AND ovr.deleted_at IS NULL
             LEFT JOIN fiat_assets fa_in  ON fa_in.id  = t.asset_in_id
             LEFT JOIN fiat_assets fa_out ON fa_out.id = t.asset_out_id
             LEFT JOIN fiat_assets fa_fee ON fa_fee.id = t.fee_asset_id
             WHERE t.status = 'COMPLETED'
-              AND t.deleted_at IS NULL
         ),
         acquisition_priced AS (
             SELECT
@@ -1020,7 +1093,13 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 a.rounds_to_zero,
                 a.currency_mismatch
             FROM v_acquisitions a
-            LEFT JOIN ledger.spot_transactions src_tx ON a.tx_id = src_tx.id
+            -- Re-pointed at the effective view for architectural consistency (design.md D5):
+            -- fiat_currency itself is not an editable field, and this acquisition row can never
+            -- reference a deleted source row in the first place (deleted_at IS NULL is already
+            -- filtered upstream in v_effective_spot_transactions), so this re-point is provably a
+            -- no-op on the emitted values — verified by the full FIFO golden-snapshot suite staying
+            -- byte-identical, not by a new failing test (there is no observable difference to assert).
+            LEFT JOIN v_effective_spot_transactions src_tx ON a.tx_id = src_tx.id
             LEFT JOIN ledger.assets ast ON a.asset_id = ast.id OR a.asset_id = ast.symbol
             LEFT JOIN (
                 SELECT acquisition_tx_id, asset_id, CAST(SUM(matched_amount) AS DECIMAL(38,18)) AS total_matched
@@ -1097,6 +1176,12 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
                 tl.status
             FROM ledger.tax_lots tl
             LEFT JOIN ledger.assets ast ON tl.asset_id = ast.id OR tl.asset_id = ast.symbol
+            -- Deliberately NOT re-pointed at v_effective_spot_transactions (unlike every other join
+            -- in this file, design.md D5): this join exists solely to detect a DELETED source row
+            -- (st.deleted_at IS NULL below), and the effective view already filters deleted rows
+            -- out entirely. Joining it here would make a deleted source silently match nothing
+            -- (st.id IS NULL), which the WHERE clause reads as "no source transaction at all" — the
+            -- opposite of what it must detect. This is the one raw read group 6 keeps on purpose.
             LEFT JOIN ledger.spot_transactions st ON tl.spot_transaction_id = st.id
             WHERE tl.deleted_at IS NULL
               -- A soft-deleted source transaction must retire its lot, not resurrect it here: its
@@ -1142,7 +1227,9 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
             COALESCE(acc.name, m.account_id) AS exchange_name
         FROM v_fifo_matches m
         JOIN v_acquisitions a ON m.acquisition_tx_id = a.tx_id AND m.asset_id = a.asset_id
-        LEFT JOIN ledger.spot_transactions dis_tx ON m.disposal_tx_id = dis_tx.id
+        -- Same no-op re-point as src_tx above: fiat_currency and flag are not editable fields,
+        -- and a disposal can never reference a deleted source row.
+        LEFT JOIN v_effective_spot_transactions dis_tx ON m.disposal_tx_id = dis_tx.id
         LEFT JOIN ledger.assets ast ON m.asset_id = ast.id OR m.asset_id = ast.symbol
         LEFT JOIN ledger.accounts acc ON m.account_id = acc.id
         ORDER BY m.disposal_date, m.id;
@@ -1701,11 +1788,10 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         SELECT
             t.id, t.id_hash, t.account_id, t.timestamp, t.transfer_group_id,
             t.asset_in_id, t.amount_in, t.asset_out_id, t.amount_out
-        FROM ledger.spot_transactions t
+        FROM v_effective_spot_transactions t
         JOIN fifo_event_policy p ON p.tx_type = t.tx_type
         WHERE p.custody_movement
           AND t.status = 'COMPLETED'
-          AND t.deleted_at IS NULL
     ),
     legs AS (
         SELECT
@@ -2219,10 +2305,9 @@ export class DuckDbAdapter implements IAnalyticalDatabasePort {
         SELECT
             t.fee_asset_id AS asset_id,
             CAST(SUM(TRY_CAST(t.fee_amount AS DECIMAL(38,18))) AS DECIMAL(38,18)) AS recorded_fees
-        FROM ledger.spot_transactions t
+        FROM v_effective_spot_transactions t
         WHERE t.fee_asset_id IS NOT NULL
           AND t.status = 'COMPLETED'
-          AND t.deleted_at IS NULL
         GROUP BY 1
     ),
     balances AS MATERIALIZED (

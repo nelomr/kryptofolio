@@ -12,7 +12,42 @@ import {
   ExternalTaxLotSchema,
   ExternalTaxLotHistorySchema,
   ExternalTokenHistorySchema,
+  ExternalTaxTransactionSchema,
 } from '../ExternalTaxSchemas'
+
+describe('ExternalTaxTransactionSchema — idHash and override read model (design.md D9)', () => {
+  const base = {
+    id: 'tx-1',
+    tx_type: 'BUY',
+    asset_in_id: 'BTC',
+    amount_in: '0.1',
+    timestamp: '2026-01-01T00:00:00.000Z',
+    id_hash: 'hash-a',
+  }
+
+  it('maps id_hash to idHash', () => {
+    const result = ExternalTaxTransactionSchema.parse({ ...base, override: { kind: 'NONE' } })
+    expect(result.idHash).toBe('hash-a')
+  })
+
+  it('defaults override to NONE when the backend omits it', () => {
+    const result = ExternalTaxTransactionSchema.parse(base)
+    expect(result.override).toEqual({ kind: 'NONE' })
+  })
+
+  it('passes through an ACTIVE override with its edited fields', () => {
+    const result = ExternalTaxTransactionSchema.parse({
+      ...base,
+      override: { kind: 'ACTIVE', editedFields: ['price_fiat'] },
+    })
+    expect(result.override).toEqual({ kind: 'ACTIVE', editedFields: ['price_fiat'] })
+  })
+
+  it('maps fiat_currency to fiatCurrency — the row\'s own native currency, not the display currency', () => {
+    const result = ExternalTaxTransactionSchema.parse({ ...base, fiat_currency: 'USD' })
+    expect(result.fiatCurrency).toBe('USD')
+  })
+})
 
 describe('ExternalTaxLotSchema — canonical status vocabulary', () => {
   it('accepts OPEN', () => {

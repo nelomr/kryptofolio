@@ -8,7 +8,6 @@
 
 import type {
   ITaxPort,
-  ManualPriceOverrideInput,
   TransferDestinationInput,
 } from '@/core/domain/ports/ITaxPort'
 import type {
@@ -18,6 +17,7 @@ import type {
   FiscalIntegrityReportEntity,
   IngestionOutcomeEntity,
   OverrideOutcomeEntity,
+  SpotOverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
 import {
@@ -28,6 +28,7 @@ import {
   ExternalFiscalIntegritySchema,
   ExternalIngestionOutcomeSchema,
   ExternalOverrideOutcomeSchema,
+  ExternalSpotOverrideOutcomeSchema,
 } from '@/core/infrastructure/dtos/FiscalIntegritySchemas'
 import { CexFuturesLedgerSchema } from '@/core/infrastructure/dtos/ExternalFuturesSchemas'
 import { TransactionIdSchema } from '@/core/infrastructure/dtos/BrandedTypeSchemas'
@@ -35,7 +36,7 @@ import { errorBus } from '@/core/infrastructure/errors/errorBus'
 import { DomainValidationError } from './RestCryptoAdapter'
 import { TaxOperationError } from '@/core/infrastructure/errors/TaxOperationError'
 import { bffClient } from '../http/BffClient'
-import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
+import type { SourceProfileId, TransactionRow, SpotTransactionEditInput } from '@kryptofolio/shared-types'
 
 /**
  * Ingestion boundary conversion — `TransactionRow.mappedData` models an unset field as `null` (its
@@ -146,6 +147,12 @@ export class RestTaxAdapter implements ITaxPort {
       amountOut: dto.amountOut,
       exchange: dto.exchange,
       refId: dto.refId,
+      // Spot-only identity/edit fields (design.md D8/D9) — futures/derivatives never populate
+      // these on the DTO, so `?? undefined` here would be redundant, but they must not be
+      // dropped for spot rows the way a hand-picked literal drops any field it doesn't name.
+      idHash: dto.idHash,
+      fiatCurrency: dto.fiatCurrency,
+      override: dto.override,
     }))
   }
 
@@ -226,14 +233,6 @@ export class RestTaxAdapter implements ITaxPort {
     }
   }
 
-  async deleteTransaction(id: string): Promise<void> {
-    await bffClient.api.tax.transactions[':id'].$delete({ param: { id } })
-  }
-
-  async updateTransaction(id: string, data: Partial<TaxTransactionEntity>): Promise<void> {
-    await bffClient.api.tax.transactions[':id'].$put({ param: { id }, json: data })
-  }
-
   async validateTransaction(payload: Partial<TaxTransactionEntity>): Promise<void> {
     await bffClient.api.tax.transactions.validate.$post({ json: payload })
   }
@@ -300,27 +299,22 @@ export class RestTaxAdapter implements ITaxPort {
     return parseOrFail(ExternalFiscalIntegritySchema, rawData, 'getFiscalIntegrity')
   }
 
-  async setManualPriceOverrides(
-    overrides: ManualPriceOverrideInput[],
-  ): Promise<OverrideOutcomeEntity> {
-    const res = await bffClient.api.fiscal.overrides.prices.$put({
-      json: {
-        overrides: overrides.map((override) => ({
-          id_hash: override.idHash,
-          price_fiat: override.priceFiat,
-          fiat_currency: override.fiatCurrency,
-          note: override.note,
-        })),
-      },
+  async setSpotTransactionOverride(
+    idHash: TransactionIdHash,
+    payload: SpotTransactionEditInput,
+  ): Promise<SpotOverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.transactions[':idHash'].$put({
+      param: { idHash },
+      json: payload,
     })
-    return this.parseOverrideOutcome(res, 'setManualPriceOverrides')
+    return this.parseSpotOverrideOutcome(res, 'setSpotTransactionOverride')
   }
 
-  async removeManualPriceOverrides(
-    idHashes: TransactionIdHash[],
-  ): Promise<OverrideOutcomeEntity> {
-    const res = await bffClient.api.fiscal.overrides.prices.$delete({ json: { idHashes } })
-    return this.parseOverrideOutcome(res, 'removeManualPriceOverrides')
+  async removeSpotTransactionOverride(idHash: TransactionIdHash): Promise<SpotOverrideOutcomeEntity> {
+    const res = await bffClient.api.fiscal.overrides.transactions[':idHash'].$delete({
+      param: { idHash },
+    })
+    return this.parseSpotOverrideOutcome(res, 'removeSpotTransactionOverride')
   }
 
   async setTransferDestinations(
@@ -362,5 +356,20 @@ export class RestTaxAdapter implements ITaxPort {
       throw new TaxOperationError('OVERRIDE_REJECTED', message)
     }
     return parseOrFail(ExternalOverrideOutcomeSchema, rawData, context)
+  }
+
+  private async parseSpotOverrideOutcome(
+    res: { ok: boolean; json: () => Promise<unknown> },
+    context: string,
+  ): Promise<SpotOverrideOutcomeEntity> {
+    const rawData = await res.json()
+    if (!res.ok) {
+      const message =
+        typeof rawData === 'object' && rawData !== null && 'message' in rawData
+          ? String((rawData as { message: unknown }).message)
+          : 'Override was rejected'
+      throw new TaxOperationError('OVERRIDE_REJECTED', message)
+    }
+    return parseOrFail(ExternalSpotOverrideOutcomeSchema, rawData, context)
   }
 }

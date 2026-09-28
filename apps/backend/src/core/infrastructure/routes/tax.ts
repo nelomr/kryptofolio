@@ -3,7 +3,50 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { DIContainer } from '../di/container.js';
 import type { SpanishTaxReportResponse } from '../../application/use-cases/GetSpanishTaxReportUseCase.js';
-import type { ConvertedAmount } from '@kryptofolio/shared-types';
+import type { ConvertedAmount, EditableField } from '@kryptofolio/shared-types';
+import type { LedgerSpotTransaction, LedgerSpotTransactionOverride } from '../../domain/ports/ILedgerPort.js';
+import { toEffectiveSpotTransaction } from '../../domain/services/EffectiveSpotTransactionView.js';
+
+/**
+ * `override` read model for the Ledgers table (design.md D8): marks each row as untouched or
+ * carrying an active edit, without a second request — the modal's lots panel still fetches
+ * separately, but the table itself needs only this to render its "edited" badge.
+ */
+type SpotTransactionOverrideView =
+  | { kind: 'NONE' }
+  | { kind: 'ACTIVE'; original: LedgerSpotTransaction; editedFields: readonly EditableField[] };
+
+function editedFieldsOf(override: LedgerSpotTransactionOverride): EditableField[] {
+  const fields: EditableField[] = [];
+  if (override.amount_in_edited) fields.push('amount_in');
+  if (override.amount_out_edited) fields.push('amount_out');
+  if (override.price_edited) fields.push('price_fiat');
+  if (override.total_fiat_edited) fields.push('total_fiat');
+  if (override.fee_kind !== 'UNCHANGED') fields.push('fee');
+  if (override.timestamp_edited) fields.push('timestamp');
+  if (override.tx_type_edited) fields.push('tx_type');
+  return fields;
+}
+
+function withOverrideView(
+  transactions: readonly LedgerSpotTransaction[],
+  overrides: readonly LedgerSpotTransactionOverride[],
+): (LedgerSpotTransaction & { override: SpotTransactionOverrideView })[] {
+  const byHash = new Map(overrides.map((o) => [o.id_hash, o]));
+  return transactions.map((tx) => {
+    const override = byHash.get(tx.id_hash);
+    // The row itself must show the EFFECTIVE (post-edit) values, not the original ones — the
+    // "edited" badge alone previously left the Ledgers table (and a reload) showing the original
+    // figures forever, even though the override had genuinely been saved and DuckDB's FIFO chain
+    // had genuinely picked it up. `original` still carries the pre-edit values for reference/undo.
+    return {
+      ...(override ? toEffectiveSpotTransaction(tx, override) : tx),
+      override: override
+        ? { kind: 'ACTIVE' as const, original: tx, editedFields: editedFieldsOf(override) }
+        : { kind: 'NONE' as const },
+    };
+  });
+}
 
 function parseReportParams(
   year: string | undefined,
@@ -99,8 +142,11 @@ export function createTaxApi(container: DIContainer) {
   return new Hono()
     .get('/transactions/spot', async (c) => {
       const accountId = c.req.query('accountId');
-      const txs = await container.ledgerPort.getSpotTransactions(accountId);
-      return c.json(txs, 200);
+      const [txs, overrides] = await Promise.all([
+        container.ledgerPort.getSpotTransactions(accountId),
+        container.ledgerPort.getSpotTransactionOverrides(),
+      ]);
+      return c.json(withOverrideView(txs, overrides), 200);
     })
     .get('/transactions/futures', async (c) => {
       const accountId = c.req.query('accountId');
@@ -145,10 +191,9 @@ export function createTaxApi(container: DIContainer) {
       const report = await container.getSpanishTaxReportUseCase.execute(params);
       return c.json(report, 200);
     })
-    .delete('/transactions/:id', (c) => c.json({ success: true }, 200))
-    .put('/transactions/:id', zValidator('json', z.record(z.unknown())), (c) =>
-      c.json({ success: true }, 200),
-    )
+    // PUT/DELETE /transactions/:id stubs removed here (design.md, group 7): they returned
+    // `{ success: true }` without ever touching the ledger. Their replacement is
+    // PUT/DELETE /fiscal/overrides/transactions/:idHash (a different route family, not a rename).
     .post(
       '/transactions/validate',
       zValidator('json', z.record(z.unknown())),

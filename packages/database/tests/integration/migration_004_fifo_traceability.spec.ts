@@ -145,9 +145,8 @@ describe('004_fifo_traceability migration', () => {
   describe('new tables', () => {
     beforeEach(() => applyMigrations(db));
 
-    it('creates lot_custody_entries, manual_price_overrides and transfer_destination_overrides', () => {
+    it('creates lot_custody_entries and transfer_destination_overrides', () => {
       expect(tableExists(db, 'lot_custody_entries')).toBe(true);
-      expect(tableExists(db, 'manual_price_overrides')).toBe(true);
       expect(tableExists(db, 'transfer_destination_overrides')).toBe(true);
     });
 
@@ -155,18 +154,46 @@ describe('004_fifo_traceability migration', () => {
       const rows = db
         .prepare(
           `SELECT name, sql FROM sqlite_master WHERE type = 'table'
-             AND name IN ('lot_custody_entries','manual_price_overrides','transfer_destination_overrides')`
+             AND name IN ('lot_custody_entries','transfer_destination_overrides')`
         )
         .all() as { name: string; sql: string }[];
-      expect(rows).toHaveLength(3);
+      expect(rows).toHaveLength(2);
       for (const row of rows) {
         expect(row.sql.toUpperCase(), `${row.name} must be STRICT`).toContain('STRICT');
       }
     });
 
-    it('keys both override tables on the deterministic transaction identity', () => {
-      expect(columnNames(db, 'manual_price_overrides')).toContain('id_hash');
+    it('keys transfer_destination_overrides on the deterministic transaction identity', () => {
       expect(columnNames(db, 'transfer_destination_overrides')).toContain('id_hash');
+    });
+  });
+
+  // `manual_price_overrides` existed as of this migration but was unified into
+  // `spot_transaction_overrides` and dropped by 008_spot_transaction_overrides.sql (design.md D3
+  // of add-spot-transaction-edit-overrides). These three assertions apply only 001-004, the state
+  // right after this migration, matching what 004 itself actually created — see
+  // migration_008_spot_transaction_overrides.spec.ts for the table that superseded it.
+  describe('new tables as of 004, before 008 unified manual_price_overrides away', () => {
+    function applyThrough004(): void {
+      const files = fs
+        .readdirSync(MIGRATIONS_DIR)
+        .filter((f) => f.endsWith('.sql') && f <= MIGRATION_004)
+        .sort();
+      for (const f of files) db.exec(readMigration(f));
+    }
+
+    beforeEach(() => applyThrough004());
+
+    it('creates manual_price_overrides', () => {
+      expect(tableExists(db, 'manual_price_overrides')).toBe(true);
+    });
+
+    it('declares it STRICT and keyed on id_hash', () => {
+      const row = db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'manual_price_overrides'")
+        .get() as { sql: string };
+      expect(row.sql.toUpperCase()).toContain('STRICT');
+      expect(columnNames(db, 'manual_price_overrides')).toContain('id_hash');
     });
 
     it('requires a currency on a manual price override', () => {
@@ -422,9 +449,11 @@ describe('004_fifo_traceability migration', () => {
   describe('active views and audit triggers cover every new table', () => {
     beforeEach(() => applyMigrations(db));
 
+    // manual_price_overrides is intentionally excluded: it is dropped by migration 008, so under
+    // the full migration chain applied here it no longer exists. Its view/trigger were verified
+    // above, scoped to the state right after 004.
     const NEW_TABLES = [
       'lot_custody_entries',
-      'manual_price_overrides',
       'transfer_destination_overrides',
     ];
 

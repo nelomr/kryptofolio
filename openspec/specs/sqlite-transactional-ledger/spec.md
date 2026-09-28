@@ -3,11 +3,9 @@
 ## Purpose
 
 The transactional ledger: relational tables under STRICT mode with text storage, the asset fiat classification column, and the account hierarchy and synthetic markers.
-
 ## Requirements
-
 ### Requirement: Relational Tables
-The database SHALL include `assets`, `accounts`, `spot_transactions`, `futures_transactions`, `tax_lots`, `lot_history_events`, `lot_custody_entries`, `manual_price_overrides`, `transfer_destination_overrides`, and `audit_log` tables matching frontend mock payload structures. Tables SHALL be partitioned into two classes with opposite lifecycles: **derived** tables (`tax_lots`, `lot_history_events`, `lot_custody_entries`), which are a pure function of their inputs and are freely reconciled; and **user-authored input** tables (`manual_price_overrides`, `transfer_destination_overrides`), which are never written by reconciliation.
+The database SHALL include `assets`, `accounts`, `spot_transactions`, `futures_transactions`, `tax_lots`, `lot_history_events`, `lot_custody_entries`, `spot_transaction_overrides`, `transfer_destination_overrides`, and `audit_log` tables matching frontend mock payload structures. Tables SHALL be partitioned into two classes with opposite lifecycles: **derived** tables (`tax_lots`, `lot_history_events`, `lot_custody_entries`), which are a pure function of their inputs and are freely reconciled; and **user-authored input** tables (`spot_transaction_overrides`, `transfer_destination_overrides`), which are never written by reconciliation.
 
 #### Scenario: Creating a tax lot link
 - **WHEN** a tax lot references a BUY transaction
@@ -110,17 +108,17 @@ The `lot_history_events` table SHALL carry `disposal_type TEXT NOT NULL` constra
 
 ### Requirement: User-Authored Override Tables
 
-The database SHALL include `manual_price_overrides` and `transfer_destination_overrides` as STRICT tables keyed by the deterministic transaction identity, each carrying an optional note and audit timestamps. These tables SHALL be documented and treated as calculation inputs.
+The database SHALL include `spot_transaction_overrides` and `transfer_destination_overrides` as STRICT tables keyed by the deterministic transaction identity, each carrying an optional note and audit timestamps. These tables SHALL be documented and treated as calculation inputs. Both tables SHALL have `AFTER INSERT` and `AFTER UPDATE` triggers writing to `audit_log`, so the first declaration of an override is audited, not only its subsequent updates.
 
-#### Scenario: Price override is keyed by deterministic transaction identity
+#### Scenario: Override is keyed by deterministic transaction identity
 
-- **WHEN** a manual price override is written
-- **THEN** it MUST key on the transaction's deterministic identity so it survives re-ingestion
-- **AND** it MUST record an explicit `fiat_currency`
+- **WHEN** a spot transaction override is written
+- **THEN** it MUST key on the transaction's deterministic `id_hash` identity so it survives re-ingestion
+- **AND** it MUST have no FOREIGN KEY to `spot_transactions`, so it survives a delete-and-reimport
 
-#### Scenario: Price override rejects a negative value
+#### Scenario: An edited price rejects a negative value
 
-- **WHEN** a manual price override is written with a negative value
+- **WHEN** a spot transaction override is written with a negative `price_fiat`
 - **THEN** the non-negative CHECK constraint MUST reject the write
 
 #### Scenario: Destination override references a real account
@@ -137,3 +135,41 @@ The database SHALL include `manual_price_overrides` and `transfer_destination_ov
 
 - **WHEN** materialisation reconciliation completes
 - **THEN** both override tables MUST be unchanged
+
+#### Scenario: The first declaration of an override is audited
+
+- **WHEN** a `spot_transaction_overrides` or `transfer_destination_overrides` row is inserted for the first time for a given `id_hash`
+- **THEN** the `AFTER INSERT` trigger MUST write a row to `audit_log` with `action='INSERT'`
+- **AND** this MUST hold even though the adapter's write path is an upsert
+
+### Requirement: Spot Transaction Override Table Uses Per-Field Edited Flags And A Three-Way Fee Discriminant
+
+`spot_transaction_overrides` SHALL have one row per `id_hash`. Each editable field group SHALL be stored as its value column(s) plus an explicit `*_edited INTEGER NOT NULL CHECK (x IN (0,1))` flag, except the fee group, which SHALL use a three-way `fee_kind TEXT CHECK (fee_kind IN ('UNCHANGED','NONE','CHARGED'))` discriminant. A table-level CHECK SHALL tie each flag to the presence of its value column(s), and SHALL reject a row where no field is marked edited.
+
+#### Scenario: A row with nothing edited is rejected
+
+- **WHEN** an insert or update to `spot_transaction_overrides` sets every `*_edited` flag to `0` and `fee_kind = 'UNCHANGED'`
+- **THEN** the CHECK constraint MUST reject the write
+
+#### Scenario: An edited-to-NULL total is distinguishable from an untouched total
+
+- **WHEN** `total_fiat_edited = 1` and `total_fiat` is written as `NULL`
+- **THEN** the write MUST succeed
+- **AND** this state MUST be distinguishable, via the flag, from a row where `total_fiat_edited = 0`
+
+#### Scenario: CHARGED requires both fee amount and fee asset
+
+- **WHEN** `fee_kind = 'CHARGED'` is written with `fee_amount` or `fee_asset_id` NULL
+- **THEN** the CHECK constraint MUST reject the write
+
+#### Scenario: NONE and UNCHANGED both require empty fee value columns
+
+- **WHEN** `fee_kind` is `'NONE'` or `'UNCHANGED'` and either `fee_amount` or `fee_asset_id` is non-NULL
+- **THEN** the CHECK constraint MUST reject the write
+
+#### Scenario: The tx_type CHECK list stays equal to the ledger's own list
+
+- **WHEN** the `tx_type` CHECK constraints of `spot_transaction_overrides` and `spot_transactions` are read from `sqlite_master`
+- **THEN** their allowed-value lists MUST be equal
+- **AND** an automated database integration test MUST assert this equality
+

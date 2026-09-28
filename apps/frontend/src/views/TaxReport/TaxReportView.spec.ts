@@ -6,6 +6,7 @@ import TaxReportHeader from './components/TaxReportHeader.vue'
 import TaxReportSummaryCards from './components/TaxReportSummaryCards.vue'
 import IntegrityCard from './components/IntegrityCard.vue'
 import PendingValuesReview from './components/PendingValuesReview.vue'
+import EditSpotTransactionDialog from './components/EditSpotTransactionDialog.vue'
 
 
 // Mock the composable
@@ -59,11 +60,18 @@ vi.mock('@/composables/queries/useTaxQueries', async () => {
   }
 })
 
+const setSpotOverrideMutate = vi.fn()
+
 vi.mock('@/composables/queries/useTaxMutations', async () => {
   const vue = await import('vue')
   const mutation = () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isLoading: vue.ref(false) })
   return {
-    useSetManualPriceOverrideMutation: vi.fn(mutation),
+    useSetSpotTransactionOverrideMutation: vi.fn(() => ({
+      mutate: setSpotOverrideMutate,
+      mutateAsync: vi.fn(),
+      isLoading: vue.ref(false),
+    })),
+    useRemoveSpotTransactionOverrideMutation: vi.fn(mutation),
     useSetTransferDestinationMutation: vi.fn(mutation),
   }
 })
@@ -126,5 +134,31 @@ describe('TaxReportView.vue', () => {
     expect(content).toContain('tax.tabs.ledgers')
     expect(content).toContain('tax.tabs.report')
     expect(content).toContain('tax.tabs.chat')
+  })
+
+  it("opening a row from the pending-review panel opens the shared edit dialog with price_fiat pre-focused, instead of declaring a price itself", async () => {
+    setSpotOverrideMutate.mockClear()
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    wrapper.findComponent(PendingValuesReview).vm.$emit('editRow', 'hash-a')
+    await wrapper.vm.$nextTick()
+
+    // The panel no longer runs its own mutation — it only opens the same dialog the Ledgers
+    // pencil opens (design.md, "Revised after user feedback").
+    expect(setSpotOverrideMutate).not.toHaveBeenCalled()
+    const dialog = wrapper.findComponent(EditSpotTransactionDialog)
+    expect(dialog.props('open')).toBe(true)
+    expect(dialog.props('initialFocusField')).toBe('price_fiat')
+  })
+
+  it('opening a row from the Ledgers pencil does not pre-focus price_fiat', async () => {
+    const wrapper = mount(TaxReportView, {
+      global: { stubs: { TaxReportHeader: true, TaxReportSummaryCards: true } },
+    })
+
+    const dialog = wrapper.findComponent(EditSpotTransactionDialog)
+    expect(dialog.props('initialFocusField')).toBe(null)
   })
 })

@@ -472,41 +472,10 @@ describe("SQLiteLedgerAdapter — Integration Tests with Real Migration", () => 
   // -------------------------------------------------------------------------
 
   describe("Manual price and transfer destination overrides", () => {
-    it("round-trips a manual price override and retires it non-destructively", async () => {
-      await adapter.setManualPriceOverride({
-        id_hash: "hash-abc123",
-        price_fiat: toPreciseAmount("0.42"),
-        fiat_currency: "EUR",
-        note: "declared by hand",
-      });
-
-      let overrides = await adapter.getManualPriceOverrides();
-      expect(overrides).toEqual([
-        {
-          id_hash: "hash-abc123",
-          price_fiat: "0.42",
-          fiat_currency: "EUR",
-          note: "declared by hand",
-        },
-      ]);
-
-      await adapter.setManualPriceOverride({
-        id_hash: "hash-abc123",
-        price_fiat: toPreciseAmount("0.55"),
-        fiat_currency: "EUR",
-      });
-      overrides = await adapter.getManualPriceOverrides();
-      expect(overrides).toHaveLength(1);
-      expect(overrides[0].price_fiat).toBe("0.55");
-      expect(overrides[0].note).toBeUndefined();
-
-      await adapter.removeManualPriceOverride("hash-abc123");
-      expect(await adapter.getManualPriceOverrides()).toHaveLength(0);
-      const surviving = db
-        .prepare("SELECT COUNT(*) AS count FROM manual_price_overrides")
-        .get() as { count: number };
-      expect(surviving.count).toBe(1);
-    });
+    // The manual-price-override round-trip case that lived here was removed along with
+    // ILedgerPort.{get,set,remove}ManualPriceOverride* — see
+    // spot-transaction-overrides.spec.ts (group 4) for its `spot_transaction_overrides`
+    // replacement, and design.md D3 for why the table was unified and dropped.
 
     it("round-trips a transfer destination override and retires it non-destructively", async () => {
       await adapter.setTransferDestinationOverride({

@@ -18,7 +18,11 @@ The gateway SHALL expose the advisor as hand-written Hono routes registered in `
 - **THEN** `pnpm typecheck` passes and `AppType` still resolves every pre-existing route
 
 ### Requirement: Advisor Route Surface
-The gateway SHALL expose exactly three advisor concerns: a non-streaming ask route, an SSE streaming route, and a model/provider configuration route (read and write). Both ask routes SHALL delegate to the same `AskAdvisorUC`, so no second orchestration path exists that could drift from the first.
+The gateway SHALL expose exactly three advisor concerns: a non-streaming ask route, an SSE streaming route, and a model/provider configuration route (read and write). The configuration route's read/write surface SHALL cover both the model chain and the per-profile execution limits (`getExecutionProfiles`/`setExecutionProfiles`, design D16) under the same `advisorConfigSchema`. Both ask routes SHALL delegate to the same `AskAdvisorUC`, so no second orchestration path exists that could drift from the first.
+
+#### Scenario: Execution profiles round-trip through the config route
+- **WHEN** a client writes per-profile execution limits and then reads the advisor config
+- **THEN** the response returns the persisted `ai_advisor_execution_profiles` values, validated by `executionProfilesSchema`, alongside the model chain and credential states
 
 #### Scenario: Streaming route content type
 - **WHEN** a client POSTs a valid body to the advisor stream route

@@ -9,5 +9,6 @@ export * from './schemas/exchange-rate-source.js';
 export * from './schemas/fiat-currencies.js';
 export * from './schemas/fifo-policy.js';
 export * from './schemas/ledger.js';
+export * from './schemas/spot-transaction-edit.js';
 export * from './schemas/transactions.js';
 export * from './utils/colors.js';

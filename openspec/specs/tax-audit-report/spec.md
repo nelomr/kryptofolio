@@ -3,9 +3,7 @@
 ## Purpose
 
 Detailed FIFO lot traceability for the audit trail.
-
 ## Requirements
-
 ### Requirement: Display detailed FIFO lot traceability
 
 The system SHALL display a detailed table representing the audit trail of tax lot history events. The audit trail SHALL distinguish taxable disposals from non-taxable custody movements, SHALL show each event's real `disposalType` rather than a universal sale label, and SHALL show the acquiring venue alongside the account where the disposal occurred. Events excluded from the tax base SHALL display their quality flag and the reason for exclusion, and figures that were manually assigned SHALL be marked as such.
@@ -66,3 +64,26 @@ The system SHALL display a detailed table representing the audit trail of tax lo
 - **WHEN** the selected fiscal year contains custody movements and fee disposals but no `SELL` or `SWAP` transactions
 - **THEN** the report's spot capital-gains figure MUST be the sum of valued fee disposals only
 - **AND** MUST NOT include any amount derived from transferred principals
+
+### Requirement: Ledgers Rows With An Active Edit Override Are Marked And Restorable
+
+The Ledgers (spot) table's edit CTA SHALL open the spot-transaction edit dialog for the selected row. A row carrying an active `spot_transaction_overrides` entry SHALL be visibly marked as edited, and SHALL offer a restore-to-original action from the same row.
+
+#### Scenario: Edit CTA opens the edit dialog
+
+- **WHEN** a user activates the pencil CTA on a Ledgers (spot) row
+- **THEN** the spot-transaction edit dialog MUST open for that row's `id_hash`
+- **AND** it MUST NOT show a disabled-feature notice
+
+#### Scenario: A row with an active override is marked as edited
+
+- **WHEN** the Ledgers (spot) table renders a row whose `id_hash` has an active `spot_transaction_overrides` entry
+- **THEN** that row MUST display an edited indicator
+- **AND** a row with no active override MUST NOT display it
+
+#### Scenario: An edited row offers restore-to-original
+
+- **WHEN** a user opens the edit dialog for a row marked as edited
+- **THEN** a restore-to-original action MUST be available
+- **AND** activating it MUST revert the row to its originally imported values and clear the edited indicator
+

@@ -25,6 +25,7 @@ import type {
   IngestionRejectionEntity,
   FeePendingReviewEntity,
   OverrideOutcomeEntity,
+  SpotOverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 
 // ---------------------------------------------------------------------------
@@ -166,3 +167,29 @@ export const ExternalOverrideOutcomeSchema = z.object({
 }) satisfies z.ZodType<OverrideOutcomeEntity>
 
 export type ExternalOverrideOutcomeDTO = z.infer<typeof ExternalOverrideOutcomeSchema>
+
+// ---------------------------------------------------------------------------
+// ExternalSpotOverrideOutcomeSchema — the outcome of a spot-transaction edit override, plus D6's
+// negative-balance check
+// ---------------------------------------------------------------------------
+
+const ExternalSpotEditBalanceCheckSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('CLEAN') }),
+  z.object({
+    kind: z.literal('NEGATIVE_BALANCE'),
+    entries: z.array(
+      z.object({
+        assetId: z.string(),
+        accountId: z.string(),
+        balance: z.string(),
+        tolerance: z.string(),
+      }),
+    ),
+  }),
+])
+
+export const ExternalSpotOverrideOutcomeSchema = ExternalOverrideOutcomeSchema.extend({
+  balanceCheck: ExternalSpotEditBalanceCheckSchema,
+}) satisfies z.ZodType<SpotOverrideOutcomeEntity>
+
+export type ExternalSpotOverrideOutcomeDTO = z.infer<typeof ExternalSpotOverrideOutcomeSchema>

@@ -47,8 +47,8 @@ const mockReport: TaxReportEntity = {
 function createMockTaxPort(): ITaxPort {
   return {
     getFiscalIntegrity: vi.fn(),
-    setManualPriceOverrides: vi.fn(),
-    removeManualPriceOverrides: vi.fn(),
+    setSpotTransactionOverride: vi.fn(),
+    removeSpotTransactionOverride: vi.fn(),
     setTransferDestinations: vi.fn(),
     removeTransferDestinations: vi.fn(),
     getSpotTransactions: vi.fn().mockResolvedValue([mockTx]),
@@ -58,8 +58,6 @@ function createMockTaxPort(): ITaxPort {
     getReport: vi.fn().mockResolvedValue(mockReport),
     getAvailableYears: vi.fn().mockResolvedValue([2026]),
     downloadReport: vi.fn().mockResolvedValue(new Blob()),
-    deleteTransaction: vi.fn().mockResolvedValue(undefined),
-    updateTransaction: vi.fn().mockResolvedValue(undefined),
     validateTransaction: vi.fn().mockResolvedValue(undefined),
     uploadTaxFile: vi.fn().mockResolvedValue(undefined),
     deleteAllTransactions: vi.fn().mockResolvedValue(undefined),

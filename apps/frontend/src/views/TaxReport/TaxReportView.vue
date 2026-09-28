@@ -7,6 +7,7 @@ import TaxReportCurrencyStatement from "./components/TaxReportCurrencyStatement.
 import TaxReportTab from "./components/TaxReportTab.vue";
 import YearFilter from "./components/YearFilter.vue";
 import TaxTransactionsTable from "./components/TaxTransactionsTable.vue";
+import EditSpotTransactionDialog from "./components/EditSpotTransactionDialog.vue";
 import TaxDerivativesTable from "./components/TaxDerivativesTable.vue";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataIngestionWizard } from "@/modules/data-ingestion";
@@ -16,10 +17,7 @@ import PendingValuesReview from "./components/PendingValuesReview.vue";
 import { useTaxReportPort } from "./composables/useTaxReportPort";
 import { useTaxLedgers } from "./composables/useTaxLedgers";
 import { useFiscalIntegrityQuery } from "@/composables/queries/useTaxQueries";
-import {
-  useSetManualPriceOverrideMutation,
-  useSetTransferDestinationMutation,
-} from "@/composables/queries/useTaxMutations";
+import { useSetTransferDestinationMutation } from "@/composables/queries/useTaxMutations";
 import { useRebuildMutation } from "@/composables/queries/usePortfolioQueries";
 import { useSelectableAccountsQuery } from "@/composables/queries/useSettingsQueries";
 import { useI18n } from "@/composables/useI18n";
@@ -34,7 +32,6 @@ const {
   isLoading: integrityLoading,
   refresh: refreshIntegrity,
 } = useFiscalIntegrityQuery();
-const setPriceOverride = useSetManualPriceOverrideMutation();
 const setDestinationOverride = useSetTransferDestinationMutation();
 const rebuild = useRebuildMutation();
 
@@ -52,23 +49,7 @@ const pendingRows = computed(
   () => integrityReport.value?.groups.flatMap((group) => group.rows) ?? [],
 );
 
-const isSubmittingOverride = computed(
-  () => setPriceOverride.isLoading.value || setDestinationOverride.isLoading.value,
-);
-
-function declarePrice(payload: {
-  idHash: string;
-  priceFiat: string;
-  fiatCurrency: string;
-}) {
-  setPriceOverride.mutate([
-    {
-      idHash: payload.idHash as TransactionIdHash,
-      priceFiat: payload.priceFiat,
-      fiatCurrency: payload.fiatCurrency,
-    },
-  ]);
-}
+const isSubmittingOverride = computed(() => setDestinationOverride.isLoading.value);
 
 function declareDestination(payload: {
   idHash: string;
@@ -99,7 +80,35 @@ const {
   handleEdit,
   handleEditDerivative,
   handleDelete,
+  editingIdHash,
+  closeEdit,
 } = useTaxLedgers();
+
+const editingTransaction = computed(
+  () => filteredSpot.value.find((tx) => tx.idHash === editingIdHash.value) ?? null,
+);
+
+/**
+ * The one signal `EditSpotTransactionDialog` needs to pre-focus `price_fiat`: a row opened from
+ * the pending-review panel is there *because* it has no price, unlike a row opened from the
+ * Ledgers pencil.
+ */
+const editInitialFocusField = ref<'price_fiat' | null>(null);
+
+function openEditFromLedgers(tx: Parameters<typeof handleEdit>[0]) {
+  editInitialFocusField.value = null;
+  handleEdit(tx);
+}
+
+function openEditFromPendingReview(idHash: string) {
+  editInitialFocusField.value = 'price_fiat';
+  editingIdHash.value = idHash;
+}
+
+function closeEditDialog() {
+  editInitialFocusField.value = null;
+  closeEdit();
+}
 
 // Sync table year filter with global report year state
 watch(spotYearFilter, (newYear) => {
@@ -207,7 +216,7 @@ const isUploadModalOpen = ref(false);
           :accounts="destinationAccounts"
           :isLoading="integrityLoading"
           :isSubmitting="isSubmittingOverride"
-          @assignPrice="declarePrice"
+          @editRow="openEditFromPendingReview"
           @assignDestination="declareDestination"
         />
 
@@ -233,7 +242,7 @@ const isUploadModalOpen = ref(false);
             <TaxTransactionsTable
               :transactions="filteredSpot"
               :isLoading="spotLoading"
-              @edit="handleEdit"
+              @edit="openEditFromLedgers"
               @delete="handleDelete"
             />
           </TabsContent>
@@ -269,6 +278,13 @@ const isUploadModalOpen = ref(false);
         </div>
       </TabsContent>
     </Tabs>
+
+    <EditSpotTransactionDialog
+      :open="editingIdHash !== null"
+      :transaction="editingTransaction"
+      :initial-focus-field="editInitialFocusField"
+      @update:open="(value) => { if (!value) closeEditDialog(); }"
+    />
   </div>
 </template>
 

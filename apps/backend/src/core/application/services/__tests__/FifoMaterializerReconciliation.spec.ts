@@ -11,10 +11,16 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DuckDbAdapter } from '@kryptofolio/database';
-import { deriveSyntheticAccountName } from '@kryptofolio/shared-types';
+import { deriveSyntheticAccountName, createTransactionIdHash } from '@kryptofolio/shared-types';
 import { SQLiteLedgerAdapter } from '../../../infrastructure/adapters/SQLiteLedgerAdapter.js';
 import { DuckDbTaxCalculatorAdapter } from '../../../infrastructure/adapters/DuckDbTaxCalculatorAdapter.js';
+import { DuckDbDerivedChainAdapter } from '../../../infrastructure/adapters/DuckDbDerivedChainAdapter.js';
 import { FifoMaterializerService } from '../FifoMaterializerService.js';
+import { FifoChainFreshnessService } from '../FifoChainFreshnessService.js';
+import { SetSpotTransactionOverrideUseCase } from '../../use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
+import { RemoveSpotTransactionOverrideUseCase } from '../../use-cases/overrides/RemoveSpotTransactionOverrideUseCase.js';
+import { toPreciseAmount } from '../../../domain/value-objects/PreciseAmount.js';
+import type { IUserSettingsPort } from '../../../domain/ports/IUserSettingsPort.js';
 
 const ACCOUNTS = {
   kraken: 'acc-kraken',
@@ -499,8 +505,8 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
   it('leaves the user-authored override tables byte-identical across a rebuild', async () => {
     sqliteDb
       .prepare(
-        `INSERT INTO manual_price_overrides (id_hash, price_fiat, fiat_currency, note)
-         VALUES (?, '0.42', 'EUR', 'declared by hand')`,
+        `INSERT INTO spot_transaction_overrides (id_hash, price_edited, price_fiat, fiat_currency, note)
+         VALUES (?, 1, '0.42', 'EUR', 'declared by hand')`,
       )
       .run(`hash-${TX.withdrawalUnknownDest}`);
     sqliteDb
@@ -511,20 +517,20 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       .run(`hash-${TX.withdrawalUnknownDest}`, ACCOUNTS.ledger);
 
     const before = {
-      prices: snapshot('manual_price_overrides', 'id_hash'),
+      prices: snapshot('spot_transaction_overrides', 'id_hash'),
       destinations: snapshot('transfer_destination_overrides', 'id_hash'),
     };
     const auditBefore = [
-      auditCount('manual_price_overrides'),
+      auditCount('spot_transaction_overrides'),
       auditCount('transfer_destination_overrides'),
     ];
 
     await service.recalculate();
 
-    expect(snapshot('manual_price_overrides', 'id_hash')).toEqual(before.prices);
+    expect(snapshot('spot_transaction_overrides', 'id_hash')).toEqual(before.prices);
     expect(snapshot('transfer_destination_overrides', 'id_hash')).toEqual(before.destinations);
     expect([
-      auditCount('manual_price_overrides'),
+      auditCount('spot_transaction_overrides'),
       auditCount('transfer_destination_overrides'),
     ]).toEqual(auditBefore);
   });
@@ -577,5 +583,178 @@ describe('FifoMaterializerService — set reconciliation of the derived tables',
       expect(stableSnapshot('lot_history_events')).toEqual(incremental.lot_history_events);
       expect(stableSnapshot('lot_custody_entries')).toEqual(incremental.lot_custody_entries);
     });
+  });
+});
+
+/**
+ * Group 8 (add-spot-transaction-edit-overrides): rebuilds triggered through the real
+ * SetSpotTransactionOverrideUseCase/RemoveSpotTransactionOverrideUseCase pipeline, not the bare
+ * FifoMaterializerService above — this is what the full `applyThenRebuild` -> `refresh()` path
+ * actually does, including the write transaction and the settings-port marker.
+ */
+describe('reconciliation through the real override use cases', () => {
+  let sqliteDb: DatabaseSync;
+  let sqliteDbPath: string;
+  let ledgerAdapter: SQLiteLedgerAdapter;
+  let duckDbAdapter: DuckDbAdapter;
+  let taxCalculator: DuckDbTaxCalculatorAdapter;
+  let freshnessService: FifoChainFreshnessService;
+  let settings: IUserSettingsPort;
+
+  function snapshot(table: string, key = 'id_hash'): Record<string, unknown>[] {
+    return sqliteDb.prepare(`SELECT * FROM ${table} ORDER BY ${key}`).all() as Record<string, unknown>[];
+  }
+
+  beforeEach(async () => {
+    sqliteDbPath = path.join(
+      os.tmpdir(),
+      `reconcile_via_usecases_${Date.now()}_${Math.random().toString(36).slice(2)}.db`,
+    );
+    sqliteDb = new DatabaseSync(sqliteDbPath);
+    sqliteDb.exec('PRAGMA foreign_keys = ON;');
+
+    ledgerAdapter = new SQLiteLedgerAdapter(sqliteDb);
+    await ledgerAdapter.initialize();
+    seedLedger(sqliteDb);
+
+    process.env.MOCK_MODE = 'false';
+    process.env.DUCKDB_PATH = ':memory:';
+    duckDbAdapter = new DuckDbAdapter();
+    await duckDbAdapter.initialize(sqliteDbPath);
+    await duckDbAdapter.rebuildDerivedChain();
+    taxCalculator = new DuckDbTaxCalculatorAdapter(duckDbAdapter);
+
+    let needsRecalculation = 'true';
+    settings = {
+      getSetting: async (key: string) => (key === 'needs_recalculation' ? needsRecalculation : null),
+      setSetting: async (key: string, value: string) => {
+        if (key === 'needs_recalculation') needsRecalculation = value;
+      },
+    };
+
+    freshnessService = new FifoChainFreshnessService(
+      settings,
+      new DuckDbDerivedChainAdapter(duckDbAdapter),
+      new FifoMaterializerService(ledgerAdapter, taxCalculator),
+    );
+  });
+
+  afterEach(() => {
+    sqliteDb.close();
+    if (fs.existsSync(sqliteDbPath)) fs.unlinkSync(sqliteDbPath);
+  });
+
+  it('8.1: a spot-transaction-override rebuild leaves BOTH override tables byte-identical, not only its own', async () => {
+    // A destination declared first, on an unrelated transaction, to prove a spot-price-edit
+    // rebuild does not disturb transfer_destination_overrides either.
+    sqliteDb
+      .prepare(
+        `INSERT INTO transfer_destination_overrides (id_hash, counterparty_account_id)
+         VALUES (?, ?)`,
+      )
+      .run(`hash-${TX.withdrawalUnknownDest}`, ACCOUNTS.ledger);
+
+    await new SetSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService, taxCalculator).execute({
+      idHash: createTransactionIdHash(`hash-${TX.buy}`),
+      amountIn: { kind: 'UNCHANGED' },
+      amountOut: { kind: 'UNCHANGED' },
+      priceFiat: { kind: 'SET', value: toPreciseAmount('1.75'), fiatCurrency: 'EUR' },
+      totalFiat: { kind: 'UNCHANGED' },
+      fee: { kind: 'UNCHANGED' },
+      timestamp: { kind: 'UNCHANGED' },
+      txType: { kind: 'UNCHANGED' },
+    });
+
+    const beforeRebuild = {
+      spot: snapshot('spot_transaction_overrides'),
+      destinations: snapshot('transfer_destination_overrides'),
+    };
+
+    await freshnessService.refresh();
+
+    expect(snapshot('spot_transaction_overrides')).toEqual(beforeRebuild.spot);
+    expect(snapshot('transfer_destination_overrides')).toEqual(beforeRebuild.destinations);
+  });
+
+  it('8.1: removing a spot-transaction override also leaves transfer_destination_overrides untouched', async () => {
+    await new SetSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService, taxCalculator).execute({
+      idHash: createTransactionIdHash(`hash-${TX.buy}`),
+      amountIn: { kind: 'UNCHANGED' },
+      amountOut: { kind: 'UNCHANGED' },
+      priceFiat: { kind: 'SET', value: toPreciseAmount('1.75'), fiatCurrency: 'EUR' },
+      totalFiat: { kind: 'UNCHANGED' },
+      fee: { kind: 'UNCHANGED' },
+      timestamp: { kind: 'UNCHANGED' },
+      txType: { kind: 'UNCHANGED' },
+    });
+    sqliteDb
+      .prepare(`INSERT INTO transfer_destination_overrides (id_hash, counterparty_account_id) VALUES (?, ?)`)
+      .run(`hash-${TX.withdrawalUnknownDest}`, ACCOUNTS.ledger);
+
+    const destinationsBefore = snapshot('transfer_destination_overrides');
+
+    await new RemoveSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService).execute(
+      createTransactionIdHash(`hash-${TX.buy}`),
+    );
+
+    expect(snapshot('transfer_destination_overrides')).toEqual(destinationsBefore);
+    // Non-destructive: removal soft-deletes (deleted_at set), the row survives.
+    const remaining = sqliteDb
+      .prepare('SELECT deleted_at FROM spot_transaction_overrides WHERE id_hash = ?')
+      .get(`hash-${TX.buy}`) as { deleted_at: string | null };
+    expect(remaining.deleted_at).not.toBeNull();
+  });
+
+  it('8.2: the reconciled tax_lots reflect the edited price once the use case commits', async () => {
+    await new SetSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService, taxCalculator).execute({
+      idHash: createTransactionIdHash(`hash-${TX.buy}`),
+      amountIn: { kind: 'UNCHANGED' },
+      amountOut: { kind: 'UNCHANGED' },
+      priceFiat: { kind: 'SET', value: toPreciseAmount('1.75'), fiatCurrency: 'EUR' },
+      totalFiat: { kind: 'UNCHANGED' },
+      fee: { kind: 'UNCHANGED' },
+      timestamp: { kind: 'UNCHANGED' },
+      txType: { kind: 'UNCHANGED' },
+    });
+
+    const lot = sqliteDb
+      .prepare(
+        `SELECT unit_cost_fiat, value_provenance FROM tax_lots
+           WHERE spot_transaction_id = ? AND deleted_at IS NULL`,
+      )
+      .get(TX.buy) as { unit_cost_fiat: string; value_provenance: string };
+
+    expect(Number(lot.unit_cost_fiat)).toBeCloseTo(1.75, 10);
+    expect(lot.value_provenance).toBe('MANUAL');
+  });
+
+  it('8.2: removing the override reverts the reconciled tax_lots to the original recorded price', async () => {
+    await new SetSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService, taxCalculator).execute({
+      idHash: createTransactionIdHash(`hash-${TX.buy}`),
+      amountIn: { kind: 'UNCHANGED' },
+      amountOut: { kind: 'UNCHANGED' },
+      priceFiat: { kind: 'SET', value: toPreciseAmount('1.75'), fiatCurrency: 'EUR' },
+      totalFiat: { kind: 'UNCHANGED' },
+      fee: { kind: 'UNCHANGED' },
+      timestamp: { kind: 'UNCHANGED' },
+      txType: { kind: 'UNCHANGED' },
+    });
+
+    await new RemoveSpotTransactionOverrideUseCase(ledgerAdapter, settings, freshnessService).execute(
+      createTransactionIdHash(`hash-${TX.buy}`),
+    );
+
+    const lot = sqliteDb
+      .prepare(
+        `SELECT unit_cost_fiat, value_provenance FROM tax_lots
+           WHERE spot_transaction_id = ? AND deleted_at IS NULL`,
+      )
+      .get(TX.buy) as { unit_cost_fiat: string; value_provenance: string };
+
+    // The original recorded fixture: total_fiat 300.00 / amount_in 179.11 = 1.6752... (not 1.6724,
+    // the recorded price_fiat) — MARKET provenance means the engine derives from the recorded
+    // total, not from the row's own recorded price_fiat column, which this pins.
+    expect(Number(lot.unit_cost_fiat)).toBeCloseTo(300 / 179.11, 6);
+    expect(lot.value_provenance).toBe('MARKET');
   });
 });

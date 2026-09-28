@@ -25,7 +25,14 @@ export const preciseAmountSchema = z
  * Use `preciseAmountSchema` only where a value is a genuine signed delta, such as
  * `lot_custody_entries.qty_delta`.
  */
-export const nonNegativePreciseAmountSchema = preciseAmountSchema.refine(
-  (val) => !new Decimal(val).isNegative(),
+export const nonNegativePreciseAmountSchema = preciseAmountSchema.refine((val) => {
+  try {
+    return !new Decimal(val).isNegative();
+  } catch {
+    // The prior refinement already flags a malformed string; this one must not throw on it too —
+    // Zod runs every chained refinement regardless of an earlier one's outcome.
+    return false;
+  }
+},
   "Fiat magnitudes must be non-negative; direction is carried by tx_type, not by sign"
 );

@@ -17,16 +17,14 @@ import {
   FISCAL_INTEGRITY_KEY,
 } from '@/composables/queries/useTaxQueries'
 import {
-  SetManualPriceOverrideUseCase,
-  RemoveManualPriceOverrideUseCase,
+  SetSpotTransactionOverrideUseCase,
+  RemoveSpotTransactionOverrideUseCase,
   SetTransferDestinationUseCase,
   RemoveTransferDestinationUseCase,
 } from '@/core/application/use-cases/overrides/ManualFiscalOverrideUseCases'
-import type {
-  ManualPriceOverrideInput,
-  TransferDestinationInput,
-} from '@/core/domain/ports/ITaxPort'
+import type { TransferDestinationInput } from '@/core/domain/ports/ITaxPort'
 import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
+import type { SpotTransactionEditInput } from '@kryptofolio/shared-types'
 import { UploadTaxFileUseCase } from '@/core/application/use-cases/UploadTaxFileUseCase'
 import { ImportWalletUseCase } from '@/core/application/use-cases/ImportWalletUseCase'
 import { SyncWeb3UseCase } from '@/core/application/use-cases/SyncWeb3UseCase'
@@ -170,25 +168,37 @@ function invalidateDerivedFiscalData(queryCache: ReturnType<typeof useQueryCache
   invalidatePortfolioAndMetrics(queryCache)
 }
 
-export function useSetManualPriceOverrideMutation() {
+// A spot-transaction edit changes the row values themselves, which invalidateDerivedFiscalData
+// alone does not cover — it invalidates the fiscal-integrity/tax-report/token-history/portfolio
+// surface, but not the Ledgers table's own list. Both mutations below add
+// TAX_TRANSACTIONS_KEY('spot') on top, once, so it is never a second invalidatePortfolioAndMetrics
+// call (design.md D9's "not called a second time" note).
+export function useSetSpotTransactionOverrideMutation() {
   const port = useTaxPort()
   const queryCache = useQueryCache()
-  const useCase = new SetManualPriceOverrideUseCase(port)
+  const useCase = new SetSpotTransactionOverrideUseCase(port)
 
   return useMutation({
-    mutation: (overrides: ManualPriceOverrideInput[]) => useCase.execute(overrides),
-    onSuccess: () => invalidateDerivedFiscalData(queryCache),
+    mutation: ({ idHash, payload }: { idHash: TransactionIdHash; payload: SpotTransactionEditInput }) =>
+      useCase.execute(idHash, payload),
+    onSuccess: () => {
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY('spot') })
+      invalidateDerivedFiscalData(queryCache)
+    },
   })
 }
 
-export function useRemoveManualPriceOverrideMutation() {
+export function useRemoveSpotTransactionOverrideMutation() {
   const port = useTaxPort()
   const queryCache = useQueryCache()
-  const useCase = new RemoveManualPriceOverrideUseCase(port)
+  const useCase = new RemoveSpotTransactionOverrideUseCase(port)
 
   return useMutation({
-    mutation: (idHashes: TransactionIdHash[]) => useCase.execute(idHashes),
-    onSuccess: () => invalidateDerivedFiscalData(queryCache),
+    mutation: (idHash: TransactionIdHash) => useCase.execute(idHash),
+    onSuccess: () => {
+      queryCache.invalidateQueries({ key: TAX_TRANSACTIONS_KEY('spot') })
+      invalidateDerivedFiscalData(queryCache)
+    },
   })
 }
 

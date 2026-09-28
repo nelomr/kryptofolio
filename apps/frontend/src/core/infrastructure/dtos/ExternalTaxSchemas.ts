@@ -84,6 +84,13 @@ export const ExternalTaxTransactionSchema = z
     exchange: z.string().optional(),
     account_id: z.string().optional(),
     ref_id: z.string().optional(),
+    id_hash: z.string().optional(),
+    override: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('NONE') }),
+        z.object({ kind: z.literal('ACTIVE'), editedFields: z.array(z.string()) }),
+      ])
+      .optional(),
   })
   .transform((raw) => {
     // Normalize the transaction type
@@ -167,6 +174,18 @@ export const ExternalTaxTransactionSchema = z
       amountOut: raw.amount_out,
       exchange: raw.exchange || raw.account_id,
       refId: raw.ref_id,
+      // `id_hash` is the deterministic identity the edit-override endpoints key on (design.md
+      // D1) — distinct from `id`, the surrogate row id above. Falls back to `id` only so a row
+      // predating this field never crashes the mapper; the edit affordance itself checks idHash
+      // truthiness before it is ever offered.
+      idHash: raw.id_hash ?? raw.id ?? raw.tx_id ?? '',
+      // The row's own native currency (e.g. what the exchange stated), never the display
+      // currency `priceEur`/`totalEur` are converted to — see the entity field's own comment.
+      fiatCurrency: raw.fiat_currency,
+      // `override.original` (design.md D9) is deliberately not carried through here: this row
+      // IS the imported data already (getSpotTransactions reads spot_transactions directly, never
+      // the effective/edited view) — a second copy of the same values would be redundant.
+      override: raw.override ?? { kind: 'NONE' },
     };
   });
 

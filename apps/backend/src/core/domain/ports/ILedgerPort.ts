@@ -191,26 +191,46 @@ export interface LedgerCustodyEntry {
 }
 
 /**
- * A user-declared fiat value for a transaction whose market price could not be resolved.
- *
- * A calculation input, never a reconciled output. Keyed on `id_hash` — the deterministic transaction
- * identity — so it survives re-ingestion of the same source file.
- */
-export interface LedgerManualPriceOverride {
-  id_hash: string;
-  price_fiat: PreciseAmount;
-  /** Required: a declared value without its currency is not interpretable. */
-  fiat_currency: string;
-  note?: string;
-}
-
-/**
  * A user-declared counterparty for a custody movement, replacing the synthetic
  * `ownwallet-<ASSET>` account with a real one. Also a calculation INPUT.
  */
 export interface LedgerTransferDestinationOverride {
   id_hash: string;
   counterparty_account_id: string;
+  note?: string;
+}
+
+/**
+ * A durable, auditable, revertible edit to a spot transaction's P&L-relevant fields, keyed on the
+ * imported row's deterministic `id_hash` (design.md D1 — never recomputed from edited values).
+ * A calculation INPUT, exempt from reconciliation, mirroring `spot_transaction_overrides` (migration
+ * 008) column-for-column: each editable field is a `*Edited` flag plus its value, except fee, which
+ * is the three-way `feeKind` discriminant (rule 5).
+ *
+ * `setSpotTransactionOverride` is PUT semantics, not a merge (design.md D8): a field absent from
+ * the write (its flag `false`) reverts that field to unedited, exactly like the UPDATE that folds
+ * `*_edited = 0` in the SQL table.
+ */
+export interface LedgerSpotTransactionOverride {
+  id_hash: string;
+  amount_in_edited: boolean;
+  amount_in: PreciseAmount | null;
+  amount_out_edited: boolean;
+  amount_out: PreciseAmount | null;
+  price_edited: boolean;
+  price_fiat: PreciseAmount | null;
+  /** Required exactly when `price_edited` is true — a declared price without a currency is inert. */
+  fiat_currency: string | null;
+  total_fiat_edited: boolean;
+  /** Nullable even when edited: "edited to NULL" and "not edited" are distinguished by the flag. */
+  total_fiat: PreciseAmount | null;
+  fee_kind: 'UNCHANGED' | 'NONE' | 'CHARGED';
+  fee_amount: PreciseAmount | null;
+  fee_asset_id: string | null;
+  timestamp_edited: boolean;
+  timestamp: string | null;
+  tx_type_edited: boolean;
+  tx_type: SpotTxType | null;
   note?: string;
 }
 
@@ -321,9 +341,12 @@ export interface ILedgerPort {
   // User-authored overrides — calculation inputs, exempt from reconciliation
   // ---------------------------------------------------------------------------
 
-  getManualPriceOverrides(): Promise<LedgerManualPriceOverride[]>;
-  setManualPriceOverride(override: LedgerManualPriceOverride): Promise<void>;
-  removeManualPriceOverride(idHash: string): Promise<void>;
+  getSpotTransactionOverride(idHash: string): Promise<LedgerSpotTransactionOverride | undefined>;
+  /** Every active override, for the Ledgers-table read model (design.md D8's `override` field). */
+  getSpotTransactionOverrides(): Promise<LedgerSpotTransactionOverride[]>;
+  setSpotTransactionOverride(input: LedgerSpotTransactionOverride): Promise<void>;
+  /** `count` is 0 when no active override existed for `idHash` — a no-op, not an error. */
+  removeSpotTransactionOverride(idHash: string): Promise<{ count: number }>;
 
   getTransferDestinationOverrides(): Promise<LedgerTransferDestinationOverride[]>;
   setTransferDestinationOverride(override: LedgerTransferDestinationOverride): Promise<void>;

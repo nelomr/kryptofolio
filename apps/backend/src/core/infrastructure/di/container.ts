@@ -55,9 +55,9 @@ import { FifoMaterializerService } from '../../application/services/FifoMaterial
 import { FifoChainFreshnessService } from '../../application/services/FifoChainFreshnessService.js';
 import { DuckDbDerivedChainAdapter } from '../adapters/DuckDbDerivedChainAdapter.js';
 import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
-import { SetManualPriceOverrideUseCase } from '../../application/use-cases/overrides/SetManualPriceOverrideUseCase.js';
-import { RemoveManualPriceOverrideUseCase } from '../../application/use-cases/overrides/RemoveManualPriceOverrideUseCase.js';
 import { SetTransferDestinationUseCase } from '../../application/use-cases/overrides/SetTransferDestinationUseCase.js';
+import { SetSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
+import { RemoveSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/RemoveSpotTransactionOverrideUseCase.js';
 import { RemoveTransferDestinationUseCase } from '../../application/use-cases/overrides/RemoveTransferDestinationUseCase.js';
 
 
@@ -154,10 +154,10 @@ export class DIContainer {
    */
   public fifoChainFreshnessService: FifoChainFreshnessService;
   public ingestAndMaterializeUseCase: IngestAndMaterializeUseCase;
-  public setManualPriceOverrideUseCase: SetManualPriceOverrideUseCase;
-  public removeManualPriceOverrideUseCase: RemoveManualPriceOverrideUseCase;
   public setTransferDestinationUseCase: SetTransferDestinationUseCase;
   public removeTransferDestinationUseCase: RemoveTransferDestinationUseCase;
+  public setSpotTransactionOverrideUseCase: SetSpotTransactionOverrideUseCase;
+  public removeSpotTransactionOverrideUseCase: RemoveSpotTransactionOverrideUseCase;
 
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
@@ -302,22 +302,24 @@ export class DIContainer {
       this.fifoChainFreshnessService,
     );
 
-    this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
-      this.ledgerPort,
-      this.userSettingsPort,
-      this.fifoChainFreshnessService,
-    );
-    this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
-      this.ledgerPort,
-      this.userSettingsPort,
-      this.fifoChainFreshnessService,
-    );
     this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
       this.ledgerPort,
       this.userSettingsPort,
       this.fifoChainFreshnessService,
     );
     this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setSpotTransactionOverrideUseCase = new SetSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+      this.taxCalculatorPort,
+    );
+    this.removeSpotTransactionOverrideUseCase = new RemoveSpotTransactionOverrideUseCase(
       this.ledgerPort,
       this.userSettingsPort,
       this.fifoChainFreshnessService,
@@ -399,22 +401,24 @@ export class DIContainer {
       this.fifoChainFreshnessService,
     );
 
-    this.setManualPriceOverrideUseCase = new SetManualPriceOverrideUseCase(
-      this.ledgerPort,
-      this.userSettingsPort,
-      this.fifoChainFreshnessService,
-    );
-    this.removeManualPriceOverrideUseCase = new RemoveManualPriceOverrideUseCase(
-      this.ledgerPort,
-      this.userSettingsPort,
-      this.fifoChainFreshnessService,
-    );
     this.setTransferDestinationUseCase = new SetTransferDestinationUseCase(
       this.ledgerPort,
       this.userSettingsPort,
       this.fifoChainFreshnessService,
     );
     this.removeTransferDestinationUseCase = new RemoveTransferDestinationUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.setSpotTransactionOverrideUseCase = new SetSpotTransactionOverrideUseCase(
+      this.ledgerPort,
+      this.userSettingsPort,
+      this.fifoChainFreshnessService,
+      this.taxCalculatorPort,
+    );
+    this.removeSpotTransactionOverrideUseCase = new RemoveSpotTransactionOverrideUseCase(
       this.ledgerPort,
       this.userSettingsPort,
       this.fifoChainFreshnessService,

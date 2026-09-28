@@ -74,6 +74,27 @@ export const overrideOutcomeSchema = z.object({
   pendingReview: z.number().int().nonnegative(),
 });
 
+/** D6: the negative-balance check a spot transaction edit reports alongside the usual outcome. */
+const spotEditBalanceCheckSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('CLEAN') }),
+  z.object({
+    kind: z.literal('NEGATIVE_BALANCE'),
+    entries: z.array(
+      z.object({
+        assetId: z.string(),
+        accountId: z.string(),
+        balance: z.string(),
+        tolerance: z.string(),
+      }),
+    ),
+  }),
+]);
+
+export const spotOverrideOutcomeSchema = overrideOutcomeSchema.extend({
+  balanceCheck: spotEditBalanceCheckSchema,
+});
+
 export type OverrideOutcomeDto = z.infer<typeof overrideOutcomeSchema>;
+export type SpotOverrideOutcomeDto = z.infer<typeof spotOverrideOutcomeSchema>;
 export type RebuildOutcomeDto = z.infer<typeof rebuildOutcomeSchema>;
 export type IngestionOutcomeDto = z.infer<typeof ingestionOutcomeSchema>;

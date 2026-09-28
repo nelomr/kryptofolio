@@ -7,7 +7,7 @@ import { onMounted, onUnmounted } from "vue";
 import { toast } from "vue-sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { errorBus } from "@/core/infrastructure/errors/errorBus";
-import type { ValidationErrorPayload } from "@/core/infrastructure/errors/errorBus";
+import type { ValidationErrorPayload, OperationErrorPayload } from "@/core/infrastructure/errors/errorBus";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import { useI18n } from "@/composables/useI18n";
 import { useInitializeLanguageQuery } from "@/composables/queries/useSettingsQueries";
@@ -43,12 +43,29 @@ function handleValidationError(payload: ValidationErrorPayload) {
   });
 }
 
+// Distinct from `validation-error`: a connectivity transition (e.g. the market SSE stream going
+// down/recovering) isn't malformed data, so it gets its own id-namespaced toast (warning while
+// down, brief success on recovery) instead of the "Data Validation Error" title.
+function handleOperationError(payload: OperationErrorPayload) {
+  // Same id for the "down" and "recovered" toasts of the same connection (they share a prefix,
+  // not the raw code) so the recovery toast replaces the persistent warning instead of stacking
+  // a second one beside it.
+  const toastId = `op-market-stream`;
+  if (payload.code === "MARKET_STREAM_RECOVERED") {
+    toast.success(t(payload.message) || payload.message, { id: toastId, duration: 3000 });
+    return;
+  }
+  toast.warning(t(payload.message) || payload.message, { id: toastId, duration: Infinity });
+}
+
 onMounted(() => {
   errorBus.on("validation-error", handleValidationError);
+  errorBus.on("operation-error", handleOperationError);
 });
 
 onUnmounted(() => {
   errorBus.off("validation-error", handleValidationError);
+  errorBus.off("operation-error", handleOperationError);
 });
 </script>
 

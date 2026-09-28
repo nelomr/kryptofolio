@@ -7,6 +7,8 @@ import {
   useImportWalletMutation,
   useSyncWeb3Mutation,
   useDeleteTransactionsMutation,
+  useSetSpotTransactionOverrideMutation,
+  useRemoveSpotTransactionOverrideMutation,
 } from "@/composables/queries/useTaxMutations";
 import { TAX_TRANSACTIONS_KEY } from "@/composables/queries/useTaxQueries";
 import { TAX_PORT_KEY } from "@/core/injectionKeys";
@@ -15,8 +17,8 @@ import type { ITaxPort } from "@/core/domain/ports/ITaxPort";
 function createMockTaxPort(): ITaxPort {
   return {
     getFiscalIntegrity: vi.fn(),
-    setManualPriceOverrides: vi.fn(),
-    removeManualPriceOverrides: vi.fn(),
+    setSpotTransactionOverride: vi.fn(),
+    removeSpotTransactionOverride: vi.fn(),
     setTransferDestinations: vi.fn(),
     removeTransferDestinations: vi.fn(),
     getSpotTransactions: vi.fn(),
@@ -24,8 +26,6 @@ function createMockTaxPort(): ITaxPort {
     getFuturesDerivatives: vi.fn(),
     getInvalidTransactions: vi.fn(),
     getReport: vi.fn(),
-    deleteTransaction: vi.fn(),
-    updateTransaction: vi.fn(),
     validateTransaction: vi.fn(),
     uploadTaxFile: vi.fn().mockResolvedValue(undefined),
     deleteAllTransactions: vi.fn().mockResolvedValue(undefined),
@@ -135,5 +135,76 @@ describe("Tax Mutations Composables", () => {
       key: TAX_TRANSACTIONS_KEY("spot"),
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ key: ["tax-report"] });
+  });
+
+  it("useSetSpotTransactionOverrideMutation calls the port and invalidates TAX_TRANSACTIONS_KEY('spot') plus the derived fiscal surface", async () => {
+    const { app, port } = setupApp();
+    (port.setSpotTransactionOverride as ReturnType<typeof vi.fn>).mockResolvedValue({
+      applied: 1,
+      materialization: null,
+      pendingReview: 0,
+      balanceCheck: { kind: "CLEAN" },
+    });
+
+    let composable: ReturnType<typeof useSetSpotTransactionOverrideMutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
+    app.runWithContext(() => {
+      composable = useSetSpotTransactionOverrideMutation();
+      cache = useQueryCache();
+    });
+
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
+    const payload = {
+      amount_in: { kind: "UNCHANGED" as const },
+      amount_out: { kind: "UNCHANGED" as const },
+      price_fiat: { kind: "SET" as const, value: "42000", fiatCurrency: "EUR" },
+      total_fiat: { kind: "UNCHANGED" as const },
+      fee: { kind: "UNCHANGED" as const },
+      timestamp: { kind: "UNCHANGED" as const },
+      tx_type: { kind: "UNCHANGED" as const },
+    };
+
+    await app.runWithContext(() =>
+      composable.mutateAsync({ idHash: "hash-a" as never, payload }),
+    );
+
+    expect(port.setSpotTransactionOverride).toHaveBeenCalledWith("hash-a", payload);
+    // The row values themselves changed — invalidateDerivedFiscalData alone omits the list the
+    // Ledgers table renders from, which is exactly the gap this mutation must not repeat.
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY("spot") });
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: ["tax-report"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: ["token-history"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: ["portfolio-summary"] });
+    // invalidateDerivedFiscalData already calls invalidatePortfolioAndMetrics — must not run twice.
+    const portfolioCalls = invalidateSpy.mock.calls.filter(
+      (call) => JSON.stringify(call[0]) === JSON.stringify({ key: ["portfolio-summary"] }),
+    );
+    expect(portfolioCalls).toHaveLength(1);
+  });
+
+  it("useRemoveSpotTransactionOverrideMutation calls the port and invalidates the same surface", async () => {
+    const { app, port } = setupApp();
+    (port.removeSpotTransactionOverride as ReturnType<typeof vi.fn>).mockResolvedValue({
+      applied: 1,
+      materialization: null,
+      pendingReview: 0,
+      balanceCheck: { kind: "CLEAN" },
+    });
+
+    let composable: ReturnType<typeof useRemoveSpotTransactionOverrideMutation>;
+    let cache: ReturnType<typeof useQueryCache>;
+
+    app.runWithContext(() => {
+      composable = useRemoveSpotTransactionOverrideMutation();
+      cache = useQueryCache();
+    });
+
+    const invalidateSpy = vi.spyOn(cache!, "invalidateQueries");
+
+    await app.runWithContext(() => composable.mutateAsync("hash-a" as never));
+
+    expect(port.removeSpotTransactionOverride).toHaveBeenCalledWith("hash-a");
+    expect(invalidateSpy).toHaveBeenCalledWith({ key: TAX_TRANSACTIONS_KEY("spot") });
   });
 });

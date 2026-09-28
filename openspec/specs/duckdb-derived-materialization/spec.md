@@ -3,9 +3,7 @@
 ## Purpose
 
 Materialising the six derived FIFO relations as physical DuckDB tables rebuilt in one transaction, gated by a freshness state machine that never serves a stale or empty chain as fresh, and fully re-derivable from SQLite on demand.
-
 ## Requirements
-
 ### Requirement: The Six Derived FIFO Relations Are Physical Tables
 
 The analytical engine SHALL store the six derived FIFO relations — `flattened_fifo_events`, `fifo_matches`, `calculated_tax_lots`, `calculated_lot_history_events`, `daily_running_balances`, `portfolio_daily_valuation` — as physical DuckDB tables rather than recomputing them per query. Each relation SHALL be declared as three catalogue objects: a definition view `v_<name>__def` holding the computation, a table `m_<name>` produced by `CREATE OR REPLACE TABLE m_<name> AS SELECT * FROM v_<name>__def`, and a public view `v_<name>` selecting from `m_<name>`. Every `v_<name>__def` SHALL reference the *public* name of its upstream relations, so a rebuild step consumes the table produced by the previous step.
@@ -194,4 +192,30 @@ A materialised relation SHALL be treated as an unordered heap. Any consumer whos
 - **WHEN** consumers of the six derived relations are audited
 - **THEN** every consumer whose response order is observable MUST carry an explicit `ORDER BY`
 - **AND** the order-sensitive equivalence comparison MUST pass for all six relations
+
+### Requirement: Derived Relations Read Spot Transactions Only Through The Effective-Transactions View
+
+Every `__def` view and every downstream consumer that needs spot transaction data (FIFO matching, custody movements, data-quality checks, lot display fields) SHALL read `ledger.spot_transactions` only through `v_effective_spot_transactions`, which left-joins the active `spot_transaction_overrides` row for each transaction and projects, per field, the edited value when `*_edited` (or `fee_kind`) marks it edited and the imported value otherwise. `id`, `id_hash`, `account_id`, `transfer_group_id` and `status` SHALL always come from the imported row, never from the override. No relation definition SHALL read `ledger.spot_transactions` directly.
+
+#### Scenario: An edited amount reaches FIFO, custody and data-quality consistently
+
+- **WHEN** a transaction's `amount_in` is edited and the derived chain rebuilds
+- **THEN** `v_flattened_fifo_events__def`, the custody movement relation, and the data-quality relation MUST all reflect the edited amount
+- **AND** none of them MUST report a value derived from the original, unedited `amount_in`
+
+#### Scenario: No relation bypasses the effective-transactions view
+
+- **WHEN** the SQL definitions of the six materialised relations and of the custody and data-quality relations are inspected
+- **THEN** none of them MUST reference `ledger.spot_transactions` directly outside `v_effective_spot_transactions`'s own definition
+
+#### Scenario: Identity and routing columns are never overridable
+
+- **WHEN** `v_effective_spot_transactions` is inspected for a transaction carrying an active override
+- **THEN** `id`, `id_hash`, `account_id`, `transfer_group_id` and `status` MUST equal the imported row's values regardless of the override's contents
+
+#### Scenario: The view is referenced once per consumer inside the existing materialized CTEs
+
+- **WHEN** `tx_context` and `custody_tx` are inspected after the effective-transactions view is introduced
+- **THEN** each MUST reference `v_effective_spot_transactions` exactly once inside its own `MATERIALIZED` CTE
+- **AND** the sqlite-extension scan MUST remain one pass per consumer
 

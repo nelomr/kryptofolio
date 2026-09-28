@@ -59,9 +59,23 @@ export function useTaxLedgers() {
   });
 
   // 5. Actions
+
+  /** design.md D9: the row currently open in the edit dialog, or none. */
+  const editingIdHash = ref<string | null>(null)
+
   function handleEdit(tx: TaxTransactionEntity) {
-    // TODO: Link with actual edit mutation/modal when ready
-    toast.info(t('common.edit_disabled', { id: tx.id || 'unknown' }))
+    if (!tx.idHash) {
+      // Futures/derivative rows never populate idHash — editing is spot-only and out of scope
+      // for those, so this falls back to the pre-existing disabled notice rather than opening a
+      // dialog that has nothing to key its mutation on.
+      toast.info(t('common.edit_disabled', { id: tx.id || 'unknown' }))
+      return
+    }
+    editingIdHash.value = tx.idHash
+  }
+
+  function closeEdit() {
+    editingIdHash.value = null
   }
 
   function handleEditDerivative(tx: TaxDerivativeEntity) {
@@ -88,5 +102,7 @@ export function useTaxLedgers() {
     handleEdit,
     handleEditDerivative,
     handleDelete,
+    editingIdHash,
+    closeEdit,
   };
 }

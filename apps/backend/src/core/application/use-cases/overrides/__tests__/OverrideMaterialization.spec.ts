@@ -17,12 +17,13 @@ import { DuckDbTaxCalculatorAdapter } from '../../../../infrastructure/adapters/
 import { FifoMaterializerService } from '../../../services/FifoMaterializerService.js';
 import { FifoChainFreshnessService } from '../../../services/FifoChainFreshnessService.js';
 import { DuckDbDerivedChainAdapter } from '../../../../infrastructure/adapters/DuckDbDerivedChainAdapter.js';
-import { SetManualPriceOverrideUseCase } from '../SetManualPriceOverrideUseCase.js';
-import { RemoveManualPriceOverrideUseCase } from '../RemoveManualPriceOverrideUseCase.js';
 import { SetTransferDestinationUseCase } from '../SetTransferDestinationUseCase.js';
+import { SetSpotTransactionOverrideUseCase } from '../SetSpotTransactionOverrideUseCase.js';
+import { RemoveSpotTransactionOverrideUseCase } from '../RemoveSpotTransactionOverrideUseCase.js';
 import { OverrideValidationError } from '../OverrideMutation.js';
-import { toPreciseAmount } from '../../../../domain/value-objects/PreciseAmount.js';
 import type { IUserSettingsPort } from '../../../../domain/ports/IUserSettingsPort.js';
+import type { ITaxCalculatorPort } from '../../../../domain/ports/ITaxCalculatorPort.js';
+import { toPreciseAmount } from '../../../../domain/value-objects/PreciseAmount.js';
 
 const KRAKEN = 'acc-kraken';
 const LEDGER_WALLET = 'acc-ledger';
@@ -93,6 +94,7 @@ describe('manual overrides against the real FIFO engine', () => {
   let materializer: FifoMaterializerService;
   let settings: IUserSettingsPort;
   let freshnessService: FifoChainFreshnessService;
+  let taxCalculator: ITaxCalculatorPort;
 
   const stakingLot = () =>
     sqliteDb
@@ -108,11 +110,6 @@ describe('manual overrides against the real FIFO engine', () => {
           value_provenance: string;
         }
       | undefined;
-
-  const overrideRows = () =>
-    sqliteDb
-      .prepare('SELECT * FROM manual_price_overrides ORDER BY id_hash')
-      .all() as Record<string, unknown>[];
 
   beforeEach(async () => {
     sqlitePath = path.join(
@@ -141,10 +138,8 @@ describe('manual overrides against the real FIFO engine', () => {
       },
     };
 
-    materializer = new FifoMaterializerService(
-      ledger,
-      new DuckDbTaxCalculatorAdapter(duckDb),
-    );
+    taxCalculator = new DuckDbTaxCalculatorAdapter(duckDb);
+    materializer = new FifoMaterializerService(ledger, taxCalculator);
 
     freshnessService = new FifoChainFreshnessService(
       settings,
@@ -158,6 +153,23 @@ describe('manual overrides against the real FIFO engine', () => {
     if (fs.existsSync(sqlitePath)) fs.unlinkSync(sqlitePath);
   });
 
+  const priceOverrideUseCase = () =>
+    new SetSpotTransactionOverrideUseCase(ledger, settings, freshnessService, taxCalculator);
+
+  const unchangedEdit = () => ({
+    amountIn: { kind: 'UNCHANGED' as const },
+    amountOut: { kind: 'UNCHANGED' as const },
+    priceFiat: { kind: 'UNCHANGED' as const },
+    totalFiat: { kind: 'UNCHANGED' as const },
+    fee: { kind: 'UNCHANGED' as const },
+    timestamp: { kind: 'UNCHANGED' as const },
+    txType: { kind: 'UNCHANGED' as const },
+  });
+
+  // Restores the coverage the deleted SetManualPriceOverrideUseCase/RemoveManualPriceOverrideUseCase
+  // tests had (design.md D3 unification), now against SetSpotTransactionOverrideUseCase/
+  // RemoveSpotTransactionOverrideUseCase.
+
   it('flags the unpriced receipt before any value is declared', async () => {
     // Without this the next test could pass against a lot that was never flagged.
     await freshnessService.refresh();
@@ -169,14 +181,12 @@ describe('manual overrides against the real FIFO engine', () => {
   it('takes the declared price into the cost basis and clears the flag', async () => {
     const { materialization: before } = await freshnessService.refresh();
 
-    const result = await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
-      {
-        idHash: createTransactionIdHash(STAKING_HASH),
-        priceFiat: toPreciseAmount('0.42'),
-        fiatCurrency: 'EUR',
-        note: 'closing price from the exchange statement',
-      },
-    ]);
+    const result = await priceOverrideUseCase().execute({
+      idHash: createTransactionIdHash(STAKING_HASH),
+      ...unchangedEdit(),
+      priceFiat: { kind: 'SET', value: toPreciseAmount('0.42'), fiatCurrency: 'EUR' },
+      note: 'closing price from the exchange statement',
+    });
 
     const lot = stakingLot();
     expect(Number(lot?.unit_cost_fiat)).toBeCloseTo(0.42, 10);
@@ -189,19 +199,16 @@ describe('manual overrides against the real FIFO engine', () => {
   });
 
   it('reverts to the flag when the declaration is removed', async () => {
-    const set = new SetManualPriceOverrideUseCase(ledger, settings, freshnessService);
-    await set.execute([
-      {
-        idHash: createTransactionIdHash(STAKING_HASH),
-        priceFiat: toPreciseAmount('0.42'),
-        fiatCurrency: 'EUR',
-      },
-    ]);
+    await priceOverrideUseCase().execute({
+      idHash: createTransactionIdHash(STAKING_HASH),
+      ...unchangedEdit(),
+      priceFiat: { kind: 'SET', value: toPreciseAmount('0.42'), fiatCurrency: 'EUR' },
+    });
     expect(stakingLot()?.quality_flag).toBeNull();
 
-    await new RemoveManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
+    await new RemoveSpotTransactionOverrideUseCase(ledger, settings, freshnessService).execute(
       createTransactionIdHash(STAKING_HASH),
-    ]);
+    );
 
     const lot = stakingLot();
     expect(lot?.quality_flag).toBe('MISSING_PRICE');
@@ -210,31 +217,29 @@ describe('manual overrides against the real FIFO engine', () => {
   });
 
   it('leaves the override table untouched across a rebuild', async () => {
-    await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
-      {
-        idHash: createTransactionIdHash(STAKING_HASH),
-        priceFiat: toPreciseAmount('0.42'),
-        fiatCurrency: 'EUR',
-      },
-    ]);
-    const before = overrideRows();
+    await priceOverrideUseCase().execute({
+      idHash: createTransactionIdHash(STAKING_HASH),
+      ...unchangedEdit(),
+      priceFiat: { kind: 'SET', value: toPreciseAmount('0.42'), fiatCurrency: 'EUR' },
+    });
+    const before = sqliteDb.prepare('SELECT * FROM spot_transaction_overrides ORDER BY id_hash').all();
 
     await freshnessService.refresh();
 
-    expect(overrideRows()).toEqual(before);
+    expect(sqliteDb.prepare('SELECT * FROM spot_transaction_overrides ORDER BY id_hash').all()).toEqual(
+      before,
+    );
     expect(before).toHaveLength(1);
   });
 
   it('keeps applying after the same source row is written again', async () => {
     // Re-ingestion replaces the transaction row but not its identity, which is what the override
     // keys on. A surrogate-id key would have been orphaned here.
-    await new SetManualPriceOverrideUseCase(ledger, settings, freshnessService).execute([
-      {
-        idHash: createTransactionIdHash(STAKING_HASH),
-        priceFiat: toPreciseAmount('0.42'),
-        fiatCurrency: 'EUR',
-      },
-    ]);
+    await priceOverrideUseCase().execute({
+      idHash: createTransactionIdHash(STAKING_HASH),
+      ...unchangedEdit(),
+      priceFiat: { kind: 'SET', value: toPreciseAmount('0.42'), fiatCurrency: 'EUR' },
+    });
 
     await ledger.saveSpotTransaction({
       id: 'tx-staking-reingested',
@@ -254,7 +259,8 @@ describe('manual overrides against the real FIFO engine', () => {
 
     await freshnessService.refresh();
 
-    expect(overrideRows()).toHaveLength(1);
+    const overrides = sqliteDb.prepare('SELECT * FROM spot_transaction_overrides').all();
+    expect(overrides).toHaveLength(1);
     const lot = sqliteDb
       .prepare(
         `SELECT unit_cost_fiat, quality_flag FROM tax_lots

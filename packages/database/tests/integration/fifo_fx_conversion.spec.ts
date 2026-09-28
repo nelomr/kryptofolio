@@ -157,7 +157,7 @@ async function harness(spec: HarnessSpec): Promise<Harness> {
   }
 
   const override = sqliteDb.prepare(
-    'INSERT INTO manual_price_overrides (id_hash, price_fiat, fiat_currency) VALUES (?, ?, ?)'
+    'INSERT INTO spot_transaction_overrides (id_hash, price_edited, price_fiat, fiat_currency) VALUES (?, 1, ?, ?)'
   );
   for (const o of spec.overrides ?? []) {
     override.run(o.idHash, o.priceFiat, o.currency);

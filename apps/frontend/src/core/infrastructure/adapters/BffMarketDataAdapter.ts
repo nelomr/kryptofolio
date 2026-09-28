@@ -68,6 +68,31 @@ export class BffMarketDataAdapter implements IMarketDataPort {
       onPrice(result.data);
     });
 
+    // Real UX gap found by the user: a dead backend produced only `net::ERR_CONNECTION_REFUSED`
+    // console spam — `EventSource` auto-reconnects silently, with no visible "stream down" state,
+    // which read as "the whole app broke" even though it recovers on its own. This fires
+    // regardless of whether a caller passed its own `onError`, so App.vue's existing errorBus/toast
+    // wiring surfaces it without every future `subscribeToStream` caller having to remember to.
+    let wasDown = false;
+    source.addEventListener('error', () => {
+      if (!wasDown) {
+        wasDown = true;
+        errorBus.emit('operation-error', {
+          code: 'MARKET_STREAM_DOWN',
+          message: 'errors.market.stream_down',
+        });
+      }
+    });
+    source.addEventListener('open', () => {
+      if (wasDown) {
+        wasDown = false;
+        errorBus.emit('operation-error', {
+          code: 'MARKET_STREAM_RECOVERED',
+          message: 'errors.market.stream_recovered',
+        });
+      }
+    });
+
     if (onError) {
       source.addEventListener('error', onError);
     }

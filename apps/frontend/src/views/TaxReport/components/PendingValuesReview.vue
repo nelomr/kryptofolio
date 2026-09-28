@@ -11,7 +11,6 @@ import { Pencil, MapPin } from "lucide-vue-next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/composables/useI18n";
 import {
@@ -44,22 +43,22 @@ const props = withDefaults(
     accounts?: SelectableAccount[];
     isLoading?: boolean;
     isSubmitting?: boolean;
-    /** The currency a declared price is denominated in. Recorded explicitly, never inferred. */
-    fiatCurrency?: string;
   }>(),
   {
     feePendingReviewRows: () => [],
     accounts: () => [],
     isLoading: false,
     isSubmitting: false,
-    fiatCurrency: "EUR",
   },
 );
 
 const emit = defineEmits<{
-  assignPrice: [
-    payload: { idHash: string; priceFiat: string; fiatCurrency: string },
-  ];
+  /**
+   * A missing price is resolved through the same `EditSpotTransactionDialog` the Ledgers pencil
+   * opens (design.md, "Revised after user feedback") — this panel only names the row, it no
+   * longer runs its own mutation.
+   */
+  editRow: [idHash: string];
   assignDestination: [payload: { idHash: string; counterpartyAccountId: string }];
 }>();
 
@@ -78,24 +77,16 @@ const needsDestination = (row: FiscalIntegrityDefectEntity) =>
   row.qualityFlag === "UNTRACKED_INFLOW" || row.qualityFlag === "CUSTODY_RESIDUAL";
 
 const openEditor = ref<string | null>(null);
-const priceDraft = ref("");
 const destinationDraft = ref("");
 
 function startEditing(row: FiscalIntegrityDefectEntity) {
   openEditor.value = row.txId;
-  priceDraft.value = "";
   destinationDraft.value = "";
 }
 
-function submitPrice(row: FiscalIntegrityDefectEntity) {
-  // An empty declaration would key an override to no value at all.
-  if (!row.txId || priceDraft.value.trim() === "") return;
-  emit("assignPrice", {
-    idHash: row.txId,
-    priceFiat: priceDraft.value.trim(),
-    fiatCurrency: props.fiatCurrency,
-  });
-  openEditor.value = null;
+function editRow(row: FiscalIntegrityDefectEntity) {
+  if (!row.txId) return;
+  emit("editRow", row.txId);
 }
 
 function submitDestination(row: FiscalIntegrityDefectEntity) {
@@ -178,11 +169,11 @@ function submitDestination(row: FiscalIntegrityDefectEntity) {
             </Button>
             <Button
               v-else
-              data-testid="assign-price"
+              data-testid="edit-row"
               variant="outline"
               size="sm"
               :disabled="isSubmitting"
-              @click="startEditing(row)"
+              @click="editRow(row)"
             >
               <Pencil />
               {{ t("tax.pending.declare_price") }}
@@ -192,27 +183,6 @@ function submitDestination(row: FiscalIntegrityDefectEntity) {
           <p class="text-xs text-muted-foreground">
             {{ t(qualityFlagExplanationKey(row.qualityFlag)) }}
           </p>
-
-          <form
-            v-if="openEditor === row.txId && !needsDestination(row)"
-            data-testid="price-submit"
-            class="flex items-center gap-2"
-            @submit.prevent="submitPrice(row)"
-          >
-            <Input
-              v-model="priceDraft"
-              data-testid="price-input"
-              inputmode="decimal"
-              class="h-9 max-w-40 font-mono tabular-nums"
-              :placeholder="t('tax.pending.price_placeholder')"
-            />
-            <span class="font-mono text-xs text-muted-foreground">{{
-              fiatCurrency
-            }}</span>
-            <Button type="submit" size="sm" :disabled="isSubmitting">
-              {{ t("tax.pending.save") }}
-            </Button>
-          </form>
 
           <form
             v-if="openEditor === row.txId && needsDestination(row)"

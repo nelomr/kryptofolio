@@ -41,7 +41,7 @@ Exactly one of `done`, `refused`, or `failed` SHALL be emitted as the last frame
 
 #### Scenario: Successful run
 - **WHEN** a run completes normally
-- **THEN** the final frame is `done` carrying `runId`, `providerId`, `modelId`, `usage.inputTokens`, `usage.outputTokens`, and `toolsCalled`
+- **THEN** the final frame is `done` carrying `runId`, `providerId`, `modelId`, `usage.inputTokens`, `usage.outputTokens`, `toolsCalled`, `executionProfile` (`local | metered | mixed`), `stepsUsed`, and `maxSteps`
 
 #### Scenario: Guardrail tripwire
 - **WHEN** the output-processor guardrail trips
@@ -122,12 +122,58 @@ The chat panel SHALL be a global surface styled exclusively with the color token
 - **WHEN** the user is on any view of the application
 - **THEN** the chat panel can be opened without navigating away, and per-view embedded insights are absent in this phase
 
+### Requirement: Panel Follows The Application's Visual Language
+The panel SHALL follow design D13: a right-side sheet mounted once in `App.vue` and opened from `AppHeader.vue`, surfaced with `--shadow-modal`, built from shadcn-vue primitives (`sheet`, `scroll-area`, `textarea`, `alert`, `badge`, `button`, `skeleton`), icons from `lucide-vue-next`, and all copy through `useI18n()`. Every figure SHALL render in `--font-mono` with `tabular-nums`, including figures inside assistant prose. States SHALL map to the semantic tokens in D13's table, and `--brand` SHALL be used only for the primary action and focus rings.
+
+#### Scenario: Figures in prose are mono
+- **WHEN** an assistant answer contains a figure the model wrapped in inline code
+- **THEN** it renders with `font-mono tabular-nums` and without a code background
+
+#### Scenario: Markdown cannot inject HTML
+- **WHEN** an answer contains raw HTML such as `<img src=x onerror=…>`
+- **THEN** it renders as escaped text and no element is created from it
+
+#### Scenario: Reading history is not interrupted
+- **WHEN** the user has scrolled up while an answer is streaming
+- **THEN** the list does not autoscroll until the user returns to the bottom
+
+#### Scenario: Reduced motion
+- **WHEN** `prefers-reduced-motion: reduce` is set
+- **THEN** the sheet opens without the slide animation and the streaming caret does not blink
+
+#### Scenario: Keyboard use
+- **WHEN** the panel is open
+- **THEN** Enter sends, Shift+Enter inserts a newline, Escape closes, and focus returns to the trigger
+
+#### Scenario: Cloud/local badge reflects the active model
+- **WHEN** the active model id ends `:cloud`, or the active provider is anything other than `ollama`
+- **THEN** the panel's model badge area shows a "cloud" badge; otherwise it shows "local"
+
+#### Scenario: Steps-used footer appears only once a receipt exists
+- **WHEN** a run's terminal event carries a receipt with `stepsUsed` and `maxSteps`
+- **THEN** the panel renders a muted, `text-xs` mono footer showing `stepsUsed / maxSteps`, and no such footer is rendered while a run is still streaming
+
+### Requirement: Disclaimer Footer On Investment Answers
+Any assistant answer whose content touches an investment category (forecast, allocation, or market-timing language) SHALL render the "not financial advice" disclaimer as a distinct footer beneath the answer, styled muted and `text-xs`, visually separate from `Alert` (which is reserved for error/refusal/failure states). The disclaimer SHALL never be rendered inline inside the answer's own prose.
+
+#### Scenario: Disclaimer renders as a footer
+- **WHEN** an assistant answer includes investment content and the disclaimer output processor appended its disclaimer
+- **THEN** the panel renders that disclaimer as a muted, `text-xs` footer distinct from the answer body and from any `Alert`
+
+#### Scenario: Non-investment answers carry no footer
+- **WHEN** an assistant answer contains no investment content
+- **THEN** no disclaimer footer is rendered
+
 ### Requirement: Explicit Empty, Error, And Aborted States
 The chat SHALL render a distinct state for each of: empty conversation, streaming in progress, `refused`, `failed` with a code, `transport-lost`, and user-aborted.
 
 #### Scenario: Empty conversation
 - **WHEN** the panel opens with no messages in the thread
-- **THEN** it renders an empty state prompting the first question, with no error or spinner shown
+- **THEN** it renders an empty state prompting the first question, with no error or spinner shown, and the suggested questions are grouped under "Taxes" and "Your portfolio"
+
+#### Scenario: A refusal offers a reformulation
+- **WHEN** a `refused` frame arrives
+- **THEN** alongside the withheld-answer presentation the panel offers one descriptive reformulation chip — a rephrased, more specific version of the user's question — that the user can send with one action
 
 #### Scenario: No model configured
 - **WHEN** a `failed` frame with code `NO_MODEL_AVAILABLE` arrives

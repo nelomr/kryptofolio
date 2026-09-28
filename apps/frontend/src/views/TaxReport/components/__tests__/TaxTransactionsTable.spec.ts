@@ -74,3 +74,23 @@ describe('TaxTransactionsTable — Money sort and null render gates (task 5.5, 5
     expect(wrapper.text()).toContain('€0.00');
   });
 });
+
+describe('TaxTransactionsTable — edited-row badge (design.md D9)', () => {
+  it('shows an "edited" badge when override.kind === "ACTIVE"', () => {
+    const row = tx({ id: 'tx-edited', idHash: 'hash-edited', override: { kind: 'ACTIVE', editedFields: ['price_fiat'] } });
+    const wrapper = mount(TaxTransactionsTable, { props: { transactions: [row] } });
+    expect(wrapper.text()).toContain('tax.badge.edited');
+  });
+
+  it('shows no "edited" badge for a row with no override', () => {
+    const row = tx({ id: 'tx-plain', idHash: 'hash-plain', override: { kind: 'NONE' } });
+    const wrapper = mount(TaxTransactionsTable, { props: { transactions: [row] } });
+    expect(wrapper.text()).not.toContain('tax.badge.edited');
+  });
+
+  it('shows no "edited" badge when override is entirely absent (a futures-shaped row)', () => {
+    const row = tx({ id: 'tx-no-override' });
+    const wrapper = mount(TaxTransactionsTable, { props: { transactions: [row] } });
+    expect(wrapper.text()).not.toContain('tax.badge.edited');
+  });
+});

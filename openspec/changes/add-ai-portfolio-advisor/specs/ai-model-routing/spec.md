@@ -3,7 +3,17 @@
 ## ADDED Requirements
 
 ### Requirement: User-Configurable Ordered Model Chain
-The ordered fallback chain SHALL live in the `user_settings` key `ai_advisor_model_chain` as a JSON array of `{ providerId, modelId }`, validated by `modelChainSchema`. It SHALL NOT live in a TypeScript constant, a config file, or an environment variable. `AI_PROVIDER_IDS` SHALL be a single closed tuple in `packages/shared-types`, holding the Phase 0 set `openai`, `anthropic`, `google`, `opencode`, `ollama`, and the same ids SHALL be the `ai-model` entries of the vault registry. `modelId` SHALL remain an unconstrained non-empty string, because provider model catalogues change without our release cycle.
+The ordered fallback chain SHALL live in the `user_settings` key `ai_advisor_model_chain` as a JSON array of chain entries, validated by `modelChainSchema`. It SHALL NOT live in a TypeScript constant, a config file, or an environment variable. `AI_PROVIDER_IDS` SHALL be a single closed tuple in `packages/shared-types`, holding the Phase 0 set `openai`, `anthropic`, `google`, `opencode`, `ollama`, `ollama-cloud` (local daemon vs. direct Ollama Cloud API are distinct provider ids), and the same ids SHALL be the `ai-model` entries of the vault registry. `modelId` SHALL remain an unconstrained non-empty string, because provider model catalogues change without our release cycle.
+
+Each chain entry SHALL additionally carry a required, non-empty positive integer `contextWindow` when, and only when, `providerId` is `ollama` and `modelId` does not end `:cloud`; every other entry shape SHALL NOT carry a `contextWindow` field. This is a content-discriminated union (design D16), not an optional field on every entry.
+
+#### Scenario: A local entry requires contextWindow
+- **WHEN** a chain entry has `providerId: 'ollama'` and a `modelId` not ending `:cloud`, with no `contextWindow`
+- **THEN** `modelChainSchema` rejects it
+
+#### Scenario: A metered entry rejects contextWindow
+- **WHEN** a chain entry for any provider other than a non-`:cloud` `ollama` model carries a `contextWindow` field
+- **THEN** `modelChainSchema` rejects it, because that field belongs only to the local shape
 
 #### Scenario: Chain is reordered without a rebuild
 - **WHEN** a user submits a reordered chain to the advisor config route
@@ -66,9 +76,9 @@ The chain SHALL be executed via the model router's native fallback array with pe
 - **WHEN** the first chain entry returns 429 until its `maxRetries` is exhausted
 - **THEN** the run continues with the second entry and, on success, terminates with the domain event `completed`, whose receipt names the second entry's provider and model
 
-#### Scenario: One agent, no per-provider duplication
+#### Scenario: No per-provider agent duplication
 - **WHEN** the agent definitions are enumerated
-- **THEN** exactly one advisor agent exists, with a dynamic model resolver and a single instructions function
+- **THEN** the model chain and its dynamic resolver are configured once, on `advisor`, and no agent is duplicated per model provider (the supervisor/sub-agent topology in the `ai-advisor-agent` capability is an orthogonal, phased concern)
 
 ### Requirement: An Empty Resolved Chain Calls No Model
 When the resolved chain is empty, the run SHALL terminate immediately with `failed` and the code `NO_MODEL_AVAILABLE`, or `VAULT_LOCKED` when a locked vault is the reason. No default provider SHALL work without a configured key.
@@ -95,6 +105,17 @@ When every resolved chain entry fails, the run SHALL terminate with `failed` and
 #### Scenario: No success event on an empty answer
 - **WHEN** a run produced zero text tokens and no provider succeeded
 - **THEN** the terminal event is `failed`, never `completed`
+
+### Requirement: Execution Profile Classification And Settings Storage
+`classifyExecutionProfile` SHALL be a pure function from a chain entry to `'local' | 'metered'`, derived and never a user-set field: `local` only for `providerId: 'ollama'` with a `modelId` not ending `:cloud`; `metered` for every other case. Per-profile limits SHALL be stored in the `user_settings` key `ai_advisor_execution_profiles`, validated by `executionProfilesSchema`, with code-supplied defaults when unset and hard ceilings the schema enforces regardless of what is submitted.
+
+#### Scenario: Classification needs no settings lookup
+- **WHEN** `classifyExecutionProfile` is called with a chain entry
+- **THEN** it returns a result using only the entry's own `providerId` and `modelId`, with no I/O
+
+#### Scenario: Defaults apply when unset
+- **WHEN** `ai_advisor_execution_profiles` is unset
+- **THEN** the resolved limits are the code defaults (metered: maxSteps 5, lastMessages 20; local: maxSteps 15, lastMessages 50)
 
 ### Requirement: Discriminated Credential State
 The advisor config response SHALL express per-provider credential state as a `kind`-discriminated union `{ kind: 'present' } | { kind: 'absent' } | { kind: 'locked' }`, never as a boolean flag with an optional detail.

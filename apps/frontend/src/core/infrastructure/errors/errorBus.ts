@@ -63,4 +63,4 @@ class ErrorBus {
 
 /** Singleton error bus — import this in adapters and App.vue */
 export const errorBus = new ErrorBus()
-export type { ValidationErrorPayload }
+export type { ValidationErrorPayload, OperationErrorPayload }

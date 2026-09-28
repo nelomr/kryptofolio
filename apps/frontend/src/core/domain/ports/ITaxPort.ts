@@ -20,20 +20,14 @@ import type {
   OverrideOutcomeEntity,
 } from '@/core/domain/models/FiscalEntities'
 import type { AccountId, TransactionIdHash } from '@/core/domain/models/BrandedTypes'
-import type { SourceProfileId, TransactionRow } from '@kryptofolio/shared-types'
+import type { SourceProfileId, TransactionRow, SpotTransactionEditInput } from '@kryptofolio/shared-types'
+import type { SpotOverrideOutcomeEntity } from '@/core/domain/models/FiscalEntities'
 
-/**
- * A price the user declares for an operation whose market value could not be resolved.
- *
- * The amount stays a decimal string all the way to the wire: it is validated against the ledger's
- * own precise-amount rule server-side, and passing it through a float would defeat that.
- */
-export interface ManualPriceOverrideInput {
-  idHash: TransactionIdHash
-  priceFiat: string
-  fiatCurrency: string
-  note?: string
-}
+// `ManualPriceOverrideInput` and its two port methods were removed here (design.md D3,
+// add-spot-transaction-edit-overrides): `manual_price_overrides` was unified into
+// `spot_transaction_overrides`. The replacement is `setSpotTransactionOverride`/
+// `removeSpotTransactionOverride` below, whose price-only payload
+// (`price_fiat: { kind: 'SET', ... }`, every other field `UNCHANGED`) covers the same case.
 
 /** A correction naming the real counterparty of a custody movement. */
 export interface TransferDestinationInput {
@@ -79,18 +73,12 @@ export interface ITaxPort {
    */
   getAvailableYears(): Promise<number[]>
 
-  /**
-   * Soft-delete a transaction by ID.
-   * @param id - The transaction's string ID
-   */
-  deleteTransaction(id: string): Promise<void>
-
-  /**
-   * Update a transaction with corrected data.
-   * @param id - The transaction's string ID
-   * @param data - Partial update payload
-   */
-  updateTransaction(id: string, data: Partial<TaxTransactionEntity>): Promise<void>
+  // `deleteTransaction`/`updateTransaction` were removed here: they called the stub
+  // `PUT/DELETE /api/tax/transactions/:id` routes (design.md, group 7), which returned
+  // `{ success: true }` without ever touching the ledger and are now deleted. Neither had a real
+  // caller in this codebase — `DeleteTransactionUseCase`/`UpdateTransactionUseCase` were dead code
+  // wired to nothing. The real edit path is `setSpotTransactionOverride` below; deletion/creation
+  // of transactions stays out of scope per this change's proposal.
 
   /**
    * Validate and confirm a single flagged transaction.
@@ -167,20 +155,22 @@ export interface ITaxPort {
    */
   getFiscalIntegrity(accountId?: string): Promise<FiscalIntegrityReportEntity>
 
-  /**
-   * Declare fiat values for operations whose market price could not be resolved.
-   *
-   * Batched deliberately: the backend rebuilds derived data once per call, so submitting one
-   * override at a time would cost one full recalculation each.
-   */
-  setManualPriceOverrides(overrides: ManualPriceOverrideInput[]): Promise<OverrideOutcomeEntity>
-
-  /** Withdraw declared prices, reverting the affected rows to the market value or to the flag. */
-  removeManualPriceOverrides(idHashes: TransactionIdHash[]): Promise<OverrideOutcomeEntity>
-
   /** Declare the real counterparty of custody movements attributed to a synthetic account. */
   setTransferDestinations(overrides: TransferDestinationInput[]): Promise<OverrideOutcomeEntity>
 
   /** Withdraw declared counterparties, reverting to the inferred synthetic account. */
   removeTransferDestinations(idHashes: TransactionIdHash[]): Promise<OverrideOutcomeEntity>
+
+  /**
+   * Edit a spot transaction's P&L-relevant fields (design.md D8). Single hash, not a batch —
+   * bulk edit is out of scope. `payload` is a full replacement of the override for that hash, not
+   * a merge: a field left `UNCHANGED` here reverts it to unedited if it was previously edited.
+   */
+  setSpotTransactionOverride(
+    idHash: TransactionIdHash,
+    payload: SpotTransactionEditInput,
+  ): Promise<SpotOverrideOutcomeEntity>
+
+  /** Restores a spot transaction to its imported values by removing its override. */
+  removeSpotTransactionOverride(idHash: TransactionIdHash): Promise<SpotOverrideOutcomeEntity>
 }

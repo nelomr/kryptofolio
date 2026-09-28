@@ -5,6 +5,7 @@ import { broadcastPrice } from './core/infrastructure/routes/market.js';
 import { startExchangeRateBootSync } from './core/infrastructure/jobs/ExchangeRateSyncJob.js';
 import { startPriceIngestionJob } from './core/infrastructure/jobs/PriceIngestionJob.js';
 import { bffLogger } from './core/utils/logger.js';
+import { attachServerLifecycle } from './core/infrastructure/server/serverLifecycle.js';
 import { DuckDbAdapter } from '@kryptofolio/database';
 
 export type { AppType } from './app.js';
@@ -56,8 +57,12 @@ if (process.env.NODE_ENV !== 'test') {
       // Start the daily Price Ingestion Job (Parquet OHLCV)
       await startPriceIngestionJob();
 
-      bffLogger.info(`Kryptofolio Backend running on port ${port}`);
-      serve({ fetch: app.fetch, port });
+      // `serve()`'s own return value must be captured — an EADDRINUSE (a stale process from a
+      // previous session still holding this port, the exact recurring failure mode this fixes)
+      // fires asynchronously as an `'error'` event, well outside this try/catch, so an unlistened
+      // server would crash the process unhandled with no clear cause instead of exiting loudly.
+      const server = serve({ fetch: app.fetch, port });
+      attachServerLifecycle(server, { port, logger: bffLogger, process });
     } catch (err) {
       bffLogger.fatal({ err }, '[Bootstrap] Failed to initialize backend');
       process.exit(1);

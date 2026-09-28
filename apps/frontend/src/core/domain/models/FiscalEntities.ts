@@ -123,7 +123,30 @@ export interface TaxTransactionEntity {
   exchange?: string
   /** Optional notes or reference ID from exchange */
   refId?: string
+  /**
+   * The transaction's deterministic identity (design.md D1) — distinct from `id`, the surrogate
+   * row id. The edit-override endpoints key on this, not on `id`. Spot-only: futures/derivative
+   * rows (which share this same entity shape) never populate it — editing is out of scope there.
+   */
+  idHash?: string
+  /**
+   * The row's own native ISO-4217 currency (e.g. the exchange's stated currency), distinct from
+   * `priceEur`/`totalEur`, which are always converted to the display currency. A price edit must
+   * declare *this* currency, not the display one — submitting a EUR-display price tagged as USD
+   * (or vice versa) would silently misstate the override. Spot-only, same reasoning as `idHash`.
+   */
+  fiatCurrency?: string
+  /**
+   * design.md D9: marks a row carrying an active spot-transaction edit-override. Spot-only, same
+   * reasoning as `idHash`; absent (not `{kind:'NONE'}`) on a futures row, since the concept does
+   * not apply there at all rather than applying and being clean.
+   */
+  override?: TaxTransactionOverrideView
 }
+
+export type TaxTransactionOverrideView =
+  | { kind: 'NONE' }
+  | { kind: 'ACTIVE'; editedFields: readonly string[] }
 
 // ---------------------------------------------------------------------------
 // LotCustodyLocation — where a lot's quantity currently sits (may differ from
@@ -432,4 +455,20 @@ export interface OverrideOutcomeEntity {
   applied: number
   materialization: MaterializationSummaryEntity | null
   pendingReview: number
+}
+
+/**
+ * D6 (add-spot-transaction-edit-overrides): whether the edit left later disposals or transfers
+ * exceeding the holdings available at that point, for the `(asset, account)` pairs newly flagged
+ * by this specific edit — never a boolean, so the UI can name exactly what to look at.
+ */
+export type SpotEditBalanceCheckEntity =
+  | { kind: 'CLEAN' }
+  | {
+      kind: 'NEGATIVE_BALANCE'
+      entries: readonly { assetId: string; accountId: string; balance: string; tolerance: string }[]
+    }
+
+export interface SpotOverrideOutcomeEntity extends OverrideOutcomeEntity {
+  balanceCheck: SpotEditBalanceCheckEntity
 }

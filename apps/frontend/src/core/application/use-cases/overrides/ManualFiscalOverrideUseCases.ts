@@ -6,35 +6,36 @@
  * inputs, so nothing here edits a derived row.
  */
 
-import type {
-  ITaxPort,
-  ManualPriceOverrideInput,
-  TransferDestinationInput,
-} from '@/core/domain/ports/ITaxPort'
-import type { OverrideOutcomeEntity } from '@/core/domain/models/FiscalEntities'
+import type { ITaxPort, TransferDestinationInput } from '@/core/domain/ports/ITaxPort'
+import type { OverrideOutcomeEntity, SpotOverrideOutcomeEntity } from '@/core/domain/models/FiscalEntities'
 import type { TransactionIdHash } from '@/core/domain/models/BrandedTypes'
+import type { SpotTransactionEditInput } from '@kryptofolio/shared-types'
 
-export class SetManualPriceOverrideUseCase {
+// `SetManualPriceOverrideUseCase`/`RemoveManualPriceOverrideUseCase` were removed here
+// (design.md D3): manual_price_overrides was unified into spot_transaction_overrides. The
+// replacement is `SetSpotTransactionOverrideUseCase`/`RemoveSpotTransactionOverrideUseCase` below.
+
+export class SetSpotTransactionOverrideUseCase {
   private readonly taxPort: ITaxPort
 
   constructor(taxPort: ITaxPort) {
     this.taxPort = taxPort
   }
 
-  async execute(overrides: ManualPriceOverrideInput[]): Promise<OverrideOutcomeEntity> {
-    return await this.taxPort.setManualPriceOverrides(overrides)
+  async execute(idHash: TransactionIdHash, payload: SpotTransactionEditInput): Promise<SpotOverrideOutcomeEntity> {
+    return await this.taxPort.setSpotTransactionOverride(idHash, payload)
   }
 }
 
-export class RemoveManualPriceOverrideUseCase {
+export class RemoveSpotTransactionOverrideUseCase {
   private readonly taxPort: ITaxPort
 
   constructor(taxPort: ITaxPort) {
     this.taxPort = taxPort
   }
 
-  async execute(idHashes: TransactionIdHash[]): Promise<OverrideOutcomeEntity> {
-    return await this.taxPort.removeManualPriceOverrides(idHashes)
+  async execute(idHash: TransactionIdHash): Promise<SpotOverrideOutcomeEntity> {
+    return await this.taxPort.removeSpotTransactionOverride(idHash)
   }
 }
 

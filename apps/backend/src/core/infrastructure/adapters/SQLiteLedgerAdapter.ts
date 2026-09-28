@@ -12,7 +12,7 @@ import type {
   LedgerTaxLot,
   LedgerTaxLotEvent,
   LedgerCustodyEntry,
-  LedgerManualPriceOverride,
+  LedgerSpotTransactionOverride,
   LedgerTransferDestinationOverride,
   ReconciliationSummary,
   EnsureAccountInput,
@@ -72,6 +72,32 @@ function toDailyExchangeRateSource(value: unknown): DailyExchangeRateSource {
   const parsed = dailyExchangeRateSourceSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new Error(`exchange_rates.source holds an unrecognised value: ${String(value)}`);
+}
+
+/** Maps a raw `spot_transaction_overrides` row to the port's branded shape (rule 4 boundary). */
+function rowToSpotTransactionOverride(row: Record<string, unknown>): LedgerSpotTransactionOverride {
+  const amount = (value: unknown): PreciseAmount | null =>
+    value === null ? null : toPreciseAmount(value as string);
+  return {
+    id_hash: row.id_hash as string,
+    amount_in_edited: Boolean(row.amount_in_edited),
+    amount_in: amount(row.amount_in),
+    amount_out_edited: Boolean(row.amount_out_edited),
+    amount_out: amount(row.amount_out),
+    price_edited: Boolean(row.price_edited),
+    price_fiat: amount(row.price_fiat),
+    fiat_currency: (row.fiat_currency as string | null) ?? null,
+    total_fiat_edited: Boolean(row.total_fiat_edited),
+    total_fiat: amount(row.total_fiat),
+    fee_kind: row.fee_kind as LedgerSpotTransactionOverride['fee_kind'],
+    fee_amount: amount(row.fee_amount),
+    fee_asset_id: (row.fee_asset_id as string | null) ?? null,
+    timestamp_edited: Boolean(row.timestamp_edited),
+    timestamp: (row.timestamp as string | null) ?? null,
+    tx_type_edited: Boolean(row.tx_type_edited),
+    tx_type: (row.tx_type as LedgerSpotTransactionOverride['tx_type']) ?? null,
+    note: (row.note as string | null) ?? undefined,
+  };
 }
 
 /**
@@ -881,39 +907,80 @@ export class SQLiteLedgerAdapter implements ILedgerPort, IFxRateLedgerPort {
   // User-authored overrides — calculation inputs, never reconciled
   // ---------------------------------------------------------------------------
 
-  async getManualPriceOverrides(): Promise<LedgerManualPriceOverride[]> {
+  async getSpotTransactionOverride(idHash: string): Promise<LedgerSpotTransactionOverride | undefined> {
+    const row = this.db
+      .prepare(
+        `SELECT id_hash, amount_in_edited, amount_in, amount_out_edited, amount_out,
+                price_edited, price_fiat, fiat_currency, total_fiat_edited, total_fiat,
+                fee_kind, fee_amount, fee_asset_id,
+                timestamp_edited, timestamp, tx_type_edited, tx_type, note
+           FROM spot_transaction_overrides WHERE id_hash = ? AND deleted_at IS NULL`,
+      )
+      .get(idHash) as Record<string, unknown> | undefined;
+
+    if (!row) return undefined;
+    return rowToSpotTransactionOverride(row);
+  }
+
+  async getSpotTransactionOverrides(): Promise<LedgerSpotTransactionOverride[]> {
     const rows = this.db
       .prepare(
-        `SELECT id_hash, price_fiat, fiat_currency, note
-           FROM manual_price_overrides WHERE deleted_at IS NULL ORDER BY id_hash ASC`,
+        `SELECT id_hash, amount_in_edited, amount_in, amount_out_edited, amount_out,
+                price_edited, price_fiat, fiat_currency, total_fiat_edited, total_fiat,
+                fee_kind, fee_amount, fee_asset_id,
+                timestamp_edited, timestamp, tx_type_edited, tx_type, note
+           FROM v_active_spot_transaction_overrides ORDER BY id_hash ASC`,
       )
       .all() as Record<string, unknown>[];
 
-    return rows.map((row) => ({
-      id_hash: row.id_hash as string,
-      price_fiat: toPreciseAmount(row.price_fiat as string),
-      fiat_currency: row.fiat_currency as string,
-      note: (row.note as string | null) ?? undefined,
-    }));
+    return rows.map(rowToSpotTransactionOverride);
   }
 
-  async setManualPriceOverride(override: LedgerManualPriceOverride): Promise<void> {
+  async setSpotTransactionOverride(input: LedgerSpotTransactionOverride): Promise<void> {
+    // Full replacement (design.md D8 PUT semantics), not a merge: every column is written on every
+    // call, so a field absent from this write (its flag false) reverts to unedited exactly as the
+    // UPDATE arm below states, rather than leaving a stale value from a previous declaration.
     this.db
       .prepare(
-        `INSERT INTO manual_price_overrides (id_hash, price_fiat, fiat_currency, note)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO spot_transaction_overrides (
+           id_hash, amount_in_edited, amount_in, amount_out_edited, amount_out,
+           price_edited, price_fiat, fiat_currency, total_fiat_edited, total_fiat,
+           fee_kind, fee_amount, fee_asset_id,
+           timestamp_edited, timestamp, tx_type_edited, tx_type, note
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id_hash) DO UPDATE SET
-           price_fiat = excluded.price_fiat,
+           amount_in_edited = excluded.amount_in_edited, amount_in = excluded.amount_in,
+           amount_out_edited = excluded.amount_out_edited, amount_out = excluded.amount_out,
+           price_edited = excluded.price_edited, price_fiat = excluded.price_fiat,
            fiat_currency = excluded.fiat_currency,
+           total_fiat_edited = excluded.total_fiat_edited, total_fiat = excluded.total_fiat,
+           fee_kind = excluded.fee_kind, fee_amount = excluded.fee_amount,
+           fee_asset_id = excluded.fee_asset_id,
+           timestamp_edited = excluded.timestamp_edited, timestamp = excluded.timestamp,
+           tx_type_edited = excluded.tx_type_edited, tx_type = excluded.tx_type,
            note = excluded.note,
            deleted_at = NULL,
            updated_at = datetime('now', 'utc')`,
       )
       .run(
-        override.id_hash,
-        override.price_fiat.toString(),
-        override.fiat_currency,
-        override.note ?? null,
+        input.id_hash,
+        input.amount_in_edited ? 1 : 0,
+        input.amount_in?.toString() ?? null,
+        input.amount_out_edited ? 1 : 0,
+        input.amount_out?.toString() ?? null,
+        input.price_edited ? 1 : 0,
+        input.price_fiat?.toString() ?? null,
+        input.fiat_currency,
+        input.total_fiat_edited ? 1 : 0,
+        input.total_fiat?.toString() ?? null,
+        input.fee_kind,
+        input.fee_amount?.toString() ?? null,
+        input.fee_asset_id,
+        input.timestamp_edited ? 1 : 0,
+        input.timestamp,
+        input.tx_type_edited ? 1 : 0,
+        input.tx_type,
+        input.note ?? null,
       );
   }
 
@@ -978,14 +1045,15 @@ export class SQLiteLedgerAdapter implements ILedgerPort, IFxRateLedgerPort {
     return rows.map((row) => row.date as string);
   }
 
-  async removeManualPriceOverride(idHash: string): Promise<void> {
-    this.db
+  async removeSpotTransactionOverride(idHash: string): Promise<{ count: number }> {
+    const result = this.db
       .prepare(
-        `UPDATE manual_price_overrides
+        `UPDATE spot_transaction_overrides
             SET deleted_at = datetime('now', 'utc'), updated_at = datetime('now', 'utc')
           WHERE id_hash = ? AND deleted_at IS NULL`,
       )
       .run(idHash);
+    return { count: Number(result.changes) };
   }
 
   async getTransferDestinationOverrides(): Promise<LedgerTransferDestinationOverride[]> {

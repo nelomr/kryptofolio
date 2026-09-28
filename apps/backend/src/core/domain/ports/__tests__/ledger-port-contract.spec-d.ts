@@ -19,7 +19,7 @@ import type {
   ILedgerPort,
   LedgerTaxLotEvent,
   LedgerCustodyEntry,
-  LedgerManualPriceOverride,
+  LedgerSpotTransactionOverride,
   LedgerTransferDestinationOverride,
   ReconciliationSummary,
   EnsureAccountInput,
@@ -49,9 +49,9 @@ describe('ILedgerPort reconciliation surface', () => {
   });
 
   it('declares CRUD for the user-authored override tables', () => {
-    expectTypeOf<ILedgerPort>().toHaveProperty('getManualPriceOverrides');
-    expectTypeOf<ILedgerPort>().toHaveProperty('setManualPriceOverride');
-    expectTypeOf<ILedgerPort>().toHaveProperty('removeManualPriceOverride');
+    expectTypeOf<ILedgerPort>().toHaveProperty('getSpotTransactionOverride');
+    expectTypeOf<ILedgerPort>().toHaveProperty('setSpotTransactionOverride');
+    expectTypeOf<ILedgerPort>().toHaveProperty('removeSpotTransactionOverride');
     expectTypeOf<ILedgerPort>().toHaveProperty('getTransferDestinationOverrides');
     expectTypeOf<ILedgerPort>().toHaveProperty('setTransferDestinationOverride');
     expectTypeOf<ILedgerPort>().toHaveProperty('removeTransferDestinationOverride');
@@ -109,12 +109,16 @@ describe('LedgerCustodyEntry', () => {
 });
 
 describe('override entities', () => {
-  it('keys a price override on the deterministic transaction identity', () => {
+  it('keys a spot transaction edit override on the deterministic transaction identity', () => {
     // Keying on `id_hash` rather than the surrogate `id` is what lets an override survive a
-    // re-ingestion of the same source file.
-    expectTypeOf<LedgerManualPriceOverride>().toHaveProperty('id_hash');
-    expectTypeOf<LedgerManualPriceOverride>().toHaveProperty('fiat_currency');
-    expectTypeOf<LedgerManualPriceOverride>().toHaveProperty('price_fiat');
+    // re-ingestion of the same source file (design.md D1).
+    expectTypeOf<LedgerSpotTransactionOverride>().toHaveProperty('id_hash');
+    expectTypeOf<LedgerSpotTransactionOverride>().toHaveProperty('price_edited');
+    expectTypeOf<LedgerSpotTransactionOverride>().toHaveProperty('price_fiat');
+    expectTypeOf<LedgerSpotTransactionOverride>().toHaveProperty('fee_kind');
+    expectTypeOf<LedgerSpotTransactionOverride['fee_kind']>().toEqualTypeOf<
+      'UNCHANGED' | 'NONE' | 'CHARGED'
+    >();
   });
 
   it('keys a destination override on the deterministic transaction identity', () => {

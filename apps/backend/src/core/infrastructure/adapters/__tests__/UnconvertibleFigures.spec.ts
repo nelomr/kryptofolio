@@ -46,6 +46,7 @@ const MIGRATIONS = [
   '005_nullable_fiat_magnitudes',
   '006_fx_conversion_provenance',
   '007_futures_collateral_movements',
+  '008_spot_transaction_overrides',
 ].map((name) =>
   fs.readFileSync(
     path.resolve(__dirname, `../../../../../../../packages/database/migrations/sqlite/${name}.sql`),

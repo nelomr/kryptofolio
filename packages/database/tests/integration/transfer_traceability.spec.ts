@@ -470,8 +470,8 @@ interface PolicyRow {
  *
  * The fixture deliberately ships without any `historical_prices` row, so these cases inject prices
  * into the adapter's `_price_seed` relation — the same seam the pre-existing FIFO integration suites
- * use — and rows into `manual_price_overrides`, to prove the resolution order actually fires rather
- * than merely producing NULL for everything.
+ * use — and rows into `spot_transaction_overrides` (a `price_edited` override), to prove the
+ * resolution order actually fires rather than merely producing NULL for everything.
  */
 describe('FIFO price resolution and provenance', () => {
   let sqlitePath: string;
@@ -528,8 +528,8 @@ describe('FIFO price resolution and provenance', () => {
     await seedPrice('0.40', 'EUR');
     sqliteDb
       .prepare(
-        `INSERT INTO manual_price_overrides (id_hash, price_fiat, fiat_currency)
-         VALUES (?, ?, ?)`
+        `INSERT INTO spot_transaction_overrides (id_hash, price_edited, price_fiat, fiat_currency)
+         VALUES (?, 1, ?, ?)`
       )
       .run(`hash-${TX.stakingUnpriced}`, '0.42', 'EUR');
 
@@ -543,8 +543,8 @@ describe('FIFO price resolution and provenance', () => {
     await seedPrice('0.40', 'EUR');
     sqliteDb
       .prepare(
-        `INSERT INTO manual_price_overrides (id_hash, price_fiat, fiat_currency, deleted_at)
-         VALUES (?, ?, ?, datetime('now', 'utc'))`
+        `INSERT INTO spot_transaction_overrides (id_hash, price_edited, price_fiat, fiat_currency, deleted_at)
+         VALUES (?, 1, ?, ?, datetime('now', 'utc'))`
       )
       .run(`hash-${TX.stakingUnpriced}`, '0.42', 'EUR');
 

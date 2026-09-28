@@ -62,10 +62,13 @@ describe('PendingValuesReview', () => {
     expect(row.text()).toContain('fifo_quality.missing_price.label')
   })
 
-  it('exposes an assignment affordance on a MISSING_PRICE row', () => {
+  it('exposes an "edit row" affordance on a MISSING_PRICE row, not its own inline price form', () => {
     const wrapper = mountReview({})
 
-    expect(wrapper.find('[data-testid="assign-price"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="edit-row"]').exists()).toBe(true)
+    // Superseded by the shared EditSpotTransactionDialog (design.md, "Revised after user
+    // feedback"): a second UI touching the same field is exactly what this fix removes.
+    expect(wrapper.find('[data-testid="price-input"]').exists()).toBe(false)
   })
 
   it('exposes a destination affordance on an UNTRACKED_INFLOW row', () => {
@@ -74,39 +77,15 @@ describe('PendingValuesReview', () => {
     })
 
     expect(wrapper.find('[data-testid="assign-destination"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="assign-price"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-row"]').exists()).toBe(false)
   })
 
-  it('emits the declared price with its currency and the row identity', async () => {
+  it('emits the row identity to open the shared edit dialog, instead of declaring a price itself', async () => {
     const wrapper = mountReview({})
 
-    await wrapper.get('[data-testid="assign-price"]').trigger('click')
-    await wrapper.get('[data-testid="price-input"]').setValue('0.42')
-    await wrapper.get('[data-testid="price-submit"]').trigger('submit')
+    await wrapper.get('[data-testid="edit-row"]').trigger('click')
 
-    expect(wrapper.emitted('assignPrice')).toEqual([
-      [{ idHash: 'hash-a', priceFiat: '0.42', fiatCurrency: 'EUR' }],
-    ])
-  })
-
-  it('does not emit a declaration with no value entered', async () => {
-    const wrapper = mountReview({})
-
-    await wrapper.get('[data-testid="assign-price"]').trigger('click')
-    await wrapper.get('[data-testid="price-submit"]').trigger('submit')
-
-    expect(wrapper.emitted('assignPrice')).toBeUndefined()
-  })
-
-  it('keeps the entered amount as a decimal string rather than a number', async () => {
-    const wrapper = mountReview({})
-
-    await wrapper.get('[data-testid="assign-price"]').trigger('click')
-    await wrapper.get('[data-testid="price-input"]').setValue('0.10')
-    await wrapper.get('[data-testid="price-submit"]').trigger('submit')
-
-    const payload = wrapper.emitted('assignPrice')?.[0]?.[0] as { priceFiat: unknown }
-    expect(payload.priceFiat).toBe('0.10')
+    expect(wrapper.emitted('editRow')).toEqual([['hash-a']])
   })
 
   it('emits the declared destination account', async () => {
@@ -149,7 +128,7 @@ describe('PendingValuesReview', () => {
   it('disables the affordance while a declaration is in flight', () => {
     const wrapper = mountReview({ isSubmitting: true })
 
-    expect(wrapper.get('[data-testid="assign-price"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="edit-row"]').attributes('disabled')).toBeDefined()
   })
 
   describe('a fee its source could not resolve', () => {
@@ -163,7 +142,7 @@ describe('PendingValuesReview', () => {
     it('offers no assignment affordance, since none exists for a fee yet', () => {
       const wrapper = mountReview({ rows: [], feePendingReviewRows: [feeRow()] })
 
-      expect(wrapper.find('[data-testid="assign-price"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="edit-row"]').exists()).toBe(false)
       expect(wrapper.find('[data-testid="assign-destination"]').exists()).toBe(false)
     })
 
