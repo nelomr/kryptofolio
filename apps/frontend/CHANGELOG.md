@@ -1,5 +1,15 @@
 # @kryptofolio/frontend
 
+## 1.16.15
+
+### Patch Changes
+
+- [`e968719`](https://github.com/nelomr/kryptofolio/commit/e968719b29ff5465d99ff33110d38d8859965162) Thanks [@nelomr](https://github.com/nelomr)! - Begin the AI portfolio advisor (Phase 0): install the Mastra/Ollama dependencies behind the backend-only AI subtree, widen the vault provider registry with a discriminated exchange/market-data/ai-model category so AI providers can register through the existing encrypted credentials path, and add the `ai_advisor_runs` audit-trail migration that records which model and tools a run used without ever storing conversation content.
+
+- Updated dependencies [[`e968719`](https://github.com/nelomr/kryptofolio/commit/e968719b29ff5465d99ff33110d38d8859965162)]:
+  - @kryptofolio/shared-types@1.1.8
+  - @kryptofolio/core-domain@1.1.8
+
 ## 1.16.14
 
 ### Patch Changes
