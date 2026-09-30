@@ -123,6 +123,9 @@ User adjustments are segregated from derived tables so recalculation never destr
 - **`manual_price_overrides`**: Allows users to manually declare the fiat price for a given transaction hash.
 - **`transfer_destination_overrides`**: Allows users to declare the counterparty account for outbound transfers that couldn't be auto-reconciled.
 
+### 3.5. AI Advisor Audit Table
+- **`ai_advisor_runs`**: One row per AI advisor run (created by migration `009_ai_advisor_runs.sql`; migration `010_nullable_advisor_execution_profile.sql` made `execution_profile` nullable). It records provenance only — `outcome` (`completed`, `refused`, `failed`, `aborted`), `provider_id`, `model_id`, `tools_called`, token counts, `failure_code`, `execution_profile` (`local`, `metered`, `mixed`, or NULL) and step usage — and **never conversation content** (a refusal's reason is not stored either). A run cancelled before a terminal event is stored as `aborted` with NULL provider, model, token and step columns. Migration `010` rebuilds the table with `DROP TABLE`, so it assumes no audit rows worth preserving. Conversation content lives in the separate, disposable `ai-advisor.db`. See [AI Portfolio Advisor](ai-advisor.md#13-persistence-memory-and-audit-trail).
+
 ---
 
 ## 4. The Audit Log & Triggers

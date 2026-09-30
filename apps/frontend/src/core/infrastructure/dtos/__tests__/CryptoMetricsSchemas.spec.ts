@@ -2,6 +2,29 @@ import { AssetAllocationItemSchema, AssetAllocationResponseSchema, DrawdownPoint
 
 describe('CryptoMetricsSchemas', () => {
   describe('AssetAllocationItemSchema', () => {
+    it('still parses the backend item shapes that now carry a quantity and a value kind', () => {
+      const valued = AssetAllocationItemSchema.parse({
+        kind: 'valued',
+        assetId: 'BTC',
+        symbol: 'BTC',
+        amount: '0.5',
+        allocationPct: '88.89',
+        valueFiat: '2400.00',
+        currency: 'USD',
+      })
+      const unvalued = AssetAllocationItemSchema.parse({
+        kind: 'unvalued',
+        assetId: 'XYZ',
+        symbol: 'XYZ',
+        amount: '3',
+        currency: 'USD',
+      })
+
+      expect(valued.valueFiat).toBe(2400)
+      expect(unvalued.symbol).toBe('XYZ')
+      expect(unvalued.valueFiat).toBe(0)
+    })
+
     it('should correctly parse and transform a valid item payload', () => {
       const raw = {
         symbol: 'BTC',

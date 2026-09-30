@@ -208,11 +208,14 @@ guessed by the column mapper.
 
 ---
 
-## 🤖 AI Agent Ready (Future Feature)
+## 🤖 AI Portfolio Advisor
 
-Although the AI Agent integration (using Vercel AI SDK and Mastra) is a future capability, the application has been designed from the ground up to support it:
+The application ships a read-only AI advisor (Phase 0). It reuses the seam the rest of the backend already has: use cases are isolated from Vue/UI and take pure DTOs, so they can be exposed as LLM tools without new validation.
 
-- **Isolated Use Cases:** Use cases in `src/core/application/use-cases/` are completely isolated from Vue/UI, expecting pure DTOs.
-- **Function Calling Compatibility:** These Use Cases and their Zod schemas are structured so they can be exposed directly as **LLM Tools** (Function Calling) for an AI Agent.
-- **Natural Language Execution:** A future LLM agent will be able to invoke operations (e.g., query the vault, request a tax report summary, import a new CSV) by matching user natural language prompts directly to the Use Cases' inputs, without bypassing validation rules or rewriting data models.
+- **Tools are thin wrappers over existing use cases.** The advisor's thirteen tools call use cases that already exist; no figure originates in the AI layer, and no write tool exists.
+- **One adapter touches the LLM SDK.** `IAdvisorPort` is LLM-agnostic; `MastraAdvisorAdapter` and the rest of `core/infrastructure/ai/` are the only code that imports `@mastra/*`.
+- **Streaming over a typed route.** `/api/advisor/stream` emits Server-Sent Events; configuration routes are part of `AppType`.
+- **Local-first.** Models can run on a local Ollama daemon, with optional cloud providers whose keys live in the encrypted vault.
+
+Conversation memory lives in its own disposable `ai-advisor.db`, and a content-free audit row per run goes to `ai_advisor_runs` in the ledger. See [AI Portfolio Advisor](ai-advisor.md) for the request lifecycle, stream contract, API reference and privacy model.
 

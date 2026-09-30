@@ -10,3 +10,7 @@ export * from "./domain/models/FxRateBasis";
 export * from "./value-objects/Money";
 export * from "./domain/services/sourceProfile";
 export * from "./domain/services/collateralPairing";
+export * from "./domain/services/holdingRanking";
+export * from "./domain/services/holdingValuation";
+export * from "./domain/services/downsampleSeries";
+export * from "./domain/services/displayOrdering";

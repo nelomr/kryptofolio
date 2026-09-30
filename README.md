@@ -3,8 +3,11 @@
 [![Release](https://img.shields.io/github/v/release/nelomr/kryptofolio?style=flat-square&logo=github&label=version)](https://github.com/nelomr/kryptofolio/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/nelomr/kryptofolio/ci.yml?branch=main&style=flat-square&logo=github-actions&label=CI)](https://github.com/nelomr/kryptofolio/actions/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue?style=flat-square)](./CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/docs-kryptofolio.kriptonianlabs.com-blue?style=flat-square&logo=readthedocs&logoColor=white)](https://kryptofolio.kriptonianlabs.com/)
 
 > 🌍 **Read this in:** [English](README.md) | [Español](README.es.md)
+
+> 📖 **Official documentation:** [kryptofolio.kriptonianlabs.com](https://kryptofolio.kriptonianlabs.com/)
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
@@ -21,7 +24,7 @@
 - **🧹 Data Ingestion Wizard with Source Format Profiles:** A multi-step interface to upload CSV/XLSX files, detect the source's own fee/format conventions (Kraken, Bitvavo, Bit2Me, Bitunix, Tangem, or a generic fallback) from its header row, perform manual adjustments with alphabetically sorted options, validate Spot vs. Futures constraints, and push valid data to the backend through the same pure ingestion pipeline used for re-ingestion.
 - **🏛️ Fiscal & Tax Compliance:** A dedicated Tax Report view to inspect transaction logs, identify gaps (missing cost bases or negative balances), and present clean data for AEAT-compliant reporting.
 - **📡 Real-Time Market Data Providers:** Seamlessly orchestrates live price streaming (Server-Sent Events) and REST endpoints using a hot-swappable provider architecture. Supports Kraken, Binance, Coinbase, Bit2Me, and CoinGecko with automated caching via DuckDB and InMemory layers.
-- **🤖 AI Agent Ready (Future Feature):** The frontend is technically prepared for future AI Agent integration (e.g., Vercel AI SDK or Mastra). Since Use Cases and DTOs are isolated and validated, they can be directly exposed as LLM Tools (function calling) for natural language querying without rewriting validations.
+- **🤖 Read-only AI Portfolio Advisor:** A chat panel (`Mod+/`) that answers questions about your own portfolio and IRPF data in your language. It is strictly read-only and never produces a number itself: every figure comes from an existing use case through a fixed set of tools. Local-first with Ollama, with optional cloud providers (OpenAI, Anthropic, Google, OpenCode, Ollama Cloud) whose keys live in the encrypted vault. See [AI Portfolio Advisor](docs/ai-advisor.md).
 - **🛡️ Privacy First:** Fully self-hosted. The system operates locally, ensuring API credentials and transactions are kept secure. The backend can integrate with any local database or external data source securely.
 - **🔐 Local Secrets Vault:** AES-256-GCM encrypted local vault for securely storing API keys. RAM memory scrubbing ensures keys are erased after use. Integrations can be dynamically enabled or disabled.
 - **🏗️ Hexagonal Architecture (Frontend Separation):** Strict separation of concerns (Ports & Adapters). The frontend UI layer is decoupled from network protocols and local storage mechanisms, enabling absolute testability and contract safety via Zod validation schemas.
@@ -42,11 +45,12 @@ The repository is structured as a **PNPM Workspaces Monorepo** to cleanly decoup
 - `packages/core-domain/`: Pure business logic (e.g., Services, Use Cases, Normalizers). Completely framework-agnostic.
 - `packages/shared-types/`: Zod schemas, DTOs, and type definitions shared across the entire monorepo.
 - `packages/database/`: Database abstraction layer — defines the generic `IDatabasePort` interface and SQL schema files. It encapsulates the core architecture: a local-first **SQLite Ledger** (`kryptofolio_ledger.db`) for OLTP persistence, and a **DuckDB Engine** (file-backed, pooled connections) for high-performance OLAP federated queries.
-- `docs/`: Technical documentation covering:
+- `docs/`: Technical documentation (the user-facing documentation lives on the [official site](https://kryptofolio.kriptonianlabs.com/)) covering:
   - [System Architecture](docs/architecture.md)
   - [Backend — Hono API Server](docs/backend.md)
   - [FIFO Tax Engine, Custody Ledger & Source Format Profiles](docs/fifo-tax-engine.md)
   - [SQLite Transactional Ledger](docs/database-architecture.md)
+  - [AI Portfolio Advisor](docs/ai-advisor.md)
   - [DuckDB & Parquet Time-Series Architecture](docs/architecture/duckdb-parquet-time-series.md)
 ### Dependency Management (PNPM Catalogs + Turborepo)
 We use **PNPM Catalogs** to maintain a single source of truth for common dependencies across all workspace packages (e.g., TypeScript, Zod, Hono).

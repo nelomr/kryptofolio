@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Where the three database files live, resolved once and identically for every process.
+ * Where the database files live, resolved once and identically for every process.
  *
  * Each path used to be `path.resolve(process.cwd(), '../../<file>')`, which makes the *same* code
  * name a different file per directory a process is started from. That is not a tidiness problem: it
@@ -22,6 +22,7 @@ const IN_MEMORY = ':memory:';
 const LEDGER_FILE = 'kryptofolio_ledger.db';
 const VAULT_FILE = 'kryptofolio.db';
 const ANALYTICAL_FILE = 'fiscal.duckdb';
+const ADVISOR_FILE = 'ai-advisor.db';
 const PARQUET_PRICES_DIR = path.join('data', 'historical', 'prices');
 
 function findWorkspaceRoot(): string {
@@ -67,6 +68,14 @@ export function resolveLedgerDbPath(): string {
 /** The SQLite vault — encrypted credentials and user settings. */
 export function resolveVaultDbPath(): string {
   return resolveDbPath(process.env.VAULT_DB_PATH, VAULT_FILE);
+}
+
+/**
+ * The advisor's conversation store (threads, messages, traces). Disposable by design: deleting it
+ * erases every conversation and nothing else, unlike the ledger that holds the run audit trail.
+ */
+export function resolveAdvisorDbPath(): string {
+  return resolveDbPath(process.env.ADVISOR_DB_PATH, ADVISOR_FILE);
 }
 
 /** The DuckDB analytical database, rebuilt from the ledger on demand. */

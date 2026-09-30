@@ -24,6 +24,7 @@ describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
           totalQty: '2.0',
           avgUnitCost: '30000.00',
           totalCostFiat: '60000.00',
+          costBasis: { kind: 'NATIVE', amount: '60000.00', currency: 'USD' },
           currency: 'USD',
           portfolioLocations: ['Binance'],
         },
@@ -195,5 +196,61 @@ describe('[Strict TDD] GetPortfolioSummaryUseCase', () => {
       new Decimal(summary.metrics.total_pnl_fiat).equals(summary.metrics.total_unrealized_pnl_fiat),
       'total_pnl_fiat is a copy of total_unrealized_pnl_fiat, so realized PnL was dropped',
     ).toBe(false);
+  });
+
+  describe('holdings without a snapshot price', () => {
+    function useCaseFor(holding: Record<string, unknown>): GetPortfolioSummaryUseCase {
+      const analytics: IPortfolioAnalyticsPort = {
+        getHoldingsSnapshot: vi.fn().mockResolvedValue([holding]),
+        getDerivativesPnl: vi.fn().mockResolvedValue([]),
+      };
+      const settings: IUserSettingsPort = {
+        getSetting: vi.fn().mockResolvedValue('EUR'),
+        setSetting: vi.fn().mockResolvedValue(undefined),
+      };
+      return new GetPortfolioSummaryUseCase(analytics, fakeFreshnessService, settings);
+    }
+
+    const base = {
+      assetId: 'asset-btc',
+      symbol: 'BTC',
+      totalQty: '2',
+      avgUnitCost: '30000.00',
+      totalCostFiat: '60000.00',
+      costBasis: { kind: 'NATIVE', amount: '60000.00', currency: 'EUR' },
+      currency: 'EUR',
+    };
+
+    it('keeps the adapter-converted valuation untouched when no snapshot price is supplied', async () => {
+      const useCase = useCaseFor({
+        ...base,
+        livePrice: '100',
+        currentValueFiat: '185.000000000000000000',
+        unrealizedPnlFiat: '-59815.000000000000000000',
+      });
+
+      const summary = await useCase.execute({});
+
+      const btc = summary.holdings[0]!;
+      expect(btc.live_price).toBe('100');
+      expect(btc.current_value_fiat).toBe('185.000000000000000000');
+      expect(btc.unrealized_pnl_fiat).toBe('-59815.000000000000000000');
+    });
+
+    it('does not re-value a holding whose cost basis is unconvertible, even with a snapshot price', async () => {
+      const useCase = useCaseFor({
+        ...base,
+        costBasis: { kind: 'UNCONVERTIBLE', nativeAmount: '60000.00', nativeCurrency: 'USD', requested: 'EUR' },
+        livePrice: '100',
+        currentValueFiat: '185.00',
+        unrealizedPnlFiat: '-59815.00',
+      });
+
+      const summary = await useCase.execute({ livePrices: new Map([['BTC', '50000.00']]) });
+
+      const btc = summary.holdings[0]!;
+      expect(btc.current_value_fiat).toBe('185.00');
+      expect(btc.live_price).toBe('100');
+    });
   });
 });

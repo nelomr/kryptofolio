@@ -5,9 +5,13 @@
 
 import { useI18n } from "@/composables/useI18n";
 import appLogo from "@/assets/favicon.svg";
-import { PieChart, Landmark, Settings } from "lucide-vue-next";
+import { useAdvisorPanel } from "@/composables/useAdvisorPanel";
+import { ref } from "vue";
+import { PieChart, Landmark, Settings, Sparkles } from "lucide-vue-next";
 
 const { t } = useI18n();
+const { isOpen, toggle } = useAdvisorPanel();
+const advisorTrigger = ref<HTMLButtonElement>();
 </script>
 
 <template>
@@ -59,6 +63,18 @@ const { t } = useI18n();
 
         <!-- Utility Action Slot -->
         <div class="flex items-center gap-2">
+          <button
+            ref="advisorTrigger"
+            type="button"
+            data-testid="advisor-trigger"
+            class="h-8 w-8 rounded-md flex items-center justify-center text-muted hover:text-foreground hover:bg-surface-2 border border-transparent hover:border-border-soft transition-colors cursor-pointer"
+            :title="t('advisor.open')"
+            :aria-label="t('advisor.open')"
+            :aria-expanded="isOpen"
+            @click="toggle(advisorTrigger)"
+          >
+            <Sparkles class="h-4 w-4" />
+          </button>
           <RouterLink
             to="/settings"
             class="h-8 w-8 rounded-md flex items-center justify-center text-muted hover:text-foreground hover:bg-surface-2 border border-transparent hover:border-border-soft transition-colors cursor-pointer"

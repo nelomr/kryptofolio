@@ -47,6 +47,7 @@ The backend employs a sophisticated dual-database architecture, heavily optimize
 | **OLTP Ledger & Vault** | SQLite (`node:sqlite`) | Fast, ACID-compliant persistence for transactions, settings, and encrypted API credentials. | File-based (`kryptofolio_ledger.db`). Strict schema enforcing `TEXT` columns for financial amounts to guarantee `decimal.js` precision without float loss. Single-user (no `user_id` multi-tenancy). |
 | **OLAP Analytics** | DuckDB | Tax calculations, FIFO matching, complex SWAPs, and portfolio PnL. | File-backed instance (`fiscal.duckdb`; `:memory:` only under `MOCK_MODE`), accessed through a fixed-size connection pool (`DUCKDB_POOL_SIZE`, default 4) over one `DuckDBInstance`. Attaches directly to the SQLite ledger using `ATTACH 'kryptofolio_ledger.db' AS ledger (TYPE SQLITE)`. Uses Window Functions for high-performance vectorized operations. |
 | **Historical Data** | Apache Parquet | Local, columnar storage of historical cryptocurrency and fiat exchange rates. | Hive-partitioned directories (`year=2026/month=01`). Federated dynamically into DuckDB via `LEFT JOIN` during analytics queries. |
+| **AI Advisor Memory** | SQLite via libsql | Disposable conversation history for the AI advisor. | File-based (`ai-advisor.db`), separate from the ledger and vault; deleting it erases conversations only. See [AI Portfolio Advisor](ai-advisor.md#13-persistence-memory-and-audit-trail). |
 
 Migration files, schema definitions, and analytical adapters live in `packages/database/`:
 - **SQLite Migrations**: Manage table definitions for Vault, Assets, Accounts, and Transactions.
@@ -109,6 +110,8 @@ export const bffClient = hc<AppType>(import.meta.env.VITE_API_URL || 'http://loc
 | `KRYPTOFOLIO_DATA_DIR` | Backend | Optional. Directory holding every database file. Defaults to the workspace root. A relative value is anchored to the workspace root, never to the working directory. |
 | `LEDGER_DB_PATH` | Backend | Optional override for the SQLite ledger (`kryptofolio_ledger.db`). |
 | `VAULT_DB_PATH` | Backend | Optional override for the SQLite vault (`kryptofolio.db`). |
+| `ADVISOR_DB_PATH` | Backend | Optional override for the AI advisor conversation database (`ai-advisor.db`). |
+| `OLLAMA_BASE_URL` | Backend | Optional override for the local Ollama daemon URL used by the AI advisor (default `http://localhost:11434/api`). |
 | `DUCKDB_PATH` | Backend | Optional override for the DuckDB OLAP database (`fiscal.duckdb`). |
 | `PARQUET_DATA_PATH` | Backend | Optional override for the historical-price Parquet tree (`data/historical/prices`). |
 | `MOCK_MODE` | Backend | Set to `true` to use in-memory SQLite (no file needed). |
@@ -158,6 +161,19 @@ Under `/api/settings/`:
 | `GET` | `/language` | Get current language (`{ language: "en" }`) |
 | `PUT` | `/language` | Update language preference |
 | `PUT` | `/market-provider` | Update the active Real-Time Market Provider |
+
+## AI Advisor API Endpoints
+
+Under `/api/advisor/`. Full contract, including the SSE frames, in [AI Portfolio Advisor](ai-advisor.md#12-http-api-contracts).
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/ask` | Non-streaming advisor answer (always HTTP 200; body discriminated on `outcome`) |
+| `POST` | `/stream` | Streaming advisor answer (Server-Sent Events, 15 s keep-alive comments) |
+| `GET` | `/config` | Stored model chain and per-provider credential state |
+| `PUT` | `/config/model-chain` | Replace the model chain |
+| `GET` | `/config/execution-profiles` | Stored execution-profile limits (or defaults) |
+| `PUT` | `/config/execution-profiles` | Replace the execution-profile limits |
 
 ## Market Data API Endpoints
 

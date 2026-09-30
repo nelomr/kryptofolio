@@ -2,6 +2,7 @@
 import VaultSettings from './components/VaultSettings.vue';
 import LanguageSettings from './components/LanguageSettings.vue';
 import CurrencySettings from './components/CurrencySettings.vue';
+import AdvisorSettings from './components/advisor/AdvisorSettings.vue';
 import { useI18n } from '@/composables/useI18n';
 
 const { t } = useI18n();
@@ -18,6 +19,7 @@ const { t } = useI18n();
 
     <LanguageSettings />
     <CurrencySettings />
+    <AdvisorSettings />
     <VaultSettings />
   </div>
 </template>

@@ -1,3 +1,4 @@
+export * from './advisor-stream.js';
 export * from './ingestion/TransactionMappedData.js';
 export * from './ingestion/sourceProfileIds.js';
 export * from './market-data/models.js';

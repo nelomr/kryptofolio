@@ -64,7 +64,7 @@ describe('DuckDbMetricsAdapter', () => {
 
   it('should return risk metrics including alpha and beta', async () => {
     const risk = await adapter.getRiskMetrics('USD');
-    expect(risk.currency).toBe('USD');
+    expect(risk).not.toHaveProperty('currency');
     expect(risk).toHaveProperty('alpha');
     expect(risk).toHaveProperty('beta');
   });

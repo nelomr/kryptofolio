@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import type { ConvertedAmount } from '@kryptofolio/shared-types';
+import { isConvertible, type ConvertedAmount } from '@kryptofolio/shared-types';
 import type {
   IPortfolioAnalyticsPort,
   HoldingsSnapshot,
@@ -55,9 +55,9 @@ export function calculateHoldingsSummary(
   livePrices?: Map<string, string>,
 ): HoldingsSnapshot[] {
   return holdings.map((item) => {
-    const livePriceStr = livePrices?.get(item.symbol) ?? item.livePrice;
+    const livePriceStr = livePrices?.get(item.symbol);
 
-    if (!livePriceStr) {
+    if (livePriceStr === undefined || !isConvertible(item.costBasis)) {
       return item;
     }
 

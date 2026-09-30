@@ -11,6 +11,7 @@ export {
   resolveLedgerDbPath,
   resolveVaultDbPath,
   resolveAnalyticalDbPath,
+  resolveAdvisorDbPath,
   resolveParquetPricesPath,
 } from "./dataPaths.js";
 export {

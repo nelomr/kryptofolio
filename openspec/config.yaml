@@ -12,7 +12,7 @@ stack:
   testing: vitest
 
 strict_tdd: true
-test_command: npx vitest run
+test_command: pnpm test
 
 session:
   execution_mode: interactive

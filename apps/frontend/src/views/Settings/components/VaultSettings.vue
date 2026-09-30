@@ -9,6 +9,7 @@ import { useToggleVaultProviderMutation } from "@/composables/queries/useVaultMu
 import { useVaultForm } from "./composables/useVaultForm";
 import { useActiveMarketProviderQuery } from "@/composables/queries/useSettingsQueries";
 import { useToggleActiveMarketProviderMutation } from "@/composables/queries/useSettingsMutations";
+import type { VaultProvider } from "@/core/domain/models/VaultEntities";
 
 import VaultLockedState from "./VaultLockedState.vue";
 import VaultProviderCard from "./VaultProviderCard.vue";
@@ -65,10 +66,24 @@ const handleToggleActiveProvider = (providerId: string, enabled: boolean) => {
   if (enabled) setActiveMarketProvider(providerId);
 };
 
+const PROVIDER_CATEGORY_ORDER = ['exchange', 'market-data', 'ai-model'] as const;
+
+const providerGroups = computed(() => {
+  const byCategory = new Map<string, VaultProvider[]>();
+  for (const provider of providers.value ?? []) {
+    const bucket = byCategory.get(provider.category.kind) ?? [];
+    bucket.push(provider);
+    byCategory.set(provider.category.kind, bucket);
+  }
+  return PROVIDER_CATEGORY_ORDER.map((kind) => ({
+    kind,
+    providers: byCategory.get(kind) ?? [],
+  })).filter((group) => group.providers.length > 0);
+});
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div id="vault-credentials" class="space-y-6 scroll-mt-6">
     <Card>
       <CardHeader>
         <div class="flex items-center justify-between">
@@ -109,26 +124,34 @@ const handleToggleActiveProvider = (providerId: string, enabled: boolean) => {
             {{ t("vault.unlocked.desc") }}
           </p>
 
-          <div class="grid gap-4 md:grid-cols-2">
-            <!-- Dynamic Services -->
-            <VaultProviderCard
-              v-for="provider in providers"
-              :key="provider.id"
-              :provider="provider"
-              :is-configured="isProviderConfigured(provider.id)"
-              :is-enabled="isProviderEnabled(provider.id)"
-              :is-toggling="isToggling"
-              :is-saving="isSaving"
-              :form-data="formData[provider.id] || {}"
-              :errors="errors[provider.id] || {}"
-              :is-active-market-provider="activeMarketProvider === provider.id"
-              :is-setting-active-provider="isSettingActiveProvider"
-              @toggle="handleToggle(provider.id, $event)"
-              @toggle-active-market-provider="handleToggleActiveProvider(provider.id, $event)"
-              @sanitize="sanitizeInput(provider.id, $event)"
-              @save="handleSaveProvider(provider.id)"
-              @update:form-field="(key, value) => formData[provider.id][key] = value"
-            />
+          <div
+            v-for="group in providerGroups"
+            :key="group.kind"
+            class="space-y-3"
+          >
+            <h3 class="text-sm font-medium text-muted-foreground">
+              {{ t(`vault.category.${group.kind}`) }}
+            </h3>
+            <div class="grid gap-4 md:grid-cols-2">
+              <VaultProviderCard
+                v-for="provider in group.providers"
+                :key="provider.id"
+                :provider="provider"
+                :is-configured="isProviderConfigured(provider.id)"
+                :is-enabled="isProviderEnabled(provider.id)"
+                :is-toggling="isToggling"
+                :is-saving="isSaving"
+                :form-data="formData[provider.id] || {}"
+                :errors="errors[provider.id] || {}"
+                :is-active-market-provider="activeMarketProvider === provider.id"
+                :is-setting-active-provider="isSettingActiveProvider"
+                @toggle="handleToggle(provider.id, $event)"
+                @toggle-active-market-provider="handleToggleActiveProvider(provider.id, $event)"
+                @sanitize="sanitizeInput(provider.id, $event)"
+                @save="handleSaveProvider(provider.id)"
+                @update:form-field="(key, value) => formData[provider.id][key] = value"
+              />
+            </div>
           </div>
         </div>
       </CardContent>

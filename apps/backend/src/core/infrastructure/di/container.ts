@@ -12,7 +12,8 @@ import type { ITaxCalculatorPort } from '../../domain/ports/ITaxCalculatorPort.j
 import type { IMetricsPort } from '../../domain/ports/IMetricsPort.js';
 import type { IDatabasePort, IAnalyticalDatabasePort } from '@kryptofolio/database';
 import { NodeSqliteAdapter } from '@kryptofolio/database';
-import { getLedgerDb } from '@kryptofolio/database';
+import { getLedgerDb, resolveAdvisorDbPath } from '@kryptofolio/database';
+import type { DatabaseSync } from 'node:sqlite';
 import { EcbExchangeRateAdapter } from '../adapters/EcbExchangeRateAdapter.js';
 import { AesGcmCryptographyAdapter } from '../adapters/AesGcmCryptographyAdapter.js';
 import { SqliteVaultPortAdapter } from '../adapters/SqliteVaultPortAdapter.js';
@@ -59,7 +60,8 @@ import { SetTransferDestinationUseCase } from '../../application/use-cases/overr
 import { SetSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
 import { RemoveSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/RemoveSpotTransactionOverrideUseCase.js';
 import { RemoveTransferDestinationUseCase } from '../../application/use-cases/overrides/RemoveTransferDestinationUseCase.js';
-
+import type { AskAdvisorUC } from '../../application/use-cases/AskAdvisorUC.js';
+import { composeAskAdvisor, lateBoundToolUseCases, readAdvisorEnv } from './advisorComposition.js';
 
 class UninitializedAnalyticalDatabaseAdapter implements IAnalyticalDatabasePort {
   async initialize(): Promise<void> {}
@@ -159,6 +161,30 @@ export class DIContainer {
   public setSpotTransactionOverrideUseCase: SetSpotTransactionOverrideUseCase;
   public removeSpotTransactionOverrideUseCase: RemoveSpotTransactionOverrideUseCase;
 
+  private readonly ledgerDb: DatabaseSync;
+  private advisorUseCase: AskAdvisorUC | null = null;
+
+  /**
+   * Built on first read, once, because constructing the advisor's memory opens (and creates)
+   * `ai-advisor.db`; a container that never serves an advisor request should not touch that file.
+   * The tools inside it resolve their use cases through this container on every run, so the
+   * analytical rebinding in `setDuckDbAdapter()` is seen without rebuilding anything.
+   */
+  get askAdvisorUC(): AskAdvisorUC {
+    if (!this.advisorUseCase) {
+      this.advisorUseCase = composeAskAdvisor({
+        ledgerDb: this.ledgerDb,
+        advisorDbPath: resolveAdvisorDbPath(),
+        userSettingsPort: this.userSettingsPort,
+        cryptographyPort: this.cryptographyPort,
+        vaultPort: this.vaultCredentialsPort,
+        toolUseCases: lateBoundToolUseCases(this),
+        ...readAdvisorEnv(process.env),
+      });
+    }
+    return this.advisorUseCase;
+  }
+
   constructor() {
     this.sqlitePort = new NodeSqliteAdapter();
     this.cryptographyPort = new AesGcmCryptographyAdapter();
@@ -204,8 +230,8 @@ export class DIContainer {
     // Ledger DB — separate SQLite instance for the financial ledger
     // No path argument: `LEDGER_DB_PATH` is read where every other database path is read, so a
     // relative value cannot be anchored to the cwd here and to the data root there.
-    const ledgerDb = getLedgerDb();
-    const ledgerAdapter = new SQLiteLedgerAdapter(ledgerDb);
+    this.ledgerDb = getLedgerDb();
+    const ledgerAdapter = new SQLiteLedgerAdapter(this.ledgerDb);
     this.ledgerPort = ledgerAdapter;
     this.fxRateLedgerPort = ledgerAdapter;
 

@@ -470,41 +470,55 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
   public async getAssetAllocation(
     targetCurrency?: string,
   ): Promise<AssetAllocationItem[]> {
+    const displayCurrency = targetCurrency ?? 'EUR';
     const rows = await this.db.queryMany<{
       asset_id: string;
       symbol: string;
-      value_fiat: string;
-      total_portfolio: string;
-    }>(`
+      amount: string;
+      value_fiat: string | null;
+      total_portfolio: string | null;
+    }>(
+      `
       WITH latest_val AS (
           SELECT
               asset_id,
               symbol,
+              running_balance,
               daily_value,
               SUM(daily_value) OVER () AS total_portfolio
-          FROM v_portfolio_daily_valuation
-          WHERE date = (SELECT MAX(date) FROM v_portfolio_daily_valuation)
+          FROM (${VALUATION_CONVERTED}) v
+          WHERE date = (SELECT MAX(date) FROM (${VALUATION_CONVERTED}) v2)
       )
       SELECT
           asset_id,
           symbol,
+          CAST(running_balance AS VARCHAR) AS amount,
           CAST(daily_value AS VARCHAR) AS value_fiat,
           CAST(total_portfolio AS VARCHAR) AS total_portfolio
       FROM latest_val
       ORDER BY asset_id
-    `);
+    `,
+      [displayCurrency],
+    );
 
-    return rows.map((r, idx) => {
-      const val = new Decimal(r.value_fiat);
-      const total = new Decimal(r.total_portfolio);
-      const pct = total.gt(0) ? val.div(total).mul(100).toFixed(2) : '0.00';
-      return {
+    return rows.map((r, idx): AssetAllocationItem => {
+      const base = {
         assetId: r.asset_id,
         symbol: r.symbol,
         color: generateAssetColor(r.symbol, idx),
-        allocationPct: pct,
+        amount: new Decimal(r.amount).toFixed(),
+        currency: displayCurrency,
+      };
+      if (r.value_fiat === null || r.total_portfolio === null) {
+        return { ...base, kind: 'unvalued' };
+      }
+      const val = new Decimal(r.value_fiat);
+      const total = new Decimal(r.total_portfolio);
+      return {
+        ...base,
+        kind: 'valued',
+        allocationPct: total.gt(0) ? val.div(total).mul(100).toFixed(2) : '0.00',
         valueFiat: val.toFixed(2),
-        currency: targetCurrency ?? 'EUR',
       };
     });
   }
@@ -536,7 +550,7 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
   }
 
   public async getRiskMetrics(
-    targetCurrency?: string,
+    _targetCurrency?: string,
   ): Promise<RiskMetrics> {
     const alphaBeta = await this.db.queryOne<{ alpha: string; beta: string }>(`
       SELECT
@@ -577,7 +591,6 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
       sharpeRatio: new Decimal(sharpeRes?.sharpe ?? '0.00').toFixed(4),
       alpha: new Decimal(alphaBeta?.alpha ?? '0.00').toFixed(4),
       beta: new Decimal(alphaBeta?.beta ?? '1.00').toFixed(4),
-      currency: targetCurrency ?? 'EUR',
     };
   }
 

@@ -1,0 +1,226 @@
+# ai-advisor-chat Specification
+
+## Purpose
+TBD - created by archiving change add-ai-portfolio-advisor. Update Purpose after archive.
+## Requirements
+### Requirement: Shared Zod Schema Is The SSE Contract
+The SSE event contract SHALL be carried by `advisorStreamEventSchema` in `packages/shared-types/src/advisor-stream.ts`, a `kind`-discriminated union with the members `token`, `tool-start`, `tool-result`, `tool-error`, `done`, `refused`, and `failed`. Type inference over the RPC client SHALL NOT be treated as the stream contract. Every vocabulary on the wire SHALL be a closed const tuple fed to `z.enum(...)`: `ADVISOR_TOOL_NAMES`, `ADVISOR_FAILURE_CODES`, `ADVISOR_PROVIDER_FAILURE_KINDS`, `ADVISOR_TOOL_ERROR_CODES`, and `AI_PROVIDER_IDS`. No failure SHALL cross the wire as an unconstrained string. A `failed` frame with code `ALL_PROVIDERS_FAILED` SHALL carry `cause: { kind, providerId, modelId }` and no other failure code SHALL carry a `cause`; the cause SHALL never include provider error text, URLs, headers, keys, or request bodies.
+
+#### Scenario: Round-trip contract test
+- **WHEN** each variant of `AdvisorStreamEvent` is serialized and parsed back through `advisorStreamEventSchema`
+- **THEN** every variant survives unchanged
+
+#### Scenario: Vocabularies are closed
+- **WHEN** a frame names a tool outside `ADVISOR_TOOL_NAMES`, a failure code outside `ADVISOR_FAILURE_CODES`, or a tool-error code outside `ADVISOR_TOOL_ERROR_CODES`
+- **THEN** `z.enum` validation rejects it, in either direction
+
+#### Scenario: An unexpected server throw still has a named code
+- **WHEN** the server's run-wrapping catch emits `failed` for an error it did not anticipate
+- **THEN** the code is `INTERNAL_ERROR` from `ADVISOR_FAILURE_CODES`, not a free-text string
+
+#### Scenario: Server validates every outbound frame
+- **WHEN** the route is about to write any frame
+- **THEN** it parses the frame through `advisorStreamEventSchema` first, so a malformed frame surfaces as a server-side test failure rather than a client mystery
+
+#### Scenario: Client validates every inbound frame
+- **WHEN** the frontend receives a frame
+- **THEN** it parses it through the same schema and treats a parse failure as an error state, never as a token
+
+### Requirement: SSE Framing And Keep-Alives
+Each event SHALL be written as one SSE frame with `event: <kind>` and `data: <JSON of the event>` via Hono's `streamSSE`. Keep-alives SHALL be SSE comment lines (`: keep-alive`) sent every 15 seconds.
+
+#### Scenario: Frame shape
+- **WHEN** a `token` event is emitted
+- **THEN** the wire bytes carry `event: token` and a `data:` line whose JSON parses to `{ kind: 'token', runId, text: … }`
+
+#### Scenario: Keep-alive is not an event
+- **WHEN** a keep-alive is written during a long model pause
+- **THEN** it is a comment line, the client parser produces no event from it, and no token is appended
+
+### Requirement: Exactly One Terminal Frame
+Exactly one of `done`, `refused`, or `failed` SHALL be emitted as the last frame of every stream that is not cancelled. The server SHALL wrap the whole run so that even an unexpected throw emits `failed` before closing.
+
+#### Scenario: Successful run
+- **WHEN** a run completes normally
+- **THEN** the final frame is `done` carrying `runId`, `threadId`, `providerId`, `modelId`, `usage.inputTokens`, `usage.outputTokens`, `toolsCalled`, `executionProfile` (`local | metered | mixed`), `stepsUsed`, `maxSteps`, `disclaimer`, and `figuresIncomplete`
+
+#### Scenario: Guardrail tripwire
+- **WHEN** the output-processor guardrail trips
+- **THEN** the final frame is `refused` carrying `runId`, `threadId`, `reason`, and `processorId`, and no `done` frame is emitted
+
+#### Scenario: Every terminal frame lets a new conversation continue
+- **WHEN** a run on a brand-new conversation ends in `done`, `refused`, or `failed`
+- **THEN** the terminal frame carries the server-generated `threadId` (on `failed` it is absent only when an unanticipated throw happened before any receipt existed), so the next request can send it
+
+#### Scenario: The run is recorded after the terminal frame is written
+- **WHEN** the streaming route has written the terminal frame
+- **THEN** it resumes the use case's iterator to completion without writing another frame, so the run's `ai_advisor_runs` row exists once the response has closed
+
+#### Scenario: Unexpected throw still terminates
+- **WHEN** the adapter throws an unanticipated error mid-run
+- **THEN** a `failed` frame with a named `AdvisorFailureCode` is written before the stream closes
+
+#### Scenario: Never two terminal frames
+- **WHEN** any run's full frame sequence is captured
+- **THEN** exactly one frame has a kind in `{done, refused, failed}` and it is the last frame
+
+#### Scenario: Tool error is not terminal
+- **WHEN** one tool call fails and the model recovers
+- **THEN** a `tool-error` frame carrying `callId`, `tool`, and `code` is emitted, the run continues, and it may still terminate with `done`
+
+### Requirement: A Close Without A Terminal Frame Is A Transport Failure
+`transport-lost` SHALL NOT exist in the wire schema. When iteration of the port's `AsyncIterable` ends with no terminal event observed, the composable SHALL synthesize a local `{ kind: 'transport-lost' }` state itself.
+
+#### Scenario: Truncated stream
+- **WHEN** the connection closes after some `token` frames and before any terminal frame
+- **THEN** the frontend enters `transport-lost`, does not report success, and offers an explicit retry
+
+#### Scenario: transport-lost is unrepresentable on the wire
+- **WHEN** `advisorStreamEventSchema` is inspected
+- **THEN** it declares no `transport-lost` member, so a server can never claim that state
+
+### Requirement: Cancellation Is Client-Initiated And Silent
+The composable SHALL hold the `AbortController` and pass its signal into `IAdvisorPort.ask`; calling `abort()` aborts the adapter's `fetch`, fires Hono's `stream.onAbort`, and tears down the model call. No terminal frame SHALL be sent for a cancelled run. The frontend port takes an `AbortSignal` even though the backend port deliberately does not, because the UI holds the controller and has no generator `finally` to hook cleanup onto.
+
+#### Scenario: User cancels mid-stream
+- **WHEN** the user stops a run in progress
+- **THEN** the fetch aborts, the model call is torn down, no terminal frame is written, and the run is recorded with outcome `aborted`
+
+#### Scenario: Nothing auto-retries
+- **WHEN** a run is cancelled or fails
+- **THEN** no automatic reconnection or re-run occurs; retry is always an explicit user action
+
+### Requirement: The Stream Transport Lives In The Adapter, Behind A Frontend Port
+The frontend SHALL declare `IAdvisorPort` in its domain layer, exposing the run as `ask(request, signal): AsyncIterable<AdvisorStreamEvent>` alongside the non-streaming config methods, exactly as `IMarketDataPort.subscribeToStream` already declares streaming for prices. `RestAdvisorAdapter` SHALL own the `fetch` POST, the `ReadableStream` reader, the SSE frame parser, and schema validation. The composable SHALL contain no `fetch`, no frame parsing, and no knowledge of SSE.
+
+#### Scenario: Transport is not in the UI layer
+- **WHEN** the chat composable is inspected
+- **THEN** it contains no `fetch`, no `ReadableStream` reader, no SSE frame parsing, and no `EventSource` — it consumes the port's `AsyncIterable` and holds reactive state
+
+#### Scenario: Adapter owns parsing and validation
+- **WHEN** `RestAdvisorAdapter` is inspected
+- **THEN** it performs the POST, reads the `ReadableStream`, parses SSE frames, ignores comment lines, and validates each frame through `advisorStreamEventSchema`
+
+#### Scenario: A malformed frame is a controlled error
+- **WHEN** an inbound frame fails schema validation
+- **THEN** the adapter reports it to the `errorBus`, as every other `Rest*Adapter` does, and the run surfaces an error state — never a token and never a silent failure
+
+#### Scenario: EventSource is not used
+- **WHEN** the adapter implementation is inspected
+- **THEN** it uses `fetch` with a POST body and no `EventSource`, so a completed LLM call can never be silently re-run by automatic reconnection
+
+### Requirement: Token Stream Is Not Pinia Colada, Config Is
+Pinia Colada SHALL NOT wrap the token stream; it remains the tool for the advisor's non-streaming server state.
+
+#### Scenario: Stream is not cached as a request/response pair
+- **WHEN** the composable consumes a run
+- **THEN** no Pinia Colada query wraps the token stream, and tokens are appended incrementally to local reactive state
+
+#### Scenario: Metadata still uses Pinia Colada
+- **WHEN** the chat panel loads the advisor config and credential states
+- **THEN** that non-streaming data is fetched through a Pinia Colada query in `composables/queries/`, via the same port
+
+### Requirement: Global Chat Panel On Design Tokens
+The chat panel SHALL be a global surface styled exclusively with the color tokens and classes defined in `DESIGN.md`. No Tailwind class or token outside `DESIGN.md` SHALL be introduced.
+
+#### Scenario: Tokens only
+- **WHEN** the panel's classes are inspected
+- **THEN** every color and surface class resolves to a token defined in `DESIGN.md`
+
+#### Scenario: Panel is reachable from any view
+- **WHEN** the user is on any view of the application
+- **THEN** the chat panel can be opened without navigating away, and per-view embedded insights are absent in this phase
+
+### Requirement: Panel Follows The Application's Visual Language
+The panel SHALL follow design D13: a right-side sheet mounted once in `App.vue` and opened from `AppHeader.vue`, surfaced with `--shadow-modal`, built from shadcn-vue primitives (`sheet`, `scroll-area`, `textarea`, `alert`, `badge`, `button`, `skeleton`), icons from `lucide-vue-next`, and all copy through `useI18n()`. Every figure SHALL render in `--font-mono` with `tabular-nums`, including figures inside assistant prose. States SHALL map to the semantic tokens in D13's table, and `--brand` SHALL be used only for the primary action and focus rings.
+
+#### Scenario: Figures in prose are mono
+- **WHEN** an assistant answer contains a figure the model wrapped in inline code
+- **THEN** it renders with `font-mono tabular-nums` and without a code background
+
+#### Scenario: Markdown cannot inject HTML
+- **WHEN** an answer contains raw HTML such as `<img src=x onerror=…>`
+- **THEN** it renders as escaped text and no element is created from it
+
+#### Scenario: Reading history is not interrupted
+- **WHEN** the user has scrolled up while an answer is streaming
+- **THEN** the list does not autoscroll until the user returns to the bottom
+
+#### Scenario: Reduced motion
+- **WHEN** `prefers-reduced-motion: reduce` is set
+- **THEN** the sheet opens without the slide animation and the streaming caret does not blink
+
+#### Scenario: Keyboard use
+- **WHEN** the panel is open
+- **THEN** Enter sends, Shift+Enter inserts a newline, Escape closes, and focus returns to the trigger
+
+#### Scenario: Cloud/local badge reflects the active model
+- **WHEN** the active model id ends `:cloud` or `-cloud`, or the active provider is anything other than `ollama`
+- **THEN** the panel's model badge area shows a "cloud" badge; otherwise it shows "local"
+
+#### Scenario: Steps-used footer appears only once a receipt exists
+- **WHEN** a run's terminal event carries a receipt with `stepsUsed` and `maxSteps`
+- **THEN** the panel renders a muted, `text-xs` mono footer showing `stepsUsed / maxSteps`, and no such footer is rendered while a run is still streaming
+
+### Requirement: Disclaimer Footer On Investment Answers
+Any assistant answer whose content touches an investment category (forecast, allocation, or market-timing language) SHALL render the "not financial advice" disclaimer as a distinct footer beneath the answer, styled muted and `text-xs`, visually separate from `Alert` (which is reserved for error/refusal/failure states). The disclaimer SHALL never be rendered inline inside the answer's own prose.
+
+#### Scenario: Disclaimer renders as a footer
+- **WHEN** an assistant answer includes investment content and its `done` frame carries `disclaimer: true`
+- **THEN** the panel renders its own "not financial advice" wording as a muted, `text-xs` footer distinct from the answer body and from any `Alert`
+
+#### Scenario: Non-investment answers carry no footer
+- **WHEN** an assistant answer contains no investment content
+- **THEN** no disclaimer footer is rendered
+
+### Requirement: Explicit Empty, Error, And Aborted States
+The chat SHALL render a distinct state for each of: empty conversation, streaming in progress, `refused`, `failed` with a code, `transport-lost`, and user-aborted.
+
+#### Scenario: Empty conversation
+- **WHEN** the panel opens with no messages in the thread
+- **THEN** it renders an empty state prompting the first question, with no error or spinner shown, and the suggested questions are grouped under "Taxes" and "Your portfolio"
+
+#### Scenario: A refusal offers a reformulation
+- **WHEN** a `refused` frame arrives
+- **THEN** alongside the withheld-answer presentation the panel offers one descriptive reformulation chip — a rephrased, more specific version of the user's question — that the user can send with one action
+
+#### Scenario: No model configured
+- **WHEN** a `failed` frame with code `NO_MODEL_AVAILABLE` arrives
+- **THEN** the panel renders a call to action linking to credential settings rather than a generic error
+
+#### Scenario: A rejected key names its cause
+- **WHEN** a `failed` frame with code `ALL_PROVIDERS_FAILED` and cause kind `auth-rejected` arrives
+- **THEN** the panel names the provider and model, points at the API key in the credential settings, and offers no retry
+
+#### Scenario: An unknown model points at the advisor settings
+- **WHEN** a `failed` frame with code `ALL_PROVIDERS_FAILED` and cause kind `model-not-found` arrives
+- **THEN** the panel names the provider and model, points at the model id in the advisor settings, and offers no retry
+
+#### Scenario: A temporary cause offers retry
+- **WHEN** a `failed` frame with code `ALL_PROVIDERS_FAILED` and cause kind `rate-limited`, `provider-unavailable`, or `network` arrives
+- **THEN** the panel names the provider and model, says the failure is temporary, and offers retry
+
+#### Scenario: An unclassified cause keeps the generic text
+- **WHEN** a `failed` frame with code `ALL_PROVIDERS_FAILED` and cause kind `unknown` arrives
+- **THEN** the panel shows the generic "No provider answered" text with retry
+
+#### Scenario: Refusal is distinguished from failure
+- **WHEN** a `refused` frame arrives
+- **THEN** the panel presents the run as completed-but-withheld with the reason, visually distinct from the `failed` presentation
+
+#### Scenario: Aborted run is presented as aborted
+- **WHEN** the user cancels a run
+- **THEN** the partial answer stays visible marked as stopped by the user, and no error state is shown
+
+#### Scenario: A follow-up continues the same thread
+- **WHEN** the user sends a second message in an open conversation
+- **THEN** the request carries the `threadId` reported by the previous run's terminal event, so the model sees the earlier turns
+
+#### Scenario: Starting a new conversation clears the thread
+- **WHEN** the user starts a new conversation from the panel
+- **THEN** the next request omits `threadId`, a new thread is created server-side, and the panel shows an empty state
+
+#### Scenario: Tool activity is visible
+- **WHEN** `tool-start` and `tool-result` frames arrive for a `callId`
+- **THEN** the panel shows that tool as running and then as finished, keyed by `callId`
+

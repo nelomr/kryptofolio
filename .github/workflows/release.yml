@@ -49,6 +49,7 @@ jobs:
       - name: Version and Publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCS_REPO_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
         run: |
           # Use npx to ensure the binary is resolved correctly
           npx changeset version
@@ -110,6 +111,43 @@ jobs:
               echo "✅ GitHub Release $GLOBAL_TAG successfully created!"
             else
               echo "⚠️ GitHub Release $GLOBAL_TAG already exists, skipping release creation."
+            fi
+
+            # Align the docs repository with this release: bump the version its site header
+            # displays, then tag that commit so the matching documentation stays addressable.
+            # GITHUB_TOKEN is scoped to this repository only, so a separate token with
+            # contents:write on the docs repo is required. A failure here must not fail a release
+            # that is already published.
+            if [[ -z "$DOCS_REPO_TOKEN" ]]; then
+              echo "::warning::DOCS_REPO_TOKEN is not set, skipping docs alignment for $GLOBAL_TAG."
+            else
+              export GH_TOKEN="$DOCS_REPO_TOKEN"
+              DOCS_REPO="nelomr/kryptofolio-documents"
+              if gh api "repos/$DOCS_REPO/git/ref/tags/$GLOBAL_TAG" >/dev/null 2>&1; then
+                echo "Docs tag $GLOBAL_TAG already exists, skipping."
+              else
+                DOCS_PKG=$(gh api "repos/$DOCS_REPO/contents/package.json?ref=main" || true)
+                DOCS_PKG_SHA=$(jq -r '.sha // empty' <<<"$DOCS_PKG")
+                DOCS_JSON=$(jq -r '.content // empty' <<<"$DOCS_PKG" | base64 -d)
+                DOCS_TARGET_SHA=""
+                if [[ -z "$DOCS_PKG_SHA" || -z "$DOCS_JSON" ]]; then
+                  echo "::warning::Cannot read docs package.json, skipping docs alignment for $GLOBAL_TAG."
+                elif [[ "$(jq -r .version <<<"$DOCS_JSON")" == "$FRONTEND_VERSION" ]]; then
+                  DOCS_TARGET_SHA=$(gh api "repos/$DOCS_REPO/commits/main" --jq .sha || true)
+                else
+                  DOCS_NEW_CONTENT=$(jq --arg v "$FRONTEND_VERSION" '.version = $v' <<<"$DOCS_JSON" | base64 -w0)
+                  DOCS_TARGET_SHA=$(gh api -X PUT "repos/$DOCS_REPO/contents/package.json" \
+                    -f message="chore(release): align docs with v$FRONTEND_VERSION" \
+                    -f content="$DOCS_NEW_CONTENT" -f sha="$DOCS_PKG_SHA" -f branch=main \
+                    --jq .commit.sha || true)
+                fi
+                if [[ -n "$DOCS_TARGET_SHA" ]] && gh api "repos/$DOCS_REPO/git/refs" \
+                  -f ref="refs/tags/$GLOBAL_TAG" -f sha="$DOCS_TARGET_SHA" >/dev/null; then
+                  echo "✅ Docs aligned and tagged $GLOBAL_TAG in $DOCS_REPO"
+                else
+                  echo "::warning::Could not align docs repository with $GLOBAL_TAG."
+                fi
+              fi
             fi
           else
             echo "No changesets found, nothing to version or publish."

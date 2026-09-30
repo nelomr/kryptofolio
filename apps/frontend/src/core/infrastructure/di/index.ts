@@ -11,6 +11,7 @@ import {
   CRYPTO_METRICS_PORT_KEY,
   SETTINGS_PORT_KEY,
   VAULT_PORT_KEY,
+  ADVISOR_PORT_KEY,
 } from "@/core/injectionKeys";
 import { RestCryptoAdapter } from "@/core/infrastructure/adapters/RestCryptoAdapter";
 import { RestTaxAdapter } from "@/core/infrastructure/adapters/RestTaxAdapter";
@@ -18,6 +19,7 @@ import { RestWalletAdapter } from "@/core/infrastructure/adapters/RestWalletAdap
 import { RestCryptoMetricsAdapter } from "@/core/infrastructure/adapters/RestCryptoMetricsAdapter";
 import { RestSettingsAdapter } from "@/core/infrastructure/adapters/RestSettingsAdapter";
 import { RestVaultAdapter } from "@/core/infrastructure/adapters/RestVaultAdapter";
+import { RestAdvisorAdapter } from "@/core/infrastructure/adapters/RestAdvisorAdapter";
 import { ReactiveI18nAdapter } from "@/core/infrastructure/i18n/ReactiveI18nAdapter";
 
 /**
@@ -35,6 +37,7 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   const cryptoMetricsPort = new RestCryptoMetricsAdapter();
   const settingsPort = new RestSettingsAdapter();
   const vaultPort = new RestVaultAdapter();
+  const advisorPort = new RestAdvisorAdapter();
 
   const lang = import.meta.env.VITE_APP_LANG || "en";
   const i18nAdapter = new ReactiveI18nAdapter(lang);
@@ -47,6 +50,7 @@ export function setupDependencyInjection(app: App, pinia: Pinia) {
   app.provide(CRYPTO_METRICS_PORT_KEY, cryptoMetricsPort);
   app.provide(SETTINGS_PORT_KEY, settingsPort);
   app.provide(VAULT_PORT_KEY, vaultPort);
+  app.provide(ADVISOR_PORT_KEY, advisorPort);
 
   // 3. Inject ports directly into Pinia stores
   // This solves the "[Vue warn]: inject() can only be used inside setup()"

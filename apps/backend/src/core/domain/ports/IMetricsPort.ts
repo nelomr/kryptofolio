@@ -64,14 +64,28 @@ export interface PerformanceHistoryPoint {
   drawdownPct: string;
 }
 
-export interface AssetAllocationItem {
+interface AssetAllocationBase {
   assetId: string;
   symbol: string;
   color?: string;
-  allocationPct: string;
-  valueFiat: string;
+  /** Quantity held, as an exact decimal string. */
+  amount: string;
   currency: string;
 }
+
+/**
+ * A holding whose worth is known is a different shape from one whose worth is not. An asset with
+ * no price series, or whose price or display currency has no exchange rate, cannot be given a
+ * value; representing that as a zero or an absent string would let a reader mistake "unknown" for
+ * "worthless", and it would shift every other holding's percentage. It still reports its quantity.
+ */
+export type AssetAllocationItem =
+  | (AssetAllocationBase & {
+      kind: 'valued';
+      allocationPct: string;
+      valueFiat: string;
+    })
+  | (AssetAllocationBase & { kind: 'unvalued' });
 
 export interface VolatilityHeatmapCell {
   date: string;
@@ -84,7 +98,6 @@ export interface RiskMetrics {
   sharpeRatio: string;
   alpha: string;
   beta: string;
-  currency: string;
 }
 
 export interface DrawdownPoint {

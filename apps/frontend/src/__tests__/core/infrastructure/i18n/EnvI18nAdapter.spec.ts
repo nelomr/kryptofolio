@@ -14,6 +14,18 @@ describe('EnvI18nAdapter', () => {
     expect(adapter.translate('greeting', { name: 'Jhon', count: '5' })).toBe('Hola Jhon, tienes 5 mensajes');
   });
 
+  it.each(['$&', '$$', '$1', '$`'])('inserts a parameter containing the replacement pattern %s literally', (value) => {
+    const adapter = new EnvI18nAdapter({ ask: 'Question: {q}' });
+
+    expect(adapter.translate('ask', { q: value })).toBe(`Question: ${value}`);
+  });
+
+  it('does not expand a placeholder that appears inside another parameter value', () => {
+    const adapter = new EnvI18nAdapter({ greeting: '{name} has {count}' });
+
+    expect(adapter.translate('greeting', { name: '{count}', count: '5' })).toBe('{count} has 5');
+  });
+
   it('returns the key and warns if translation is missing', () => {
     const dictionary = {};
     const adapter = new EnvI18nAdapter(dictionary);

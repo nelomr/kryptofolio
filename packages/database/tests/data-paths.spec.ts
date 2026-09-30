@@ -6,6 +6,7 @@ import {
   resolveLedgerDbPath,
   resolveVaultDbPath,
   resolveAnalyticalDbPath,
+  resolveAdvisorDbPath,
   resolveParquetPricesPath,
 } from '../src/dataPaths.js';
 
@@ -16,6 +17,7 @@ const PATH_VARS = [
   'KRYPTOFOLIO_DATA_DIR',
   'LEDGER_DB_PATH',
   'VAULT_DB_PATH',
+  'ADVISOR_DB_PATH',
   'DUCKDB_PATH',
   'PARQUET_DATA_PATH',
 ] as const;
@@ -92,6 +94,27 @@ describe('the three database paths', () => {
 
     process.env.VAULT_DB_PATH = ':memory:';
     expect(resolveVaultDbPath()).toBe(':memory:');
+  });
+});
+
+describe('resolveAdvisorDbPath', () => {
+  it('places the advisor store beside the other databases, in the data root', () => {
+    expect(resolveAdvisorDbPath()).toBe(path.join(WORKSPACE_ROOT, 'ai-advisor.db'));
+    expect(path.dirname(resolveAdvisorDbPath())).toBe(path.dirname(resolveLedgerDbPath()));
+  });
+
+  it('follows KRYPTOFOLIO_DATA_DIR like the other databases', () => {
+    process.env.KRYPTOFOLIO_DATA_DIR = '/mnt/data';
+    expect(resolveAdvisorDbPath()).toBe('/mnt/data/ai-advisor.db');
+  });
+
+  it('honours ADVISOR_DB_PATH, anchoring a relative value to the data root and leaving :memory: alone', () => {
+    process.env.ADVISOR_DB_PATH = '/tmp/other-advisor.db';
+    expect(resolveAdvisorDbPath()).toBe('/tmp/other-advisor.db');
+    process.env.ADVISOR_DB_PATH = 'advisor.db';
+    expect(resolveAdvisorDbPath()).toBe(path.join(WORKSPACE_ROOT, 'advisor.db'));
+    process.env.ADVISOR_DB_PATH = ':memory:';
+    expect(resolveAdvisorDbPath()).toBe(':memory:');
   });
 });
 

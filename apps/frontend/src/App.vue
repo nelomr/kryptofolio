@@ -5,10 +5,11 @@
 
 import { onMounted, onUnmounted } from "vue";
 import { toast } from "vue-sonner";
-import { Toaster } from "@/components/ui/sonner";
 import { errorBus } from "@/core/infrastructure/errors/errorBus";
 import type { ValidationErrorPayload, OperationErrorPayload } from "@/core/infrastructure/errors/errorBus";
 import AppHeader from "@/components/layout/AppHeader.vue";
+import AdvisorPanel from "@/components/advisor/AdvisorPanel.vue";
+import AppToaster from "@/components/layout/AppToaster.vue";
 import { useI18n } from "@/composables/useI18n";
 import { useInitializeLanguageQuery } from "@/composables/queries/useSettingsQueries";
 import { useMarketDataFeed } from "@/composables/queries/useMarketDataFeed";
@@ -84,8 +85,10 @@ onUnmounted(() => {
       </RouterView>
     </main>
 
+    <AdvisorPanel />
+
     <!-- Global Toast Notifications (shadcn-vue Sonner) -->
-    <Toaster position="top-right" :close-button="true" />
+    <AppToaster />
   </div>
 </template>
 

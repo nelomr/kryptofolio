@@ -41,3 +41,7 @@ export const CRYPTO_METRICS_PORT_KEY: InjectionKey<ICryptoMetricsPort> =
 import type { ISettingsPort } from "./domain/ports/ISettingsPort";
 export const SETTINGS_PORT_KEY: InjectionKey<ISettingsPort> =
   Symbol("ISettingsPort");
+
+/** Injection key for the AI advisor port (Ports) */
+import type { IAdvisorPort } from "./domain/ports/IAdvisorPort";
+export const ADVISOR_PORT_KEY: InjectionKey<IAdvisorPort> = Symbol("IAdvisorPort");

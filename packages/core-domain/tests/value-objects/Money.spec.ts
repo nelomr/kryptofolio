@@ -97,6 +97,18 @@ describe("Money Value Object", () => {
       const sum = new Money("0.1").add(new Money("0.2"));
       expect(sum.compareTo(new Money("0.3"))).toBe(0);
     });
+
+    it("distinguishes a pair whose difference is beyond float precision — parseFloat collapses both to the same double", () => {
+      const a = "1.000000000000000001";
+      const b = "1.000000000000000002";
+      expect(parseFloat(a)).toBe(parseFloat(b));
+      expect(new Money(a).compareTo(new Money(b))).toBe(-1);
+    });
+
+    it("returns 0 for equal values at that same beyond-float-precision scale", () => {
+      const value = "1.000000000000000001";
+      expect(new Money(value).compareTo(new Money(value))).toBe(0);
+    });
   });
 
   describe("toFixed", () => {

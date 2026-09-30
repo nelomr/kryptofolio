@@ -3,8 +3,11 @@
 [![Release](https://img.shields.io/github/v/release/nelomr/kryptofolio?style=flat-square&logo=github&label=version)](https://github.com/nelomr/kryptofolio/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/nelomr/kryptofolio/ci.yml?branch=main&style=flat-square&logo=github-actions&label=CI)](https://github.com/nelomr/kryptofolio/actions/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue?style=flat-square)](./CHANGELOG.md)
+[![Docs](https://img.shields.io/badge/docs-kryptofolio.kriptonianlabs.com-blue?style=flat-square&logo=readthedocs&logoColor=white)](https://kryptofolio.kriptonianlabs.com/)
 
 > 🌍 **Leer en:** [English](README.md) | [Español](README.es.md)
+
+> 📖 **Documentación oficial:** [kryptofolio.kriptonianlabs.com](https://kryptofolio.kriptonianlabs.com/)
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
@@ -20,7 +23,7 @@
 - **⚖️ Motor Fiscal FIFO con Trazabilidad de Custodia:** El FIFO global por activo para tributación (obligatorio en el IRPF español) se calcula de forma completamente separada de un libro de custodia de doble entrada que rastrea qué cuenta posee físicamente cada lote. Las transferencias entre wallets propias nunca generan un evento tributable ni reordenan la cola FIFO. Ver [Motor Fiscal FIFO y Libro de Custodia](docs/fifo-tax-engine.md).
 - **🧹 Asistente de Ingesta de Datos con Perfiles de Formato de Origen:** Una interfaz en varios pasos que permite subir archivos CSV/XLSX, detectar las convenciones propias de comisiones/formato de cada origen (Kraken, Bitvavo, Bit2Me, Bitunix, Tangem, o un fallback genérico) a partir de su cabecera, realizar ajustes manuales con opciones ordenadas alfabéticamente, validar restricciones de Spot vs. Futuros y enviar los datos al backend mediante el mismo pipeline de ingesta puro usado al reingestar.
 - **🏛️ Cumplimiento Fiscal y Tributario:** Una vista dedicada de Informe Fiscal para inspeccionar el historial de transacciones, identificar inconsistencias (ej. bases de coste faltantes o saldos negativos) y presentar datos estructurados listos para informes AEAT.
-- **🤖 Preparado para Agentes de IA (Futura Feature):** El frontend está técnicamente diseñado para una futura integración de Agentes de IA (usando Vercel AI SDK o Mastra). Dado que los Casos de Uso y los DTOs están aislados y validados, pueden exponerse directamente como herramientas (Tools / Function Calling) a un LLM en el futuro para consultas en lenguaje natural sin reescribir validaciones.
+- **🤖 Asesor de Portafolio con IA (solo lectura):** Un panel de chat (`Mod+/`) que responde preguntas sobre tu portafolio y tus datos de IRPF en tu idioma. Es estrictamente de solo lectura y nunca inventa una cifra: todos los números salen de casos de uso existentes a través de un conjunto fijo de herramientas. Prioriza lo local con Ollama, con proveedores en la nube opcionales (OpenAI, Anthropic, Google, OpenCode, Ollama Cloud) cuyas claves viven en la bóveda cifrada. Ver [Asesor de Portafolio con IA](docs/ai-advisor.md).
 - **🛡️ Privacidad Primero:** Totalmente self-hosted. El sistema funciona localmente, asegurando que las credenciales de API y las transacciones permanezcan seguras. El backend puede integrarse con bases de datos locales o remotas de forma segura.
 - **🔐 Bóveda de Secretos Local:** Bóveda encriptada con AES-256-GCM para almacenar de forma segura credenciales de APIs. El borrado de memoria RAM ("scrubbing") asegura que las claves se destruyen tras su uso. Permite habilitar o deshabilitar integraciones en caliente.
 - **🏗️ Arquitectura Hexagonal (Separación en Frontend):** Estricta separación de responsabilidades (Puertos y Adaptadores). La capa de UI del frontend está desacoplada de los protocolos de red y mecanismos de almacenamiento local, garantizando alta testabilidad y seguridad de contratos mediante esquemas de validación Zod.
@@ -40,11 +43,12 @@ El repositorio está estructurado como un **Monorepo (PNPM Workspaces)** para de
 - `packages/database/`: Capa de abstracción de base de datos que define la interfaz genérica `IDatabasePort` y los esquemas SQL. Encapsula la arquitectura core: un **SQLite Ledger** (`kryptofolio_ledger.db`) *local-first* para persistencia OLTP, y un **Motor DuckDB** (respaldado en disco, con conexiones en pool) para consultas OLAP federadas de alto rendimiento.
 - `packages/core-domain/`: Lógica de negocio pura (Servicios, Casos de Uso, Normalizadores). Totalmente agnóstico del framework.
 - `packages/shared-types/`: Esquemas de Zod, DTOs y definiciones de tipos compartidas por todo el monorepo.
-- `docs/`: Documentación técnica cubriendo:
+- `docs/`: Documentación técnica (la documentación para usuarios está en el [sitio oficial](https://kryptofolio.kriptonianlabs.com/)) cubriendo:
   - [Arquitectura del Sistema](docs/architecture.md)
   - [Backend — Servidor API Hono](docs/backend.md)
   - [Motor Fiscal FIFO, Libro de Custodia y Perfiles de Formato de Origen](docs/fifo-tax-engine.md)
   - [Arquitectura de Base de Datos (SQLite Ledger)](docs/database-architecture.md)
+  - [Asesor de Portafolio con IA](docs/ai-advisor.md)
   - [Arquitectura de Series Temporales (DuckDB & Parquet)](docs/architecture/duckdb-parquet-time-series.md)
 ### Gestión de Dependencias (PNPM Catalogs)
 Usamos **PNPM Catalogs** para mantener una única fuente de la verdad en las dependencias comunes de todos los paquetes del monorepo (ej. TypeScript, Zod, Hono).
