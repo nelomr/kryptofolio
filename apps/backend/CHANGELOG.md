@@ -1,5 +1,11 @@
 # @kryptofolio/backend
 
+## 0.1.13
+
+### Patch Changes
+
+- [`90d4d05`](https://github.com/nelomr/kryptofolio/commit/90d4d059c46783cc7cfb021377c453fadcd68b4e) Thanks [@nelomr](https://github.com/nelomr)! - Performance history now follows the display currency: each point is converted at its own date's FX rate, points with no available rate are reported as unavailable instead of falling back to EUR or zero, and the advisor's `performance_history` tool reports in the user's base currency.
+
 ## 0.1.12
 
 ### Patch Changes

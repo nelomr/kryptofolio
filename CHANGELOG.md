@@ -3,6 +3,21 @@
 All notable changes to **Kriptofolio** are documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org) and [Semantic Versioning](https://semver.org).
 
+## [1.16.16](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.16) (2026-10-01)
+
+### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.16)
+
+**Patch Changes**
+
+- [`90d4d05`](https://github.com/nelomr/kryptofolio/commit/90d4d059c46783cc7cfb021377c453fadcd68b4e) Thanks [@nelomr](https://github.com/nelomr)! - Performance history now follows the display currency: each point is converted at its own date's FX rate, points with no available rate are reported as unavailable instead of falling back to EUR or zero, and the advisor's `performance_history` tool reports in the user's base currency.
+
+### ⚙️ Backend (`@kryptofolio/backend` @ 0.1.13)
+
+**Patch Changes**
+
+- [`90d4d05`](https://github.com/nelomr/kryptofolio/commit/90d4d059c46783cc7cfb021377c453fadcd68b4e) Thanks [@nelomr](https://github.com/nelomr)! - Performance history now follows the display currency: each point is converted at its own date's FX rate, points with no available rate are reported as unavailable instead of falling back to EUR or zero, and the advisor's `performance_history` tool reports in the user's base currency.
+
+
 ## [1.16.15](https://github.com/nelomr/kryptofolio/releases/tag/v1.16.15) (2026-09-30)
 
 ### 🖥️ Frontend (`@kryptofolio/frontend` @ 1.16.15)
