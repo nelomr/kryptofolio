@@ -81,7 +81,7 @@ Arbitrary-precision arithmetic (`Decimal`) is strictly confined to Application a
 
 - `GET /api/metrics/kpis`: Portfolio KPI summary (equity, cost basis, realized/unrealized PnL, win rate, best/worst asset).
 - `GET /api/metrics/risk`: Portfolio risk metrics (Sharpe ratio, 30d annualized volatility, max drawdown, Alpha, Beta).
-- `GET /api/metrics/performance`: Daily valuation time-series.
+- `GET /api/metrics/performance`: Daily valuation time-series in the requested `currency`, converted per point at that date's rate (`null` where no rate exists).
 - `GET /api/metrics/drawdown`: Historical percentage drawdown curve.
 
 ## Hono RPC Type Safety

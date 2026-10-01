@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
@@ -7,6 +7,9 @@ import os from 'node:os';
 import { DuckDbAdapter, getLedgerDb, closeLedgerDb, applyMigrations } from '@kryptofolio/database';
 import { DIContainer } from '../../di/container.js';
 import { createMetricsApi } from '../metrics.js';
+import { GetPerformanceHistoryUseCase } from '../../../application/use-cases/GetPerformanceHistoryUseCase.js';
+import type { IMetricsPort } from '../../../domain/ports/IMetricsPort.js';
+import type { FifoChainFreshnessService } from '../../../application/services/FifoChainFreshnessService.js';
 
 
 describe('Metrics Route API', () => {
@@ -65,5 +68,26 @@ describe('Metrics Route API', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
+  });
+
+  describe('GET /metrics/performance currency', () => {
+    const forwardedCurrency = async (query: string): Promise<unknown[]> => {
+      const getPerformanceHistory = vi.fn<IMetricsPort['getPerformanceHistory']>().mockResolvedValue([]);
+      const freshness = { ensureFresh: vi.fn().mockResolvedValue(undefined) } as unknown as FifoChainFreshnessService;
+      container.getPerformanceHistoryUseCase = new GetPerformanceHistoryUseCase(
+        { getPerformanceHistory } as unknown as IMetricsPort,
+        freshness,
+      );
+      await app.request(`/metrics/performance${query}`);
+      return getPerformanceHistory.mock.calls[0] ?? [];
+    };
+
+    it('forwards the currency query parameter to the use case', async () => {
+      expect(await forwardedCurrency('?days=7&currency=USD')).toEqual([7, 'USD']);
+    });
+
+    it('leaves the currency undefined when absent so the adapter defaults to EUR', async () => {
+      expect(await forwardedCurrency('?days=7')).toEqual([7, undefined]);
+    });
   });
 });

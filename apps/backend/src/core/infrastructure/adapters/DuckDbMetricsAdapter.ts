@@ -11,6 +11,7 @@ import type {
 } from '../../domain/ports/IMetricsPort.js';
 import Decimal from 'decimal.js';
 import { generateAssetColor } from '@kryptofolio/shared-types';
+import { toPreciseAmount } from '../../domain/value-objects/PreciseAmount.js';
 
 /**
  * Lots whose cost basis is not trustworthy enough to aggregate.
@@ -439,11 +440,12 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
 
   public async getPerformanceHistory(
     days = 30,
-    _targetCurrency?: string,
+    targetCurrency?: string,
   ): Promise<PerformanceHistoryPoint[]> {
+    const displayCurrency = targetCurrency ?? 'EUR';
     const rows = await this.db.queryMany<{
       date: string;
-      total_value: string;
+      total_value: string | null;
       drawdown_pct: string;
     }>(
       `
@@ -451,18 +453,19 @@ export class DuckDbMetricsAdapter implements IMetricsPort {
           CAST(v.date AS VARCHAR) AS date,
           CAST(SUM(v.daily_value) AS VARCHAR) AS total_value,
           CAST(COALESCE(d.drawdown_pct, 0.0) AS VARCHAR) AS drawdown_pct
-      FROM v_portfolio_daily_valuation v
+      FROM (${VALUATION_CONVERTED}) v
       LEFT JOIN v_portfolio_ath_drawdown d ON v.date = d.date
       GROUP BY v.date, d.drawdown_pct
       ORDER BY v.date DESC
-      LIMIT $1
+      LIMIT $2
     `,
-      [days],
+      [displayCurrency, days],
     );
 
     return rows.reverse().map((r) => ({
       date: r.date,
-      portfolioValue: new Decimal(r.total_value).toFixed(2),
+      portfolioValue:
+        r.total_value === null ? null : toPreciseAmount(new Decimal(r.total_value).toFixed(2)),
       drawdownPct: new Decimal(r.drawdown_pct).toFixed(4),
     }));
   }

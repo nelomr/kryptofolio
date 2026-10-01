@@ -86,7 +86,8 @@ export const es: I18nDictionary = {
   "portfolio.metrics_tabs.performance.kicker": "Historial de Rentabilidad",
   "portfolio.metrics_tabs.performance.title": "Portfolio Performance",
   "portfolio.metrics_tabs.performance.desc":
-    "Valor liquidado de cartera frente a coste base ({cost}). Línea azul = capital, gris punteado = coste base.",
+    "Valor liquidado de cartera. Coste base: {cost}.",
+  "portfolio.metrics_tabs.performance.desc_no_cost": "Valor liquidado de cartera.",
   "portfolio.metrics_tabs.performance.stats.return": "Retorno {range}",
   "portfolio.metrics_tabs.performance.stats.return_desc":
     "Beneficio o pérdida absoluta (en Fiat) generada en el período seleccionado.",

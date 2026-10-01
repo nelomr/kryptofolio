@@ -85,7 +85,8 @@ export const en: I18nDictionary = {
   "portfolio.metrics_tabs.performance.kicker": "Performance History",
   "portfolio.metrics_tabs.performance.title": "Portfolio Performance",
   "portfolio.metrics_tabs.performance.desc":
-    "Liquidated portfolio value vs cost basis ({cost}). Blue line = equity, dotted gray = cost basis.",
+    "Liquidated portfolio value. Cost basis: {cost}.",
+  "portfolio.metrics_tabs.performance.desc_no_cost": "Liquidated portfolio value.",
   "portfolio.metrics_tabs.performance.stats.return": "Return {range}",
   "portfolio.metrics_tabs.performance.stats.return_desc":
     "Absolute profit or loss (in Fiat) generated over the selected period.",

@@ -15,10 +15,14 @@ const getCSSVar = (name: string) => {
 // (equity/cost-basis view) and DrawdownPoint (drawdown view) from ICryptoMetricsPort.
 export interface PerformanceChartPoint {
   timestamp: number
-  valueFiat?: number
+  valueFiat?: number | null
   drawdownPercent?: number
   costBasisFiat?: number
 }
+
+// A value-less point is whitespace: lightweight-charts draws a gap, never a zero.
+const toSeriesPoint = (time: UTCTimestamp, value: number | null | undefined) =>
+  value === null || value === undefined ? { time } : { time, value }
 
 // lightweight-charts' MouseEventParams types seriesData values as the union of every
 // series data shape it supports; Area/Baseline/Line series all resolve to the
@@ -249,10 +253,9 @@ export function usePerformanceChart<T extends PerformanceChartPoint>(
     
     const sortedData = Array.from(uniqueDataMap.values()).sort((a, b) => a.timestamp - b.timestamp)
 
-    const areaData = sortedData.map(p => ({
-      time: p.timestamp as UTCTimestamp,
-      value: isPercent ? p.drawdownPercent : p.valueFiat,
-    }))
+    const areaData = sortedData.map(p =>
+      toSeriesPoint(p.timestamp as UTCTimestamp, isPercent ? p.drawdownPercent : p.valueFiat),
+    )
 
     areaSeries.setData(areaData)
 

@@ -46,15 +46,15 @@ export type TimeRange = "1D" | "1W" | "1M" | "1Y" | "5Y" | "ALL";
 
 export interface PerformancePoint {
   timestamp: number; // Unix timestamp
-  valueFiat: number;
-  costBasisFiat: number;
+  /** `null` when no stored FX rate covers the point's date, so no value exists in the display currency. */
+  valueFiat: number | null;
   drawdownPercent?: number;
   dateStr?: string;
 }
 
 export interface PerformanceMetrics {
-  returnFiat: number;
-  returnPercent: number;
+  returnFiat: number | null;
+  returnPercent: number | null;
   volatilityPercent: number;
   bestDayPercent: number;
 }

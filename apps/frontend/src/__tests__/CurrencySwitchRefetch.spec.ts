@@ -7,12 +7,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createApp, h, nextTick } from 'vue'
+import { createApp, h, nextTick, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { usePortfolioSummaryQuery } from '@/composables/queries/usePortfolioQueries'
 import { useUpdateBaseCurrencyMutation } from '@/composables/queries/useSettingsMutations'
-import { PORTFOLIO_PORT_KEY, SETTINGS_PORT_KEY, I18N_PORT_KEY } from '@/core/injectionKeys'
+import { PORTFOLIO_PORT_KEY, SETTINGS_PORT_KEY, I18N_PORT_KEY, CRYPTO_METRICS_PORT_KEY } from '@/core/injectionKeys'
+import { usePerformanceHistoryQuery } from '@/composables/queries/useCryptoMetricsQueries'
+import type { ICryptoMetricsPort, PerformanceMetrics, TimeRange } from '@/core/domain/ports/ICryptoMetricsPort'
 import type { ICryptoPortfolioPort } from '@/core/domain/ports/ICryptoPortfolioPort'
 import type { ISettingsPort } from '@/core/domain/ports/ISettingsPort'
 import type { PortfolioSummaryEntity } from '@/core/domain/models/PortfolioEntities'
@@ -125,5 +127,60 @@ describe('switching the display currency re-reads through Pinia Colada (task 9.3
     expect(summary.data.value?.holdings[0].costBasis.kind).toBe('CONVERTED')
     expect(host.textContent).toBe('EUR')
     expect(reload).not.toHaveBeenCalled()
+  })
+})
+
+describe('switching the display currency re-reads the performance history', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('requests the next series in the new currency and plots the backend values untouched', async () => {
+    let served: 'USD' | 'EUR' = 'USD'
+    const metrics: PerformanceMetrics = { returnFiat: null, returnPercent: null, volatilityPercent: 0, bestDayPercent: 0 }
+    const backendValue = { USD: 1234.5, EUR: 1100 }
+    const getPerformanceHistory = vi.fn(async (_range: TimeRange, currency?: string) => ({
+      history: [{ timestamp: 1, valueFiat: backendValue[currency === 'EUR' ? 'EUR' : 'USD'] }],
+      metrics,
+    }))
+    const metricsPort = { getPerformanceHistory } as unknown as ICryptoMetricsPort
+    const settingsPort = {
+      getBaseCurrency: vi.fn(async () => served),
+      setBaseCurrency: vi.fn(async () => {
+        served = 'EUR'
+      }),
+    } as unknown as ISettingsPort
+
+    let history!: ReturnType<typeof usePerformanceHistoryQuery>
+    let mutation!: ReturnType<typeof useUpdateBaseCurrencyMutation>
+    const app = createApp({
+      setup() {
+        history = usePerformanceHistoryQuery(ref<TimeRange>('1M'))
+        mutation = useUpdateBaseCurrencyMutation()
+        return () => h('div')
+      },
+    })
+    app.use(createPinia())
+    app.use(PiniaColada)
+    app.provide(CRYPTO_METRICS_PORT_KEY, metricsPort)
+    app.provide(SETTINGS_PORT_KEY, settingsPort)
+    app.provide(I18N_PORT_KEY, {
+      translate: (key: string) => key,
+      setLocale: vi.fn(),
+      getLocale: () => 'en',
+      getSupportedLocales: () => [],
+    })
+    app.mount(document.createElement('div'))
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(getPerformanceHistory).toHaveBeenLastCalledWith('1M', 'USD')
+    expect(history.data.value?.history[0].valueFiat).toBe(1234.5)
+
+    await mutation.mutateAsync('EUR')
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(getPerformanceHistory).toHaveBeenLastCalledWith('1M', 'EUR')
+    expect(history.data.value?.history[0].valueFiat).toBe(1100)
   })
 })

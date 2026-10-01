@@ -357,7 +357,7 @@ The advisor SHALL be a single supervisor `Agent` (`advisor`) declared with an `a
 - **THEN** it passes `maxSteps` explicitly, resolved from the run's execution profile (its `maxSteps`, never left to the library default), rather than a bare literal
 
 ### Requirement: Tool Inputs Exclude Server-Resolved And Injected Values
-The `portfolio_summary` tool's `inputSchema` SHALL accept no input at all, and in particular no `accountId`: the account scope is always every account, because a model cannot know an account id and taxation is per asset, never per account. `targetCurrency` SHALL be resolved server-side from the base-currency setting via request context, and `livePrices` SHALL be injected by the tool factory. Neither SHALL be a model-suppliable tool input. The same rule applies to every other tool that reads currency or price data (`asset_allocation`, `risk_metrics`, `drawdown_curve`, `performance_history`, `kpis`, `volatility_heatmap`, `spanish_tax_report`, `live_prices`): a currency is never a tool input. `asset_allocation` and `kpis` read the base currency from request context and pass it to their use case, whose adapter converts to it per valuation date; a holding the rate ledger cannot convert is reported as unvalued, never relabelled. `risk_metrics` returns only ratios and percentages and carries no currency. `spanish_tax_report` resolves its own default, because IRPF figures are EUR. `performance_history` wraps an adapter query that does not convert, so its figures are EUR whatever the base currency is, and its result SHALL declare that in a `currency` field. `drawdown_curve` and `volatility_heatmap` return percentages and a volatility statistic, which carry no currency.
+The `portfolio_summary` tool's `inputSchema` SHALL accept no input at all, and in particular no `accountId`: the account scope is always every account, because a model cannot know an account id and taxation is per asset, never per account. `targetCurrency` SHALL be resolved server-side from the base-currency setting via request context, and `livePrices` SHALL be injected by the tool factory. Neither SHALL be a model-suppliable tool input. The same rule applies to every other tool that reads currency or price data (`asset_allocation`, `risk_metrics`, `drawdown_curve`, `performance_history`, `kpis`, `volatility_heatmap`, `spanish_tax_report`, `live_prices`): a currency is never a tool input. `asset_allocation` and `kpis` read the base currency from request context and pass it to their use case, whose adapter converts to it per valuation date; a holding the rate ledger cannot convert is reported as unvalued, never relabelled. `risk_metrics` returns only ratios and percentages and carries no currency. `spanish_tax_report` resolves its own default, because IRPF figures are EUR. `performance_history` reads the base currency from request context and passes it to its use case, whose adapter converts each point to it at that point's own date; a point the rate ledger cannot convert carries a `null` `portfolioValue`, never an EUR value or `0`, and the result SHALL declare the request's base currency in its `currency` field. `drawdown_curve` and `volatility_heatmap` return percentages and a volatility statistic, which carry no currency.
 
 #### Scenario: Extra fields are rejected
 - **WHEN** the model calls `portfolio_summary` with a `targetCurrency` or `livePrices` field in its input
@@ -367,9 +367,15 @@ The `portfolio_summary` tool's `inputSchema` SHALL accept no input at all, and i
 - **WHEN** `asset_allocation` or `kpis` executes for a request whose base currency is not EUR
 - **THEN** its use case is called with that base currency, taken from request context and never from tool input
 
-#### Scenario: A tool that cannot convert declares the currency its figures are in
-- **WHEN** `performance_history` returns its series
-- **THEN** the result carries a `currency` field stating the currency the values are really in (EUR), regardless of the request's base currency
+#### Scenario: Performance history is requested in the base currency
+- **WHEN** `performance_history` executes for a request whose base currency is not EUR
+- **THEN** its use case is called with that base currency, taken from request context and never from tool input
+- **AND** the result's `currency` field states that base currency
+
+#### Scenario: An unconvertible point is reported as unvalued
+- **WHEN** `performance_history` returns a series containing a point no stored rate covers
+- **THEN** that point's `portfolioValue` is `null` in the result
+- **AND** it is neither the EUR value nor `0`, and the `currency` field is not relabelled to EUR
 
 #### Scenario: No tool accepts a currency parameter
 - **WHEN** the `inputSchema` of any tool that resolves a monetary or price figure is inspected

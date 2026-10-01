@@ -32,4 +32,25 @@ describe("downsampleSeries", () => {
     // Positional stride over 10 items to 4 points picks indices 0, 2, 5, 7.
     expect(sampled).toEqual([series[0], series[2], series[5], series[7]]);
   });
+
+  it("carries a null value through a downsampled series unchanged, never as a number and never dropped", () => {
+    const series = Array.from({ length: 10 }, (_, i) => ({
+      value: i % 2 === 0 ? null : String(i),
+    }));
+
+    const { sampled } = downsampleSeries(series, 5);
+
+    // Stride 2 over 10 points picks indices 0, 2, 4, 6, 8 — every one of them null.
+    expect(sampled).toHaveLength(5);
+    expect(sampled.map((p) => p.value)).toEqual([null, null, null, null, null]);
+  });
+
+  it("keeps a null point at its position among valued points", () => {
+    const series = [{ value: "1" }, { value: null }, { value: "3" }, { value: "4" }];
+
+    const { sampled, omittedCount } = downsampleSeries(series, 4);
+
+    expect(omittedCount).toBe(0);
+    expect(sampled.map((p) => p.value)).toEqual(["1", null, "3", "4"]);
+  });
 });

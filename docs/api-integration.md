@@ -279,19 +279,14 @@ Returns the breakdown of asset allocations.
 #### `GET /api/metrics/performance`
 Provides historical performance points for portfolio charting.
 
-- **Query Params:** `days` (number, default: `30`)
-- **Response Schema:**
+- **Query Params:** `days` (number, default: `30`), `currency` (string, default: `EUR`)
+- **Response Schema:** a bare array, oldest point first.
   ```json
-  {
-    "history": [
-      { "date": "string (YYYY-MM-DD)", "value_eur": "number" }
-    ],
-    "metrics": {
-      "absolute_change_eur": "number",
-      "percentage_change": "number"
-    }
-  }
+  [
+    { "date": "string (YYYY-MM-DD)", "portfolioValue": "string (decimal) | null", "drawdownPct": "string (decimal)" }
+  ]
   ```
+- **Currency:** each `portfolioValue` is converted at the latest stored `EUR/<currency>` rate on or before that point's own date; `EUR` needs no rate. A point no rate covers has `portfolioValue: null` (it is never the EUR value or `0`) and is still returned. `drawdownPct` is derived from the EUR series and is identical for every currency.
 
 #### `GET /api/metrics/heatmap`
 Provides monthly/daily volatility heatmaps for advanced trading metrics.

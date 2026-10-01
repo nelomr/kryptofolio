@@ -1,3 +1,5 @@
+import type { PreciseAmount } from '../value-objects/PreciseAmount.js';
+
 export interface AssetKpiSummary {
   symbol: string;
   name: string;
@@ -59,7 +61,8 @@ export interface MetricsKpis {
 
 export interface PerformanceHistoryPoint {
   date: string;
-  portfolioValue: string;
+  /** `null` when no stored FX rate on or before `date` can express the value in the requested currency. */
+  portfolioValue: PreciseAmount | null;
   btcValue?: string;
   drawdownPct: string;
 }

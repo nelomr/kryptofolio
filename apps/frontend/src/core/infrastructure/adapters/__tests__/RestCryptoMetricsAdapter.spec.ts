@@ -18,6 +18,9 @@ vi.mock('../../http/BffClient', () => {
           },
           drawdown: {
             $get: vi.fn()
+          },
+          performance: {
+            $get: vi.fn()
           }
         }
       }
@@ -217,5 +220,26 @@ describe('RestCryptoMetricsAdapter', () => {
     const adapter = new RestCryptoMetricsAdapter()
     await expect(adapter.getDrawdownCurve('1M')).rejects.toThrow(DomainValidationError)
   })
-})
 
+  describe('getPerformanceHistory', () => {
+    it('forwards the display currency and keeps an unconvertible point as null', async () => {
+      const { bffClient } = await import('../../http/BffClient')
+      const get = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { date: '2024-01-01', portfolioValue: null, drawdownPct: '0.0000' },
+            { date: '2024-01-02', portfolioValue: '100.00', drawdownPct: '0.0000' },
+            { date: '2024-01-03', portfolioValue: '120.00', drawdownPct: '0.0000' },
+          ]),
+      })
+      bffClient.api.metrics.performance.$get = get
+
+      const result = await new RestCryptoMetricsAdapter().getPerformanceHistory('1W', 'USD')
+
+      expect(get).toHaveBeenCalledWith({ query: { days: '7', currency: 'USD' } })
+      expect(result.history.map((p) => p.valueFiat)).toEqual([null, 100, 120])
+      expect(result.metrics.returnFiat).toBe(20)
+    })
+  })
+})

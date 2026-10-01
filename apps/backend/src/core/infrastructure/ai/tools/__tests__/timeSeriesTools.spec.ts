@@ -1,4 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { RequestContext } from '@mastra/core/request-context';
+import { noopObserve } from '@mastra/core/tools';
+import { toPreciseAmount } from '../../../../domain/value-objects/PreciseAmount.js';
+import type { AdvisorRequestContextValues } from '../../advisorRequestContext.js';
 import {
   buildDrawdownCurveToolResult,
   drawdownCurveToolInputSchema,
@@ -6,6 +10,7 @@ import {
 } from '../drawdownCurveTool.js';
 import {
   buildPerformanceHistoryToolResult,
+  performanceHistoryTool,
   performanceHistoryToolInputSchema,
   performanceHistoryToolOutputSchema,
 } from '../performanceHistoryTool.js';
@@ -24,7 +29,7 @@ function buildYear(): { drawdown: DrawdownPoint[]; performance: PerformanceHisto
   for (let i = 0; i < 365; i++) {
     const date = new Date(2024, 0, i + 1).toISOString().slice(0, 10);
     drawdown.push({ date, drawdownPct: `${i % 10}.0` });
-    performance.push({ date, portfolioValue: `${1000 + i}.00`, drawdownPct: `${i % 10}.0` });
+    performance.push({ date, portfolioValue: toPreciseAmount(`${1000 + i}.00`), drawdownPct: `${i % 10}.0` });
     heatmap.push({ date, volatility: `${i % 5}.0` });
   }
   return { drawdown, performance, heatmap };
@@ -48,7 +53,7 @@ describe('drawdown_curve, performance_history, volatility_heatmap tools', () => 
 
   it('performance_history downsamples a 365-point series to at most 120 points with a correct omittedCount', () => {
     const { performance } = buildYear();
-    const result = buildPerformanceHistoryToolResult(performance, CONFIG);
+    const result = buildPerformanceHistoryToolResult(performance, 'EUR', CONFIG);
 
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') throw new Error('expected ok');
@@ -81,19 +86,56 @@ describe('drawdown_curve, performance_history, volatility_heatmap tools', () => 
   });
 });
 
-describe('the currency each time-series tool declares', () => {
-  it('performance_history states that its portfolio values are in EUR, the currency the analytics view aggregates in', () => {
-    const { performance } = buildYear();
-    const result = buildPerformanceHistoryToolResult(performance, CONFIG);
+function requestContextFor(baseCurrency: string): RequestContext<AdvisorRequestContextValues> {
+  return new RequestContext<AdvisorRequestContextValues>([
+    ['locale', 'en'],
+    ['baseCurrency', baseCurrency],
+  ]);
+}
 
-    if (result.kind !== 'ok') throw new Error('expected ok');
-    expect(result.payload.currency).toBe('EUR');
+describe('performance_history currency', () => {
+  it('asks its use case for the request base currency, never a tool input', async () => {
+    const useCase = { execute: vi.fn(async () => buildYear().performance) };
+    const tool = performanceHistoryTool(useCase, CONFIG);
+    if (!tool.execute) throw new Error('expected tool.execute to be defined');
+
+    await tool.execute({ days: 90 }, { requestContext: requestContextFor('USD'), observe: noopObserve });
+
+    expect(useCase.execute).toHaveBeenCalledWith(90, 'USD');
+  });
+
+  it('declares the request base currency in the payload, not EUR, for a USD request', async () => {
+    const useCase = { execute: vi.fn(async () => buildYear().performance) };
+    const tool = performanceHistoryTool(useCase, CONFIG);
+    if (!tool.execute) throw new Error('expected tool.execute to be defined');
+
+    const result = await tool.execute({}, { requestContext: requestContextFor('USD'), observe: noopObserve });
+
+    expect(result).toMatchObject({ kind: 'ok', payload: { currency: 'USD' } });
+  });
+
+  it('keeps an unconvertible point as null in the result and still validates', async () => {
+    const points = buildYear().performance.slice(0, 3).map((p, i) => (i === 0 ? { ...p, portfolioValue: null } : p));
+    const useCase = { execute: vi.fn(async () => points) };
+    const tool = performanceHistoryTool(useCase, CONFIG);
+    if (!tool.execute) throw new Error('expected tool.execute to be defined');
+
+    const result = await tool.execute({}, { requestContext: requestContextFor('USD'), observe: noopObserve });
+
+    if (!result || 'error' in result || result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.payload.points[0]?.portfolioValue).toBeNull();
+    expect(result.payload.points[1]?.portfolioValue).toBe('1001.00');
     expect(() => performanceHistoryToolOutputSchema.parse(result)).not.toThrow();
   });
 
-  it('performance_history rejects a payload with no declared currency', () => {
+  it('declares no currency field in its inputSchema', () => {
+    expect(Object.keys(performanceHistoryToolInputSchema.shape)).toEqual(['days']);
+    expect(() => performanceHistoryToolInputSchema.parse({ currency: 'USD' })).toThrow();
+  });
+
+  it('rejects a payload with no declared currency', () => {
     const { performance } = buildYear();
-    const result = buildPerformanceHistoryToolResult(performance, CONFIG);
+    const result = buildPerformanceHistoryToolResult(performance, 'USD', CONFIG);
     if (result.kind !== 'ok') throw new Error('expected ok');
     const { currency: _currency, ...withoutCurrency } = result.payload;
 

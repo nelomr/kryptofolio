@@ -6,9 +6,7 @@ Resolving every monetary figure in the read model into the user's selected displ
 rate dated to the figure itself. Conversion is arithmetic applied per row before any aggregation,
 it is a read-time concern that never touches the stored ledger, and a figure it cannot express
 reports that rather than passing through at a factor of one.
-
 ## Requirements
-
 ### Requirement: A Monetary Figure Is Converted, Not Relabelled
 
 Every monetary figure the read model returns SHALL be the product of its stored value and a resolved
@@ -251,7 +249,11 @@ restated in each query. An adapter SHALL apply a rate basis it is given; it SHAL
 The daily valuation series SHALL aggregate assets in a single canonical currency before summing, and
 SHALL convert that canonical total to the display currency at each point's own date. The canonical
 currency SHALL be `EUR`, because the FX ledger is ECB-quoted and `EUR` is reachable from any
-supported currency by a published rather than an inverted rate.
+supported currency by a published rather than an inverted rate. Every read path that returns this
+daily series as money, including the performance-history read path, SHALL obtain its display-currency
+values from this one conversion, using the latest stored `EUR/<display currency>` rate dated on or
+before each point, and SHALL NOT implement a second conversion of its own. A point for which no such
+rate exists SHALL be reported as unconvertible, carrying no amount in the display currency.
 
 #### Scenario: Each point of the series uses its own date's rate
 
@@ -271,6 +273,21 @@ supported currency by a published rather than an inverted rate.
 - **WHEN** a cost basis, a realized gain or a tax report figure is produced
 - **THEN** it MUST be converted by a single direct or reciprocal hop from its native currency
 - **AND** it MUST NOT be routed through the canonical aggregation currency
+
+#### Scenario: The performance-history path uses the same conversion
+
+- **WHEN** the performance history and the daily valuation series are requested in the same display
+  currency over the same dates
+- **THEN** each performance point's `portfolioValue` MUST equal the valuation series' converted value
+  for that date
+- **AND** the performance-history path MUST NOT apply a rate the valuation series did not apply
+
+#### Scenario: A point with no prior rate is unconvertible on the performance path
+
+- **WHEN** a performance-history point's date precedes the earliest stored `EUR/<display currency>`
+  rate
+- **THEN** its `portfolioValue` MUST be reported as unconvertible (`null`)
+- **AND** the latest rate, a factor of `1`, and the EUR value MUST NOT be substituted
 
 ### Requirement: A Per-Event Figure Carries Its Own Conversion Outcome
 
@@ -312,3 +329,4 @@ reachable from the path that persists, in any currency.
 - **WHEN** the method that feeds materialisation is called while a display currency is configured
 - **THEN** the figures it returns MUST be the native ones
 - **AND** no converted figure MUST be persisted to the ledger
+

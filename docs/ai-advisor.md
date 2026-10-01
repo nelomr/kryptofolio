@@ -352,7 +352,7 @@ All tools return a discriminated union: `{ kind: 'ok', payload }` or `{ kind: 't
 | `risk_metrics` | `GetRiskMetricsUseCase` | none | `maxDrawdownPct`, `annualizedVolatility`, `sharpeRatio`, `alpha`, `beta`. Ratios, no currency field. |
 | `kpis` | `GetKpisUseCase` | none | Equity, cost basis, PnL, all-time high, drawdown, volatility, Sharpe, `currency`, incompleteness flags, and optional trade statistics and best/worst asset. Base currency. |
 | `drawdown_curve` | `GetDrawdownCurveUseCase` | `days?` (integer 1 to 3650) | `points` of `date` and `drawdownPct`, downsampled to at most 120, plus `omittedCount`. |
-| `performance_history` | `GetPerformanceHistoryUseCase` | `days?` (1 to 3650) | `currency` (always `EUR`), `points` (`portfolioValue`, optional `btcValue`, `drawdownPct`) downsampled to at most 120, `omittedCount`. |
+| `performance_history` | `GetPerformanceHistoryUseCase` | `days?` (1 to 3650) | `currency` (the base currency), `points` (`portfolioValue`, nullable; optional `btcValue`; `drawdownPct`) downsampled to at most 120, `omittedCount`. |
 | `volatility_heatmap` | `GetVolatilityHeatmapUseCase` | `year?` (integer) | `cells` of `date` and `volatility`, downsampled to at most 120, `omittedCount`. |
 | `spanish_tax_report` | `GetSpanishTaxReportUseCase` | `year` (integer, at least 2009), `method?` | IRPF `summary`, unconvertible and excluded counters, `auditTrail` capped at 20 rows, `omittedCount`. Always EUR. |
 | `live_prices` | `IPriceHistoryPort.getLatest` | `symbols` (1 to 25) | `prices` (`price`, `currency`, `timestamp`, `provider`, `stalenessSeconds`) and `notTracked`. |
@@ -400,7 +400,7 @@ Tool failures surface on the stream as `tool-error` with `INVALID_TOOL_INPUT` (M
 - `asset_allocation` converts the canonical-EUR daily valuation at the rate of the valuation date (`VALUATION_CONVERTED`, like `kpis`). A holding with no price series, or no exchange rate, is `unvalued`: it reports its quantity and is excluded from every percentage, never passed through at a factor of one.
 - `risk_metrics`, `drawdown_curve` and `volatility_heatmap` return ratios, percentages or statistics with no currency.
 - `spanish_tax_report` is always EUR, as IRPF requires.
-- `performance_history` is currently **EUR-only** whatever the base currency: it reads the canonical-EUR daily valuation, the metrics adapter ignores its currency parameter, and the tool declares `currency: 'EUR'` in the result. See [Known divergences](#20-known-divergences).
+- `performance_history` honours the base currency: each point is converted at the latest stored `EUR/<base>` rate on or before that point's own date (`VALUATION_CONVERTED`, like `kpis`), and the result's `currency` field states it. A point no rate covers has `portfolioValue: null`, never an EUR value or `0`. `drawdownPct` is a ratio and stays derived from the EUR series, so it does not depend on the base currency.
 
 The agent is instructed to state each result's declared currency beside the figure and never to convert or relabel.
 
@@ -838,8 +838,6 @@ Per project rules, a new behaviour needs a failing test first, and a deliberate 
 
 **Answers show a "Figures incomplete" badge.** A tool reported missing exchange rates or prices (`ratesIncomplete` or `pricesIncomplete`). Fix the underlying data rather than the prompt.
 
-**`performance_history` figures are in EUR although my base currency is different.** Known limitation ([Known divergences](#20-known-divergences)).
-
 **An answer was refused.** Either the text matched the tax-evasion pattern (always refused), attempted to override the disclaimer, or made an investment claim with no tool activity in the turn. Rephrase using your own data; the chip offers this.
 
 **Can the advisor filter by account?** No. No tool accepts an account id and the model is told never to ask for one. Filtering by account name, resolved server-side, is a possible future addition.
@@ -881,7 +879,6 @@ Each phase has a pre-proposal under `openspec/changes/<id>/pre-proposal.md`; a p
 Other designed but unshipped items:
 
 - **Forecast criterion settings.** Two user settings are reserved to gate whether a forecast is shown once forecasting exists: `ai_advisor_forecast_min_hit_rate` (decimal string, planned default `"0.90"`, range `0.50` to `0.99`) and `ai_advisor_forecast_min_samples` (integer, planned default `30`). **Nothing in the code reads, stores or exposes them**, and there is no Settings UI; they are listed so the names are not reused.
-- **`performance_history` in the base currency**, proposed by [`performance-history-display-currency`](../openspec/changes/performance-history-display-currency/proposal.md) (proposal only, no tasks yet).
 - **Remembered vault unlock**, proposed by [`vault-remember-unlock-on-device`](../openspec/changes/vault-remember-unlock-on-device/proposal.md) (proposal only).
 - **Filtering by account name**, resolved server-side (idea, no artifact).
 
@@ -896,7 +893,6 @@ Places where the shipped code differs from, or goes beyond, the OpenSpec design.
 | Topic | Design says | Code does |
 |---|---|---|
 | Cloud model suffix | D16 classifies an `ollama` entry as cloud when the model id ends `:cloud`. | `isOllamaCloudModelId` also treats `-cloud` (for example `gpt-oss:120b-cloud`) as cloud, and `readModelChain` drops a stale `contextWindow` from such stored entries. |
-| `performance_history` currency | D16 records the EUR-only limitation as known. | Unchanged: the tool declares `EUR`. A separate proposal addresses it; until it lands the tool ignores the base currency. |
 | Migration `010` | Loosens a constraint. | Implemented as `DROP TABLE` plus recreate, destroying existing audit rows. Safe only under the documented clean-slate assumption. |
 | Corrupt execution-profile setting | The chain degrades gracefully. | The profile setting has no equivalent guard; a bad value yields HTTP 500 or `INTERNAL_ERROR`. |
 | Task 16.7 | Local commit. | Unchecked; the work is uncommitted. |

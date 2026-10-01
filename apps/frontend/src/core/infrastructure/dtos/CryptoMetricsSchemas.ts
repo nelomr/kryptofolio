@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generateAssetColor } from '@kryptofolio/shared-types';
-import { numericField } from './CommonSchemaHelpers';
+import { numericField, nullableNumericField } from './CommonSchemaHelpers';
 
 export const AssetKpiSchema = z
   .object({
@@ -139,33 +139,42 @@ export const PerformancePointSchema = z
   .object({
     date: z.string().optional(),
     ts: numericField.optional(),
-    portfolioValue: numericField.optional(),
-    value: numericField.optional(),
+    portfolioValue: nullableNumericField.optional(),
+    value: nullableNumericField.optional(),
     btcValue: numericField.optional(),
-    costBasisFiat: numericField.optional(),
-    cost: numericField.optional(),
     drawdownPct: numericField.optional(),
   })
   .transform((val) => {
     const timestamp = val.ts ?? (val.date ? new Date(val.date).getTime() : Date.now());
-    const valueFiat = val.portfolioValue ?? val.value ?? 0;
-    const costBasisFiat = val.costBasisFiat ?? val.cost ?? 0;
     return {
       timestamp,
       dateStr: val.date ?? new Date(timestamp).toISOString().split('T')[0],
-      valueFiat,
-      costBasisFiat,
+      valueFiat: val.portfolioValue ?? val.value ?? null,
       drawdownPercent: val.drawdownPct ?? 0,
     };
   });
+
+type ParsedPerformancePoint = z.output<typeof PerformancePointSchema>;
+
+function summarizeReturn(points: ParsedPerformancePoint[]): { returnFiat: number | null; returnPercent: number | null } {
+  const valued = points.flatMap((p) => (p.valueFiat === null ? [] : [p.valueFiat]));
+  const first = valued[0];
+  const last = valued[valued.length - 1];
+  if (valued.length < 2 || first === undefined || last === undefined) {
+    return { returnFiat: null, returnPercent: null };
+  }
+  return {
+    returnFiat: last - first,
+    returnPercent: first > 0 ? ((last - first) / first) * 100 : 0,
+  };
+}
 
 export const PerformanceHistoryResponseSchema = z
   .union([
     z.array(PerformancePointSchema).transform((arr) => ({
       history: arr,
       metrics: {
-        returnFiat: arr.length > 0 ? arr[arr.length - 1].valueFiat - arr[0].valueFiat : 0,
-        returnPercent: arr.length > 0 && arr[0].valueFiat > 0 ? ((arr[arr.length - 1].valueFiat - arr[0].valueFiat) / arr[0].valueFiat) * 100 : 0,
+        ...summarizeReturn(arr),
         volatilityPercent: 0,
         bestDayPercent: 0,
       },
