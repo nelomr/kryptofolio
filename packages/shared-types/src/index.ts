@@ -1,4 +1,6 @@
 export * from './advisor-stream.js';
+export * from './advisor-metrics.js';
+export * from './stablecoins.js';
 export * from './ingestion/TransactionMappedData.js';
 export * from './ingestion/sourceProfileIds.js';
 export * from './market-data/models.js';
@@ -13,3 +15,5 @@ export * from './schemas/ledger.js';
 export * from './schemas/spot-transaction-edit.js';
 export * from './schemas/transactions.js';
 export * from './utils/colors.js';
+export * from './advisor-scenarios.js';
+export * from './advisor-tx-search.js';

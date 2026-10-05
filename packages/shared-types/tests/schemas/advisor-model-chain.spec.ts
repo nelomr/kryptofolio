@@ -5,6 +5,7 @@ import {
   isOllamaCloudModelId,
   executionProfilesSchema,
   defaultExecutionProfiles,
+  ADVISOR_TOOL_NAMES,
   type ModelChainEntry,
 } from '../../src/advisor-stream';
 
@@ -128,7 +129,7 @@ describe('executionProfilesSchema', () => {
       topNHoldings: 15,
       lotsPageSize: 20,
       rowsPageSize: 25,
-      toolBudgets: {
+      toolBudgets: expect.objectContaining({
         portfolio_summary: 4000,
         fiscal_integrity: 6000,
         token_history: 6000,
@@ -142,8 +143,9 @@ describe('executionProfilesSchema', () => {
         live_prices: 2000,
         fiscal_integrity_rows: 4000,
         token_lots: 4000,
-      },
+      }),
     });
+    expect(Object.keys(defaults.metered.toolBudgets).sort()).toEqual([...ADVISOR_TOOL_NAMES].sort());
     expect(defaults.local).toEqual({
       maxSteps: 15,
       lastMessages: 50,

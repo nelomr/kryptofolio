@@ -71,7 +71,7 @@ describe('advisorStreamEventSchema closed vocabularies', () => {
 
   it('exposes the full closed vocabularies', () => {
     expect(ADVISOR_TOOL_NAMES).toContain('portfolio_summary');
-    expect(ADVISOR_TOOL_NAMES).toHaveLength(13);
+    expect(new Set(ADVISOR_TOOL_NAMES).size).toBe(ADVISOR_TOOL_NAMES.length);
     expect(ADVISOR_FAILURE_CODES).toEqual([
       'NO_MODEL_AVAILABLE',
       'VAULT_LOCKED',

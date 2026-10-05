@@ -55,7 +55,7 @@ describe('deterministic delegation with one active sub-agent', () => {
       },
     });
 
-    const taxAnalyst = buildTaxAnalystAgent({}, taxAnalystModel);
+    const taxAnalyst = buildTaxAnalystAgent({}, taxAnalystModel, 'metered');
     const memory = new Memory({ storage: new LibSQLStore({ id: 'test-advisor-memory', url: ':memory:' }) });
     const advisor = buildAdvisorAgent({ model: advisorModel, memory, taxAnalyst });
 

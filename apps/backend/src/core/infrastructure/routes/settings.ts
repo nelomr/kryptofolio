@@ -155,20 +155,17 @@ const settingsApi = new Hono()
     },
   )
   // ── Supported Accounts ───────────────────────────────────────────────────────
-  // This is the user-facing account selector. Synthetic accounts exist only as custody
-  // counterparties, so naming one as an import target or a movement destination is meaningless —
-  // they are filtered here, at the single point every selector reads from.
+  // The user-facing account selector. `ListAccountsUseCase` drops the synthetic custody
+  // counterparties, which are meaningless as an import target or a movement destination.
   .get("/accounts", async (c) => {
     try {
-      const accounts = await container.ledgerPort.getAccounts();
-      const mapped = accounts
-        .filter(acc => !acc.isSynthetic)
-        .map(acc => ({
-          value: acc.id,
-          label: acc.name,
-          type: acc.type,
-          parentAccountId: acc.parentAccountId ?? null,
-        }));
+      const accounts = await container.listAccountsUseCase.execute();
+      const mapped = accounts.map((acc) => ({
+        value: acc.id,
+        label: acc.name,
+        type: acc.type,
+        parentAccountId: acc.parentAccountId,
+      }));
       return c.json({ accounts: mapped });
     } catch (err) {
       bffLogger.error({ err }, "Failed to get supported accounts");

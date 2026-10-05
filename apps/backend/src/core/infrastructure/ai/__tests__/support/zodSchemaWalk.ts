@@ -16,6 +16,12 @@ function childrenOf(schema: z.ZodTypeAny, path: string): SchemaNode[] {
   if (schema instanceof z.ZodOptional || schema instanceof z.ZodNullable) return [{ path, schema: schema.unwrap() }];
   if (schema instanceof z.ZodDefault) return [{ path, schema: schema.removeDefault() }];
   if (schema instanceof z.ZodEffects) return [{ path, schema: schema.innerType() }];
+  if (schema instanceof z.ZodPipeline) {
+    return [
+      { path, schema: schema._def.in },
+      { path, schema: schema._def.out },
+    ];
+  }
   if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
     return (schema.options as z.ZodTypeAny[]).map((option) => ({ path, schema: option }));
   }

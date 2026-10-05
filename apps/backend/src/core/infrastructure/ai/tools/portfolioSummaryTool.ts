@@ -17,7 +17,7 @@ import { enforceBudget, type EnforceBudgetResult, type RunBudgetTracker } from '
  */
 export const portfolioSummaryToolInputSchema = z.object({}).strict();
 
-const rankedHoldingSchema = z
+export const rankedHoldingSchema = z
   .object({
     id: z.string(),
     symbol: z.string(),
@@ -30,7 +30,7 @@ const rankedHoldingSchema = z
   })
   .strict();
 
-const unvaluedHoldingSchema = z
+export const unvaluedHoldingSchema = z
   .object({
     id: z.string(),
     symbol: z.string(),
@@ -40,7 +40,7 @@ const unvaluedHoldingSchema = z
   })
   .strict();
 
-const portfolioSummaryPayloadSchema = z
+export const portfolioSummaryPayloadSchema = z
   .object({
     metrics: z
       .object({
@@ -80,13 +80,13 @@ export const portfolioSummaryToolOutputSchema = z.discriminatedUnion('kind', [
 export type PortfolioSummaryToolPayload = z.infer<typeof portfolioSummaryPayloadSchema>;
 
 /** A holding's resolved value, or `undefined` when it has none — never a comparable `0`. */
-function resolvedValueOf(holding: PortfolioHoldingDto): string | undefined {
+export function resolvedValueOf(holding: PortfolioHoldingDto): string | undefined {
   if (holding.current_value_fiat === undefined) return undefined;
   if (!isConvertible(holding.cost_basis)) return undefined;
   return holding.current_value_fiat;
 }
 
-function toRankedSummary(
+export function toRankedSummary(
   holding: PortfolioHoldingDto,
   currentValueFiat: string,
 ): PortfolioSummaryToolPayload['ranked'][number] {
@@ -102,7 +102,7 @@ function toRankedSummary(
   };
 }
 
-function toUnvaluedSummary(holding: PortfolioHoldingDto): PortfolioSummaryToolPayload['unvalued'][number] {
+export function toUnvaluedSummary(holding: PortfolioHoldingDto): PortfolioSummaryToolPayload['unvalued'][number] {
   return {
     id: holding.id,
     symbol: holding.symbol,
@@ -127,19 +127,19 @@ export interface PortfolioSummaryToolConfig {
 }
 
 /**
- * Pure projection + budget gate, factored out of the Mastra `execute` closure so it is directly
- * unit-testable without constructing a `Tool`. Ranking goes through `rankHoldingsByValue` only: this
+ * The projection without the budget gate, so a tool that composes several summaries (one per
+ * account) gates the combined payload once. Ranking goes through `rankHoldingsByValue` only: this
  * file orders nothing itself, compares no monetary value, and does no floating-point conversion or
  * formatting of one.
  */
-export function buildPortfolioSummaryToolResult(
+export function projectPortfolioSummary(
   response: PortfolioSummaryResponse,
-  config: PortfolioSummaryToolConfig,
-): EnforceBudgetResult<PortfolioSummaryToolPayload> {
+  topNHoldings: number,
+): PortfolioSummaryToolPayload {
   const { ranked, omittedCount, unvalued } = rankHoldingsByValue(
     response.holdings,
     resolvedValueOf,
-    config.topNHoldings,
+    topNHoldings,
   );
 
   const totals = sumValuedHoldings(response.holdings, (h) => {
@@ -147,7 +147,7 @@ export function buildPortfolioSummaryToolResult(
     return value === undefined ? undefined : { value, costBasis: h.cost_basis_fiat };
   });
 
-  const payload: PortfolioSummaryToolPayload = {
+  return {
     metrics: {
       ratesIncomplete:
         response.metrics.rates_incomplete ||
@@ -168,8 +168,18 @@ export function buildPortfolioSummaryToolResult(
     unvalued: unvalued.map(toUnvaluedSummary),
     unvaluedCount: unvalued.length,
   };
+}
 
-  return enforceBudget(payload, config.maxChars, config.runBudgetTracker);
+/** Pure projection + budget gate, factored out of the Mastra `execute` closure so it is unit-testable without a `Tool`. */
+export function buildPortfolioSummaryToolResult(
+  response: PortfolioSummaryResponse,
+  config: PortfolioSummaryToolConfig,
+): EnforceBudgetResult<PortfolioSummaryToolPayload> {
+  return enforceBudget(
+    projectPortfolioSummary(response, config.topNHoldings),
+    config.maxChars,
+    config.runBudgetTracker,
+  );
 }
 
 /** Structural, not the concrete class: the tool only ever calls `execute`. */

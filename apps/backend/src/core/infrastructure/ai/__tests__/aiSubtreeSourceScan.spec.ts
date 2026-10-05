@@ -7,6 +7,7 @@ import {
   findAnyEscapes,
   findCalls,
   findConstructions,
+  findMoneyImports,
   findMonetaryOperations,
   findTypeAssertions,
   findNumericCoercion,
@@ -86,6 +87,44 @@ describe('AI subtree source scan', () => {
     });
   });
 
+  describe('Money stays out of the AI subtree', () => {
+    it('imports neither Money nor decimal.js anywhere in the AI subtree', () => {
+      expect(offendersIn(aiSources, findMoneyImports)).toEqual([]);
+    });
+
+    const SCENARIO_TOOLS = [
+      'infrastructure/ai/tools/scenarioPositionValueTool.ts',
+      'infrastructure/ai/tools/breakevenPriceTool.ts',
+      'infrastructure/ai/tools/scenarioPortfolioShockTool.ts',
+      'infrastructure/ai/tools/concentrationRiskTool.ts',
+    ];
+
+    it('scans the four scenario tools and finds no Money, decimal.js, coercion or monetary arithmetic in them', () => {
+      const scenarioFiles = aiSources.filter((file) => SCENARIO_TOOLS.includes(displayPath(file)));
+
+      expect(scenarioFiles.map(displayPath).sort()).toEqual([...SCENARIO_TOOLS].sort());
+      expect(offendersIn(scenarioFiles, findMoneyImports)).toEqual([]);
+      expect(offendersIn(scenarioFiles, findNumericCoercion)).toEqual([]);
+      expect(offendersIn(scenarioFiles, findMonetaryOperations)).toEqual([]);
+    });
+
+    it.each([
+      ['a named import from core-domain', 'import { Money } from "@kryptofolio/core-domain";'],
+      ['an aliased import', 'import { rankHoldingsByValue, Money as M } from "@kryptofolio/core-domain";'],
+      ['a type-only import', 'import type { Money } from "@kryptofolio/core-domain";'],
+      ['a direct value-object import', 'import { Money } from "../../../../../packages/core-domain/src/value-objects/Money";'],
+      ['a decimal.js import', 'import Decimal from "decimal.js";'],
+    ])('detects %s', (_label, source) => {
+      expect(findMoneyImports(source)).not.toEqual([]);
+    });
+
+    it('allows the pure core-domain functions that do the arithmetic on the AI subtree\'s behalf', () => {
+      expect(
+        findMoneyImports('import { rankHoldingsByValue, compareTaxSummaries } from "@kryptofolio/core-domain";'),
+      ).toEqual([]);
+    });
+  });
+
   describe('custody and tax orderings', () => {
     const advisorOwned = [...aiSources, ...ADVISOR_OWNED_FILES];
 
@@ -100,6 +139,15 @@ describe('AI subtree source scan', () => {
       ['a DuckDB adapter import', 'import { a } from "../adapters/DuckDbMetricsAdapter.js";'],
     ])('detects %s', (_label, source) => {
       expect(findOrderingSqlAndTaxImports(source)).not.toEqual([]);
+    });
+
+    it('allows only the custody lookup use case and its tool, and still rejects any other custody module', () => {
+      expect(
+        findOrderingSqlAndTaxImports('import { u } from "../../../application/use-cases/GetLotCustodyLocationsUseCase.js";'),
+      ).toEqual([]);
+      expect(findOrderingSqlAndTaxImports('import { t } from "./custodyLocationsTool.js";')).toEqual([]);
+      expect(findOrderingSqlAndTaxImports('import { c } from "../adapters/CustodyLedgerAdapter.js";')).not.toEqual([]);
+      expect(findOrderingSqlAndTaxImports('import { c } from "./notCustodyLocationsTool.js";')).not.toEqual([]);
     });
 
     it('ignores a comment that merely names a clause', () => {

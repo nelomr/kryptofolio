@@ -16,6 +16,7 @@ import { resolveToolBudget, resolveRunBudget } from './models/resolveToolBudget.
 import type { ResolvedExecutionProfile } from './models/resolveExecutionProfile.js';
 import { createRunBudgetTracker, type RunBudgetTracker } from './tools/enforceBudget.js';
 import { buildImplementedTools, type ToolUseCases, type ToolConfigs } from './tools/index.js';
+import { selectExposedTools } from './tools/toolExposure.js';
 import { buildTaxAnalystAgent } from './agents/taxAnalyst.js';
 import { buildAdvisorAgent } from './agents/advisor.js';
 import { streamWithAdvisor } from './agents/runAdvisor.js';
@@ -73,6 +74,38 @@ function buildToolConfigs(
     tokenLots: {
       lotsPageSize: profile.settings.lotsPageSize,
       maxChars: maxCharsFor('token_lots'),
+      runBudgetTracker,
+    },
+    holdingDetail: { maxChars: maxCharsFor('holding_detail'), runBudgetTracker },
+    accountHoldings: {
+      topNHoldings: profile.settings.topNHoldings,
+      maxChars: maxCharsFor('account_holdings'),
+      runBudgetTracker,
+    },
+    taxYearComparison: { maxChars: maxCharsFor('tax_year_comparison'), runBudgetTracker },
+    derivativesPnl: {
+      topNHoldings: profile.settings.topNHoldings,
+      maxChars: maxCharsFor('derivatives_pnl'),
+      runBudgetTracker,
+    },
+    custodyLocations: {
+      topNHoldings: profile.settings.topNHoldings,
+      maxChars: maxCharsFor('custody_locations'),
+      runBudgetTracker,
+    },
+    dataGaps: { maxChars: maxCharsFor('data_gaps'), runBudgetTracker },
+    explainMetric: { maxChars: maxCharsFor('explain_metric'), runBudgetTracker },
+    scenarioPositionValue: { maxChars: maxCharsFor('scenario_position_value'), runBudgetTracker },
+    breakevenPrice: { maxChars: maxCharsFor('breakeven_price'), runBudgetTracker },
+    scenarioPortfolioShock: {
+      topNHoldings: profile.settings.topNHoldings,
+      maxChars: maxCharsFor('scenario_portfolio_shock'),
+      runBudgetTracker,
+    },
+    concentrationRisk: { maxChars: maxCharsFor('concentration_risk'), runBudgetTracker },
+    txSearch: {
+      rowsPageSize: profile.settings.rowsPageSize,
+      maxChars: maxCharsFor('tx_search'),
       runBudgetTracker,
     },
   };
@@ -134,10 +167,13 @@ export class MastraAdvisorAdapter implements IAdvisorPort {
 
     const runBudgetTracker = createRunBudgetTracker(resolveRunBudget(executionProfile));
     const toolConfigs = buildToolConfigs(executionProfile, request, runBudgetTracker);
-    const tools = buildImplementedTools(this.deps.toolUseCases, toolConfigs);
+    const tools = selectExposedTools(
+      buildImplementedTools(this.deps.toolUseCases, toolConfigs),
+      executionProfile.kind,
+    );
     const modelConfig = buildModelChainConfig(entries, this.deps.ollamaBaseURL);
 
-    const taxAnalyst = buildTaxAnalystAgent(tools, modelConfig);
+    const taxAnalyst = buildTaxAnalystAgent(tools, modelConfig, executionProfile.kind);
     // `buildAdvisorAgent` wires a grounding detector + disclaimer processor by default.
     const advisor = buildAdvisorAgent({ model: modelConfig, memory: this.deps.memory, taxAnalyst });
 

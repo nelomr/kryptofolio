@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { rankHoldingsByValue } from "../domain/services/holdingRanking";
+import { rankByAbsoluteValue, rankHoldingsByValue } from "../domain/services/holdingRanking";
 
 type Holding = { id: string; value: string | undefined };
 
@@ -52,5 +52,41 @@ describe("rankHoldingsByValue", () => {
 
     expect(source).not.toMatch(/from\s+["']decimal\.js["']/);
     expect(source).toMatch(/from\s+["'](\.\.\/)*value-objects\/Money["']/);
+  });
+});
+
+describe("rankByAbsoluteValue", () => {
+  type Row = { id: string; value: string };
+
+  it("ranks by magnitude regardless of sign, capped at topN, counting what missed the cut", () => {
+    const rows: Row[] = [
+      { id: "small-gain", value: "10" },
+      { id: "big-loss", value: "-500.5" },
+      { id: "mid-gain", value: "300" },
+      { id: "tiny-loss", value: "-1" },
+    ];
+
+    const { ranked, omittedCount } = rankByAbsoluteValue(rows, (r) => r.value, 2);
+
+    expect(ranked.map((r) => r.id)).toEqual(["big-loss", "mid-gain"]);
+    expect(omittedCount).toBe(2);
+  });
+
+  it("compares exact decimals, not floats", () => {
+    const rows: Row[] = [
+      { id: "a", value: "-1.000000000000000001" },
+      { id: "b", value: "1.000000000000000002" },
+    ];
+
+    expect(rankByAbsoluteValue(rows, (r) => r.value, 2).ranked.map((r) => r.id)).toEqual(["b", "a"]);
+  });
+
+  it("keeps the input order for equal magnitudes", () => {
+    const rows: Row[] = [
+      { id: "first", value: "-5" },
+      { id: "second", value: "5" },
+    ];
+
+    expect(rankByAbsoluteValue(rows, (r) => r.value, 2).ranked.map((r) => r.id)).toEqual(["first", "second"]);
   });
 });

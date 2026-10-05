@@ -154,6 +154,13 @@ describe('buildImplementedTools wiring', () => {
       priceHistory: portStub([price('BTC', 'EUR', '50000.00')]),
       fiscalIntegrityRows: { execute: notUsed },
       tokenLots: { execute: notUsed },
+      txSearch: { execute: notUsed },
+      portfolioScenario: { positionValue: notUsed, breakeven: notUsed, portfolioShock: notUsed, concentration: notUsed },
+      custodyLocations: { execute: notUsed },
+      derivativesPnl: { execute: notUsed },
+      taxYearComparison: { execute: notUsed },
+      listAccounts: { execute: notUsed },
+      holdingDetail: { execute: notUsed },
     };
     const configs: ToolConfigs = {
       portfolioSummary: { topNHoldings: 15, maxChars: 4000 },
@@ -169,6 +176,18 @@ describe('buildImplementedTools wiring', () => {
       livePrices: { maxChars: 2000, currency: 'EUR' },
       fiscalIntegrityRows: { rowsPageSize: 25, maxChars: 4000 },
       tokenLots: { lotsPageSize: 20, maxChars: 4000 },
+      txSearch: { rowsPageSize: 25, maxChars: 5000 },
+      concentrationRisk: { maxChars: 2000 },
+      scenarioPortfolioShock: { topNHoldings: 15, maxChars: 4000 },
+      breakevenPrice: { maxChars: 1500 },
+      scenarioPositionValue: { maxChars: 1500 },
+      explainMetric: { maxChars: 2000 },
+      dataGaps: { maxChars: 4000 },
+      custodyLocations: { topNHoldings: 15, maxChars: 4000 },
+      derivativesPnl: { topNHoldings: 15, maxChars: 4000 },
+      taxYearComparison: { maxChars: 4000 },
+      accountHoldings: { topNHoldings: 15, maxChars: 5000 },
+      holdingDetail: { maxChars: 3000 },
     };
     const tool = buildImplementedTools(useCases, configs).portfolio_summary;
     if (!tool.execute) throw new Error('expected tool.execute');

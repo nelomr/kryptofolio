@@ -55,7 +55,7 @@ describe('ToolCallFilter preserves current-turn tool results and filters recalle
       },
     });
 
-    const taxAnalyst = buildTaxAnalystAgent({}, taxAnalystModel);
+    const taxAnalyst = buildTaxAnalystAgent({}, taxAnalystModel, 'metered');
     const memory = new Memory({ storage: new LibSQLStore({ id: 'test-advisor-recall', url: ':memory:' }) });
     const advisor = buildAdvisorAgent({ model: advisorModel, memory, taxAnalyst });
 

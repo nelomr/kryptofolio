@@ -31,7 +31,7 @@ function everySourceFile(root: string): string[] {
 
 describe('Supervisor Agent With Phased Sub-Agents', () => {
   it('constructs advisor with agents: { taxAnalyst }, leaves investmentAnalyst absent from that map, and only advisor holds Memory', async () => {
-    const taxAnalyst = buildTaxAnalystAgent({}, textOnlyModel('irrelevant'));
+    const taxAnalyst = buildTaxAnalystAgent({}, textOnlyModel('irrelevant'), 'metered');
     const investmentAnalyst = buildInvestmentAnalystAgent(textOnlyModel('irrelevant'));
     const advisor = buildAdvisorAgent({
       model: textOnlyModel('irrelevant'),

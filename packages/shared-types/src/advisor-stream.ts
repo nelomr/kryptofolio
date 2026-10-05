@@ -29,8 +29,56 @@ export const ADVISOR_TOOL_NAMES = [
   'live_prices',
   'fiscal_integrity_rows',
   'token_lots',
+  'holding_detail',
+  'account_holdings',
+  'tax_year_comparison',
+  'derivatives_pnl',
+  'custody_locations',
+  'data_gaps',
+  'explain_metric',
+  'scenario_position_value',
+  'breakeven_price',
+  'scenario_portfolio_shock',
+  'concentration_risk',
+  'tx_search',
 ] as const;
 export type AdvisorToolName = (typeof ADVISOR_TOOL_NAMES)[number];
+
+/**
+ * `core` is what a small local model is shown; `extended` adds the detail and drill-down tools that
+ * only metered and mixed runs expose. Static on purpose: a per-tool setting would be a persisted
+ * choice the user cannot judge well.
+ */
+export const ADVISOR_TOOL_TIER_VALUES = ['core', 'extended'] as const;
+export type AdvisorToolTier = (typeof ADVISOR_TOOL_TIER_VALUES)[number];
+
+export const ADVISOR_TOOL_TIERS: Record<AdvisorToolName, AdvisorToolTier> = {
+  portfolio_summary: 'core',
+  fiscal_integrity: 'core',
+  token_history: 'core',
+  asset_allocation: 'core',
+  risk_metrics: 'extended',
+  drawdown_curve: 'extended',
+  performance_history: 'extended',
+  kpis: 'core',
+  volatility_heatmap: 'extended',
+  spanish_tax_report: 'core',
+  live_prices: 'core',
+  fiscal_integrity_rows: 'extended',
+  token_lots: 'extended',
+  holding_detail: 'core',
+  account_holdings: 'core',
+  tax_year_comparison: 'core',
+  derivatives_pnl: 'extended',
+  custody_locations: 'extended',
+  data_gaps: 'core',
+  explain_metric: 'core',
+  scenario_position_value: 'core',
+  breakeven_price: 'core',
+  scenario_portfolio_shock: 'extended',
+  concentration_risk: 'extended',
+  tx_search: 'extended',
+} satisfies Record<AdvisorToolName, AdvisorToolTier>;
 
 export const ADVISOR_FAILURE_CODES = [
   'NO_MODEL_AVAILABLE',
@@ -281,6 +329,18 @@ const METERED_TOOL_BUDGETS = {
   live_prices: 2000,
   fiscal_integrity_rows: 4000,
   token_lots: 4000,
+  holding_detail: 3000,
+  account_holdings: 5000,
+  tax_year_comparison: 4000,
+  derivatives_pnl: 4000,
+  custody_locations: 4000,
+  data_gaps: 4000,
+  explain_metric: 2000,
+  scenario_position_value: 1500,
+  breakeven_price: 1500,
+  scenario_portfolio_shock: 4000,
+  concentration_risk: 2000,
+  tx_search: 5000,
 } as const satisfies Record<AdvisorToolName, number>;
 
 const MAX_STEPS_CEILING = 30;

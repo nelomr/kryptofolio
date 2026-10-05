@@ -52,3 +52,16 @@ describe('advisor domain files stay isolated', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the effective spot-transaction view stays pure domain', () => {
+  it('imports only sibling domain modules and shared-types', () => {
+    const source = fs.readFileSync(
+      path.join(domainDir, 'services/EffectiveSpotTransactionView.ts'),
+      'utf-8',
+    );
+    const offenders = importSpecifiers(source).filter(
+      (specifier) => !specifier.startsWith('.') && specifier !== '@kryptofolio/shared-types',
+    );
+    expect(offenders).toEqual([]);
+  });
+});

@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import type { ToolsInput, ModelWithRetries } from '@mastra/core/agent';
 import type { MastraModelConfig } from '@mastra/core/llm';
+import type { ExecutionProfileKind } from '@kryptofolio/shared-types';
 import { advisorRequestContextSchema } from '../advisorRequestContext.js';
 import { buildTaxAnalystInstructions } from '../prompts/buildTaxAnalystInstructions.js';
 
@@ -9,12 +10,16 @@ import { buildTaxAnalystInstructions } from '../prompts/buildTaxAnalystInstructi
  * `advisor`'s own tool-call loop — never directly by a route or use case. It carries no `Memory` of
  * its own; that's reserved for `advisor` alone. Takes Mastra's own `ToolsInput` rather than the
  * full `AdvisorTools` catalogue shape — the composition root is what guarantees all
- * thirteen tools are actually supplied; this factory only needs a valid tool map.
+ * exposed tools are actually supplied; this factory only needs a valid tool map.
  *
  * `model` accepts a resolved fallback array too — `taxAnalyst` answers
  * through the same resolved chain `advisor` does, not a separately-configured single model.
  */
-export function buildTaxAnalystAgent(tools: ToolsInput, model: MastraModelConfig | ModelWithRetries[]) {
+export function buildTaxAnalystAgent(
+  tools: ToolsInput,
+  model: MastraModelConfig | ModelWithRetries[],
+  profile: ExecutionProfileKind,
+) {
   return new Agent({
     id: 'tax-analyst',
     name: 'taxAnalyst',
@@ -23,6 +28,7 @@ export function buildTaxAnalystAgent(tools: ToolsInput, model: MastraModelConfig
       buildTaxAnalystInstructions({
         locale: requestContext.get('locale'),
         baseCurrency: requestContext.get('baseCurrency'),
+        profile,
       }),
     model,
     tools,

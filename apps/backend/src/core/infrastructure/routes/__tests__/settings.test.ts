@@ -4,7 +4,13 @@ import settingsApi from '../settings';
 import { container } from '../../di/container';
 
 
-vi.mock('../../di/container', () => ({
+vi.mock('../../di/container', async () => {
+  const { ListAccountsUseCase } = await import('../../../application/use-cases/accounts/ListAccountsUseCase.js');
+  const ledgerPort = {
+    getAccounts: vi.fn(),
+    ensureAccountExists: vi.fn(),
+  };
+  return {
   container: {
     userSettingsPort: {
       getSetting: vi.fn(),
@@ -22,12 +28,11 @@ vi.mock('../../di/container', () => ({
     updateActiveMarketProviderUseCase: {
       execute: vi.fn(),
     },
-    ledgerPort: {
-      getAccounts: vi.fn(),
-      ensureAccountExists: vi.fn(),
-    },
+    ledgerPort,
+    listAccountsUseCase: new ListAccountsUseCase(ledgerPort),
   },
-}));
+  };
+});
 
 describe('Settings API', () => {
   const app = new Hono().route('/settings', settingsApi);

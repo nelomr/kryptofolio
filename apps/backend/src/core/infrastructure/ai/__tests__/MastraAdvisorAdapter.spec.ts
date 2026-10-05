@@ -106,6 +106,13 @@ function buildStubToolUseCases(): ToolUseCases {
     priceHistory: { getLatest: notUsed, getTrackedSymbols: notUsed },
     fiscalIntegrityRows: { execute: notUsed },
     tokenLots: { execute: notUsed },
+    txSearch: { execute: notUsed },
+    portfolioScenario: { positionValue: notUsed, breakeven: notUsed, portfolioShock: notUsed, concentration: notUsed },
+    custodyLocations: { execute: notUsed },
+    derivativesPnl: { execute: notUsed },
+    taxYearComparison: { execute: notUsed },
+    listAccounts: { execute: notUsed },
+    holdingDetail: { execute: notUsed },
   };
 }
 
@@ -305,7 +312,10 @@ describe('MastraAdvisorAdapter', () => {
         'profile.settings.lotsPageSize',
         'profile.settings.lotsPageSize',
       ]);
-      expect(propertyInitializers(source, 'rowsPageSize')).toEqual(['profile.settings.rowsPageSize']);
+      expect(propertyInitializers(source, 'rowsPageSize')).toEqual([
+        'profile.settings.rowsPageSize',
+        'profile.settings.rowsPageSize',
+      ]);
     });
 
     it('the initializer scan reports a literal page size', () => {

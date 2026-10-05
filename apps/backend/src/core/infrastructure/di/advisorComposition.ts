@@ -21,6 +21,11 @@ export interface ToolUseCaseSource {
   readonly getVolatilityHeatmapUseCase: ToolUseCases['volatilityHeatmap'];
   readonly getSpanishTaxReportUseCase: ToolUseCases['spanishTaxReport'];
   readonly priceHistoryPort: ToolUseCases['priceHistory'];
+  readonly listAccountsUseCase: ToolUseCases['listAccounts'];
+  readonly getDerivativesPnlUseCase: ToolUseCases['derivativesPnl'];
+  readonly getLotCustodyLocationsUseCase: ToolUseCases['custodyLocations'];
+  readonly getPortfolioScenarioUseCase: ToolUseCases['portfolioScenario'];
+  readonly searchSpotTransactionsUseCase: ToolUseCases['txSearch'];
 }
 
 /**
@@ -43,6 +48,13 @@ export function lateBoundToolUseCases(source: ToolUseCaseSource): ToolUseCases {
     get priceHistory() { return source.priceHistoryPort; },
     get fiscalIntegrityRows() { return source.getFiscalIntegrityUseCase; },
     get tokenLots() { return source.getTokenHistoryUseCase; },
+    get holdingDetail() { return source.getPortfolioSummaryUseCase; },
+    get listAccounts() { return source.listAccountsUseCase; },
+    get taxYearComparison() { return source.getSpanishTaxReportUseCase; },
+    get derivativesPnl() { return source.getDerivativesPnlUseCase; },
+    get custodyLocations() { return source.getLotCustodyLocationsUseCase; },
+    get portfolioScenario() { return source.getPortfolioScenarioUseCase; },
+    get txSearch() { return source.searchSpotTransactionsUseCase; },
   };
 }
 

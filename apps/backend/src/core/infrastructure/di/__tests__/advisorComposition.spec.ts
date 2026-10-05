@@ -45,6 +45,11 @@ const SOURCE_KEYS = [
   'getVolatilityHeatmapUseCase',
   'getSpanishTaxReportUseCase',
   'priceHistoryPort',
+  'listAccountsUseCase',
+  'getDerivativesPnlUseCase',
+  'getLotCustodyLocationsUseCase',
+  'getPortfolioScenarioUseCase',
+  'searchSpotTransactionsUseCase',
 ] as const satisfies readonly (keyof ToolUseCaseSource)[];
 
 /** Every entry throws when read unless overridden, so a test proves which ones it actually touches. */

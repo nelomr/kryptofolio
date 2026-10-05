@@ -8,7 +8,12 @@
  * show the override's value when that field's flag is set, otherwise the original.
  */
 import { describe, it, expect } from 'vitest';
-import { toEffectiveSpotTransaction } from '../EffectiveSpotTransactionView';
+import {
+  toEffectiveSpotTransaction,
+  withOverrideView,
+  editedFieldsOf,
+  type SpotTransactionOverrideView,
+} from '../EffectiveSpotTransactionView';
 import type { LedgerSpotTransaction, LedgerSpotTransactionOverride } from '../../ports/ILedgerPort';
 
 function baseTx(overrides: Partial<LedgerSpotTransaction> = {}): LedgerSpotTransaction {
@@ -119,5 +124,61 @@ describe('toEffectiveSpotTransaction', () => {
     expect(effective.id_hash).toBe('hash-1');
     expect(effective.account_id).toBe('acc-1');
     expect(effective.timestamp).toBe('2025-06-01T00:00:00.000Z');
+  });
+});
+
+describe('editedFieldsOf', () => {
+  it('lists exactly the fields whose flag is set, and the fee whenever it is not UNCHANGED', () => {
+    expect(editedFieldsOf(noOverride('h'))).toEqual([]);
+    expect(
+      editedFieldsOf({
+        ...noOverride('h'),
+        amount_in_edited: true,
+        price_edited: true,
+        fee_kind: 'NONE',
+        tx_type_edited: true,
+      }),
+    ).toEqual(['amount_in', 'price_fiat', 'fee', 'tx_type']);
+  });
+});
+
+describe('withOverrideView', () => {
+  it('marks an untouched row NONE and carries its original values', () => {
+    const tx = baseTx();
+
+    const [row] = withOverrideView([tx], []);
+
+    expect(row?.override).toEqual<SpotTransactionOverrideView>({ kind: 'NONE' });
+    expect(row?.price_fiat).toBe('1.5');
+  });
+
+  it('shows effective values on an edited row and keeps the pre-edit row under override.original', () => {
+    const tx = baseTx();
+    const override: LedgerSpotTransactionOverride = {
+      ...noOverride('hash-1'),
+      tx_type_edited: true,
+      tx_type: 'SELL',
+    };
+
+    const [row] = withOverrideView([tx], [override]);
+
+    expect(row?.tx_type).toBe('SELL');
+    expect(row?.override).toEqual({ kind: 'ACTIVE', original: tx, editedFields: ['tx_type'] });
+  });
+
+  it('keeps an explicit zero fee as a charged zero instead of collapsing it into no fee', () => {
+    const tx = baseTx();
+    const override: LedgerSpotTransactionOverride = {
+      ...noOverride('hash-1'),
+      fee_kind: 'CHARGED',
+      fee_amount: '0' as NonNullable<LedgerSpotTransaction['fee_amount']>,
+      fee_asset_id: 'EUR',
+    };
+
+    const [row] = withOverrideView([tx], [override]);
+
+    expect(row?.fee_amount).toBe('0');
+    expect(row?.fee_asset_id).toBe('EUR');
+    expect(row?.override).toMatchObject({ kind: 'ACTIVE', editedFields: ['fee'] });
   });
 });

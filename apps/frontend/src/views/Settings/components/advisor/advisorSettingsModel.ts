@@ -153,23 +153,11 @@ function limitsToText(source: Record<LimitField, number>): LimitsDraft {
   }
 }
 
-/** Spelled out key by key so a tool added to the catalogue fails to compile here instead of rendering no input. */
 function toolBudgetsToText(budgets: Record<AdvisorToolName, number>): Record<AdvisorToolName, string> {
-  return {
-    portfolio_summary: String(budgets.portfolio_summary),
-    fiscal_integrity: String(budgets.fiscal_integrity),
-    token_history: String(budgets.token_history),
-    asset_allocation: String(budgets.asset_allocation),
-    risk_metrics: String(budgets.risk_metrics),
-    drawdown_curve: String(budgets.drawdown_curve),
-    performance_history: String(budgets.performance_history),
-    kpis: String(budgets.kpis),
-    volatility_heatmap: String(budgets.volatility_heatmap),
-    spanish_tax_report: String(budgets.spanish_tax_report),
-    live_prices: String(budgets.live_prices),
-    fiscal_integrity_rows: String(budgets.fiscal_integrity_rows),
-    token_lots: String(budgets.token_lots),
-  }
+  return Object.fromEntries(ADVISOR_TOOL_NAMES.map((tool) => [tool, String(budgets[tool])])) as Record<
+    AdvisorToolName,
+    string
+  >
 }
 
 export function draftFromProfiles(profiles: ExecutionProfiles): ExecutionProfilesDraft {

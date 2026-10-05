@@ -1,5 +1,8 @@
 # 📊 Kryptofolio
 
+> **Gestor de carteras cripto autoalojado, centrado en la privacidad y motor fiscal institucional.**  
+> Diseñado con Arquitectura Hexagonal, un motor dual SQLite/DuckDB y precisión financiera sin pérdida (`PreciseAmount`). Creado para inversores que exigen custodia soberana de sus datos y cumplimiento FIFO auditable.
+
 [![Release](https://img.shields.io/github/v/release/nelomr/kryptofolio?style=flat-square&logo=github&label=version)](https://github.com/nelomr/kryptofolio/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/nelomr/kryptofolio/ci.yml?branch=main&style=flat-square&logo=github-actions&label=CI)](https://github.com/nelomr/kryptofolio/actions/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue?style=flat-square)](./CHANGELOG.md)
@@ -11,9 +14,17 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
+### ¿Por qué Kryptofolio?
+
+- 🔒 **100% Local y Autosoberano:** Sin costes mensuales SaaS, sin telemetría y sin exponer el saldo de tus carteras ni tus direcciones a terceros. Las claves API se almacenan en un baúl cifrado localmente mediante AES-256-GCM con limpieza de memoria RAM (*RAM scrubbing*).
+- ⚖️ **Motor Fiscal FIFO Conforme a Normativa:** Cálculo nativo y riguroso adaptado al IRPF español (criterio AEAT). Las transferencias entre carteras y custodios propios nunca generan hechos imponibles artificiales.
+- ⚡ **Analítica Institucional de Alto Rendimiento:** Consultas analíticas OLAP mediante DuckDB sobre series temporales particionadas en Parquet, calculando volatilidad, Ratio de Sharpe, Alpha, Beta y drawdowns desde máximos (ATH) en submilisegundos.
+- 🏛️ **Precisión Financiera Absoluta:** Erradicación total de los errores de punto flotante IEEE-754 mediante objetos de valor marcados (*branded types*) `PreciseAmount`.
+- 🤖 **Asesor IA de Solo Lectura:** Consulta tu cartera e informes fiscales de manera privada mediante Ollama o proveedores externos opcionales, sin riesgo de alucinaciones matemáticas.
+
 > **Kryptofolio** es un dashboard de portafolio cripto y fiscal de código abierto, construido con Vue 3 y Arquitectura Hexagonal estricta (Puertos y Adaptadores). Funciona como una capa de presentación visual que muestra información fiscal y de transacciones calculada por el backend, utilizando un backend centralizado (`apps/backend`) para conectar la interfaz con las fuentes de datos.
 >
-> ⚠️ **Nota:** Este proyecto nace como una iniciativa de aprendizaje y se encuentra en desarrollo continuo en sus primeras etapas.
+> ⚠️ **Nota:** Este proyecto nace como una iniciativa de aprendizaje y se encuentra en desarrollo continuo.
 
 ## ✨ Características Principales
 

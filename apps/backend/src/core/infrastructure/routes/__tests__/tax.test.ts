@@ -105,6 +105,21 @@ describe('Tax Route API', () => {
       expect(body.find((r) => r.id_hash === 'hash-usd')?.fiat_currency).toBe('USD');
     });
 
+    it('returns rows oldest first, an ordering that comes from the ledger query and that the use case preserves', async () => {
+      sqliteDb
+        .prepare(
+          `INSERT INTO spot_transactions
+             (id, id_hash, account_id, tx_type, asset_in_id, amount_in, total_fiat, price_fiat, fiat_currency, timestamp, status)
+           VALUES ('tx-oldest', 'hash-oldest', 'acc-1', 'BUY', 'BTC', '1.0', '1', '1', 'EUR', '2025-06-01T00:00:00Z', 'COMPLETED')`,
+        )
+        .run();
+
+      const res = await app.request('/tax/transactions/spot');
+      const body = (await res.json()) as { id_hash: string }[];
+
+      expect(body.map((r) => r.id_hash)).toEqual(['hash-oldest', 'hash-plain', 'hash-edited', 'hash-usd']);
+    });
+
     it('marks a row with no override as { kind: "NONE" }', async () => {
       const res = await app.request('/tax/transactions/spot');
       const body = (await res.json()) as { id_hash: string; override: { kind: string } }[];

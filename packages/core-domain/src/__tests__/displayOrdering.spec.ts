@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderByCountDescending, orderByIsoDateDescending } from "../domain/services/displayOrdering";
+import { orderByCountDescending, orderByIsoDateDescending, orderByIsoDateDescendingThenKey } from "../domain/services/displayOrdering";
 
 type Group = { id: string; count: number };
 type Lot = { id: string; date: string };
@@ -78,5 +78,47 @@ describe("orderByIsoDateDescending", () => {
 
     expect(lots).toEqual(snapshot);
     expect(result).not.toBe(lots);
+  });
+});
+
+describe("orderByIsoDateDescendingThenKey", () => {
+  type Tx = { hash: string; at: string };
+
+  it("orders newest first and breaks a tie on the key ascending", () => {
+    const txs: Tx[] = [
+      { hash: "b", at: "2025-01-02T00:00:00.000Z" },
+      { hash: "z", at: "2025-03-01T00:00:00.000Z" },
+      { hash: "a", at: "2025-01-02T00:00:00.000Z" },
+    ];
+
+    const result = orderByIsoDateDescendingThenKey(txs, (t) => t.at, (t) => t.hash);
+
+    expect(result.map((t) => t.hash)).toEqual(["z", "a", "b"]);
+  });
+
+  it("returns the same order whatever order the input arrives in", () => {
+    const txs: Tx[] = [
+      { hash: "c", at: "2025-01-01T00:00:00.000Z" },
+      { hash: "a", at: "2025-01-01T00:00:00.000Z" },
+      { hash: "b", at: "2025-01-01T00:00:00.000Z" },
+    ];
+
+    const forward = orderByIsoDateDescendingThenKey(txs, (t) => t.at, (t) => t.hash);
+    const backward = orderByIsoDateDescendingThenKey([...txs].reverse(), (t) => t.at, (t) => t.hash);
+
+    expect(forward.map((t) => t.hash)).toEqual(["a", "b", "c"]);
+    expect(backward).toEqual(forward);
+  });
+
+  it("does not mutate its input", () => {
+    const txs: Tx[] = [
+      { hash: "b", at: "2025-01-01" },
+      { hash: "a", at: "2025-01-02" },
+    ];
+    const snapshot = [...txs];
+
+    orderByIsoDateDescendingThenKey(txs, (t) => t.at, (t) => t.hash);
+
+    expect(txs).toEqual(snapshot);
   });
 });

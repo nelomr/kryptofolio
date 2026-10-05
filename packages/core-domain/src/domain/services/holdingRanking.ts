@@ -30,3 +30,18 @@ export function rankHoldingsByValue<T>(
 
   return { ranked, omittedCount, unvalued };
 }
+
+/** Ranks by magnitude, so a large loss outranks a small gain. `Array.prototype.sort` is stable, so equal magnitudes keep input order. */
+export function rankByAbsoluteValue<T>(
+  items: readonly T[],
+  valueOf: (item: T) => string,
+  topN: number,
+): { ranked: readonly T[]; omittedCount: number } {
+  const measured = items.map((item) => ({ item, magnitude: new Money(valueOf(item)).abs() }));
+  measured.sort((a, b) => b.magnitude.compareTo(a.magnitude));
+
+  return {
+    ranked: measured.slice(0, topN).map((entry) => entry.item),
+    omittedCount: Math.max(measured.length - topN, 0),
+  };
+}

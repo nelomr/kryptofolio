@@ -73,7 +73,7 @@ flowchart LR
 
     subgraph AI["Agent graph (per request)"]
         Sup["advisor<br/>supervisor"]
-        Tax["taxAnalyst<br/>13 read-only tools"]
+        Tax["taxAnalyst<br/>up to 25 read-only tools"]
         Inv["investmentAnalyst<br/>declared, unreachable"]
         Sup -->|agents map| Tax
         Sup -.-x Inv
@@ -185,12 +185,13 @@ Composition notes worth knowing:
 
 - `app.ts` builds `AdvisorRouteDeps` with getters, so importing `app` never opens `ai-advisor.db` or the ledger. `container.askAdvisorUC` is constructed on the first advisor request.
 - `lateBoundToolUseCases(container)` resolves each tool's use case from the container on every run. The container replaces its analytical use cases when the real DuckDB connection is bound at startup; a captured reference would keep answering from the uninitialised guard.
-- `fiscal_integrity` and `fiscal_integrity_rows` share `GetFiscalIntegrityUseCase`; `token_history` and `token_lots` share `GetTokenHistoryUseCase`.
+- `fiscal_integrity` and `fiscal_integrity_rows` share `GetFiscalIntegrityUseCase`; `token_history` and `token_lots` share `GetTokenHistoryUseCase`; `holding_detail`, `account_holdings` and `data_gaps` read `GetPortfolioSummaryUseCase`, and `tax_year_comparison` reads `GetSpanishTaxReportUseCase` twice.
+- Tool factories receive use cases, never ports. The use cases added for the catalogue are `ListAccountsUseCase` (non-synthetic accounts, also used by `GET /settings/accounts`), `GetDerivativesPnlUseCase`, `GetLotCustodyLocationsUseCase`, `GetPortfolioScenarioUseCase` and `SearchSpotTransactionsUseCase` (also used by `GET /tax/transactions/spot`).
 
 ## 5. Agent topology: supervisor and specialists
 
 - **`advisor`** (`agents/advisor.ts`) is the supervisor. It owns `Memory`, an input `ToolCallFilter` and the two output processors. It never calls a catalogue tool itself; it delegates to `taxAnalyst` through the `agents` map and relays the answer with every figure preserved. Its instructions add only response language and the "never originate a figure" rule.
-- **`taxAnalyst`** (`agents/taxAnalyst.ts`) holds all thirteen tools and carries no memory. Its instructions (`buildTaxAnalystInstructions`) are a byte-stable prefix plus a trailing `Response format` line that carries locale and base currency, so the prefix stays cache-friendly.
+- **`taxAnalyst`** (`agents/taxAnalyst.ts`) holds the tools its execution profile exposes (fourteen for a local run, twenty-five for metered and mixed; see [section 9](#9-the-tool-catalogue)) and carries no memory. Its instructions (`buildTaxAnalystInstructions`) list exactly the exposed tools, so the prompt never names a tool the model cannot call; they are a prefix that is byte-stable per profile plus a trailing `Response format` line that carries locale and base currency, so the prefix stays cache-friendly.
 - **`investmentAnalyst`** (`agents/investmentAnalyst.ts`) is declared with instructions and a contract but holds no tools and is **not** in `advisor`'s `agents` map, so nothing can reach it. It exists so a later phase adds tools plus one line of wiring rather than a redesign. `advisorTopology.spec.ts` asserts this and that `.network()` is never used.
 
 The supervisor pattern uses the `agents` map (Mastra's replacement for the deprecated agent-network primitive). `deterministicDelegation.spec.ts` asserts a normal run costs exactly two model calls (decide, then finalise), never a third spent choosing among sub-agents. This matters for Ollama Cloud's one-concurrent-request free tier.
@@ -325,6 +326,20 @@ A tool result is measured as the length of its JSON encoding in **characters**, 
 | `live_prices` | 2000 |
 | `fiscal_integrity_rows` | 4000 |
 | `token_lots` | 4000 |
+| `holding_detail` | 3000 |
+| `account_holdings` | 5000 |
+| `tax_year_comparison` | 4000 |
+| `data_gaps` | 4000 |
+| `scenario_position_value` | 1500 |
+| `breakeven_price` | 1500 |
+| `explain_metric` | 2000 |
+| `derivatives_pnl` | 4000 |
+| `custody_locations` | 4000 |
+| `scenario_portfolio_shock` | 4000 |
+| `concentration_risk` | 2000 |
+| `tx_search` | 5000 |
+
+A stored `ai_advisor_execution_profiles` row written before a tool existed still loads: on read, the stored `toolBudgets` are laid over the defaults key by key, so a new tool takes its default budget. Every other stored field stays required, and `PUT` still demands every key.
 
 **Local:** budgets are never stored; they derive from the declared `contextWindow` at 4 characters per token.
 
@@ -337,7 +352,21 @@ For a declared window of 8192: 4915 per tool and 19660 per run. Both formulas li
 
 ## 9. The tool catalogue
 
-`taxAnalyst` holds thirteen read-only tools (`ADVISOR_TOOL_NAMES`). Inputs are strict Zod objects: unknown fields are rejected. Symbols must match `^[A-Z0-9.]{1,20}$`. **No tool accepts an account id**; every tool reads all accounts together, and a model that sends `accountId` fails as `INVALID_TOOL_INPUT`. Tax figures are per asset across accounts regardless.
+`taxAnalyst` defines twenty-five read-only tools (`ADVISOR_TOOL_NAMES`). Inputs are strict Zod objects: unknown fields are rejected. Symbols are upper-cased and must then match `^[A-Z0-9.]{1,20}$`. **No tool accepts an account id**; every tool reads all accounts together, except `account_holdings`, which takes an account **name** and resolves it server-side. A model that sends `accountId` fails as `INVALID_TOOL_INPUT`. Tax figures are per asset across accounts regardless. No tool accepts a quantity or a currency.
+
+### Tiers per execution profile
+
+Each tool belongs to one tier in `ADVISOR_TOOL_TIERS` (shared-types), checked with `satisfies` so a tool cannot be added without one. The selection is static code, not a setting, and is applied by `selectExposedTools` in `ai/tools/toolExposure.ts` when `MastraAdvisorAdapter.ask` builds the `taxAnalyst` tool map.
+
+| Profile | Exposed tools |
+|---|---|
+| `local` | the 14 `core` tools |
+| `metered`, `mixed` | all 25 tools |
+
+- **core (14):** `portfolio_summary`, `holding_detail`, `account_holdings`, `kpis`, `asset_allocation`, `spanish_tax_report`, `tax_year_comparison`, `fiscal_integrity`, `data_gaps`, `token_history`, `live_prices`, `scenario_position_value`, `breakeven_price`, `explain_metric`.
+- **extended (11):** `fiscal_integrity_rows`, `token_lots`, `risk_metrics`, `drawdown_curve`, `performance_history`, `volatility_heatmap`, `derivatives_pnl`, `custody_locations`, `scenario_portfolio_shock`, `concentration_risk`, `tx_search`.
+
+Small local models pick measurably worse from a long tool list, which is why a local run sees only the core tier. The local prompt says a detail tool exists in a larger profile.
 
 All tools return a discriminated union: `{ kind: 'ok', payload }` or `{ kind: 'truncated', maxChars, actualChars }`.
 
@@ -356,6 +385,18 @@ All tools return a discriminated union: `{ kind: 'ok', payload }` or `{ kind: 't
 | `volatility_heatmap` | `GetVolatilityHeatmapUseCase` | `year?` (integer) | `cells` of `date` and `volatility`, downsampled to at most 120, `omittedCount`. |
 | `spanish_tax_report` | `GetSpanishTaxReportUseCase` | `year` (integer, at least 2009), `method?` | IRPF `summary`, unconvertible and excluded counters, `auditTrail` capped at 20 rows, `omittedCount`. Always EUR. |
 | `live_prices` | `IPriceHistoryPort.getLatest` | `symbols` (1 to 25) | `prices` (`price`, `currency`, `timestamp`, `provider`, `stalenessSeconds`) and `notTracked`. |
+| `holding_detail` | `GetPortfolioSummaryUseCase` | `symbol` | One of `valued` (holding with value), `unvalued` (quantity and cost basis only) or `not_held`. Finds a holding outside the `portfolio_summary` top-N. Base currency. |
+| `account_holdings` | `ListAccountsUseCase`, `GetPortfolioSummaryUseCase` | `accountName` (trimmed, 1 to 64) | `resolved` with one section per account in the resolved account's tree (own `metrics`, `ranked`, `omittedCount`, `unvalued`) plus `emptyAccountCount`; or `ambiguous` (candidate names) or `not_found` (top-level names). Exact case-insensitive match first, a prefix only if none matches exactly. Never sums across accounts. |
+| `tax_year_comparison` | `GetSpanishTaxReportUseCase` (twice) | `yearA`, `yearB` (distinct, at least 2009), `method?` | Per year `summary`, `unconvertibleCount`, `excludedFlaggedEvents`, `excludedUnresolvedIncomeCount`, `completeness`; `deltas` (second year minus first) computed by `compareTaxSummaries`, each `delta`, or `delta_incomparable` when either year is incomplete. EUR, no audit trail. |
+| `data_gaps` | `GetPortfolioSummaryUseCase`, `GetFiscalIntegrityUseCase` | none | `unvalued` split into `no_price` and `no_rate` (symbol and quantity only), `integrity` (at most 10 groups, `totalDefects`, `needsRecalculation`) and a fixed `nextTools` list. |
+| `explain_metric` | static table | `metric` (closed `MetricId` enum) | The definition in the request locale and `producedBy`, the tool that reports the metric. Text states formulas in words with no example numbers. |
+| `scenario_position_value` | `GetPortfolioScenarioUseCase` | `symbol`, `hypotheticalPrice` | `computed` (`positionValue`, `deltaVsCurrent`, `impliedAllocationPct`), `not_held`, `unvalued` (position value only) or `empty_portfolio`; each with `currency`. Quantity always comes from the ledger. |
+| `breakeven_price` | `GetPortfolioScenarioUseCase` | `symbol` | `computed` (`avgUnitCost`), `not_held`, `unconvertible_cost_basis` or `zero_quantity`. Uses the holdings cost basis, which can differ from `kpis`. |
+| `derivatives_pnl` | `GetDerivativesPnlUseCase` | none | Contracts ranked by absolute realized PnL and capped at `topNHoldings` (`realizedPnl`, `funding`, `fees`, `netPnl`, `currency`), `omittedCount`. |
+| `custody_locations` | `GetLotCustodyLocationsUseCase` | `symbol?` | Quantity per non-synthetic account and asset (`lotCount`), capped at `topNHoldings`, `omittedCount`, and `syntheticRowCount` for the `ownwallet-*` rows it does not list. Reads the custody ledger only; location has no effect on taxation. |
+| `scenario_portfolio_shock` | `GetPortfolioScenarioUseCase` | `shock`: `{ kind: 'uniform', pct }` or `{ kind: 'per_asset', shocks }` (1 to 25 entries); `pct` from -100 to 1000 | `computed` (per-asset `before` and `after` capped at `topNHoldings`, `omittedCount`, `totalBefore`, `totalAfter`, `delta`, `unvaluedSymbols`, `notHeld`) or `empty_portfolio`. Unlisted assets stay put in a per-asset shock. |
+| `concentration_risk` | `GetPortfolioScenarioUseCase` | none | `all` and `excludingStablecoins` blocks (`computed` with `top1Weight`, `top3Weight`, `hhi` on a zero to one scale, `effectiveHoldings`, or `empty`), `stablecoinWeight` (`null` when nothing is valued) and `unvaluedCount`. |
+| `tx_search` | `SearchSpotTransactionsUseCase` | `symbol?`, `from?`, `to?` (inclusive days), `types?` (non-empty), `page` (default 1) | One page (`rowsPageSize`) of rows (`date`, `type`, assets and amounts, `priceFiat`, `totalFiat`, `fiatCurrency`, `fee` as `NONE` or `CHARGED`, `exchange`, `edited`), newest first, with `page`, `pageSize`, `totalPages`, `totalCount`. A page past the end is an empty `ok` result with the true totals. Filters run on the edited values; the pre-edit row is never returned. |
 
 Example `portfolio_summary` result as the model sees it (shape only; figures are illustrative):
 
@@ -399,7 +440,8 @@ Tool failures surface on the stream as `tool-error` with `INVALID_TOOL_INPUT` (M
 - `portfolio_summary`, `kpis`, `asset_allocation` and `live_prices` honour the user's base currency, read server-side from settings and injected through the request context. The model never supplies a currency.
 - `asset_allocation` converts the canonical-EUR daily valuation at the rate of the valuation date (`VALUATION_CONVERTED`, like `kpis`). A holding with no price series, or no exchange rate, is `unvalued`: it reports its quantity and is excluded from every percentage, never passed through at a factor of one.
 - `risk_metrics`, `drawdown_curve` and `volatility_heatmap` return ratios, percentages or statistics with no currency.
-- `spanish_tax_report` is always EUR, as IRPF requires.
+- `spanish_tax_report` and `tax_year_comparison` are always EUR, as IRPF requires.
+- `holding_detail`, `account_holdings`, `data_gaps`, the four scenario tools and `derivatives_pnl` read the base currency from the request context. Scenario results carry a `currency` field. `custody_locations` returns quantities and `tx_search` rows carry each row's own `fiatCurrency`.
 - `performance_history` honours the base currency: each point is converted at the latest stored `EUR/<base>` rate on or before that point's own date (`VALUATION_CONVERTED`, like `kpis`), and the result's `currency` field states it. A point no rate covers has `portfolioValue: null`, never an EUR value or `0`. `drawdownPct` is a ratio and stays derived from the EUR series, so it does not depend on the base currency.
 
 The agent is instructed to state each result's declared currency beside the figure and never to convert or relabel.
@@ -410,9 +452,19 @@ The agent is instructed to state each result's declared currency beside the figu
 - `token_history` returns one page of lots, not a fixed top 20; the full list is reachable through `token_lots`. Both are subject to the same character budgets, and a page that still exceeds its budget is reported as `truncated`.
 - `live_prices` reads the latest already-cached price per symbol from the price-history port (the same cache the market stream fills). It opens no provider connection and starts no stream. A symbol with no cached price appears in `notTracked`.
 
+### Arithmetic lives in core-domain, never in the tools
+
+A scenario figure is produced by a pure function in `packages/core-domain` (`positionValueAt`, `breakevenPrice`, `applyShock`, `concentrationOf` in `portfolioScenarios.ts`, `compareTaxSummaries`, `summarizeCustodyLocations`), always through `Money`, with every variable division guarded by an `isZero` check that returns a typed outcome instead of throwing. The AI subtree imports neither `Money` nor `decimal.js`, and a source scan enforces it. The prompt tells the model never to compute, convert, sum, subtract or estimate a figure, and to state a non-computed outcome (not held, ambiguous, unconvertible cost basis) as it is.
+
+Stablecoins in `concentration_risk` come from the closed `STABLECOIN_SYMBOLS` list (`USDT`, `USDC`, `DAI`, `EURC`, `FDUSD`, `PYUSD`, `TUSD`, `USDE`); an unlisted symbol counts as risky. The list is display classification only and no tax or FIFO code reads it.
+
+### Tools deliberately left out: `fees_paid` and `cash_flow_summary`
+
+Both were measured against the real exchange exports and failed the gate, so they are not in this catalogue. Only Bitvavo's fees are natively EUR and complete; every other source charges in crypto or USD, which would need a dated price per fee asset (new analytical logic, not a wrapper). A portfolio-wide fiat in/out figure would include Kraken spot's internal `spottofutures` transfer as a withdrawal, and three sources export no fiat movements at all. Partial per-source shipping was rejected because a total that silently covers some sources breaks the "every figure states its completeness" rule. They return in a follow-up once Kraken's `spottofutures` subtype is declared an internal transfer in `profiles.ts`, fee-asset EUR valuation exists as a use case, and explicit-zero fees survive normalization in every profile.
+
 ### Display-only ordering
 
-The AI layer contains no `.sort(` of its own. Three pure helpers in `packages/core-domain` supply every ordering: `rankHoldingsByValue` (monetary, compared through `Money`), `orderByCountDescending` and `orderByIsoDateDescending` (integer and ISO-date keys), plus `downsampleSeries` (uniform stride, at most 120 points). None has access to a lot, a queue or an account, so rule 6 (tax FIFO versus custody) is untouched.
+The AI layer contains no `.sort(` of its own. Pure helpers in `packages/core-domain` supply every ordering: `rankHoldingsByValue` and `rankByAbsoluteValue` (monetary, compared through `Money`), `orderByCountDescending`, `orderByIsoDateDescending` and `orderByIsoDateDescendingThenKey` (integer and ISO-date keys, the last with a key tiebreak for `tx_search`), plus `downsampleSeries` (uniform stride, at most 120 points). None has access to a lot, a queue or an account, so rule 6 (tax FIFO versus custody) is untouched.
 
 ## 10. Guardrails and the disclaimer
 
@@ -619,7 +671,10 @@ curl -X PUT http://localhost:3001/api/advisor/config/model-chain \
       "portfolio_summary": 4000, "fiscal_integrity": 6000, "token_history": 6000, "asset_allocation": 3000,
       "risk_metrics": 1500, "drawdown_curve": 4000, "performance_history": 4000, "kpis": 3000,
       "volatility_heatmap": 4000, "spanish_tax_report": 5000, "live_prices": 2000,
-      "fiscal_integrity_rows": 4000, "token_lots": 4000
+      "fiscal_integrity_rows": 4000, "token_lots": 4000, "holding_detail": 3000, "account_holdings": 5000,
+      "tax_year_comparison": 4000, "data_gaps": 4000, "scenario_position_value": 1500, "breakeven_price": 1500,
+      "explain_metric": 2000, "derivatives_pnl": 4000, "custody_locations": 4000,
+      "scenario_portfolio_shock": 4000, "concentration_risk": 2000, "tx_search": 5000
     }
   },
   "local": { "maxSteps": 15, "lastMessages": 50, "topNHoldings": 50, "lotsPageSize": 100, "rowsPageSize": 100 }
@@ -813,7 +868,7 @@ The frontend `typecheck` script is `vue-tsc --build --force`; a bare `--noEmit` 
 | `backend/.../ai/__tests__/MastraAdvisorAdapter.spec.ts`, `mastraChunk.spec.ts`, `classifyProviderError.spec.ts` | Chunk-to-event mapping, receipts, failure classification, sanitisation. |
 | `backend/.../ai/__tests__/mastraImportZone.spec.ts`, `noTelemetry.spec.ts` | `@mastra/*` import zone; no telemetry dependency. |
 | `backend/.../ai/models/__tests__/*` | Credential filtering, chain resolution, profile derivation, budgets. |
-| `backend/.../ai/tools/__tests__/*` | Each tool projection and budget; `toolSurface.spec.ts` (13 tools, read-only, thin wrappers); `noModelAccountId.spec.ts`; `enforceBudget.spec.ts`. |
+| `backend/.../ai/tools/__tests__/*` | Each tool projection and budget; `toolSurface.spec.ts` (25 tools, tier counts, exact exposure per profile, read-only, thin wrappers); `noModelAccountId.spec.ts`; `enforceBudget.spec.ts`. |
 | `backend/.../ai/guardrails/__tests__/*`, `agents/__tests__/*` | Grounding, disclaimer, topology, two-call delegation, tool-call filtering. |
 | `backend/.../routes/__tests__/advisor.test.ts`, `advisorMounting.spec.ts`, `advisorRollback.spec.ts`, `app-type.spec-d.ts`, `credentials.test.ts` | HTTP contracts and 400s, exactly six routes, rollback with no chain, `AppType` typing, AI providers in the vault registry. |
 | `backend/.../di/__tests__/*`, `dtos/__tests__/advisor.spec.ts` | Lazy composition, disposability, wire mapping. |
@@ -854,7 +909,7 @@ Per project rules, a new behaviour needs a failing test first, and a deliberate 
 
 ### Shipped (Phase 0)
 
-- Read-only supervisor plus `taxAnalyst` with thirteen tools; declared-but-unreachable `investmentAnalyst`.
+- Read-only supervisor plus `taxAnalyst` with twenty-five tools (fourteen exposed to a local run); declared-but-unreachable `investmentAnalyst`.
 - Six providers with vault-backed keys; ordered model chain with per-entry retries and fallback.
 - Derived local/metered execution profiles, editable limits, character budgets, mixed-chain rule.
 - Deterministic grounding and injection/evasion guardrails; structural disclaimer flag.
@@ -880,7 +935,6 @@ Other designed but unshipped items:
 
 - **Forecast criterion settings.** Two user settings are reserved to gate whether a forecast is shown once forecasting exists: `ai_advisor_forecast_min_hit_rate` (decimal string, planned default `"0.90"`, range `0.50` to `0.99`) and `ai_advisor_forecast_min_samples` (integer, planned default `30`). **Nothing in the code reads, stores or exposes them**, and there is no Settings UI; they are listed so the names are not reused.
 - **Remembered vault unlock**, proposed by [`vault-remember-unlock-on-device`](../openspec/changes/vault-remember-unlock-on-device/proposal.md) (proposal only).
-- **Filtering by account name**, resolved server-side (idea, no artifact).
 
 Explicitly out of scope for Phase 0 and not started: `structuredOutput` reports, a `requireApproval` data-quality copilot, rebalancing, a RAG-backed tax explainer, "explain this number", integrity triage ranked by euro impact, a pre-filing checklist and PII redaction.
 
@@ -896,8 +950,9 @@ Places where the shipped code differs from, or goes beyond, the OpenSpec design.
 | Migration `010` | Loosens a constraint. | Implemented as `DROP TABLE` plus recreate, destroying existing audit rows. Safe only under the documented clean-slate assumption. |
 | Corrupt execution-profile setting | The chain degrades gracefully. | The profile setting has no equivalent guard; a bad value yields HTTP 500 or `INTERNAL_ERROR`. |
 | Task 16.7 | Local commit. | Unchecked; the work is uncommitted. |
+| Spot-transaction order | The spot-transaction search orders results newest first. | `tx_search` pages are ordered newest first with an `id_hash` tiebreak. The `all` arm used by `GET /tax/transactions/spot` keeps the ledger order (oldest first), which comes from `ORDER BY t.timestamp ASC` in `SQLiteLedgerAdapter` and is pinned by a route test, so the route response is unchanged. |
 
-Verified consistent with the design: thirteen tool names in `ADVISOR_TOOL_NAMES`, the six provider ids, the `009`/`010` column set, the `done` frame fields, setting keys, and the absence of the forecast keys from the code.
+Verified consistent with the design: twenty-five tool names in `ADVISOR_TOOL_NAMES`, the six provider ids, the `009`/`010` column set, the `done` frame fields, setting keys, and the absence of the forecast keys from the code.
 
 ---
 

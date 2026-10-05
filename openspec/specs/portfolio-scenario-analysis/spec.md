@@ -1,5 +1,8 @@
-## ADDED Requirements
+# portfolio-scenario-analysis Specification
 
+## Purpose
+TBD - created by archiving change add-ai-advisor-read-and-scenario-tools. Update Purpose after archive.
+## Requirements
 ### Requirement: Scenario Arithmetic Lives In Pure Core-Domain Functions Over Money
 `packages/core-domain/src/domain/services/portfolioScenarios.ts` SHALL expose `positionValueAt`, `breakevenPrice`, `applyShock`, and `concentrationOf`. Their inputs and outputs SHALL be `PreciseAmount` strings, every arithmetic step SHALL go through `Money` (`mul`, `div`, `add`, `sub`), and they SHALL perform no I/O. Every `div` SHALL be preceded by an `isZero` check on the divisor that returns a typed outcome arm, so a division by zero is never thrown and never produces `Infinity` or `NaN`.
 
@@ -16,7 +19,7 @@
 - **THEN** it imports only `Money`, `PreciseAmount` types, and sibling pure modules, with no port, no database driver, and no direct `decimal.js` import
 
 ### Requirement: Scenario Inputs Are Validated Before Any Computation
-A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percentage SHALL be parsed with `preciseAmountSchema` and bounded to the closed range -100 to 1000. A symbol SHALL be matched exactly after upper-casing. Quantity, cost basis, and current value SHALL always come from the ledger read and SHALL NOT be accepted as model input.
+A hypothetical unit price SHALL be parsed with `scenarioPriceSchema`, which is `preciseAmountSchema` refined to reject negative values; zero SHALL be accepted. The `per_asset` shock entry count SHALL be bounded to 1 to 25 by the input schema (`MAX_SHOCK_ENTRIES`), not by the pure function. A percentage SHALL be parsed with `preciseAmountSchema` and bounded to the closed range -100 to 1000. A symbol SHALL be matched exactly after upper-casing. Quantity, cost basis, and current value SHALL always come from the ledger read and SHALL NOT be accepted as model input.
 
 #### Scenario: A percentage below -100 is rejected
 - **WHEN** a scenario is requested with a percentage of `-100.01`
@@ -34,12 +37,16 @@ A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percenta
 - **WHEN** a scenario is requested with a unit price that `preciseAmountSchema` rejects
 - **THEN** input validation rejects it and no use case is invoked
 
+#### Scenario: A negative hypothetical price is rejected
+- **WHEN** a scenario is requested with a unit price of `-1`
+- **THEN** input validation rejects it and no use case is invoked
+
 #### Scenario: Quantity cannot be supplied by the caller
 - **WHEN** a scenario request carries a `quantity`, `costBasis`, or `currentValue` field
 - **THEN** the strict input schema rejects it
 
 ### Requirement: Scenario Use Case Is A Functional Sandwich Over The Portfolio Summary
-`GetPortfolioScenarioUseCase`, in `apps/backend/src/core/application/use-cases/`, SHALL read `GetPortfolioSummaryUseCase` (all accounts, base currency, live prices, no top-N cap), apply the matching pure function, and return the result, with one method per scenario. It SHALL contain no arithmetic of its own. Figures SHALL be expressed in the base currency of the request.
+`GetPortfolioScenarioUseCase`, in `apps/backend/src/core/application/use-cases/`, SHALL read `GetPortfolioSummaryUseCase` (all accounts, base currency, live prices, no top-N cap), apply the matching pure function, and return the result, with one method per scenario. It SHALL contain no arithmetic of its own. Figures SHALL be expressed in the base currency of the request, and every outcome, `computed` or not, SHALL carry a `currency` field naming it; every non-`computed` arm of a per-symbol scenario SHALL also carry `symbol`. A holding SHALL be valued only when its current value is present and its cost basis is convertible, the same predicate `portfolio_summary` applies; the use case SHALL apply this predicate itself because the application layer may not import from the AI subtree.
 
 #### Scenario: Holdings are read once and uncapped
 - **WHEN** a scenario method runs against a portfolio with more holdings than `topNHoldings`
@@ -54,7 +61,7 @@ A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percenta
 - **THEN** the summary is read in that base currency and the result's figures are in that currency
 
 ### Requirement: Position Value At A Hypothetical Price
-`positionValueAt` SHALL accept a symbol and a hypothetical unit price and return exactly one of: `computed` (`positionValue`, `deltaVsCurrent`, `impliedAllocationPct`), `not_held`, `unvalued`, or `empty_portfolio`. `positionValue` SHALL be the ledger quantity multiplied by the hypothetical price. `deltaVsCurrent` SHALL be `positionValue` minus the holding's current value. `impliedAllocationPct` SHALL be `positionValue` divided by (total valued equity minus the current position value plus `positionValue`).
+`positionValueAt` SHALL accept a symbol and a hypothetical unit price and return exactly one of: `computed` (`positionValue`, `deltaVsCurrent`, `impliedAllocationPct` as a `PreciseAmount` string, never a number), `not_held`, `unvalued`, or `empty_portfolio`. `positionValue` SHALL be the ledger quantity multiplied by the hypothetical price. `deltaVsCurrent` SHALL be `positionValue` minus the holding's current value. `impliedAllocationPct` SHALL be `positionValue` divided by (total valued equity minus the current position value plus `positionValue`).
 
 #### Scenario: Computed outcome
 - **WHEN** the holding is `BTC` with quantity `2`, current value `100000`, total valued equity `200000`, and the hypothetical price is `70000`
@@ -96,7 +103,7 @@ A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percenta
 - **THEN** the result is `zero_quantity` and no division is performed
 
 ### Requirement: Portfolio Shock Applies A Uniform Or Per-Asset Percentage
-`applyShock` SHALL accept an input that is a union `{ kind: 'uniform', pct }` or `{ kind: 'per_asset', shocks: [{ symbol, pct }] }` with 1 to 25 entries in `shocks`, and return exactly one of: `computed` (per-asset shocked values, `totalBefore`, `totalAfter`, `delta`, `unvaluedSymbols`) or `empty_portfolio`. In `per_asset`, a held asset not listed SHALL be held at 0%, and a listed symbol that is not held SHALL be returned in `notHeld`. Unvalued holdings SHALL be excluded from the totals and listed in `unvaluedSymbols`, never shocked as zero.
+`applyShock` SHALL accept an input that is a union `{ kind: 'uniform', pct }` or `{ kind: 'per_asset', shocks: [{ symbol, pct }] }` (the 1 to 25 entry bound is enforced upstream by the input schema), and return exactly one of: `computed` (per-asset shocked values, `totalBefore`, `totalAfter`, `delta`, `unvaluedSymbols`) or `empty_portfolio`. In `per_asset`, a held asset not listed SHALL be held at 0%, and a listed symbol that is not held SHALL be returned in `notHeld`. Unvalued holdings SHALL be excluded from the totals and listed in `unvaluedSymbols`, never shocked as zero.
 
 #### Scenario: Uniform shock
 - **WHEN** two valued holdings worth `100` and `300` receive a uniform shock of `-50`
@@ -123,7 +130,11 @@ A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percenta
 - **THEN** input validation rejects it
 
 ### Requirement: Concentration Reports Weights And HHI With Stablecoins Reported Separately
-`concentrationOf` SHALL compute over valued holdings only, so an unvalued holding is excluded and counted, never weighted as zero. The weight of holding i SHALL be its value divided by the total valued value. `top1Weight` and `top3Weight` SHALL be the largest weight and the sum of the three largest, ranked through `rankHoldingsByValue`. HHI SHALL be the sum of squared weights on a 0 to 1 scale, returned as a `PreciseAmount` string, with `effectiveHoldings` equal to 1 divided by HHI. The result SHALL carry an `all` block (stablecoins included), an `excludingStablecoins` block (weights renormalised over non-stable holdings), and `stablecoinWeight` (the stablecoin share of the total). Each block SHALL be `{ kind: 'computed', ... }` or `{ kind: 'empty' }` when its valued total is zero. A symbol SHALL be a stablecoin only if it is in `STABLECOIN_SYMBOLS` in shared-types (`USDT`, `USDC`, `DAI`, `EURC`, `FDUSD`, `PYUSD`, `TUSD`, `USDE`).
+`concentrationOf` SHALL compute over valued holdings only, so an unvalued holding is excluded and counted, never weighted as zero. The weight of holding i SHALL be its value divided by the total valued value. `top1Weight` and `top3Weight` SHALL be the largest weight and the sum of the three largest, ranked through `rankHoldingsByValue`. HHI SHALL be the sum of squared weights on a 0 to 1 scale, returned as a `PreciseAmount` string, with `effectiveHoldings` equal to 1 divided by HHI. The result SHALL carry an `all` block (stablecoins included), an `excludingStablecoins` block (weights renormalised over non-stable holdings), and `stablecoinWeight` (the stablecoin share of the total as a `PreciseAmount` string, or `null` when no holding is valued, never `'0'`, so an undefined share is not read as zero). Each block SHALL be `{ kind: 'computed', ... }` or `{ kind: 'empty' }` when its valued total is zero. A symbol SHALL be a stablecoin only if it is in `STABLECOIN_SYMBOLS` in shared-types (`USDT`, `USDC`, `DAI`, `EURC`, `FDUSD`, `PYUSD`, `TUSD`, `USDE`).
+
+#### Scenario: Stablecoin weight is null when nothing is valued
+- **WHEN** `concentrationOf` runs over holdings none of which is valued
+- **THEN** `stablecoinWeight` is `null`, not `'0'`, and both blocks are `empty`
 
 #### Scenario: HHI on a single holding
 - **WHEN** the only valued holding is `BTC`
@@ -160,3 +171,4 @@ A hypothetical unit price SHALL be parsed with `preciseAmountSchema`. A percenta
 #### Scenario: The stablecoin list is display classification only
 - **WHEN** the repository is searched for readers of `STABLECOIN_SYMBOLS`
 - **THEN** no tax, FIFO, or custody code reads it
+

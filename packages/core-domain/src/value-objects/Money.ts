@@ -38,6 +38,10 @@ export class Money {
     return new Money(this.amount.dividedBy(other.amount));
   }
   
+  abs(): Money {
+    return new Money(this.amount.abs());
+  }
+
   equals(other: Money): boolean {
     return this.amount.equals(other.amount);
   }

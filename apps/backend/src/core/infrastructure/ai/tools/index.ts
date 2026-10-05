@@ -48,6 +48,61 @@ import {
   type FiscalIntegrityRowsUseCaseLike,
 } from './fiscalIntegrityRowsTool.js';
 import { tokenLotsTool, type TokenLotsToolConfig, type TokenLotsUseCaseLike } from './tokenLotsTool.js';
+import {
+  holdingDetailTool,
+  type HoldingDetailToolConfig,
+  type HoldingDetailUseCaseLike,
+} from './holdingDetailTool.js';
+import {
+  accountHoldingsTool,
+  type AccountHoldingsToolConfig,
+  type ListAccountsUseCaseLike,
+} from './accountHoldingsTool.js';
+import {
+  taxYearComparisonTool,
+  type TaxYearComparisonToolConfig,
+  type TaxYearComparisonUseCaseLike,
+} from './taxYearComparisonTool.js';
+import {
+  derivativesPnlTool,
+  type DerivativesPnlToolConfig,
+  type DerivativesPnlUseCaseLike,
+} from './derivativesPnlTool.js';
+import {
+  custodyLocationsTool,
+  type CustodyLocationsToolConfig,
+  type CustodyLocationsUseCaseLike,
+} from './custodyLocationsTool.js';
+import {
+  dataGapsTool,
+  type DataGapsToolConfig,
+} from './dataGapsTool.js';
+import {
+  explainMetricTool,
+  type ExplainMetricToolConfig,
+} from './explainMetricTool.js';
+import type { PortfolioScenarioUseCaseLike } from './scenarioUseCase.js';
+import {
+  scenarioPositionValueTool,
+  type ScenarioPositionValueToolConfig,
+} from './scenarioPositionValueTool.js';
+import {
+  breakevenPriceTool,
+  type BreakevenPriceToolConfig,
+} from './breakevenPriceTool.js';
+import {
+  scenarioPortfolioShockTool,
+  type ScenarioPortfolioShockToolConfig,
+} from './scenarioPortfolioShockTool.js';
+import {
+  concentrationRiskTool,
+  type ConcentrationRiskToolConfig,
+} from './concentrationRiskTool.js';
+import {
+  txSearchTool,
+  type TxSearchToolConfig,
+  type TxSearchUseCaseLike,
+} from './txSearchTool.js';
 
 export {
   portfolioSummaryTool,
@@ -63,6 +118,18 @@ export {
   livePricesTool,
   fiscalIntegrityRowsTool,
   tokenLotsTool,
+  holdingDetailTool,
+  accountHoldingsTool,
+  taxYearComparisonTool,
+  derivativesPnlTool,
+  custodyLocationsTool,
+  dataGapsTool,
+  explainMetricTool,
+  scenarioPositionValueTool,
+  breakevenPriceTool,
+  scenarioPortfolioShockTool,
+  concentrationRiskTool,
+  txSearchTool,
 };
 export type {
   PortfolioSummaryToolConfig,
@@ -78,6 +145,18 @@ export type {
   LivePricesToolConfig,
   FiscalIntegrityRowsToolConfig,
   TokenLotsToolConfig,
+  HoldingDetailToolConfig,
+  AccountHoldingsToolConfig,
+  TaxYearComparisonToolConfig,
+  DerivativesPnlToolConfig,
+  CustodyLocationsToolConfig,
+  DataGapsToolConfig,
+  ExplainMetricToolConfig,
+  ScenarioPositionValueToolConfig,
+  BreakevenPriceToolConfig,
+  ScenarioPortfolioShockToolConfig,
+  ConcentrationRiskToolConfig,
+  TxSearchToolConfig,
 };
 
 /**
@@ -98,6 +177,13 @@ export interface ToolUseCases {
   priceHistory: PriceSnapshotPortLike;
   fiscalIntegrityRows: FiscalIntegrityRowsUseCaseLike;
   tokenLots: TokenLotsUseCaseLike;
+  portfolioScenario: PortfolioScenarioUseCaseLike;
+  holdingDetail: HoldingDetailUseCaseLike;
+  listAccounts: ListAccountsUseCaseLike;
+  taxYearComparison: TaxYearComparisonUseCaseLike;
+  derivativesPnl: DerivativesPnlUseCaseLike;
+  custodyLocations: CustodyLocationsUseCaseLike;
+  txSearch: TxSearchUseCaseLike;
 }
 
 export interface ToolConfigs {
@@ -114,6 +200,18 @@ export interface ToolConfigs {
   livePrices: LivePricesToolConfig;
   fiscalIntegrityRows: FiscalIntegrityRowsToolConfig;
   tokenLots: TokenLotsToolConfig;
+  holdingDetail: HoldingDetailToolConfig;
+  accountHoldings: AccountHoldingsToolConfig;
+  taxYearComparison: TaxYearComparisonToolConfig;
+  derivativesPnl: DerivativesPnlToolConfig;
+  custodyLocations: CustodyLocationsToolConfig;
+  dataGaps: DataGapsToolConfig;
+  explainMetric: ExplainMetricToolConfig;
+  scenarioPositionValue: ScenarioPositionValueToolConfig;
+  breakevenPrice: BreakevenPriceToolConfig;
+  scenarioPortfolioShock: ScenarioPortfolioShockToolConfig;
+  concentrationRisk: ConcentrationRiskToolConfig;
+  txSearch: TxSearchToolConfig;
 }
 
 /** `taxAnalyst`'s own tool shape — every caller needs only this, never `ToolUseCases`/`ToolConfigs`. */
@@ -137,5 +235,44 @@ export function buildImplementedTools(useCases: ToolUseCases, configs: ToolConfi
     live_prices: livePricesTool(useCases.priceHistory, configs.livePrices),
     fiscal_integrity_rows: fiscalIntegrityRowsTool(useCases.fiscalIntegrityRows, configs.fiscalIntegrityRows),
     token_lots: tokenLotsTool(useCases.tokenLots, configs.tokenLots),
+    holding_detail: holdingDetailTool(useCases.holdingDetail, {
+      ...configs.holdingDetail,
+      livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+    }),
+    account_holdings: accountHoldingsTool(
+      { listAccounts: useCases.listAccounts, portfolioSummary: useCases.portfolioSummary },
+      {
+        ...configs.accountHoldings,
+        livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+      },
+    ),
+    tax_year_comparison: taxYearComparisonTool(useCases.taxYearComparison, configs.taxYearComparison),
+    derivatives_pnl: derivativesPnlTool(useCases.derivativesPnl, configs.derivativesPnl),
+    custody_locations: custodyLocationsTool(useCases.custodyLocations, configs.custodyLocations),
+    data_gaps: dataGapsTool(
+      { portfolioSummary: useCases.portfolioSummary, fiscalIntegrity: useCases.fiscalIntegrity },
+      {
+        ...configs.dataGaps,
+        livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+      },
+    ),
+    explain_metric: explainMetricTool(configs.explainMetric),
+    scenario_position_value: scenarioPositionValueTool(useCases.portfolioScenario, {
+      ...configs.scenarioPositionValue,
+      livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+    }),
+    breakeven_price: breakevenPriceTool(useCases.portfolioScenario, {
+      ...configs.breakevenPrice,
+      livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+    }),
+    scenario_portfolio_shock: scenarioPortfolioShockTool(useCases.portfolioScenario, {
+      ...configs.scenarioPortfolioShock,
+      livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+    }),
+    concentration_risk: concentrationRiskTool(useCases.portfolioScenario, {
+      ...configs.concentrationRisk,
+      livePrices: (currency) => resolveLivePriceSnapshot(useCases.priceHistory, currency),
+    }),
+    tx_search: txSearchTool(useCases.txSearch, configs.txSearch),
   };
 }

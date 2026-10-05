@@ -14,6 +14,7 @@
  * `account_id`, `transfer_group_id`, `status`) are never touched, even if an override happened to
  * carry a value for one — same invariant `v_effective_spot_transactions` enforces in DuckDB.
  */
+import type { EditableField } from '@kryptofolio/shared-types';
 import type { LedgerSpotTransaction, LedgerSpotTransactionOverride } from '../ports/ILedgerPort';
 
 export function toEffectiveSpotTransaction(
@@ -51,4 +52,41 @@ export function toEffectiveSpotTransaction(
   }
 
   return effective;
+}
+
+/**
+ * Marks each row as untouched or carrying an active edit, without a second request: the modal's lots
+ * panel still fetches separately, but the Ledgers table needs only this to render its "edited" badge.
+ * `original` keeps the pre-edit values for reference and undo.
+ */
+export type SpotTransactionOverrideView =
+  | { kind: 'NONE' }
+  | { kind: 'ACTIVE'; original: LedgerSpotTransaction; editedFields: readonly EditableField[] };
+
+export function editedFieldsOf(override: LedgerSpotTransactionOverride): EditableField[] {
+  const fields: EditableField[] = [];
+  if (override.amount_in_edited) fields.push('amount_in');
+  if (override.amount_out_edited) fields.push('amount_out');
+  if (override.price_edited) fields.push('price_fiat');
+  if (override.total_fiat_edited) fields.push('total_fiat');
+  if (override.fee_kind !== 'UNCHANGED') fields.push('fee');
+  if (override.timestamp_edited) fields.push('timestamp');
+  if (override.tx_type_edited) fields.push('tx_type');
+  return fields;
+}
+
+export function withOverrideView(
+  transactions: readonly LedgerSpotTransaction[],
+  overrides: readonly LedgerSpotTransactionOverride[],
+): (LedgerSpotTransaction & { override: SpotTransactionOverrideView })[] {
+  const byHash = new Map(overrides.map((o) => [o.id_hash, o]));
+  return transactions.map((tx) => {
+    const override = byHash.get(tx.id_hash);
+    return {
+      ...(override ? toEffectiveSpotTransaction(tx, override) : tx),
+      override: override
+        ? { kind: 'ACTIVE' as const, original: tx, editedFields: editedFieldsOf(override) }
+        : { kind: 'NONE' as const },
+    };
+  });
 }

@@ -12,6 +12,9 @@ const toolFiles = readdirSync(toolsDir)
   .map((f) => join(toolsDir, f));
 
 const BANNED_PORT_IMPORTS = ['ILedgerPort', 'ITaxCalculatorPort', 'IDatabasePort', 'DuckDB', 'duckdb'];
+const notUsed = async (): Promise<never> => {
+  throw new Error('tool use case not exercised in this test');
+};
 const WRITE_METHOD_PATTERN = /\.(insert|update|delete|save|write)\(/;
 
 async function buildAllTools() {
@@ -92,6 +95,13 @@ async function buildAllTools() {
       execute: async () => ({ groups: [], totalDefects: 0, pendingReview: 0, needsRecalculation: false }),
     },
     tokenLots: { execute: async () => ({ lots: [], history: {}, relocations: {} }) },
+    txSearch: { execute: notUsed },
+    portfolioScenario: { positionValue: notUsed, breakeven: notUsed, portfolioShock: notUsed, concentration: notUsed },
+    custodyLocations: { execute: notUsed },
+    derivativesPnl: { execute: notUsed },
+    taxYearComparison: { execute: notUsed },
+    listAccounts: { execute: notUsed },
+    holdingDetail: { execute: notUsed },
   };
   const configs = {
     portfolioSummary: { topNHoldings: 15, maxChars: 4000 },
@@ -107,6 +117,18 @@ async function buildAllTools() {
     livePrices: { maxChars: 2000, currency: 'EUR' },
     fiscalIntegrityRows: { rowsPageSize: 25, maxChars: 4000 },
     tokenLots: { lotsPageSize: 20, maxChars: 4000 },
+    txSearch: { rowsPageSize: 25, maxChars: 5000 },
+    concentrationRisk: { maxChars: 2000 },
+    scenarioPortfolioShock: { topNHoldings: 15, maxChars: 4000 },
+    breakevenPrice: { maxChars: 1500 },
+    scenarioPositionValue: { maxChars: 1500 },
+    explainMetric: { maxChars: 2000 },
+    dataGaps: { maxChars: 4000 },
+    custodyLocations: { topNHoldings: 15, maxChars: 4000 },
+    derivativesPnl: { topNHoldings: 15, maxChars: 4000 },
+    taxYearComparison: { maxChars: 4000 },
+    accountHoldings: { topNHoldings: 15, maxChars: 5000 },
+    holdingDetail: { maxChars: 3000 },
   };
 
   return buildImplementedTools(useCases, configs);
@@ -124,7 +146,7 @@ describe('read-only tool catalogue surface', () => {
     }
   });
 
-  it('the registered tool set is exactly the thirteen names in ADVISOR_TOOL_NAMES', async () => {
+  it('the registered tool set is exactly the names in ADVISOR_TOOL_NAMES', async () => {
     const { ADVISOR_TOOL_NAMES } = await import('@kryptofolio/shared-types');
     const tools = await buildAllTools();
 
@@ -132,11 +154,49 @@ describe('read-only tool catalogue surface', () => {
     expect(new Set(Object.keys(tools))).toEqual(new Set(ADVISOR_TOOL_NAMES));
   });
 
+  it('leaves out fees_paid and cash_flow_summary, which failed the real-file measurement gate', async () => {
+    const { ADVISOR_TOOL_NAMES } = await import('@kryptofolio/shared-types');
+
+    expect(ADVISOR_TOOL_NAMES).not.toContain('fees_paid');
+    expect(ADVISOR_TOOL_NAMES).not.toContain('cash_flow_summary');
+    expect(ADVISOR_TOOL_NAMES).toContain('tx_search');
+  });
+
   it('no tool file performs an insert, update, or delete', () => {
     for (const file of toolFiles) {
       const source = readFileSync(file, 'utf-8');
       expect(WRITE_METHOD_PATTERN.test(source), `${file} must not call a write/mutation method`).toBe(false);
     }
+  });
+});
+
+describe('the finished catalogue and what each profile exposes', () => {
+  const CORE_TOOLS = [
+    'portfolio_summary', 'holding_detail', 'account_holdings', 'kpis', 'asset_allocation', 'spanish_tax_report',
+    'tax_year_comparison', 'fiscal_integrity', 'data_gaps', 'token_history', 'live_prices',
+    'scenario_position_value', 'breakeven_price', 'explain_metric',
+  ];
+  const EXTENDED_TOOLS = [
+    'fiscal_integrity_rows', 'token_lots', 'risk_metrics', 'drawdown_curve', 'performance_history',
+    'volatility_heatmap', 'derivatives_pnl', 'custody_locations', 'scenario_portfolio_shock',
+    'concentration_risk', 'tx_search',
+  ];
+
+  it('has exactly twenty-five tools, fourteen core and eleven extended', async () => {
+    const { ADVISOR_TOOL_NAMES, ADVISOR_TOOL_TIERS } = await import('@kryptofolio/shared-types');
+
+    expect(ADVISOR_TOOL_NAMES).toHaveLength(25);
+    expect(Object.keys(ADVISOR_TOOL_TIERS)).toHaveLength(25);
+    expect(ADVISOR_TOOL_NAMES.filter((n) => ADVISOR_TOOL_TIERS[n] === 'core').sort()).toEqual([...CORE_TOOLS].sort());
+    expect(ADVISOR_TOOL_NAMES.filter((n) => ADVISOR_TOOL_TIERS[n] === 'extended').sort()).toEqual([...EXTENDED_TOOLS].sort());
+  });
+
+  it('exposes exactly the fourteen core tools to a local run and all twenty-five to metered and mixed', async () => {
+    const { selectExposedTools } = await import('../toolExposure.js');
+    const tools = await buildAllTools();
+
+    expect(Object.keys(selectExposedTools(tools, 'local')).sort()).toEqual([...CORE_TOOLS].sort());
+    expect(Object.keys(selectExposedTools(tools, 'metered')).sort()).toEqual([...CORE_TOOLS, ...EXTENDED_TOOLS].sort());
   });
 });
 
@@ -159,7 +219,8 @@ describe('input and output contracts across the whole catalogue', () => {
   it('no tool inputSchema declares a targetCurrency, currency or livePrices field', async () => {
     const tools = await schemasByTool();
 
-    expect(tools).toHaveLength(13);
+    const { ADVISOR_TOOL_NAMES } = await import('@kryptofolio/shared-types');
+    expect(tools).toHaveLength(ADVISOR_TOOL_NAMES.length);
     for (const { name, input } of tools) {
       const declared = declaredFieldNames(input);
       for (const forbidden of FORBIDDEN_CURRENCY_FIELDS) {
@@ -182,6 +243,17 @@ describe('input and output contracts across the whole catalogue', () => {
 
     expect(declaredFieldNames(nested)).toContain('currency');
     expect(declaredFieldNames(z.object({ symbols: z.array(z.string()) }).strict())).not.toContain('currency');
+  });
+
+  it('the field scan descends through a transform piped into a refinement', () => {
+    const upperCased = z.string().transform((v) => v.toUpperCase()).pipe(z.string().regex(/^[A-Z]+$/));
+    const piped = z.object({ symbol: upperCased, nested: z.object({ currency: upperCased }).strict() }).strict();
+
+    expect(declaredFieldNames(piped)).toEqual(expect.arrayContaining(['symbol', 'currency']));
+    expect(numberFields(z.number().int().transform((n) => n).pipe(z.number()))).toEqual([
+      { path: '', isInt: true },
+      { path: '', isInt: false },
+    ]);
   });
 
   it('every number-typed outputSchema field is an integer, except the named percentage and ratio fields of kpis', async () => {

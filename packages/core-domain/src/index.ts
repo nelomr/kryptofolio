@@ -14,3 +14,7 @@ export * from "./domain/services/holdingRanking";
 export * from "./domain/services/holdingValuation";
 export * from "./domain/services/downsampleSeries";
 export * from "./domain/services/displayOrdering";
+export * from "./domain/services/resolveAccountByName";
+export * from "./domain/services/compareTaxSummaries";
+export * from "./domain/services/summarizeCustodyLocations";
+export * from "./domain/services/portfolioScenarios";

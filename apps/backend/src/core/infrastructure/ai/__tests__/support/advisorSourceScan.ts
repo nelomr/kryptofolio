@@ -99,8 +99,31 @@ export function findAnyEscapes(source: string): Violation[] {
   return found;
 }
 
+/** Arithmetic lives in core-domain's pure functions; the AI subtree may call those but never hold a `Money` or a decimal library. */
+export function findMoneyImports(source: string): Violation[] {
+  const file = parse(source);
+  const found: Violation[] = [];
+  walk(file, (node) => {
+    const specifier = moduleSpecifierOf(node);
+    if (specifier === undefined) return;
+    if (/decimal\.js/.test(specifier) || /value-objects\/Money$/.test(specifier)) {
+      found.push(report(file, node, `import of ${specifier}`));
+      return;
+    }
+    if (ts.isImportDeclaration(node)) {
+      const bindings = node.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings) && bindings.elements.some((el) => (el.propertyName ?? el.name).text === 'Money')) {
+        found.push(report(file, node, 'import of Money'));
+      }
+    }
+  });
+  return found;
+}
+
 const ORDERING_CLAUSE = /\b(PARTITION\s+BY|ORDER\s+BY)\b/i;
 const CUSTODY_OR_TAX_MODULE = /fifo|custody|duckdb/i;
+/** The read-only custody lookup is reached only through its use case and the tool wrapping it; no other custody-named module is. */
+const ALLOWED_CUSTODY_NAMED_MODULES = /(^|\/)(GetLotCustodyLocationsUseCase|custodyLocationsTool)\.js$/;
 
 /** Only literals are inspected, so a comment that names a clause is not a clause. */
 export function findOrderingSqlAndTaxImports(source: string): Violation[] {
@@ -116,7 +139,11 @@ export function findOrderingSqlAndTaxImports(source: string): Violation[] {
       found.push(report(file, node, 'PARTITION BY / ORDER BY'));
     }
     const specifier = moduleSpecifierOf(node);
-    if (specifier !== undefined && CUSTODY_OR_TAX_MODULE.test(specifier)) {
+    if (
+      specifier !== undefined &&
+      CUSTODY_OR_TAX_MODULE.test(specifier) &&
+      !ALLOWED_CUSTODY_NAMED_MODULES.test(specifier)
+    ) {
       found.push(report(file, node, `import of ${specifier}`));
     }
   });

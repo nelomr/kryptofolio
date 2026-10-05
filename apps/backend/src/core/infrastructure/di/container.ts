@@ -56,6 +56,11 @@ import { FifoMaterializerService } from '../../application/services/FifoMaterial
 import { FifoChainFreshnessService } from '../../application/services/FifoChainFreshnessService.js';
 import { DuckDbDerivedChainAdapter } from '../adapters/DuckDbDerivedChainAdapter.js';
 import { IngestAndMaterializeUseCase } from '../../application/use-cases/IngestAndMaterializeUseCase.js';
+import { GetDerivativesPnlUseCase } from '../../application/use-cases/GetDerivativesPnlUseCase.js';
+import { GetLotCustodyLocationsUseCase } from '../../application/use-cases/GetLotCustodyLocationsUseCase.js';
+import { GetPortfolioScenarioUseCase } from '../../application/use-cases/GetPortfolioScenarioUseCase.js';
+import { SearchSpotTransactionsUseCase } from '../../application/use-cases/SearchSpotTransactionsUseCase.js';
+import { ListAccountsUseCase } from '../../application/use-cases/accounts/ListAccountsUseCase.js';
 import { SetTransferDestinationUseCase } from '../../application/use-cases/overrides/SetTransferDestinationUseCase.js';
 import { SetSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/SetSpotTransactionOverrideUseCase.js';
 import { RemoveSpotTransactionOverrideUseCase } from '../../application/use-cases/overrides/RemoveSpotTransactionOverrideUseCase.js';
@@ -127,6 +132,8 @@ export class DIContainer {
   public readonly backfillExchangeRateGapsUC: BackfillExchangeRateGapsUC;
   public readonly backfillSchedulerPort: IBackfillSchedulerPort;
   public readonly initializeLedgerUseCase: InitializeLedgerUseCase;
+  public readonly listAccountsUseCase: ListAccountsUseCase;
+  public readonly searchSpotTransactionsUseCase: SearchSpotTransactionsUseCase;
 
   /** Analytical DuckDB Ports & Adapters */
   public priceIngestionPort: IPriceIngestionPort;
@@ -138,6 +145,9 @@ export class DIContainer {
   public ingestDailyPricesUseCase: IngestDailyPricesUseCase;
   public getPortfolioSummaryUseCase: GetPortfolioSummaryUseCase;
   public getSpanishTaxReportUseCase: GetSpanishTaxReportUseCase;
+  public getDerivativesPnlUseCase: GetDerivativesPnlUseCase;
+  public getLotCustodyLocationsUseCase: GetLotCustodyLocationsUseCase;
+  public getPortfolioScenarioUseCase: GetPortfolioScenarioUseCase;
   public getTokenHistoryUseCase: GetTokenHistoryUseCase;
   public getFiscalIntegrityUseCase: GetFiscalIntegrityUseCase;
   public getKpisUseCase: GetKpisUseCase;
@@ -255,6 +265,8 @@ export class DIContainer {
       this.backfillSchedulerPort,
     );
     this.initializeLedgerUseCase = new InitializeLedgerUseCase(this.ledgerPort, this.userSettingsPort);
+    this.listAccountsUseCase = new ListAccountsUseCase(this.ledgerPort);
+    this.searchSpotTransactionsUseCase = new SearchSpotTransactionsUseCase(this.ledgerPort);
 
     // Analytical DuckDB Adapters (initially bound to uninitialized guard)
     const uninitializedDb = new UninitializedAnalyticalDatabaseAdapter();
@@ -281,6 +293,18 @@ export class DIContainer {
       this.userSettingsPort,
       this.metricsPort,
     );
+
+    this.getLotCustodyLocationsUseCase = new GetLotCustodyLocationsUseCase(
+      this.taxCalculatorPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getDerivativesPnlUseCase = new GetDerivativesPnlUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getPortfolioScenarioUseCase = new GetPortfolioScenarioUseCase(this.getPortfolioSummaryUseCase);
 
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,
@@ -380,6 +404,18 @@ export class DIContainer {
       this.userSettingsPort,
       this.metricsPort,
     );
+
+    this.getLotCustodyLocationsUseCase = new GetLotCustodyLocationsUseCase(
+      this.taxCalculatorPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getDerivativesPnlUseCase = new GetDerivativesPnlUseCase(
+      this.portfolioAnalyticsPort,
+      this.fifoChainFreshnessService,
+    );
+
+    this.getPortfolioScenarioUseCase = new GetPortfolioScenarioUseCase(this.getPortfolioSummaryUseCase);
 
     this.getSpanishTaxReportUseCase = new GetSpanishTaxReportUseCase(
       this.taxCalculatorPort,

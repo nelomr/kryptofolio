@@ -1,5 +1,8 @@
 # 📊 Kryptofolio
 
+> **Privacy-first, self-hosted crypto portfolio tracker & institutional tax engine.**  
+> Designed with Hexagonal Architecture, a dual SQLite/DuckDB engine, and zero-loss financial precision (`PreciseAmount`). Built for investors who demand sovereign data custody and auditable FIFO compliance.
+
 [![Release](https://img.shields.io/github/v/release/nelomr/kryptofolio?style=flat-square&logo=github&label=version)](https://github.com/nelomr/kryptofolio/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/nelomr/kryptofolio/ci.yml?branch=main&style=flat-square&logo=github-actions&label=CI)](https://github.com/nelomr/kryptofolio/actions/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-blue?style=flat-square)](./CHANGELOG.md)
@@ -11,9 +14,15 @@
 
 ![Kryptofolio Banner](docs/assets/banner.png)
 
+### Why Kryptofolio?
+- 🔒 **100% Local-First & Sovereign:** No monthly SaaS fees, no telemetry, no leaks of your wallet addresses or financial net worth. Your keys live in an encrypted AES-256-GCM vault with RAM scrubbing.
+- ⚖️ **Compliant FIFO Tax Engine:** Native, legally sound Spanish IRPF calculations (AEAT-compliant). Wall-to-wall transfers never trigger artificial tax events.
+- ⚡ **Institutional Analytics:** DuckDB-powered OLAP queries for sub-second volatility, Sharpe Ratio, drawdown, and risk metrics over historical Hive-partitioned Parquet datasets.
+- 🤖 **Read-Only Local AI Advisor:** Query your portfolio analytics privately via Ollama or custom providers without sending financial snapshots to third parties.
+
 > **Kryptofolio** is an open-source crypto portfolio tracker built with Vue 3 and strict Hexagonal Architecture (Ports and Adapters). It serves as a visual presentation layer that displays transaction and tax information computed by the backend, utilizing a centralized backend (`apps/backend`) to bridge the UI with the data sources.
 >
-> ⚠️ **Note:** This project was born as a learning endeavor and is in continuous development in its early stages.
+> ⚠️ **Note:** This project was born as a learning endeavor and is in continuous development.
 
 ## ✨ Key Features
 

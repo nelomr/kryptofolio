@@ -8,6 +8,13 @@ import { fiscalIntegrityRowsTool, fiscalIntegrityRowsToolInputSchema } from '../
 import { tokenHistoryTool, tokenHistoryToolInputSchema } from '../tokenHistoryTool.js';
 import { tokenLotsTool, tokenLotsToolInputSchema } from '../tokenLotsTool.js';
 import { spanishTaxReportTool, spanishTaxReportToolInputSchema } from '../spanishTaxReportTool.js';
+import { holdingDetailTool, holdingDetailToolInputSchema } from '../holdingDetailTool.js';
+import { accountHoldingsTool, accountHoldingsToolInputSchema } from '../accountHoldingsTool.js';
+import { taxYearComparisonTool, taxYearComparisonToolInputSchema } from '../taxYearComparisonTool.js';
+import { derivativesPnlTool, derivativesPnlToolInputSchema } from '../derivativesPnlTool.js';
+import { custodyLocationsTool, custodyLocationsToolInputSchema } from '../custodyLocationsTool.js';
+import { dataGapsTool, dataGapsToolInputSchema } from '../dataGapsTool.js';
+import { explainMetricTool, explainMetricToolInputSchema } from '../explainMetricTool.js';
 
 /**
  * A model cannot know a valid account id and neither can the user, so no tool lets it supply one.
@@ -92,7 +99,103 @@ const CASES: ReadonlyArray<Case> = [
   },
 ];
 
-describe.each(CASES)('$name', (c) => {
+const emptySummary = {
+  metrics: {
+    rates_incomplete: false,
+    prices_incomplete: false,
+    total_equity_fiat: '0.00',
+    total_cost_basis_fiat: '0.00',
+    total_realized_pnl_fiat: '0.00',
+    total_unrealized_pnl_fiat: '0.00',
+    total_pnl_fiat: '0.00',
+    currency: 'EUR',
+  },
+  holdings: [],
+};
+
+const GROUP_ONE_CASES: ReadonlyArray<Case> = [
+  {
+    name: 'holding_detail',
+    rejects: (i) => !holdingDetailToolInputSchema.safeParse({ symbol: 'BTC', ...i }).success,
+    run: (record) =>
+      holdingDetailTool(
+        { execute: (req) => { record(req); return Promise.reject(FAILING); } },
+        { maxChars: 3000 },
+      ).execute?.({ symbol: 'BTC' }, summaryContext()) ?? Promise.reject(new Error('no execute')),
+  },
+  {
+    name: 'tax_year_comparison',
+    rejects: (i) => !taxYearComparisonToolInputSchema.safeParse({ yearA: 2024, yearB: 2025, ...i }).success,
+    run: (record) =>
+      taxYearComparisonTool(
+        // Two reads, one per year; only the first is recorded so the shared one-request assertion applies.
+        { execute: (req) => { if (req.year === 2024) record(req); return Promise.reject(FAILING); } },
+        { maxChars: 4000 },
+      ).execute?.({ yearA: 2024, yearB: 2025 }, plainContext()) ?? Promise.reject(new Error('no execute')),
+  },
+  {
+    name: 'derivatives_pnl',
+    rejects: (i) => !derivativesPnlToolInputSchema.safeParse(i).success,
+    run: (record) =>
+      derivativesPnlTool(
+        { execute: (currency) => { record({ currency }); return Promise.reject(FAILING); } },
+        { topNHoldings: 15, maxChars: 4000 },
+      ).execute?.({}, summaryContext()) ?? Promise.reject(new Error('no execute')),
+  },
+  {
+    name: 'custody_locations',
+    rejects: (i) => !custodyLocationsToolInputSchema.safeParse(i).success,
+    run: (record) =>
+      custodyLocationsTool(
+        { execute: (req) => { record(req); return Promise.reject(FAILING); } },
+        { topNHoldings: 15, maxChars: 4000 },
+      ).execute?.({}, plainContext()) ?? Promise.reject(new Error('no execute')),
+  },
+  {
+    name: 'data_gaps',
+    rejects: (i) => !dataGapsToolInputSchema.safeParse(i).success,
+    run: (record) =>
+      dataGapsTool(
+        {
+          portfolioSummary: { execute: (req) => { record(req); return Promise.resolve(emptySummary); } },
+          fiscalIntegrity: { execute: () => Promise.reject(FAILING) },
+        },
+        { maxChars: 4000 },
+      ).execute?.({}, summaryContext()) ?? Promise.reject(new Error('no execute')),
+  },
+  {
+    name: 'explain_metric',
+    rejects: (i) => !explainMetricToolInputSchema.safeParse({ metric: 'hhi', ...i }).success,
+    run: (record) => {
+      record({});
+      return explainMetricTool({ maxChars: 2000 }).execute?.({ metric: 'hhi' }, summaryContext()) ?? Promise.reject(new Error('no execute'));
+    },
+  },
+];
+
+describe('account_holdings', () => {
+  it('rejects a model-supplied accountId; the id it reads with is resolved server-side from a name', () => {
+    expect(accountHoldingsToolInputSchema.safeParse({ accountName: 'Kraken', accountId: 'x' }).success).toBe(false);
+    expect(Object.keys(accountHoldingsToolInputSchema.shape)).toEqual(['accountName']);
+  });
+
+  it('never reads a summary for an id the model typed', async () => {
+    const reads: unknown[] = [];
+    const tool = accountHoldingsTool(
+      {
+        listAccounts: { execute: async () => [{ id: 'real-id', name: 'Kraken', type: 'exchange', parentAccountId: null }] },
+        portfolioSummary: { execute: async (req) => { reads.push(req); return emptySummary; } },
+      },
+      { topNHoldings: 15, maxChars: 4000 },
+    );
+
+    await tool.execute?.({ accountName: 'real-id' }, summaryContext());
+
+    expect(reads).toEqual([]);
+  });
+});
+
+describe.each([...CASES, ...GROUP_ONE_CASES])('$name', (c) => {
   it('rejects a model-supplied accountId', () => {
     expect(c.rejects({ accountId: '11111111-1111-4111-8111-111111111111' })).toBe(true);
   });

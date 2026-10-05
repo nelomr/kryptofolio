@@ -12,7 +12,7 @@ import { enforceBudget, type EnforceBudgetResult, type RunBudgetTracker } from '
 /** At most this many defect groups reach the model, ranked by count — fixed, not profile-derived. */
 const MAX_GROUPS = 10;
 
-const groupSummarySchema = z
+export const groupSummarySchema = z
   .object({
     qualityFlag: z.enum(FIFO_QUALITY_FLAGS),
     severity: z.enum(FLAG_SEVERITIES),
@@ -21,7 +21,7 @@ const groupSummarySchema = z
   })
   .strict();
 
-const fiscalIntegrityPayloadSchema = z
+export const fiscalIntegrityPayloadSchema = z
   .object({
     groups: z.array(groupSummarySchema),
     totalDefects: z.number().int().nonnegative(),
@@ -59,25 +59,28 @@ export interface FiscalIntegrityToolConfig {
 }
 
 /**
- * Pure projection + budget gate. The use case's own `groups` are already ranked by severity then
- * flag order (`GetFiscalIntegrityUseCase`'s `groupDefects`); this only re-ranks by the integer
- * `count` each group already carries and caps at `MAX_GROUPS` — no monetary comparison, and the
- * per-transaction `rows` field never reaches the projected summary.
+ * The projection without the budget gate, reused by `data_gaps`. The use case's own `groups` are
+ * already ranked by severity then flag order (`GetFiscalIntegrityUseCase`'s `groupDefects`); this only
+ * re-ranks by the integer `count` each group already carries and caps at `MAX_GROUPS` — no monetary
+ * comparison, and the per-transaction `rows` field never reaches the projected summary.
  */
-export function buildFiscalIntegrityToolResult(
-  report: FiscalIntegrityReport,
-  config: FiscalIntegrityToolConfig,
-): EnforceBudgetResult<FiscalIntegrityToolPayload> {
+export function projectFiscalIntegrity(report: FiscalIntegrityReport): FiscalIntegrityToolPayload {
   const ranked = orderByCountDescending(report.groups, (group) => group.count).slice(0, MAX_GROUPS);
 
-  const payload: FiscalIntegrityToolPayload = {
+  return {
     groups: ranked.map(toGroupSummary),
     totalDefects: report.totalDefects,
     pendingReview: report.pendingReview,
     needsRecalculation: report.needsRecalculation,
   };
+}
 
-  return enforceBudget(payload, config.maxChars, config.runBudgetTracker);
+/** Pure projection + budget gate. */
+export function buildFiscalIntegrityToolResult(
+  report: FiscalIntegrityReport,
+  config: FiscalIntegrityToolConfig,
+): EnforceBudgetResult<FiscalIntegrityToolPayload> {
+  return enforceBudget(projectFiscalIntegrity(report), config.maxChars, config.runBudgetTracker);
 }
 
 export const fiscalIntegrityToolInputSchema = z.object({}).strict();
