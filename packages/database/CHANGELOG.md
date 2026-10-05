@@ -1,5 +1,12 @@
 # @kryptofolio/database
 
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [[`c1f23b4`](https://github.com/nelomr/kryptofolio/commit/c1f23b42cb2c6200015777e252b2d6a6139e88be)]:
+  - @kryptofolio/shared-types@1.1.9
+
 ## 0.0.14
 
 ### Patch Changes

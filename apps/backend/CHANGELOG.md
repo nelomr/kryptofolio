@@ -1,5 +1,16 @@
 # @kryptofolio/backend
 
+## 0.1.14
+
+### Patch Changes
+
+- [`c1f23b4`](https://github.com/nelomr/kryptofolio/commit/c1f23b42cb2c6200015777e252b2d6a6139e88be) Thanks [@nelomr](https://github.com/nelomr)! - Expand the AI advisor from 13 to 25 read-only tools: holding and account detail, tax-year comparison, data gaps, derivatives and custody views, metric explanations, deterministic what-if scenarios, and paged spot-transaction search. Local models see a core tier of 14 tools while metered and mixed profiles expose all 25.
+
+- Updated dependencies [[`c1f23b4`](https://github.com/nelomr/kryptofolio/commit/c1f23b42cb2c6200015777e252b2d6a6139e88be)]:
+  - @kryptofolio/shared-types@1.1.9
+  - @kryptofolio/core-domain@1.1.9
+  - @kryptofolio/database@0.0.15
+
 ## 0.1.13
 
 ### Patch Changes
